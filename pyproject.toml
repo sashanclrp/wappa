@@ -1,7 +1,73 @@
 [project]
 name = "wappa"
 version = "0.1.0"
-description = "Add your description here"
+description = "Open Source Framework to develop smart Workflows, Agents and full chat appllications through WhatsApp"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "aiofiles>=24.1.0",
+    "aiohttp>=3.11.14",
+    "black>=25.1.0",
+    "fastapi[standard]>=0.115.12",
+    "hypercorn>=0.17.0",
+    "markdown2>=2.5.3",
+    "mimeiapify>=1.4.3",
+    "numpy>=2.2.4",
+    "openai>=1.69.0",
+    "opencv-python-headless>=4.11.0.86",
+    "pillow>=11.1.0",
+    "pydantic-settings>=2.10.1",
+    "pydantic[email]>=2.8.2",
+    "python-dotenv>=1.0.1",
+    "redis>=5.2.1",
+    "rich>=13.0.0",
+    "ruff>=0.9.0",
+    "setuptools>=78.1.0",
+    "uvicorn>=0.34.0",
+]
+
+[tool.ruff]
+# Python 3.12 target
+target-version = "py312"
+line-length = 88
+indent-width = 4
+
+[tool.ruff.lint]
+# Enable specific rule sets
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "UP", # pyupgrade
+    "B",  # flake8-bugbear
+    "SIM", # flake8-simplify
+    "I",  # isort
+]
+
+# Ignore specific rules if needed
+ignore = [
+    "E501",  # line too long (handled by line-length)
+]
+
+# Exclude directories
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    "*.egg-info",
+    "app_old",
+    "examples",
+]
+
+[tool.ruff.format]
+# Formatting options
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.1.0",
+]

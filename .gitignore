@@ -1,10 +1,144 @@
-# Python-generated files
+# AI
+.claude/
+CLAUDE.md
+app/
+logs/
+# Python-related files
+*.py[cod]
+*$py.class
 __pycache__/
-*.py[oc]
+*.so
+
+# Environment variables and settings
+.env
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Distribution / packaging
+.Python
 build/
+develop-eggs/
 dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
 wheels/
-*.egg-info
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# IPython
+profile_default/
+ipython_config.py
+
+# MacOS system files
+.DS_Store
+
+# VSCode settings
+.vscode/
+
+# Django-related files
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask-related files
+instance/
+.webassets-cache
+
+# Scrapy-related files
+.scrapy/
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Poetry and pipenv
+.pdm.toml
+.pdm-python
+.pdm-build/
+poetry.lock
+Pipfile.lock
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
 
 # Virtual environments
 .venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+wp_dev/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# Type checker caches
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyPI configuration
+.pypirc
+
+# General IDE settings (optional, specific to JetBrains PyCharm)
+#.idea/
+
+# Test Directories and Files
+pruebas/
+send_templates/
+_test.py
