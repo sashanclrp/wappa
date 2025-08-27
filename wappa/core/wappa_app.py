@@ -62,11 +62,12 @@ async def lifespan(app: FastAPI):
         )
         logger.info("=============================")
         logger.info("")
-        
+
         # Generate and display WhatsApp webhook URL
         from .events.webhook_factory import webhook_url_factory
+
         whatsapp_webhook_url = webhook_url_factory.generate_whatsapp_webhook_url()
-        
+
         logger.info("=== WHATSAPP WEBHOOK URL ===")
         logger.info(f"📍 Primary Webhook URL: {whatsapp_webhook_url}")
         logger.info("   • Use this single URL in WhatsApp Business settings")
@@ -77,7 +78,7 @@ async def lifespan(app: FastAPI):
 
         # Initialize HTTP session for the app (shared for connection pooling - correct scope)
         app.state.http_session = aiohttp.ClientSession()
-        
+
         logger.info("Wappa application startup completed")
         yield
 
@@ -92,9 +93,9 @@ async def lifespan(app: FastAPI):
         # Shutdown
         if logger:
             logger.info("Wappa application shutdown completed")
-        
+
         # Close HTTP session
-        if hasattr(app.state, 'http_session'):
+        if hasattr(app.state, "http_session"):
             await app.state.http_session.close()
 
 
@@ -111,15 +112,15 @@ class Wappa:
         app.run()
     """
 
-    def __init__(self, storage: str = "auto", config: dict | None = None):
+    def __init__(self, cache: str = "memory", config: dict | None = None):
         """
         Initialize Wappa application.
 
         Args:
-            storage: Storage type ('auto', 'redis', 'json', 'memory')
+            cache: Cache type ('memory', 'redis', 'json')
             config: Optional configuration overrides
         """
-        self.storage_type = storage
+        self.cache_type = cache
         self.config = config or {}
         self._event_handler: WappaEventHandler | None = None
         self._app: FastAPI | None = None
@@ -176,7 +177,9 @@ class Wappa:
             app.include_router(webhook_router)
 
             logger = get_app_logger()
-            logger.info("Webhook routes integrated with event dispatcher and per-request dependency injection")
+            logger.info(
+                "Webhook routes integrated with event dispatcher and per-request dependency injection"
+            )
 
         self._app = app
         return app
@@ -205,58 +208,80 @@ class Wappa:
         # Development mode: use reload with app factory
         if settings.is_development:
             logger.info("Development mode: reload enabled")
-            
+
             # For reload to work, we need to use subprocess to call uvicorn with app factory
             # This way uvicorn can import the module and create the app fresh on each reload
             try:
                 import subprocess
                 import sys
                 import os
-                
+
                 # Get the current script that called run()
                 import inspect
+
                 frame = inspect.currentframe()
                 while frame:
                     filename = frame.f_code.co_filename
-                    if filename != __file__ and not filename.startswith('<'):
+                    if filename != __file__ and not filename.startswith("<"):
                         script_path = filename
                         break
                     frame = frame.f_back
                 else:
                     # Fallback: just run without reload
-                    logger.warning("Could not detect script for reload, running without reload")
-                    uvicorn.run(self._app, host=host, port=port, reload=False, log_level=settings.log_level.lower())
+                    logger.warning(
+                        "Could not detect script for reload, running without reload"
+                    )
+                    uvicorn.run(
+                        self._app,
+                        host=host,
+                        port=port,
+                        reload=False,
+                        log_level=settings.log_level.lower(),
+                    )
                     return
-                
+
                 # Create a temporary app factory in the script's directory
                 script_dir = os.path.dirname(script_path)
-                script_name = os.path.basename(script_path).replace('.py', '')
-                
+                script_name = os.path.basename(script_path).replace(".py", "")
+
                 logger.info(f"Starting uvicorn with reload for {script_name}")
-                
+
                 # Build uvicorn command
                 cmd = [
-                    sys.executable, "-m", "uvicorn",
+                    sys.executable,
+                    "-m",
+                    "uvicorn",
                     f"{script_name}:fastapi_app",
                     "--reload",
-                    "--host", str(host),
-                    "--port", str(port),
-                    "--log-level", settings.log_level.lower()
+                    "--host",
+                    str(host),
+                    "--port",
+                    str(port),
+                    "--log-level",
+                    settings.log_level.lower(),
                 ]
-                
+
                 # Add any additional kwargs as command line args
                 for key, value in kwargs.items():
-                    if key == 'reload':  # Skip reload, we're handling it
+                    if key == "reload":  # Skip reload, we're handling it
                         continue
                     cmd.extend([f"--{key.replace('_', '-')}", str(value)])
-                
+
                 # Change to script directory and run
                 logger.info("Starting server with reload capability...")
                 subprocess.run(cmd, cwd=script_dir)
-                
+
             except Exception as e:
-                logger.warning(f"Could not start with reload ({e}), falling back to no-reload mode")
-                uvicorn.run(self._app, host=host, port=port, reload=False, log_level=settings.log_level.lower())
+                logger.warning(
+                    f"Could not start with reload ({e}), falling back to no-reload mode"
+                )
+                uvicorn.run(
+                    self._app,
+                    host=host,
+                    port=port,
+                    reload=False,
+                    log_level=settings.log_level.lower(),
+                )
         else:
             # Production mode: no reload, run app object directly
             logger.info("Production mode: reload disabled")
