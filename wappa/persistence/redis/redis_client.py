@@ -18,7 +18,7 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, cast
 
 from redis.asyncio import ConnectionPool, Redis
 
@@ -77,7 +77,7 @@ class RedisClient:
 
         for alias, db_num in POOL_DB_MAPPING.items():
             url = f"{base_url.rstrip('/')}/{db_num}"
-            cls._setup_pool(alias, url, max_connections)
+            cls._setup_pool(cast(PoolAlias, alias), url, max_connections)
 
     @classmethod
     def setup_multiple_urls(
@@ -102,14 +102,14 @@ class RedisClient:
         if missing:
             raise ValueError(f"Missing required pool aliases: {missing}")
 
-        extra = set(urls.keys()) - set(POOL_DB_MAPPING.keys())
+        extra = set(str(k) for k in urls.keys()) - set(str(k) for k in POOL_DB_MAPPING.keys())
         if extra:
             raise ValueError(
                 f"Unknown pool aliases: {extra}. Only {list(POOL_DB_MAPPING.keys())} are allowed."
             )
 
         for alias, url in urls.items():
-            cls._setup_pool(alias, url, max_connections)
+            cls._setup_pool(cast(PoolAlias, alias), url, max_connections)
 
     @classmethod
     def _setup_pool(cls, alias: PoolAlias, url: str, max_connections: int) -> None:
@@ -148,11 +148,11 @@ class RedisClient:
 
         aliases = [alias] if alias else list(cls._pools.keys())
         for a in aliases:
-            pool = cls._pools.pop(a, None)
+            pool = cls._pools.pop(cast(PoolAlias, a), None)
             if pool:
                 log.info("Closing Redis pool '%s' in PID %s", a, pid)
                 await pool.disconnect()
-                cls._clients.pop(a, None)
+                cls._clients.pop(cast(PoolAlias, a), None)
         if not cls._pools:
             cls._pid = None
 

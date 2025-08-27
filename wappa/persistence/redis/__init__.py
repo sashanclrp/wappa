@@ -1,10 +1,11 @@
 """
 Redis Module
 
-Provides Redis client functionality and operations.
+Provides Redis client functionality, operations, and lifecycle management.
 """
 
-from . import context, listeners, ops, redis_handler
+from . import ops, redis_handler
 from .redis_client import RedisClient
+from .redis_manager import RedisManager
 
-__all__ = ["RedisClient", "ops", "redis_handler", "context", "listeners"]
+__all__ = ["RedisClient", "RedisManager", "ops", "redis_handler"]

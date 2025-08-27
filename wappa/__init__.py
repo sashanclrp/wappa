@@ -19,6 +19,28 @@ from .core.events import (
     webhook_url_factory,
 )
 from .core.wappa_app import Wappa
+
+# Factory System
+from .core.factory import WappaBuilder, WappaPlugin
+
+# Core Plugins
+from .core.plugins import (
+    AuthPlugin,
+    CORSPlugin,
+    CustomMiddlewarePlugin,
+    DatabasePlugin,
+    RateLimitPlugin,
+    RedisPlugin,
+    WebhookPlugin,
+)
+
+# Database System
+from .database import DatabaseAdapter, MySQLAdapter, PostgreSQLAdapter, SQLiteAdapter
+
+# Redis System  
+from .persistence.redis import RedisClient, RedisManager
+
+# Messaging Interface
 from .domain.interfaces.messaging_interface import IMessenger
 from .messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
 
@@ -27,9 +49,34 @@ __all__ = [
     # Core Framework
     "Wappa",
     "WappaEventHandler",
+    
+    # Factory System
+    "WappaBuilder",
+    "WappaPlugin",
+    
+    # Core Plugins
+    "DatabasePlugin",
+    "RedisPlugin",
+    "WebhookPlugin",
+    "CORSPlugin",
+    "AuthPlugin",
+    "RateLimitPlugin", 
+    "CustomMiddlewarePlugin",
+    
+    # Database Adapters
+    "DatabaseAdapter",
+    "PostgreSQLAdapter",
+    "SQLiteAdapter",
+    "MySQLAdapter",
+    
+    # Redis System
+    "RedisClient",
+    "RedisManager",
+    
     # Webhook Management
     "WebhookURLFactory",
     "webhook_url_factory",
+    
     # Default Handlers
     "DefaultMessageHandler",
     "DefaultStatusHandler",
@@ -38,6 +85,7 @@ __all__ = [
     "MessageLogStrategy",
     "StatusLogStrategy",
     "ErrorLogStrategy",
+    
     # Messaging
     "WhatsAppMessenger",
     "IMessenger",

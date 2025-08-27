@@ -138,9 +138,40 @@ class Wappa:
         # Store handler reference - dependencies will be injected per request
         self._event_handler = handler
 
+    def set_app(self, app: FastAPI) -> None:
+        """
+        Set a pre-built FastAPI application instance.
+        
+        This method allows users to provide a FastAPI app that was created
+        using WappaBuilder or other advanced configuration methods, while
+        still using the Wappa class for event handler integration and running.
+        
+        Args:
+            app: Pre-configured FastAPI application instance
+            
+        Example:
+            # Create advanced app with WappaBuilder
+            builder = WappaBuilder()
+            app = await (builder
+                .add_plugin(DatabasePlugin(...))
+                .add_plugin(RedisPlugin())
+                .build())
+            
+            # Use with Wappa for event handling
+            wappa = Wappa()
+            wappa.set_app(app)
+            wappa.set_event_handler(MyHandler())
+            wappa.run()
+        """
+        self._app = app
+
     def create_app(self) -> FastAPI:
         """
         Create and configure the FastAPI application.
+
+        If a pre-built app was provided via set_app(), it integrates the event
+        handler with that app. Otherwise, it creates a new FastAPI app with
+        default Wappa configuration.
 
         Returns:
             Configured FastAPI application instance
@@ -149,6 +180,19 @@ class Wappa:
             raise ValueError(
                 "Must set event handler with set_event_handler() before creating app"
             )
+
+        # If pre-built app was provided, integrate event handler and return it
+        if self._app is not None:
+            # Add webhook routes to the existing app
+            dispatcher = WappaEventDispatcher(self._event_handler)
+            webhook_router = create_webhook_router(dispatcher)
+            self._app.include_router(webhook_router)
+
+            logger = get_app_logger()
+            logger.info(
+                "Event handler integrated with pre-built FastAPI app from WappaBuilder"
+            )
+            return self._app
 
         # Create FastAPI app
         app = FastAPI(
