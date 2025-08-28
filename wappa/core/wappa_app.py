@@ -5,7 +5,8 @@ This is the core class that developers use to create and run their WhatsApp appl
 The class now uses WappaBuilder internally for unified plugin-based architecture.
 """
 
-import asyncio
+import subprocess
+import sys
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -70,6 +71,7 @@ class Wappa:
         self.config = config or {}
         self._event_handler: WappaEventHandler | None = None
         self._app: FastAPI | None = None
+        self._asgi: FastAPI | None = None
 
         # Initialize WappaBuilder with core plugin
         self._builder = WappaBuilder()
@@ -159,41 +161,40 @@ class Wappa:
             f"(middleware: {len(app.user_middleware)}, routes: {len(app.routes)})"
         )
 
-    async def create_app(self) -> FastAPI:
+    @property
+    def asgi(self) -> FastAPI:
         """
-        Create and configure the FastAPI application using WappaBuilder.
+        Return a FastAPI ASGI application, building synchronously if needed.
 
-        Uses the internal WappaBuilder instance that was configured during initialization
-        with WappaCorePlugin and any cache-specific plugins. If an event handler is set,
-        it will be integrated with the webhook system.
+        This property enables uvicorn reload compatibility by providing a synchronous
+        way to access the FastAPI app. Plugin configuration is deferred to lifespan 
+        hooks to maintain async initialization while keeping this property sync.
 
         Returns:
-            Configured FastAPI application instance
+            FastAPI ASGI application instance
 
         Raises:
             ValueError: If no event handler has been set
         """
+        if self._asgi is None:
+            self._asgi = self._build_asgi_sync()
+        return self._asgi
+
+    def _build_asgi_sync(self) -> FastAPI:
+        """
+        Build FastAPI application synchronously using WappaBuilder.
+
+        Creates the FastAPI app with WappaBuilder's unified lifespan management.
+        Plugin configuration is deferred to lifespan startup hooks to maintain
+        proper async initialization.
+        """
         if not self._event_handler:
             raise ValueError(
-                "Must set event handler with set_event_handler() before creating app"
+                "Must set event handler with set_event_handler() before accessing .asgi property"
             )
 
-        # If pre-built app was provided, integrate event handler and return it
-        if self._app is not None:
-            # Add webhook routes to the existing app
-            dispatcher = WappaEventDispatcher(self._event_handler)
-            webhook_router = create_webhook_router(dispatcher)
-            self._app.include_router(webhook_router)
-
-            logger = get_app_logger()
-            logger.info(
-                "Event handler integrated with pre-built FastAPI app from WappaBuilder"
-            )
-            return self._app
-
-        # Build the FastAPI app using WappaBuilder with all configured plugins
         logger = get_app_logger()
-        logger.debug("Creating FastAPI app using WappaBuilder with plugin architecture")
+        logger.debug("Building FastAPI ASGI app synchronously using WappaBuilder")
 
         # Configure FastAPI settings for builder
         self._builder.configure(
@@ -204,22 +205,36 @@ class Wappa:
             redoc_url="/redoc" if settings.is_development else None,
         )
 
-        # Build the app with unified plugin-based architecture
-        app = await self._builder.build()
+        # Use WappaBuilder.build() - creates app with lifespan, 
+        # defers plugin configuration to startup hooks
+        app = self._builder.build()
 
-        # Add webhook routes that use the event dispatcher
+        # Add webhook routes to the built app
         dispatcher = WappaEventDispatcher(self._event_handler)
         webhook_router = create_webhook_router(dispatcher)
         app.include_router(webhook_router)
 
         logger.info(
-            f"✅ Wappa app created with plugin architecture - "
-            f"cache: {self.cache_type.value}, plugins: {len(self._builder.plugins)}, "
+            f"✅ Wappa ASGI app built synchronously - cache: {self.cache_type.value}, "
+            f"plugins: {len(self._builder.plugins)}, "
             f"event_handler: {self._event_handler.__class__.__name__}"
         )
 
-        self._app = app
         return app
+
+    def create_app(self) -> FastAPI:
+        """
+        Create FastAPI application.
+
+        This method directly uses WappaBuilder.build() which creates the app
+        with unified lifespan management.
+
+        Returns:
+            Configured FastAPI application instance
+        """
+        if self._asgi is None:
+            self._asgi = self._build_asgi_sync()
+        return self._asgi
 
     def add_plugin(self, plugin: "WappaPlugin") -> "Wappa":
         """
@@ -314,7 +329,102 @@ class Wappa:
 
         return self
 
-    def run(self, host: str = "0.0.0.0", port: int|None = None, **kwargs) -> None:
+    def add_middleware(self, middleware_class: type, priority: int = 50, **kwargs) -> "Wappa":
+        """
+        Add middleware to the application with priority ordering.
+        
+        This provides access to the underlying WappaBuilder's middleware system.
+        Priority determines execution order:
+        - Lower numbers run first (outer middleware)
+        - Higher numbers run last (inner middleware)
+        - Default priority is 50
+
+        Args:
+            middleware_class: Middleware class to add
+            priority: Execution priority (lower = outer, higher = inner)
+            **kwargs: Middleware configuration parameters
+
+        Returns:
+            Self for method chaining
+
+        Example:
+            from fastapi.middleware.cors import CORSMiddleware
+            
+            app = Wappa(cache="redis")
+            app.add_middleware(CORSMiddleware, allow_origins=["*"], priority=30)
+            app.set_event_handler(MyHandler())
+            app.run()
+        """
+        self._builder.add_middleware(middleware_class, priority, **kwargs)
+
+        logger = get_app_logger()
+        logger.debug(
+            f"Middleware added to Wappa: {middleware_class.__name__} (priority: {priority})"
+        )
+
+        return self
+
+    def add_router(self, router, **kwargs) -> "Wappa":
+        """
+        Add a router to the application.
+
+        This provides access to the underlying WappaBuilder's router system.
+
+        Args:
+            router: FastAPI router to include
+            **kwargs: Arguments for app.include_router()
+
+        Returns:
+            Self for method chaining
+
+        Example:
+            from fastapi import APIRouter
+            
+            custom_router = APIRouter()
+            
+            app = Wappa(cache="redis")
+            app.add_router(custom_router, prefix="/api/v1", tags=["custom"])
+            app.set_event_handler(MyHandler())
+            app.run()
+        """
+        self._builder.add_router(router, **kwargs)
+
+        logger = get_app_logger()
+        router_name = getattr(router, "prefix", "router")
+        logger.debug(f"Router added to Wappa: {router_name} with config: {kwargs}")
+
+        return self
+
+    def configure(self, **overrides) -> "Wappa":
+        """
+        Override default FastAPI configuration.
+
+        This provides access to the underlying WappaBuilder's configuration system.
+
+        Args:
+            **overrides: FastAPI constructor arguments to override
+
+        Returns:
+            Self for method chaining
+
+        Example:
+            app = Wappa(cache="redis")
+            app.configure(
+                title="My WhatsApp Bot",
+                version="2.0.0", 
+                description="Custom bot with advanced features"
+            )
+            app.set_event_handler(MyHandler())
+            app.run()
+        """
+        self._builder.configure(**overrides)
+
+        logger = get_app_logger()
+        logger.debug(f"FastAPI configuration overrides added: {list(overrides.keys())}")
+
+        return self
+
+    def run(self, host: str = "0.0.0.0", port: int | None = None, **kwargs) -> None:
         """
         Run the Wappa application using uvicorn.
 
@@ -327,25 +437,18 @@ class Wappa:
         if port is None:
             port = settings.port
 
-        # Auto-determine reload mode based on environment
-        reload = settings.is_development
+        # Use settings.is_development to determine mode
+        dev_mode = settings.is_development
 
-        # Create the app first to ensure logging is initialized
-        if not self._app:
-            self._app = asyncio.run(self.create_app())
-
-        # Now we can safely get the logger
         logger = get_app_logger()
         logger.info(f"Starting Wappa v{settings.version} server on {host}:{port}")
+        logger.info(f"Mode: {'development' if dev_mode else 'production'}")
 
-        # Handle development vs production mode
-        logger.info(f"Mode: {'development' if settings.is_development else 'production'}")
-
-        if reload:
+        if dev_mode:
             logger.info("🔄 Development mode: auto-reload enabled")
-            self._run_with_reload(host, port, **kwargs)
+            self._run_dev_mode(host, port, **kwargs)
         else:
-            logger.info("🚀 Production mode: auto-reload disabled")
+            logger.info("🚀 Production mode: running directly")
             self._run_production(host, port, **kwargs)
 
     def _run_production(self, host: str, port: int, **kwargs) -> None:
@@ -360,84 +463,84 @@ class Wappa:
             **kwargs,
         }
 
-        logger.info("Starting server with Wappa's unified architecture...")
-        if self._app is None:
-            logger.error("❌ FastAPI app instance is None. Cannot start server.")
-            raise RuntimeError("FastAPI app instance is None. Ensure create_app() was called and succeeded.")
-        uvicorn.run(self._app, **uvicorn_config)
+        logger.info("Starting production server with .asgi property...")
+        # Use the .asgi property which handles sync build + lifespan initialization
+        uvicorn.run(self.asgi, **uvicorn_config)
 
-    def _run_with_reload(self, host: str, port: int, **kwargs) -> None:
-        """Run in development mode with uvicorn auto-reload using subprocess."""
-        import subprocess
-        import sys
-        import os
+    def _run_dev_mode(self, host: str, port: int, **kwargs) -> None:
+        """
+        Run in development mode with uvicorn auto-reload.
+
+        Uses uvicorn with import string for proper reload functionality.
+        Requires module-level 'app' variable containing Wappa instance.
+        """
         import inspect
-        
+
         logger = get_app_logger()
-        
-        # Get the current script that called run()
+
+        # Get the calling module to build import string
         frame = inspect.currentframe()
-        script_path = None
-        while frame:
-            filename = frame.f_code.co_filename
-            if filename != __file__ and not filename.startswith('<') and filename.endswith('.py'):
-                script_path = filename
-                break
+        while frame and frame.f_globals.get("__name__") == __name__:
             frame = frame.f_back
-        
-        if not script_path:
-            logger.warning("Could not detect script for reload, falling back to no-reload mode")
-            self._run_production(host, port, **kwargs)
-            return
-        
-        # Check if the script has a fastapi_app export
-        try:
-            with open(script_path, 'r') as f:
-                content = f.read()
-            
-            if 'fastapi_app' not in content:
-                logger.warning("🔄 Auto-reload requires 'fastapi_app' export in your script")
-                logger.warning("🔄 Add: fastapi_app = create_fastapi_app()")
-                logger.warning("🔄 Falling back to production mode")
-                self._run_production(host, port, **kwargs)
-                return
-                
-        except Exception as e:
-            logger.error(f"❌ Could not read script for reload detection: {e}")
-            self._run_production(host, port, **kwargs)
-            return
-        
-        # Create uvicorn subprocess command
-        script_dir = os.path.dirname(script_path)
-        script_name = os.path.basename(script_path).replace('.py', '')
-        
-        logger.info(f"🔄 Starting uvicorn with reload for {script_name}")
-        
-        # Build uvicorn command
+
+        if not frame:
+            logger.error("❌ Cannot detect calling script for dev mode")
+            raise RuntimeError(
+                "Cannot locate calling script for dev mode.\n"
+                "Make sure you're running from a Python file, not a REPL."
+            )
+
+        module_name = frame.f_globals.get("__name__")
+        if module_name in (None, "__main__"):
+            # Try to guess from file path
+            file_path = frame.f_globals.get("__file__")
+            if not file_path:
+                raise RuntimeError("Dev mode requires running from a file, not a REPL.")
+
+            # Convert file path to module name (e.g., examples/main.py -> examples.main)
+            import os.path
+
+            module_name = (
+                os.path.splitext(os.path.relpath(file_path))[0]
+                .replace(os.sep, ".")
+                .lstrip(".")
+            )
+
+        # Build uvicorn command with import string
+        import_string = f"{module_name}:app.asgi"
         cmd = [
-            sys.executable, "-m", "uvicorn",
-            f"{script_name}:fastapi_app",
+            sys.executable,
+            "-m",
+            "uvicorn",
+            import_string,
             "--reload",
-            "--host", str(host),
-            "--port", str(port),
-            "--log-level", settings.log_level.lower()
+            "--host",
+            host,
+            "--port",
+            str(port),
+            "--log-level",
+            settings.log_level.lower(),
         ]
-        
-        # Add any additional kwargs as command line args
+
+        # Add additional kwargs
         for key, value in kwargs.items():
-            if key == 'reload':  # Skip reload, we're handling it
-                continue
-            cmd.extend([f"--{key.replace('_', '-')}", str(value)])
-        
+            if key != "reload":  # Skip reload, we're handling it
+                cmd.extend([f"--{key.replace('_', '-')}", str(value)])
+
+        logger.info(f"🚀 Starting dev server: {' '.join(cmd)}")
+        logger.info(f"📡 Import string: {import_string}")
+
         try:
-            # Change to script directory and run
-            logger.info("🔄 Starting server with reload capability...")
-            logger.info(f"📁 Working directory: {script_dir}")
-            logger.info(f"📁 Import string: {script_name}:fastapi_app")
-            subprocess.run(cmd, cwd=script_dir)
-            
-        except Exception as e:
-            logger.error(f"❌ Could not start with reload ({e}), falling back to no-reload mode")
-            self._run_production(host, port, **kwargs)
-
-
+            subprocess.run(cmd, check=True)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"❌ Uvicorn failed to start (exit code: {e.returncode})")
+            raise RuntimeError(
+                f"Development server failed to start.\n\n"
+                f"Common causes:\n"
+                f"• No module-level 'app' variable found in {module_name}\n"
+                f"• Port {port} already in use\n"
+                f"• Import errors in your script\n\n"
+                f"Make sure you have: app = Wappa(...) at module level."
+            ) from e
+        except KeyboardInterrupt:
+            logger.info("👋 Development server stopped by user")

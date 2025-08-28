@@ -174,38 +174,46 @@ class WappaBuilder:
         self.config_overrides.update(overrides)
         return self
 
-    async def build(self) -> FastAPI:
+    def build(self) -> FastAPI:
         """
         Build the configured FastAPI application with unified lifespan management.
 
-        This method:
-        1. Configures all plugins (they register their hooks)
-        2. Creates unified lifespan manager that executes all hooks in priority order
-        3. Creates the FastAPI app with unified lifespan
-        4. Adds middleware in priority order
-        5. Includes all routers
+        This method creates the FastAPI app with unified lifespan management, deferring
+        plugin configuration to lifespan startup hooks. This enables uvicorn reload 
+        compatibility while maintaining proper async initialization.
+
+        The method:
+        1. Creates unified lifespan manager that defers plugin configuration
+        2. Creates FastAPI app with unified lifespan
+        3. Adds middleware and routers (from current builder state)
+        4. Returns configured FastAPI app (plugins configure during startup)
 
         Returns:
-            Configured FastAPI application instance
+            FastAPI application with unified lifespan (plugins configured at startup)
         """
         logger = get_app_logger()
-
-        # Configure plugins first - they register their hooks with the builder
-        logger.debug(f"Configuring {len(self.plugins)} plugins...")
-        for plugin in self.plugins:
-            await plugin.configure(self)
-
-        logger.info(
-            f"Plugin configuration complete - registered {len(self.startup_hooks)} startup hooks, "
-            f"{len(self.shutdown_hooks)} shutdown hooks"
-        )
-
-        # Create unified lifespan manager that orchestrates ALL hooks
+        logger.debug(f"Building FastAPI app synchronously with {len(self.plugins)} plugins")
+        
+        # Create unified lifespan that will configure plugins and execute hooks
+        from contextlib import asynccontextmanager
+        
         @asynccontextmanager
         async def unified_lifespan(app: FastAPI):
             try:
-                # Startup phase - execute all hooks in priority order
+                # Startup phase - configure plugins first, then execute all hooks
                 logger.debug("🚀 Starting unified lifespan startup phase...")
+                
+                # Configure plugins (this is the async work we defer)
+                logger.debug(f"Configuring {len(self.plugins)} plugins...")
+                for plugin in self.plugins:
+                    await plugin.configure(self)
+                
+                logger.info(
+                    f"Plugin configuration complete - registered {len(self.startup_hooks)} startup hooks, "
+                    f"{len(self.shutdown_hooks)} shutdown hooks"
+                )
+                
+                # Execute all startup hooks in priority order
                 await self._execute_all_startup_hooks(app)
                 logger.info("✅ All startup hooks completed successfully")
                 yield
@@ -218,12 +226,12 @@ class WappaBuilder:
                 await self._execute_all_shutdown_hooks(app)
                 logger.info("✅ All shutdown hooks completed")
 
-        # Create FastAPI app with default configuration and overrides
+        # Create FastAPI app with unified lifespan
         default_config = {
             "title": "Wappa Application",
             "description": "WhatsApp Business application built with Wappa framework",
             "version": "1.0.0",
-            "lifespan": unified_lifespan,  # Single unified lifespan manager
+            "lifespan": unified_lifespan,  # Unified lifespan with deferred plugin config
         }
         default_config.update(self.config_overrides)
 
@@ -231,7 +239,7 @@ class WappaBuilder:
         logger.debug(f"Created FastAPI app: {default_config['title']}")
 
         # Add middlewares in reverse priority order (FastAPI adds in reverse)
-        # Higher priority numbers run closer to the routes (inner middleware)
+        # Note: Middleware from plugins will be added during lifespan startup
         sorted_middlewares = sorted(self.middlewares, key=lambda x: x[2], reverse=True)
         for middleware_class, kwargs, priority in sorted_middlewares:
             app.add_middleware(middleware_class, **kwargs)
@@ -240,14 +248,14 @@ class WappaBuilder:
             )
 
         # Include all routers
+        # Note: Routers from plugins will be added during lifespan startup
         for router, kwargs in self.routers:
             app.include_router(router, **kwargs)
             logger.debug(f"Included router with config: {kwargs}")
 
         logger.info(
-            f"🏗️ WappaBuilder created app with {len(self.plugins)} plugins, "
-            f"{len(self.middlewares)} middlewares, {len(self.routers)} routers, "
-            f"{len(self.startup_hooks)} startup hooks, {len(self.shutdown_hooks)} shutdown hooks"
+            f"🏗️ WappaBuilder created app synchronously with {len(self.plugins)} plugins (deferred), "
+            f"{len(self.middlewares)} middlewares, {len(self.routers)} routers"
         )
 
         return app
@@ -313,8 +321,8 @@ class WappaBuilder:
         logger.debug(f"Executing {len(sorted_hooks)} shutdown hooks in reverse priority order...")
 
         for hook, priority in sorted_hooks:
+            hook_name = getattr(hook, "__name__", "anonymous_hook")
             try:
-                hook_name = getattr(hook, "__name__", "anonymous_hook")
                 logger.debug(f"🛑 Executing shutdown hook: {hook_name} (priority: {priority})")
                 await hook(app)
                 logger.debug(f"✅ Shutdown hook {hook_name} completed")

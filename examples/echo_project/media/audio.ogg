@@ -1,0 +1,5 @@
+# This is a placeholder for audio.ogg file
+# In a real implementation, this would be an actual OGG audio file
+# You can replace this with a real audio file for testing
+
+echo "Sample audio placeholder - replace with actual .ogg file for testing" > /dev/null

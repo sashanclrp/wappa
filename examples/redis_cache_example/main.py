@@ -1,11 +1,8 @@
 """
-Redis Cache Demo for Wappa Framework
+Redis Cache Demo for Wappa Framework - SIMPLIFIED VERSION
 
-This example demonstrates how to use the RedisPlugin with a Wappa application
-to implement comprehensive caching functionality using all three cache types:
-- User Cache: Store user profile data
-- Table Cache: Log all messages
-- State Handler: Manage /WAPPA command state
+This example demonstrates the NEW simplified way to run Wappa apps in development mode.
+No more complex create_fastapi_app() boilerplate needed!
 
 SETUP REQUIRED:
 1. Create a .env file with your WhatsApp Business API credentials:
@@ -28,18 +25,28 @@ DEMO FEATURES:
   * Send "/EXIT" to deactivate state and cleanup cache
 - Message history retrieval:
   * Send "/HISTORY" to see your last 20 messages with timestamps
+
+DEVELOPMENT MODES:
+1. Direct Python: python main_simplified.py (uses settings.is_development for mode)
+2. FastAPI-style: uvicorn main_simplified:app.asgi --reload (clean, no boilerplate)  
+3. Wappa CLI: wappa dev main_simplified.py (batteries-included convenience)
+
+The new .asgi property approach eliminates all threading complexity!
 """
 
 
-# Import our demo models
+# Import our demo models (handle both direct run and CLI execution)
 import sys
 from pathlib import Path
 
+# Add the example directory to Python path for local imports
+example_dir = Path(__file__).parent
+if str(example_dir) not in sys.path:
+    sys.path.insert(0, str(example_dir))
+
 from models.redis_demo_models import CacheStats, MessageLog, StateHandler, User
 
-# Add parent directory to path for direct script execution
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
+# Import from the installed wappa package
 from wappa import Wappa, WappaEventHandler, __version__
 from wappa.core.config.settings import settings
 from wappa.domain.interfaces.cache_interface import ICache
@@ -219,7 +226,7 @@ class RedisCacheDemoHandler(WappaEventHandler):
             message_log.add_message(message_content, message_type)
 
             # Store back to Redis using Pydantic auto-serialization
-            await self._table_cache.set(log_key, message_log, ttl=604800)  # 7 days
+            await self._table_cache.set(log_key, message_log, ttl=86400)  # 7 days
 
             self._cache_stats.record_table_entry()
             self.logger.info(
@@ -333,7 +340,7 @@ class RedisCacheDemoHandler(WappaEventHandler):
             user_id = webhook.user.user_id
 
             # Get user's message history from table cache using helper method and BaseModel deserialization
-            log_key = self._table_cache.create_table_key("msg_history", user_id) 
+            log_key = self._table_cache.create_table_key("msg_history", user_id)
             message_log = await self._table_cache.get(log_key, models=MessageLog)
 
             if message_log:
@@ -344,12 +351,12 @@ class RedisCacheDemoHandler(WappaEventHandler):
                 if recent_messages:
                     # Format the history message
                     history_text = f"📚 Your Message History ({total_count} total messages):\n\n"
-                    
+
                     for i, msg_history in enumerate(recent_messages, 1):
                         timestamp_str = msg_history.timestamp.strftime("%Y-%m-%d %H:%M")
                         msg_type = f"[{msg_history.message_type.upper()}]" if msg_history.message_type != "text" else ""
                         history_text += f"{i:2d}. {timestamp_str} {msg_type} {msg_history.message}\n"
-                    
+
                     if total_count > 20:
                         history_text += f"\n... showing last 20 of {total_count} messages"
 
@@ -487,81 +494,18 @@ class RedisCacheDemoHandler(WappaEventHandler):
         self._cache_stats.record_error()
 
 
-def create_wappa_app_with_redis() -> Wappa:
-    """
-    Create Wappa application with Redis cache using unified plugin architecture.
-    
-    This demonstrates the NEW simplified way to use Redis cache - just specify cache="redis"
-    and Wappa automatically adds RedisPlugin through the unified architecture.
-    """
-    print("🔧 Creating Wappa app with Redis cache (unified architecture)...")
+# ============================================================================
+# SIMPLIFIED WAPPA SETUP - NO COMPLEX BOILERPLATE NEEDED!
+# ============================================================================
 
-    try:
-        # NEW: Unified architecture - just specify cache type!
-        # Wappa automatically adds RedisPlugin + WappaCorePlugin
-        wappa = Wappa(cache="redis")
-
-        print("✅ Wappa created with automatic Redis plugin integration")
-
-        # Set the cache-enabled event handler
-        handler = RedisCacheDemoHandler()
-        wappa.set_event_handler(handler)
-
-        print("✅ Wappa app configured with Redis cache handler")
-
-        return wappa
-
-    except Exception as e:
-        print(f"❌ Failed to create Wappa app with Redis: {e}")
-        raise
-
-
-# Export FastAPI app for uvicorn reload with lazy loading
-def create_fastapi_app():
-    """Create FastAPI app synchronously for uvicorn reload compatibility."""
-    import asyncio
-    import threading
-
-    # Check if we're in an event loop (uvicorn subprocess context)
-    try:
-        loop = asyncio.get_running_loop()
-        # We're in a running loop, use thread-based async execution
-        result = None
-        exception = None
-
-        def run_async():
-            nonlocal result, exception
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            try:
-                # Create the app and get FastAPI instance
-                wappa_app = create_wappa_app_with_redis()
-                result = new_loop.run_until_complete(wappa_app.create_app())
-            except Exception as e:
-                exception = e
-            finally:
-                new_loop.close()
-
-        thread = threading.Thread(target=run_async)
-        thread.start()
-        thread.join()
-
-        if exception:
-            raise exception
-        return result
-
-    except RuntimeError:
-        # No running loop, safe to use asyncio.run()
-        wappa_app = create_wappa_app_with_redis()
-        return asyncio.run(wappa_app.create_app())
-
-# For uvicorn reload: "redis_cache_demo:fastapi_app"
-fastapi_app = create_fastapi_app()
-
+# Create Wappa instance at module level (required for auto-reload)
+app = Wappa(cache="redis")
+handler = RedisCacheDemoHandler()
+app.set_event_handler(handler)
 
 def main():
     """Main demo function."""
-    print(f"🚀 Wappa v{__version__} - Redis Cache Demo")
+    print(f"🚀 Wappa v{__version__} - Redis Cache Demo (SIMPLIFIED)")
     print("=" * 60)
     print()
     print("🎯 **REDIS CACHE DEMONSTRATION:**")
@@ -609,13 +553,20 @@ def main():
 
     print("🌐 Starting Redis cache demo server...")
     print("💡 Press CTRL+C to stop the server")
+    print()
+    print("✨ **NEW FASTAPI-STYLE APPROACH:**")
+    print("  • No complex create_fastapi_app() function needed!")
+    print("  • Clean .asgi property for uvicorn reload compatibility")
+    print("  • Just app.run() OR uvicorn main:app.asgi --reload")
+    print("  • Lifespan hooks handle async initialization")
     print("=" * 60)
 
     try:
-        # Create the app with unified architecture (no async needed!)
-        app = create_wappa_app_with_redis()
+        print("✅ Wappa created with automatic Redis plugin integration")
+        print("✅ Wappa app configured with Redis cache handler")
 
-        # Start the server (auto-reload enabled in DEV environment)
+        # THAT'S IT! No complex ASGI export functions needed!
+        # Framework handles everything automatically
         app.run()
 
     except KeyboardInterrupt:
@@ -624,14 +575,6 @@ def main():
         print(f"\n❌ Server error: {e}")
     finally:
         print("🏁 Redis cache demo completed")
-
-
-# Auto-reload Development Setup:
-# 1. Direct Python: python examples/redis_cache_demo.py (simple, no auto-reload)
-# 2. Uvicorn reload: uvicorn examples.redis_cache_demo:fastapi_app --reload (auto-reload enabled)
-#
-# The fastapi_app export uses thread-based lazy loading to avoid asyncio event loop conflicts
-# in uvicorn's subprocess reloader environment.
 
 
 if __name__ == "__main__":

@@ -1,0 +1,5 @@
+# This is a placeholder for video.mp4 file
+# In a real implementation, this would be an actual MP4 video file
+# You can replace this with a real video file for testing
+
+echo "Sample video placeholder - replace with actual .mp4 file for testing" > /dev/null
