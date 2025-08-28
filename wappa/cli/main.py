@@ -17,21 +17,28 @@ app = typer.Typer(help="Wappa WhatsApp Business Framework CLI")
 def _resolve_module_name(file_path: str) -> tuple[str, Path]:
     """
     Convert a file path to a Python module name and working directory.
-
-    Examples:
+    
+    Handles both flat and nested project structures:
         main.py -> ("main", Path("."))
-        examples/redis_demo/main.py -> ("main", Path("examples/redis_demo"))
+        app/main.py -> ("app.main", Path("."))  # Use dotted import from project root
+        examples/redis_demo/main.py -> ("examples.redis_demo.main", Path("."))
     
     Returns:
         tuple[str, Path]: (module_name, working_directory)
     """
     # Convert to Path object for better handling
     path = Path(file_path)
-
-    # Get the directory and filename
-    working_dir = path.parent if path.parent != Path(".") else Path(".")
-    module_name = path.stem  # Just the filename without extension
-
+    
+    # Always use current directory as working dir and create dotted module name
+    working_dir = Path(".")
+    
+    # Convert path to dotted module name (remove .py extension)
+    if path.suffix == ".py":
+        path = path.with_suffix("")
+    
+    # Convert path separators to dots for Python import
+    module_name = str(path).replace(os.path.sep, ".")
+    
     return module_name, working_dir
 
 
