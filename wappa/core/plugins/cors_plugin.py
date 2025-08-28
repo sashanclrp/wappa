@@ -69,7 +69,7 @@ class CORSPlugin:
         self.priority = priority
         self.cors_kwargs = cors_kwargs
 
-    async def configure(self, builder: "WappaBuilder") -> None:
+    def configure(self, builder: "WappaBuilder") -> None:
         """
         Configure CORS plugin with WappaBuilder.
 

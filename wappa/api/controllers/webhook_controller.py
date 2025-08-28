@@ -142,9 +142,16 @@ class WebhookController:
         # Extract owner from middleware (URL owner_id)
         owner_id = get_current_owner_context()
 
+        # ENHANCED DEBUGGING: Show context details
+        from wappa.core.logging.context import get_context_info
+        context_info = get_context_info()
+        
         self.logger.debug(
             f"Processing webhook for platform: {platform}, owner: {owner_id}"
         )
+        self.logger.debug(f"🔍 Full context info: {context_info}")
+        self.logger.debug(f"🌐 Request URL: {request.url.path}")
+        self.logger.debug(f"📨 Request method: {request.method}")
 
         # Validate platform
         if not self._is_supported_platform(platform):

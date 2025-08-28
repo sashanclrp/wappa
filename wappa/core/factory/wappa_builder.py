@@ -176,44 +176,42 @@ class WappaBuilder:
 
     def build(self) -> FastAPI:
         """
-        Build the configured FastAPI application with unified lifespan management.
+        Build the configured FastAPI application following proper FastAPI initialization pattern.
 
-        This method creates the FastAPI app with unified lifespan management, deferring
-        plugin configuration to lifespan startup hooks. This enables uvicorn reload 
-        compatibility while maintaining proper async initialization.
-
-        The method:
-        1. Creates unified lifespan manager that defers plugin configuration
-        2. Creates FastAPI app with unified lifespan
-        3. Adds middleware and routers (from current builder state)
-        4. Returns configured FastAPI app (plugins configure during startup)
+        This method follows the exact pattern you specified:
+        1. Configure plugins (sync setup only)
+        2. Create FastAPI app with lifespan and config
+        3. Add all middleware via app.add_middleware()
+        4. Include all routers via app.include_router()
+        
+        Only async operations happen in the lifespan (startup/shutdown hooks).
 
         Returns:
-            FastAPI application with unified lifespan (plugins configured at startup)
+            FastAPI application with properly configured plugins
         """
         logger = get_app_logger()
-        logger.debug(f"Building FastAPI app synchronously with {len(self.plugins)} plugins")
+        logger.debug(f"🏗️ Building FastAPI app with {len(self.plugins)} plugins")
         
-        # Create unified lifespan that will configure plugins and execute hooks
+        # Step 1: Configure plugins (sync setup only - middleware/router registration)
+        if self.plugins:
+            logger.debug(f"⚙️ Configuring {len(self.plugins)} plugins synchronously...")
+            for plugin in self.plugins:
+                plugin.configure(self)  # Synchronous configuration
+            
+            logger.info(
+                f"✅ Plugin configuration complete - registered {len(self.middlewares)} middlewares, "
+                f"{len(self.routers)} routers, {len(self.startup_hooks)} startup hooks, "
+                f"{len(self.shutdown_hooks)} shutdown hooks"
+            )
+        
+        # Create unified lifespan (only for async startup/shutdown hooks)
         from contextlib import asynccontextmanager
         
         @asynccontextmanager
         async def unified_lifespan(app: FastAPI):
             try:
-                # Startup phase - configure plugins first, then execute all hooks
+                # Startup phase - execute async startup hooks only
                 logger.debug("🚀 Starting unified lifespan startup phase...")
-                
-                # Configure plugins (this is the async work we defer)
-                logger.debug(f"Configuring {len(self.plugins)} plugins...")
-                for plugin in self.plugins:
-                    await plugin.configure(self)
-                
-                logger.info(
-                    f"Plugin configuration complete - registered {len(self.startup_hooks)} startup hooks, "
-                    f"{len(self.shutdown_hooks)} shutdown hooks"
-                )
-                
-                # Execute all startup hooks in priority order
                 await self._execute_all_startup_hooks(app)
                 logger.info("✅ All startup hooks completed successfully")
                 yield
@@ -221,40 +219,37 @@ class WappaBuilder:
                 logger.error(f"❌ Error during startup phase: {e}", exc_info=True)
                 raise
             finally:
-                # Shutdown phase - execute all hooks in reverse priority order
+                # Shutdown phase - execute async shutdown hooks
                 logger.debug("🛑 Starting unified lifespan shutdown phase...")
                 await self._execute_all_shutdown_hooks(app)
                 logger.info("✅ All shutdown hooks completed")
 
-        # Create FastAPI app with unified lifespan
+        # Step 2: Create FastAPI app with lifespan and config
         default_config = {
             "title": "Wappa Application",
             "description": "WhatsApp Business application built with Wappa framework",
             "version": "1.0.0",
-            "lifespan": unified_lifespan,  # Unified lifespan with deferred plugin config
+            "lifespan": unified_lifespan,
         }
         default_config.update(self.config_overrides)
 
         app = FastAPI(**default_config)
         logger.debug(f"Created FastAPI app: {default_config['title']}")
 
-        # Add middlewares in reverse priority order (FastAPI adds in reverse)
-        # Note: Middleware from plugins will be added during lifespan startup
+        # Step 3: Add all middleware via app.add_middleware()
+        # Sort by priority (reverse order because FastAPI adds middleware in reverse)
         sorted_middlewares = sorted(self.middlewares, key=lambda x: x[2], reverse=True)
         for middleware_class, kwargs, priority in sorted_middlewares:
             app.add_middleware(middleware_class, **kwargs)
-            logger.debug(
-                f"Added middleware {middleware_class.__name__} (priority: {priority})"
-            )
+            logger.debug(f"Added middleware {middleware_class.__name__} (priority: {priority})")
 
-        # Include all routers
-        # Note: Routers from plugins will be added during lifespan startup
+        # Step 4: Include all routers via app.include_router()  
         for router, kwargs in self.routers:
             app.include_router(router, **kwargs)
             logger.debug(f"Included router with config: {kwargs}")
 
         logger.info(
-            f"🏗️ WappaBuilder created app synchronously with {len(self.plugins)} plugins (deferred), "
+            f"🎉 WappaBuilder created FastAPI app: {len(self.plugins)} plugins, "
             f"{len(self.middlewares)} middlewares, {len(self.routers)} routers"
         )
 

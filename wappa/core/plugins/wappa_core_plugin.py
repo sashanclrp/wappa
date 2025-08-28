@@ -51,7 +51,7 @@ class WappaCorePlugin:
         """
         self.cache_type = cache_type
 
-    async def configure(self, builder: "WappaBuilder") -> None:
+    def configure(self, builder: "WappaBuilder") -> None:
         """
         Configure core Wappa functionality with the builder.
 

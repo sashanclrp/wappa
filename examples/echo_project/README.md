@@ -15,17 +15,19 @@ The Echo Project replicates and extends the original `echo_test_event` project u
 
 ## Architecture
 
-### Clean Architecture Pattern
+### New Simplified Architecture (No Bridge Modules!)
+
+**The Echo Project now uses Wappa's new unified architecture** - eliminating complex bridge modules and threading code!
 
 ```
-main.py                 # Wappa app setup and configuration
+main.py                 # Simple: app = Wappa(cache="redis") + app.run()
 echo_handler.py        # Master event handler (WappaEventHandler)
 constants.py           # Shared configuration and constants
 components/            # Core processing components
 ├── state_manager.py      # Redis state management
 ├── interactive_builder.py # Interactive message builder
 └── media_processor.py    # Media echo processor
-logic/                 # Business logic modules
+logic/                 # Business logic modules (20 modules)
 ├── text_echo.py          # Text message processing
 ├── image_echo.py         # Image message processing
 ├── video_echo.py         # Video message processing
@@ -33,16 +35,24 @@ logic/                 # Business logic modules
 ├── document_echo.py      # Document processing
 ├── location_echo.py      # Location sharing
 ├── contact_echo.py       # Contact sharing
-├── button_*.py           # Button interaction logic
-├── list_*.py             # List interaction logic
+├── button_*.py           # Button interaction logic (3 modules)
+├── list_*.py             # List interaction logic (3 modules)
 ├── cta_activation.py     # CTA button logic
 ├── location_activation.py # Location request logic
 ├── state_management.py   # State utilities
 ├── metadata_extraction.py # Metadata processing
 ├── user_storage.py       # User profile management
 └── message_confirmation.py # Read receipts & typing
-media/                 # Sample media files
+media/                 # Sample media files (7 files)
 ```
+
+### Key Improvements
+
+✅ **Eliminated Complex Boilerplate**: No more `create_fastapi_app()` with threading!  
+✅ **Clean Module-Level Setup**: `app = Wappa(cache="redis")` is all you need  
+✅ **Three Development Modes**: Direct Python, uvicorn, or CLI - your choice  
+✅ **Standards Compliant**: Uses FastAPI `.asgi` property pattern  
+✅ **Auto-Reload Compatible**: Works seamlessly with `uvicorn --reload`
 
 ## Features
 
@@ -115,14 +125,29 @@ REDIS_URL=redis://localhost:6379/0
 redis-server
 ```
 
-2. **Run the echo project**:
+2. **Choose your preferred development mode**:
+
+**Option A: Direct Python execution** (recommended for development):
 ```bash
+cd examples/echo_project
 uv run python main.py
+```
+
+**Option B: FastAPI-style with uvicorn** (industry standard):
+```bash
+cd examples/echo_project
+uv run uvicorn main:app.asgi --reload
+```
+
+**Option C: Wappa CLI** (batteries-included convenience):
+```bash
+uv run wappa dev examples/echo_project/main.py
 ```
 
 3. **For production deployment**:
 ```bash
-uv run hypercorn main:app --workers 1 --bind "[::]:8000"
+cd examples/echo_project
+uv run hypercorn main:app.asgi --workers 1 --bind "[::]:8000"
 ```
 
 ## Usage
@@ -213,29 +238,57 @@ curl -X POST http://localhost:8000/webhook/whatsapp \
 
 ## Integration with Wappa Framework
 
+### New Unified Architecture Benefits
+
+**Before (Complex Bridge Modules)**:
+```python
+# OLD WAY - 50+ lines of complex threading code!
+def create_fastapi_app():
+    import asyncio, threading
+    # Complex event loop detection...
+    # Threading gymnastics...
+    # Bridge module generation...
+    return result
+
+fastapi_app = create_fastapi_app()  # Required for uvicorn
+```
+
+**After (Clean & Simple)**:
+```python
+# NEW WAY - Just 3 lines!
+from wappa import Wappa
+from echo_handler import EchoProjectHandler
+
+app = Wappa(cache="redis")
+handler = EchoProjectHandler()
+app.set_event_handler(handler)
+
+# That's it! No complex boilerplate needed.
+```
+
 ### Dependency Injection
-The echo handler receives all required dependencies:
+The echo handler receives all required dependencies through Wappa's unified system:
 ```python
 async def process_message(self, webhook: IncomingMessageWebhook):
-    # Access injected dependencies
+    # Access injected dependencies via WappaBuilder's unified lifespan
     messenger = self.messenger
-    cache = self.cache
+    cache_factory = self.cache_factory
     # Components created from dependencies
-    state_manager = StateManager(cache)
+    state_manager = StateManager(cache_factory.create_state_cache())
     media_processor = MediaProcessor(messenger)
 ```
 
 ### Wappa Cache Integration
-Redis integration through Wappa's unified cache:
+Redis integration through Wappa's unified plugin architecture:
 ```python
-# In main.py
-wappa = Wappa(cache="redis")  # Automatic Redis setup
+# In main.py - Wappa automatically adds RedisPlugin!
+app = Wappa(cache="redis")  # That's it - no complex setup needed
 ```
 
 ### Universal Webhook Interface
-Seamless webhook processing:
+Seamless webhook processing through WappaBuilder's unified lifespan:
 ```python
-# Automatic webhook parsing and routing
+# Automatic webhook parsing, plugin initialization, and routing
 webhook: IncomingMessageWebhook = parsed_automatically
 result = await handler.process_message(webhook)
 ```

@@ -3,6 +3,7 @@
 CLAUDE.md
 app/
 logs/
+.ruff_cache
 # Python-related files
 *.py[cod]
 *$py.class

@@ -53,7 +53,7 @@ class RedisPlugin:
         self.max_connections = max_connections
         self.redis_config = redis_config
 
-    async def configure(self, builder: "WappaBuilder") -> None:
+    def configure(self, builder: "WappaBuilder") -> None:
         """
         Configure Redis plugin with WappaBuilder using hook-based architecture.
 

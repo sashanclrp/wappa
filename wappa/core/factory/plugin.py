@@ -25,13 +25,16 @@ class WappaPlugin(Protocol):
     This protocol ensures consistent plugin behavior and proper resource management.
     """
 
-    async def configure(self, builder: "WappaBuilder") -> None:
+    def configure(self, builder: "WappaBuilder") -> None:
         """
         Configure the plugin with the WappaBuilder.
 
         This method is called during the build phase, before the FastAPI app
         is created. Use this to register middleware, routes, and other components
         that need to be set up before the app starts.
+
+        This method is synchronous because it only registers components with the builder.
+        Actual async initialization should be done in the startup() method.
 
         Args:
             builder: WappaBuilder instance to configure
