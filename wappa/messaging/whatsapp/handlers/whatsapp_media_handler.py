@@ -11,6 +11,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.media_interface import IMediaHandler
 from wappa.domain.models.media_result import (
     MediaDeleteResult,
@@ -21,7 +22,6 @@ from wappa.domain.models.media_result import (
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.models.media_models import MediaType
 from wappa.schemas.core.types import PlatformType
-from wappa.core.logging.logger import get_logger
 
 
 class WhatsAppMediaHandler(IMediaHandler):

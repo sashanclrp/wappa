@@ -74,12 +74,12 @@ class IncomingMessageWebhook(BaseModel):
 
     # Webhook identification
     webhook_id: str = Field(description="Unique identifier for this webhook event")
-    
+
     # Raw webhook data (for debugging and inspection)
     raw_webhook_data: dict | None = Field(
-        default=None, 
+        default=None,
         description="Original raw webhook JSON payload",
-        exclude=True  # Don't include in serialization by default
+        exclude=True,  # Don't include in serialization by default
     )
 
     def get_message_text(self) -> str:
@@ -166,10 +166,10 @@ class IncomingMessageWebhook(BaseModel):
     def get_raw_webhook_data(self) -> dict | None:
         """
         Get the original raw webhook JSON payload.
-        
+
         This is useful for debugging, logging, or accessing platform-specific
         fields that aren't included in the universal interface.
-        
+
         Returns:
             Original webhook JSON dict or None if not available
         """
@@ -178,10 +178,10 @@ class IncomingMessageWebhook(BaseModel):
     def set_raw_webhook_data(self, raw_data: dict) -> None:
         """
         Set the original raw webhook JSON payload.
-        
+
         This should be called by webhook processors when creating
         UniversalWebhook instances.
-        
+
         Args:
             raw_data: Original webhook JSON payload
         """
@@ -255,12 +255,12 @@ class StatusWebhook(BaseModel):
     # Universal metadata
     platform: PlatformType = Field(description="Source messaging platform")
     webhook_id: str = Field(description="Unique identifier for this webhook event")
-    
+
     # Raw webhook data (for debugging and inspection)
     raw_webhook_data: dict | None = Field(
-        default=None, 
+        default=None,
         description="Original raw webhook JSON payload",
-        exclude=True  # Don't include in serialization by default
+        exclude=True,  # Don't include in serialization by default
     )
 
     def is_delivered_status(self) -> bool:
@@ -309,10 +309,10 @@ class StatusWebhook(BaseModel):
     def get_raw_webhook_data(self) -> dict | None:
         """
         Get the original raw webhook JSON payload.
-        
+
         This is useful for debugging, logging, or accessing platform-specific
         fields that aren't included in the universal interface.
-        
+
         Returns:
             Original webhook JSON dict or None if not available
         """
@@ -321,10 +321,10 @@ class StatusWebhook(BaseModel):
     def set_raw_webhook_data(self, raw_data: dict) -> None:
         """
         Set the original raw webhook JSON payload.
-        
+
         This should be called by webhook processors when creating
         UniversalWebhook instances.
-        
+
         Args:
             raw_data: Original webhook JSON payload
         """
@@ -360,12 +360,12 @@ class ErrorWebhook(BaseModel):
     # Universal metadata
     platform: PlatformType = Field(description="Source messaging platform")
     webhook_id: str = Field(description="Unique identifier for this webhook event")
-    
+
     # Raw webhook data (for debugging and inspection)
     raw_webhook_data: dict | None = Field(
-        default=None, 
+        default=None,
         description="Original raw webhook JSON payload",
-        exclude=True  # Don't include in serialization by default
+        exclude=True,  # Don't include in serialization by default
     )
 
     def get_primary_error(self) -> ErrorDetailBase:
@@ -410,10 +410,10 @@ class ErrorWebhook(BaseModel):
     def get_raw_webhook_data(self) -> dict | None:
         """
         Get the original raw webhook JSON payload.
-        
+
         This is useful for debugging, logging, or accessing platform-specific
         fields that aren't included in the universal interface.
-        
+
         Returns:
             Original webhook JSON dict or None if not available
         """
@@ -422,10 +422,10 @@ class ErrorWebhook(BaseModel):
     def set_raw_webhook_data(self, raw_data: dict) -> None:
         """
         Set the original raw webhook JSON payload.
-        
+
         This should be called by webhook processors when creating
         UniversalWebhook instances.
-        
+
         Args:
             raw_data: Original webhook JSON payload
         """

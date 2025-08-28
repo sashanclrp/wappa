@@ -5,9 +5,9 @@ This module provides the WappaBuilder class that enables users to create
 highly customized FastAPI applications using a plugin-based architecture.
 """
 
-import asyncio
+from collections.abc import Callable
 from contextlib import asynccontextmanager
-from typing import Any, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
 
@@ -20,15 +20,15 @@ if TYPE_CHECKING:
 class WappaBuilder:
     """
     Fluent builder for creating extensible Wappa applications.
-    
+
     The WappaBuilder provides a plugin-based architecture that allows users
     to extend FastAPI functionality without modifying core code. It supports:
-    
+
     - Plugin system with lifecycle management
     - Priority-based middleware ordering
     - Configurable startup/shutdown hooks
     - Seamless integration with existing Wappa class
-    
+
     Example:
         builder = WappaBuilder()
         app = await (builder
@@ -41,7 +41,7 @@ class WappaBuilder:
 
     def __init__(self):
         """Initialize WappaBuilder with empty configuration."""
-        self.plugins: list["WappaPlugin"] = []
+        self.plugins: list[WappaPlugin] = []
         self.middlewares: list[tuple[type, dict, int]] = []  # (class, kwargs, priority)
         self.routers: list[tuple[Any, dict]] = []  # (router, include_kwargs)
         self.startup_hooks: list[tuple[Callable, int]] = []  # (hook, priority)
@@ -51,13 +51,13 @@ class WappaBuilder:
     def add_plugin(self, plugin: "WappaPlugin") -> "WappaBuilder":
         """
         Add a plugin to extend functionality.
-        
+
         Plugins provide a clean way to add complex functionality like database
         connections, Redis caching, authentication, etc.
-        
+
         Args:
             plugin: WappaPlugin instance to add
-            
+
         Returns:
             Self for method chaining
         """
@@ -65,24 +65,21 @@ class WappaBuilder:
         return self
 
     def add_middleware(
-        self, 
-        middleware_class: type, 
-        priority: int = 50, 
-        **kwargs: Any
+        self, middleware_class: type, priority: int = 50, **kwargs: Any
     ) -> "WappaBuilder":
         """
         Add middleware to the application with priority ordering.
-        
+
         Priority determines execution order:
         - Lower numbers run first (outer middleware)
         - Higher numbers run last (inner middleware)
         - Default priority is 50
-        
+
         Args:
             middleware_class: Middleware class to add
             priority: Execution priority (lower = outer, higher = inner)
             **kwargs: Middleware configuration parameters
-            
+
         Returns:
             Self for method chaining
         """
@@ -92,11 +89,11 @@ class WappaBuilder:
     def add_router(self, router: Any, **kwargs: Any) -> "WappaBuilder":
         """
         Add a router to the application.
-        
+
         Args:
             router: FastAPI router to include
             **kwargs: Arguments for app.include_router()
-            
+
         Returns:
             Self for method chaining
         """
@@ -105,28 +102,61 @@ class WappaBuilder:
 
     def add_startup_hook(self, hook: Callable, priority: int = 50) -> "WappaBuilder":
         """
-        Add a startup hook with priority ordering.
+        Add a startup hook to unified lifespan management.
         
+        Hooks are executed during application startup in priority order.
+        Lower priority numbers execute first.
+        
+        Priority Guidelines:
+        - 10: Core system initialization (logging, sessions)
+        - 20: Infrastructure (databases, caches, external services)
+        - 30: Application services
+        - 50: User hooks (default)
+        - 70+: Late initialization hooks
+
         Args:
-            hook: Async callable to execute during startup
+            hook: Async callable that takes (app: FastAPI) -> None
             priority: Execution priority (lower = runs first)
-            
+
         Returns:
             Self for method chaining
+            
+        Example:
+            async def my_startup(app: FastAPI):
+                print("Starting my service")
+                
+            builder.add_startup_hook(my_startup, priority=30)
         """
         self.startup_hooks.append((hook, priority))
         return self
 
     def add_shutdown_hook(self, hook: Callable, priority: int = 50) -> "WappaBuilder":
         """
-        Add a shutdown hook with priority ordering.
+        Add a shutdown hook to unified lifespan management.
         
+        Hooks are executed during application shutdown in reverse priority order.
+        Higher priority numbers execute first during shutdown.
+        
+        Priority Guidelines:
+        - 90: Core system cleanup (sessions, logging) - runs last
+        - 70: Application services cleanup
+        - 50: User hooks (default)
+        - 30: Application services
+        - 20: Infrastructure cleanup (databases, caches)
+        - 10: Early cleanup
+
         Args:
-            hook: Async callable to execute during shutdown
-            priority: Execution priority (lower = runs first in shutdown)
-            
+            hook: Async callable that takes (app: FastAPI) -> None  
+            priority: Execution priority (higher = runs first in shutdown)
+
         Returns:
             Self for method chaining
+            
+        Example:
+            async def my_shutdown(app: FastAPI):
+                print("Cleaning up my service")
+                
+            builder.add_shutdown_hook(my_shutdown, priority=30)
         """
         self.shutdown_hooks.append((hook, priority))
         return self
@@ -134,10 +164,10 @@ class WappaBuilder:
     def configure(self, **overrides: Any) -> "WappaBuilder":
         """
         Override default FastAPI configuration.
-        
+
         Args:
             **overrides: FastAPI constructor arguments to override
-            
+
         Returns:
             Self for method chaining
         """
@@ -146,46 +176,57 @@ class WappaBuilder:
 
     async def build(self) -> FastAPI:
         """
-        Build the configured FastAPI application.
-        
+        Build the configured FastAPI application with unified lifespan management.
+
         This method:
-        1. Configures all plugins
-        2. Creates the FastAPI app with lifespan management
-        3. Adds middleware in priority order
-        4. Includes all routers
-        
+        1. Configures all plugins (they register their hooks)
+        2. Creates unified lifespan manager that executes all hooks in priority order
+        3. Creates the FastAPI app with unified lifespan
+        4. Adds middleware in priority order
+        5. Includes all routers
+
         Returns:
             Configured FastAPI application instance
         """
         logger = get_app_logger()
-        
-        # Configure plugins first - they can modify the builder
+
+        # Configure plugins first - they register their hooks with the builder
         logger.debug(f"Configuring {len(self.plugins)} plugins...")
         for plugin in self.plugins:
             await plugin.configure(self)
-        
-        # Create lifespan manager with plugin coordination
+
+        logger.info(
+            f"Plugin configuration complete - registered {len(self.startup_hooks)} startup hooks, "
+            f"{len(self.shutdown_hooks)} shutdown hooks"
+        )
+
+        # Create unified lifespan manager that orchestrates ALL hooks
         @asynccontextmanager
-        async def lifespan(app: FastAPI):
+        async def unified_lifespan(app: FastAPI):
             try:
-                # Startup phase
-                logger.debug("Starting plugin and hook startup phase...")
-                await self._execute_startup(app)
+                # Startup phase - execute all hooks in priority order
+                logger.debug("🚀 Starting unified lifespan startup phase...")
+                await self._execute_all_startup_hooks(app)
+                logger.info("✅ All startup hooks completed successfully")
                 yield
+            except Exception as e:
+                logger.error(f"❌ Error during startup phase: {e}", exc_info=True)
+                raise
             finally:
-                # Shutdown phase
-                logger.debug("Starting plugin and hook shutdown phase...")
-                await self._execute_shutdown(app)
+                # Shutdown phase - execute all hooks in reverse priority order
+                logger.debug("🛑 Starting unified lifespan shutdown phase...")
+                await self._execute_all_shutdown_hooks(app)
+                logger.info("✅ All shutdown hooks completed")
 
         # Create FastAPI app with default configuration and overrides
         default_config = {
             "title": "Wappa Application",
             "description": "WhatsApp Business application built with Wappa framework",
             "version": "1.0.0",
-            "lifespan": lifespan,
+            "lifespan": unified_lifespan,  # Single unified lifespan manager
         }
         default_config.update(self.config_overrides)
-        
+
         app = FastAPI(**default_config)
         logger.debug(f"Created FastAPI app: {default_config['title']}")
 
@@ -194,7 +235,9 @@ class WappaBuilder:
         sorted_middlewares = sorted(self.middlewares, key=lambda x: x[2], reverse=True)
         for middleware_class, kwargs, priority in sorted_middlewares:
             app.add_middleware(middleware_class, **kwargs)
-            logger.debug(f"Added middleware {middleware_class.__name__} (priority: {priority})")
+            logger.debug(
+                f"Added middleware {middleware_class.__name__} (priority: {priority})"
+            )
 
         # Include all routers
         for router, kwargs in self.routers:
@@ -202,71 +245,79 @@ class WappaBuilder:
             logger.debug(f"Included router with config: {kwargs}")
 
         logger.info(
-            f"WappaBuilder created app with {len(self.plugins)} plugins, "
-            f"{len(self.middlewares)} middlewares, {len(self.routers)} routers"
+            f"🏗️ WappaBuilder created app with {len(self.plugins)} plugins, "
+            f"{len(self.middlewares)} middlewares, {len(self.routers)} routers, "
+            f"{len(self.startup_hooks)} startup hooks, {len(self.shutdown_hooks)} shutdown hooks"
         )
-        
+
         return app
 
-    async def _execute_startup(self, app: FastAPI) -> None:
+    async def _execute_all_startup_hooks(self, app: FastAPI) -> None:
         """
-        Execute startup sequence for plugins and hooks.
+        Execute all startup hooks in unified priority order.
         
+        This replaces the old plugin-specific startup execution with a unified
+        approach where all hooks (from plugins and user code) are executed
+        in a single priority-ordered sequence.
+
         Args:
             app: FastAPI application instance
         """
         logger = get_app_logger()
-        
+
         try:
-            # Execute plugin startups first
-            for plugin in self.plugins:
-                plugin_name = plugin.__class__.__name__
-                logger.debug(f"Starting plugin: {plugin_name}")
-                await plugin.startup(app)
-                logger.debug(f"Plugin {plugin_name} started successfully")
-
-            # Execute custom startup hooks in priority order
+            # Execute all startup hooks in priority order (10, 20, 30, ...)
             sorted_hooks = sorted(self.startup_hooks, key=lambda x: x[1])
-            for hook, priority in sorted_hooks:
-                hook_name = getattr(hook, '__name__', 'anonymous_hook')
-                logger.debug(f"Executing startup hook: {hook_name} (priority: {priority})")
-                await hook(app)
-                logger.debug(f"Startup hook {hook_name} completed")
 
-            logger.info("All plugins and startup hooks completed successfully")
-            
+            if not sorted_hooks:
+                logger.debug("No startup hooks registered")
+                return
+
+            logger.debug(f"Executing {len(sorted_hooks)} startup hooks in priority order...")
+
+            for hook, priority in sorted_hooks:
+                hook_name = getattr(hook, "__name__", "anonymous_hook")
+                logger.debug(f"⚡ Executing startup hook: {hook_name} (priority: {priority})")
+
+                try:
+                    await hook(app)
+                    logger.debug(f"✅ Startup hook {hook_name} completed")
+                except Exception as e:
+                    logger.error(f"❌ Startup hook {hook_name} failed: {e}", exc_info=True)
+                    raise  # Re-raise to fail fast
+
         except Exception as e:
-            logger.error(f"Error during startup phase: {e}", exc_info=True)
+            logger.error(f"❌ Startup sequence failed: {e}", exc_info=True)
             raise
 
-    async def _execute_shutdown(self, app: FastAPI) -> None:
+    async def _execute_all_shutdown_hooks(self, app: FastAPI) -> None:
         """
-        Execute shutdown sequence for plugins and hooks.
+        Execute all shutdown hooks in reverse priority order.
         
+        This replaces the old plugin-specific shutdown execution with a unified
+        approach where all hooks are executed in reverse priority order,
+        with error isolation to prevent shutdown cascading failures.
+
         Args:
             app: FastAPI application instance
         """
         logger = get_app_logger()
-        
-        # Execute shutdown hooks first (reverse priority order)
+
+        # Execute shutdown hooks in reverse priority order (90, 70, 50, 30, 20, 10)
         sorted_hooks = sorted(self.shutdown_hooks, key=lambda x: x[1], reverse=True)
+
+        if not sorted_hooks:
+            logger.debug("No shutdown hooks registered")
+            return
+
+        logger.debug(f"Executing {len(sorted_hooks)} shutdown hooks in reverse priority order...")
+
         for hook, priority in sorted_hooks:
             try:
-                hook_name = getattr(hook, '__name__', 'anonymous_hook')
-                logger.debug(f"Executing shutdown hook: {hook_name} (priority: {priority})")
+                hook_name = getattr(hook, "__name__", "anonymous_hook")
+                logger.debug(f"🛑 Executing shutdown hook: {hook_name} (priority: {priority})")
                 await hook(app)
-                logger.debug(f"Shutdown hook {hook_name} completed")
+                logger.debug(f"✅ Shutdown hook {hook_name} completed")
             except Exception as e:
-                logger.error(f"Error in shutdown hook {hook_name}: {e}", exc_info=True)
-
-        # Execute plugin shutdowns in reverse order
-        for plugin in reversed(self.plugins):
-            try:
-                plugin_name = plugin.__class__.__name__
-                logger.debug(f"Shutting down plugin: {plugin_name}")
-                await plugin.shutdown(app)
-                logger.debug(f"Plugin {plugin_name} shut down successfully")
-            except Exception as e:
-                logger.error(f"Error shutting down plugin {plugin_name}: {e}", exc_info=True)
-
-        logger.info("All plugins and shutdown hooks completed")
+                # Don't re-raise in shutdown - log and continue with other hooks
+                logger.error(f"❌ Error in shutdown hook {hook_name}: {e}", exc_info=True)

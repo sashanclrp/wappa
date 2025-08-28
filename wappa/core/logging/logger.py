@@ -20,27 +20,36 @@ from wappa.core.config.settings import settings
 
 class CompactFormatter(logging.Formatter):
     """Custom formatter that shortens long module names for better readability."""
-    
+
     def format(self, record):
         # Shorten long module names for better readability
-        if record.name.startswith('wappa.'):
+        if record.name.startswith("wappa."):
             # Convert wappa.core.events.event_dispatcher -> events.dispatcher
-            parts = record.name.split('.')
+            parts = record.name.split(".")
             if len(parts) > 2:
                 # Keep last 2 parts for most modules
-                if 'event_dispatcher' in record.name:
-                    record.name = 'events.dispatcher'
-                elif 'default_handlers' in record.name:
-                    record.name = 'events.handlers'
-                elif 'whatsapp' in record.name:
+                if "event_dispatcher" in record.name:
+                    record.name = "events.dispatcher"
+                elif "default_handlers" in record.name:
+                    record.name = "events.handlers"
+                elif "whatsapp" in record.name:
                     # For WhatsApp modules, keep whatsapp.component
-                    relevant_parts = [p for p in parts if p in ['whatsapp', 'messenger', 'handlers', 'client']]
-                    record.name = '.'.join(relevant_parts[-2:]) if len(relevant_parts) >= 2 else '.'.join(relevant_parts)
+                    relevant_parts = [
+                        p
+                        for p in parts
+                        if p in ["whatsapp", "messenger", "handlers", "client"]
+                    ]
+                    record.name = (
+                        ".".join(relevant_parts[-2:])
+                        if len(relevant_parts) >= 2
+                        else ".".join(relevant_parts)
+                    )
                 else:
                     # Default: keep last 2 parts
-                    record.name = '.'.join(parts[-2:])
-        
+                    record.name = ".".join(parts[-2:])
+
         return super().format(record)
+
 
 # Rich theme for colored output
 _theme = Theme(
@@ -76,10 +85,10 @@ class ContextLogger:
         """Add context prefix to message."""
         # Get fresh context variables on each log call for dynamic context
         from .context import get_current_tenant_context, get_current_user_context
-        
+
         current_tenant = get_current_tenant_context() or self.tenant_id
         current_user = get_current_user_context() or self.user_id
-        
+
         if current_tenant and current_tenant != "---":
             if current_user and current_user != "---":
                 return f"[T:{current_tenant}][U:{current_user}] {message}"
@@ -261,13 +270,15 @@ def get_logger(name: str) -> ContextLogger:
     """
     # Import here to avoid circular imports
     from .context import get_current_tenant_context, get_current_user_context
-    
+
     # Use context variables for automatic context propagation
     effective_tenant_id = get_current_tenant_context()
     effective_user_id = get_current_user_context()
-    
+
     base_logger = logging.getLogger(name)
-    return ContextLogger(base_logger, tenant_id=effective_tenant_id, user_id=effective_user_id)
+    return ContextLogger(
+        base_logger, tenant_id=effective_tenant_id, user_id=effective_user_id
+    )
 
 
 def get_app_logger() -> ContextLogger:
@@ -293,8 +304,6 @@ def get_api_logger(name: str | None = None) -> ContextLogger:
         ContextLogger instance with API-level context
     """
     return get_logger(name or "wappa.api")
-
-
 
 
 def get_webhook_logger(name: str, tenant_id: str, user_id: str) -> ContextLogger:

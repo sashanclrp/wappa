@@ -7,10 +7,10 @@ the appropriate schema classes based on platform and message type combinations.
 
 from typing import Any
 
+from wappa.core.logging.logger import get_logger
 from wappa.webhooks.core.base_message import BaseMessage
 from wappa.webhooks.core.base_webhook import BaseWebhook
 from wappa.webhooks.core.types import MessageType, PlatformType
-from wappa.core.logging.logger import get_logger
 
 
 class SchemaRegistryError(Exception):

@@ -17,13 +17,13 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import BinaryIO
 
-from wappa.schemas.core.types import PlatformType
 from wappa.domain.models.media_result import (
     MediaDeleteResult,
     MediaDownloadResult,
     MediaInfoResult,
     MediaUploadResult,
 )
+from wappa.schemas.core.types import PlatformType
 
 
 class IMediaHandler(ABC):

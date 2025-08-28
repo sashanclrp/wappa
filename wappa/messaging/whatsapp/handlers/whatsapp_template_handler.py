@@ -9,6 +9,7 @@ Provides template messaging operations using WhatsApp Cloud API:
 Migrated from whatsapp_latest/services/send_templates.py with SOLID architecture.
 """
 
+from wappa.core.logging.logger import get_logger
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.template_models import (
@@ -16,7 +17,6 @@ from wappa.messaging.whatsapp.models.template_models import (
     TemplateParameter,
     TemplateParameterType,
 )
-from wappa.core.logging.logger import get_logger
 
 
 class WhatsAppTemplateHandler:

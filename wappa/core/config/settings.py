@@ -82,7 +82,7 @@ class Settings:
         self.redis_url: str | None = os.getenv("REDIS_URL")
 
         # Redis connection settings (only used if Redis is enabled)
-        self.redis_max_connections: int = int(os.getenv("REDIS_MAX_CONNECTIONS", "50"))
+        self.redis_max_connections: int = int(os.getenv("REDIS_MAX_CONNECTIONS", "64"))
         self.redis_connection_timeout: int = int(
             os.getenv("REDIS_CONNECTION_TIMEOUT", "30")
         )

@@ -7,9 +7,9 @@ clean architecture, SOLID compliance, and proper design patterns.
 SETUP REQUIRED:
 Create a .env file with your WhatsApp Business API credentials:
 
-    # WhatsApp Business API Credentials  
+    # WhatsApp Business API Credentials
     WP_ACCESS_TOKEN=your_access_token_here
-    WP_PHONE_ID=your_phone_number_id_here  
+    WP_PHONE_ID=your_phone_number_id_here
     WP_BID=your_business_id_here
 
 The framework will automatically:
@@ -18,6 +18,12 @@ The framework will automatically:
 3. Configure WhatsApp client with proper authentication
 4. Route webhooks to your event handler methods
 """
+import asyncio
+import sys
+from pathlib import Path
+
+# Add parent directory to path for direct script execution
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from wappa import Wappa, WappaEventHandler, __version__, webhook_url_factory
 from wappa.core.config.settings import settings
@@ -26,11 +32,11 @@ from wappa.webhooks import ErrorWebhook, IncomingMessageWebhook, StatusWebhook
 
 class MyEventHandler(WappaEventHandler):
     """Example event handler showing the new Template Method pattern."""
-    
+
     def __init__(self):
         """Initialize event handler and validate dependencies."""
         super().__init__()
-        
+
         # Dependencies will be injected by Wappa framework during startup
         # We'll validate them in the first message processing
 
@@ -53,24 +59,31 @@ class MyEventHandler(WappaEventHandler):
         # Show raw webhook data for debugging
         raw_data = webhook.get_raw_webhook_data()
         if raw_data:
-            self.logger.debug(f"📄 Raw webhook JSON available (keys: {list(raw_data.keys())})")
-            self.logger.debug(f"📄 MESSENGER Raw webhook JSON available (keys: {raw_data})")
+            self.logger.debug(
+                f"📄 Raw webhook JSON available (keys: {list(raw_data.keys())})"
+            )
+            self.logger.debug(
+                f"📄 MESSENGER Raw webhook JSON available (keys: {raw_data})"
+            )
 
         # Echo the message back using the injected messenger
         if self.messenger:
             try:
                 result = await self.messenger.send_text(
-                    recipient=user_id, 
-                    text=f"🔄 Echo: {message_text}"
+                    recipient=user_id, text=f"🔄 Echo: {message_text}"
                 )
-                
+
                 if result.success:
-                    self.logger.info(f"✅ Echo sent successfully (msg_id: {result.message_id})")
+                    self.logger.info(
+                        f"✅ Echo sent successfully (msg_id: {result.message_id})"
+                    )
                 else:
                     self.logger.error(f"❌ Failed to send echo: {result.error}")
-                    
+
             except Exception as e:
-                self.logger.error(f"❌ Exception sending echo message: {e}", exc_info=True)
+                self.logger.error(
+                    f"❌ Exception sending echo message: {e}", exc_info=True
+                )
         else:
             self.logger.warning("⚠️  Messenger not available - cannot send echo")
 
@@ -79,15 +92,19 @@ class MyEventHandler(WappaEventHandler):
         """Custom status processing - called after framework logging."""
         self.logger.info(f"📊 Custom status processing: {webhook.status.value}")
 
-        # Show raw webhook data for debugging  
+        # Show raw webhook data for debugging
         raw_data = webhook.get_raw_webhook_data()
         if raw_data:
-            self.logger.debug(f"📄 Raw status webhook JSON available (keys: {list(raw_data.keys())})")
+            self.logger.debug(
+                f"📄 Raw status webhook JSON available (keys: {list(raw_data.keys())})"
+            )
             self.logger.debug(f"📄 Raw webhook JSON available (keys: {raw_data})")
 
         # Example: Track delivery rates for business metrics
         if webhook.status.value == "delivered":
-            self.logger.info("✅ Message successfully delivered - updating delivery metrics")
+            self.logger.info(
+                "✅ Message successfully delivered - updating delivery metrics"
+            )
         elif webhook.status.value == "failed":
             self.logger.error("❌ Message failed - investigating delivery issue")
 
@@ -96,7 +113,7 @@ class MyEventHandler(WappaEventHandler):
         """Custom error processing - called after framework logging and escalation."""
         error_count = webhook.get_error_count()
         primary_error = webhook.get_primary_error()
-        
+
         self.logger.error(
             f"🚨 Custom error processing: {error_count} errors, primary: {primary_error.error_code}"
         )
@@ -104,14 +121,33 @@ class MyEventHandler(WappaEventHandler):
         # Show raw webhook data for debugging
         raw_data = webhook.get_raw_webhook_data()
         if raw_data:
-            self.logger.debug(f"📄 Raw error webhook JSON available (keys: {list(raw_data.keys())})")
+            self.logger.debug(
+                f"📄 Raw error webhook JSON available (keys: {list(raw_data.keys())})"
+            )
             self.logger.debug(f"📄 Raw webhook JSON available (keys: {raw_data})")
 
         # Example: Custom business logic for specific error types
         if primary_error.error_code == 131047:  # Rate limit error
-            self.logger.warning("⏳ Rate limit detected - implementing backoff strategy")
+            self.logger.warning(
+                "⏳ Rate limit detected - implementing backoff strategy"
+            )
         elif primary_error.error_code == 131026:  # Message undeliverable
             self.logger.warning("📧 Message undeliverable - adding to retry queue")
+
+
+def create_wappa_app():
+    """Create and configure the Wappa application."""
+    # 1. Create Wappa application
+    app = Wappa()
+
+    # 2. Set event handler
+    handler = MyEventHandler()
+    app.set_event_handler(handler)
+
+    return app
+
+# Export the app for uvicorn auto-reload support
+app = create_wappa_app()
 
 
 
@@ -123,19 +159,18 @@ def main():
     print()
     print("📋 Configuration Loaded from .env:")
     print(f"  • Access Token: {'✅ Set' if settings.wp_access_token else '❌ Missing'}")
-    print(f"  • Phone ID: {settings.wp_phone_id if settings.wp_phone_id else '❌ Missing'}")
+    print(
+        f"  • Phone ID: {settings.wp_phone_id if settings.wp_phone_id else '❌ Missing'}"
+    )
     print(f"  • Business ID: {'✅ Set' if settings.wp_bid else '❌ Missing'}")
     print()
 
-    # 1. Create Wappa application
-    app = Wappa()
-
-    # 2. Set event handler
-    handler = MyEventHandler()
-    app.set_event_handler(handler)
+    # Use the exported app instance
 
     # 3. Webhook URL is now automatically displayed during server startup
-    print(f"📱 Using Phone ID: {settings.owner_id}")  # Show which phone ID is being used
+    print(
+        f"📱 Using Phone ID: {settings.owner_id}"
+    )  # Show which phone ID is being used
     print("🔗 Webhook URL will be displayed when server starts")
     print()
 
@@ -190,19 +225,20 @@ def main():
     print("  • Multi-tenant: Support for multiple WhatsApp Business accounts")
     print()
 
-
     print("🌐 Starting server on http://localhost:8000")
     print("💡 Press CTRL+C to stop the server")
     print("🔗 Health check: GET http://localhost:8000/health")
     print("=" * 50)
-    print("🔄 Alternative ways to run:")
-    print("   • Python: uv run python example_webhook_usage.py")
-    print("   • Uvicorn: uv run uvicorn example_webhook_usage:fastapi_app --reload --host 0.0.0.0")
+    print("🔄 Recommended ways to run:")
+    print("   • Development: python examples/webhook_usage.py (auto-reload enabled in DEV)")
+    print("   • Manual reload: uvicorn examples.webhook_usage:fastapi_app --reload")
+    print("   • Production: Set ENVIRONMENT=PROD in .env (auto-reload disabled)")
     print()
-    
+
     try:
         # Start the server - this will block and keep running
-        app.run()
+        # Auto-reload is automatically enabled in DEV environment
+        app.run(port=8004)
     except KeyboardInterrupt:
         print("\n👋 Server stopped by user")
     except Exception as e:
@@ -211,16 +247,12 @@ def main():
         print("🏁 Webhook demo completed")
 
 
-# Export the FastAPI app for direct uvicorn usage
-def create_app():
-    """Create the FastAPI app for uvicorn direct usage."""
-    app = Wappa()
-    handler = MyEventHandler()
-    app.set_event_handler(handler)
-    return app.create_app()
-
-# Create the app instance for uvicorn
-fastapi_app = create_app()
+# Auto-reload Development Setup:
+# 1. Direct Python: python examples/webhook_usage.py (simple, no auto-reload)
+# 2. Uvicorn reload: uvicorn examples.webhook_usage:fastapi_app --reload (auto-reload enabled)
+#
+# The fastapi_app export uses thread-based lazy loading to avoid asyncio event loop conflicts
+# in uvicorn's subprocess reloader environment.
 
 
 if __name__ == "__main__":

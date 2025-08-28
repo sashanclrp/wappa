@@ -102,7 +102,9 @@ class RedisClient:
         if missing:
             raise ValueError(f"Missing required pool aliases: {missing}")
 
-        extra = set(str(k) for k in urls.keys()) - set(str(k) for k in POOL_DB_MAPPING.keys())
+        extra = set(str(k) for k in urls) - set(
+            str(k) for k in POOL_DB_MAPPING
+        )
         if extra:
             raise ValueError(
                 f"Unknown pool aliases: {extra}. Only {list(POOL_DB_MAPPING.keys())} are allowed."

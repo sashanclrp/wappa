@@ -19,7 +19,7 @@ from .default_handlers import (
 )
 from .event_dispatcher import WappaEventDispatcher
 from .event_handler import WappaEventHandler
-from .webhook_factory import WebhookURLFactory, WebhookEndpointType, webhook_url_factory
+from .webhook_factory import WebhookEndpointType, WebhookURLFactory, webhook_url_factory
 
 __all__ = [
     # Event Handlers

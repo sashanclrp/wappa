@@ -5,18 +5,19 @@ Simplified version of the SimpleEventDispatcher focused on the core webhook rout
 """
 
 from datetime import datetime
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
 from wappa.core.logging.logger import get_logger
 
-
 if TYPE_CHECKING:
-    from .event_handler import WappaEventHandler
     from wappa.webhooks import (
         ErrorWebhook,
         IncomingMessageWebhook,
         StatusWebhook,
         UniversalWebhook,
     )
+
+    from .event_handler import WappaEventHandler
 
 
 class WappaEventDispatcher:
@@ -75,12 +76,14 @@ class WappaEventDispatcher:
 
             # Use emoji and shorter format for webhook processing
             webhook_emoji = {
-                'IncomingMessageWebhook': '💬',
-                'StatusWebhook': '📊',
-                'ErrorWebhook': '🚨'
-            }.get(webhook_type, '📨')
-            
-            self.logger.info(f"{webhook_emoji} {webhook_type.replace('Webhook', '')} from {platform_or_provider}")
+                "IncomingMessageWebhook": "💬",
+                "StatusWebhook": "📊",
+                "ErrorWebhook": "🚨",
+            }.get(webhook_type, "📨")
+
+            self.logger.info(
+                f"{webhook_emoji} {webhook_type.replace('Webhook', '')} from {platform_or_provider}"
+            )
 
             # Route to appropriate handler method
             result = None
@@ -130,12 +133,13 @@ class WappaEventDispatcher:
         """
         try:
             # Enhanced message routing log
-            handler_name = self._event_handler.__class__.__name__.replace('EventHandler', '')
+            handler_name = self._event_handler.__class__.__name__.replace(
+                "EventHandler", ""
+            )
             msg_type = webhook.get_message_type_name()
-            
+
             self.logger.info(
-                f"💬 {msg_type} message → {handler_name} "
-                f"(from: {webhook.user.user_id})"
+                f"💬 {msg_type} message → {handler_name} (from: {webhook.user.user_id})"
             )
 
             # Call user's handle_message method
@@ -171,12 +175,12 @@ class WappaEventDispatcher:
         try:
             # Enhanced status logging without message ID
             status_emoji = {
-                'sent': '📤',
-                'delivered': '✅', 
-                'read': '👁️',
-                'failed': '❌'
-            }.get(webhook.status.value, '📋')
-            
+                "sent": "📤",
+                "delivered": "✅",
+                "read": "👁️",
+                "failed": "❌",
+            }.get(webhook.status.value, "📋")
+
             self.logger.info(
                 f"{status_emoji} Status Update: {webhook.status.value.upper()} "
                 f"(recipient: {webhook.recipient_id})"

@@ -9,7 +9,11 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from wappa.schemas.core.base_webhook import BaseContact, BaseWebhook, BaseWebhookMetadata
+from wappa.schemas.core.base_webhook import (
+    BaseContact,
+    BaseWebhook,
+    BaseWebhookMetadata,
+)
 from wappa.schemas.core.types import PlatformType, WebhookType
 from wappa.schemas.whatsapp.base_models import WhatsAppContact, WhatsAppMetadata
 

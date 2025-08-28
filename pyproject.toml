@@ -23,6 +23,7 @@ dependencies = [
     "rich>=13.0.0",
     "ruff>=0.9.0",
     "setuptools>=78.1.0",
+    "sqlmodel>=0.0.24",
     "uvicorn>=0.34.0",
 ]
 

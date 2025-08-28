@@ -16,15 +16,17 @@ class IExpiryRepository(IBaseRepository):
 
     Handles expiry triggers and time-based automation with context binding.
     Uses the 'expiry' Redis pool (database 8).
-    
+
     This interface mirrors the RedisTrigger implementation:
     - create_expiry_trigger(action, identifier, ttl) -> set(action, identifier, ttl_seconds)
-    - delete_expiry_trigger(action, identifier) -> delete(action, identifier)  
+    - delete_expiry_trigger(action, identifier) -> delete(action, identifier)
     - delete_all_expiry_triggers_by_id(identifier) -> delete_all_by_identifier(identifier)
     """
 
     @abstractmethod
-    async def create_expiry_trigger(self, action: str, identifier: str, ttl: timedelta) -> str:
+    async def create_expiry_trigger(
+        self, action: str, identifier: str, ttl: timedelta
+    ) -> str:
         """
         Create expiry trigger for automated workflow.
 

@@ -32,18 +32,21 @@ class WappaEventHandler(ABC):
     Dependencies are injected PER-REQUEST by WebhookController:
     - messenger: IMessenger created with correct tenant_id for each request
     - cache_factory: Future cache factory for tenant-specific data persistence (currently None)
-    
-    This ensures proper multi-tenant support where each webhook is processed 
+
+    This ensures proper multi-tenant support where each webhook is processed
     with the correct tenant-specific messenger instance.
     """
 
     def __init__(self):
         """Initialize event handler with None dependencies (injected per-request)."""
-        self.messenger: "IMessenger" = None  # Injected per-request by WebhookController
-        self.cache_factory = None  # Injected per-request by WebhookController (placeholder)
+        self.messenger: IMessenger = None  # Injected per-request by WebhookController
+        self.cache_factory = (
+            None  # Injected per-request by WebhookController (placeholder)
+        )
 
         # Set up logger with the actual class module name (not the base class)
         from wappa.core.logging.logger import get_logger
+
         self.logger = get_logger(self.__class__.__module__)
 
         # Default handlers for all webhook types (core framework infrastructure)
@@ -193,20 +196,26 @@ class WappaEventHandler(ABC):
     def validate_dependencies(self) -> bool:
         """
         Validate that required dependencies have been properly injected per-request.
-        
+
         Returns:
             True if all required dependencies are available, False otherwise
         """
         if self.messenger is None:
-            self.logger.error("❌ Messenger dependency not injected - cannot send messages (check WebhookController)")
+            self.logger.error(
+                "❌ Messenger dependency not injected - cannot send messages (check WebhookController)"
+            )
             return False
-            
+
         # Cache factory is optional for now (placeholder)
         if self.cache_factory is None:
-            self.logger.debug("ℹ️  Cache factory not injected - using placeholder (expected)")
+            self.logger.debug(
+                "ℹ️  Cache factory not injected - using placeholder (expected)"
+            )
         else:
-            self.logger.debug(f"✅ Cache factory injected: {type(self.cache_factory).__name__}")
-        
+            self.logger.debug(
+                f"✅ Cache factory injected: {type(self.cache_factory).__name__}"
+            )
+
         self.logger.debug(
             f"✅ Per-request dependencies validation passed - "
             f"messenger: {self.messenger.__class__.__name__} "
@@ -217,7 +226,7 @@ class WappaEventHandler(ABC):
     def get_dependency_status(self) -> dict:
         """
         Get the status of injected dependencies for debugging.
-        
+
         Returns:
             Dictionary containing dependency injection status
         """
@@ -230,7 +239,9 @@ class WappaEventHandler(ABC):
             },
             "cache_factory": {
                 "injected": self.cache_factory is not None,
-                "type": type(self.cache_factory).__name__ if self.cache_factory else None,
+                "type": type(self.cache_factory).__name__
+                if self.cache_factory
+                else None,
                 "status": "placeholder" if self.cache_factory is None else "active",
-            }
+            },
         }

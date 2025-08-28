@@ -7,24 +7,23 @@ automatically available to all components.
 """
 
 from contextvars import ContextVar
-from typing import Optional
 
 # Context variables for automatic propagation
-_owner_context: ContextVar[Optional[str]] = ContextVar(
+_owner_context: ContextVar[str | None] = ContextVar(
     "owner_id", default=None
 )  # From middleware/configuration
-_tenant_context: ContextVar[Optional[str]] = ContextVar(
+_tenant_context: ContextVar[str | None] = ContextVar(
     "tenant_id", default=None
 )  # From webhook JSON
-_user_context: ContextVar[Optional[str]] = ContextVar(
+_user_context: ContextVar[str | None] = ContextVar(
     "user_id", default=None
 )  # From webhook JSON
 
 
 def set_request_context(
-    owner_id: Optional[str] = None,
-    tenant_id: Optional[str] = None,
-    user_id: Optional[str] = None,
+    owner_id: str | None = None,
+    tenant_id: str | None = None,
+    user_id: str | None = None,
 ) -> None:
     """
     Set the request context for the current async context.
@@ -45,7 +44,7 @@ def set_request_context(
         _user_context.set(user_id)
 
 
-def get_current_owner_context() -> Optional[str]:
+def get_current_owner_context() -> str | None:
     """
     Get the current owner ID from context variables.
 
@@ -55,7 +54,7 @@ def get_current_owner_context() -> Optional[str]:
     return _owner_context.get()
 
 
-def get_current_tenant_context() -> Optional[str]:
+def get_current_tenant_context() -> str | None:
     """
     Get the current tenant ID from context variables.
 
@@ -65,7 +64,7 @@ def get_current_tenant_context() -> Optional[str]:
     return _tenant_context.get()
 
 
-def get_current_user_context() -> Optional[str]:
+def get_current_user_context() -> str | None:
     """
     Get the current user ID from context variables.
 
@@ -87,7 +86,7 @@ def clear_request_context() -> None:
     _user_context.set(None)
 
 
-def get_context_info() -> dict[str, Optional[str]]:
+def get_context_info() -> dict[str, str | None]:
     """
     Get current context information for debugging.
 

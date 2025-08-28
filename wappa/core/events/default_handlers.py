@@ -5,13 +5,13 @@ Provides built-in handlers for incoming messages, status updates and error webho
 used out-of-the-box or extended by users for custom behavior.
 """
 
-from typing import Any, Dict, Optional
+import re
 from datetime import datetime
 from enum import Enum
-import re
+from typing import Any
 
-from wappa.webhooks import IncomingMessageWebhook, StatusWebhook, ErrorWebhook
 from wappa.core.logging.logger import get_logger
+from wappa.webhooks import ErrorWebhook, IncomingMessageWebhook, StatusWebhook
 
 
 class LogLevel(Enum):
@@ -230,7 +230,7 @@ class DefaultMessageHandler:
         if message_type.lower() in ["text", "interactive", "button"]:
             await self._log_summarized(logger, webhook)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """
         Get current message processing statistics.
 
@@ -285,7 +285,7 @@ class DefaultStatusHandler:
             "last_processed": None,
         }
 
-    async def handle_status(self, webhook: StatusWebhook) -> Dict[str, Any]:
+    async def handle_status(self, webhook: StatusWebhook) -> dict[str, Any]:
         """
         Handle a status webhook with configurable logging.
 
@@ -375,7 +375,7 @@ class DefaultStatusHandler:
         }
         return methods.get(log_level, self.logger.info)
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get current status processing statistics."""
         return self._stats.copy()
 
@@ -424,7 +424,7 @@ class DefaultErrorHandler:
             "recent_errors": [],  # For escalation tracking
         }
 
-    async def handle_error(self, webhook: ErrorWebhook) -> Dict[str, Any]:
+    async def handle_error(self, webhook: ErrorWebhook) -> dict[str, Any]:
         """
         Handle an error webhook with escalation logic.
 
@@ -554,7 +554,7 @@ class DefaultErrorHandler:
                 f"{error_count} errors, primary: {primary_error.error_code} - {primary_error.error_title}"
             )
 
-    def _get_stats_summary(self) -> Dict[str, Any]:
+    def _get_stats_summary(self) -> dict[str, Any]:
         """Get summarized statistics for response."""
         return {
             "total_errors": self._stats["total_errors"],
@@ -568,7 +568,7 @@ class DefaultErrorHandler:
             ),
         }
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get complete error processing statistics."""
         return self._stats.copy()
 

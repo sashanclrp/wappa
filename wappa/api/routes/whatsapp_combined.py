@@ -21,7 +21,7 @@ whatsapp_router = APIRouter(
     tags=["WhatsApp API"],
     responses={
         400: {"description": "Bad Request - Invalid message format"},
-        401: {"description": "Unauthorized - Invalid tenant credentials"},  
+        401: {"description": "Unauthorized - Invalid tenant credentials"},
         429: {"description": "Rate Limited - Too many requests"},
         500: {"description": "Internal Server Error"},
     },

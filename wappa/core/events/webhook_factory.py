@@ -6,7 +6,6 @@ for different messaging platforms with tenant-aware routing.
 """
 
 from enum import Enum
-from typing import Dict, Optional
 
 from wappa.core.config.settings import settings
 from wappa.schemas.core.types import PlatformType
@@ -31,7 +30,7 @@ class WebhookURLFactory:
     flexible URL construction.
     """
 
-    def __init__(self, base_url: Optional[str] = None):
+    def __init__(self, base_url: str | None = None):
         """
         Initialize the webhook URL factory.
 
@@ -117,7 +116,7 @@ class WebhookURLFactory:
             PlatformType.WHATSAPP, "", WebhookEndpointType.VERIFY
         )
 
-    def get_supported_platforms(self) -> Dict[str, Dict[str, str]]:
+    def get_supported_platforms(self) -> dict[str, dict[str, str]]:
         """
         Get all supported platforms and their webhook URL patterns.
 
@@ -157,7 +156,7 @@ class WebhookURLFactory:
         expected_url = self.generate_webhook_url(platform, tenant_id)
         return url == expected_url
 
-    def extract_platform_from_url(self, webhook_path: str) -> Optional[PlatformType]:
+    def extract_platform_from_url(self, webhook_path: str) -> PlatformType | None:
         """
         Extract platform type from a webhook URL path.
 
@@ -183,7 +182,7 @@ class WebhookURLFactory:
 
         return None
 
-    def extract_tenant_from_url(self, webhook_path: str) -> Optional[str]:
+    def extract_tenant_from_url(self, webhook_path: str) -> str | None:
         """
         Extract tenant ID from a webhook URL path.
 

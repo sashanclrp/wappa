@@ -13,7 +13,7 @@ Based on existing whatsapp_latest/services/interactive_message.py functionality
 with SOLID architecture improvements.
 """
 
-from wappa.schemas.core.types import PlatformType
+from wappa.core.logging.logger import get_logger
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.interactive_models import (
@@ -23,7 +23,7 @@ from wappa.messaging.whatsapp.models.interactive_models import (
     validate_buttons_menu_limits,
     validate_header_constraints,
 )
-from wappa.core.logging.logger import get_logger
+from wappa.schemas.core.types import PlatformType
 
 
 class WhatsAppInteractiveHandler:

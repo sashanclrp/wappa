@@ -5,8 +5,9 @@ Provides PostgreSQL-specific implementation for SQLModel/SQLAlchemy async connec
 using asyncpg as the async driver.
 """
 
+from collections.abc import Callable
 from contextlib import asynccontextmanager
-from typing import Any, AsyncContextManager, Callable
+from typing import Any, AsyncContextManager
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -16,55 +17,51 @@ from sqlmodel import SQLModel
 class PostgreSQLAdapter:
     """
     PostgreSQL adapter for SQLModel/SQLAlchemy async connections.
-    
+
     Uses asyncpg driver for optimal PostgreSQL async performance.
     Provides connection pooling, health checks, and schema management.
     """
 
-    async def create_engine(
-        self, 
-        connection_string: str, 
-        **kwargs: Any
-    ) -> AsyncEngine:
+    async def create_engine(self, connection_string: str, **kwargs: Any) -> AsyncEngine:
         """
         Create PostgreSQL async engine with asyncpg driver.
-        
+
         Args:
             connection_string: PostgreSQL connection URL (postgresql+asyncpg://...)
             **kwargs: Engine configuration options
-            
+
         Returns:
             Configured AsyncEngine for PostgreSQL
-            
+
         Raises:
             ValueError: If connection string is invalid
             ConnectionError: If unable to create engine
         """
         # Ensure asyncpg driver is specified
-        if not connection_string.startswith(('postgresql+asyncpg://', 'postgres+asyncpg://')):
+        if not connection_string.startswith(
+            ("postgresql+asyncpg://", "postgres+asyncpg://")
+        ):
             # Convert standard postgresql:// to asyncpg version
-            if connection_string.startswith(('postgresql://', 'postgres://')):
+            if connection_string.startswith(("postgresql://", "postgres://")):
                 connection_string = connection_string.replace(
-                    'postgresql://', 'postgresql+asyncpg://', 1
-                ).replace(
-                    'postgres://', 'postgresql+asyncpg://', 1
-                )
+                    "postgresql://", "postgresql+asyncpg://", 1
+                ).replace("postgres://", "postgresql+asyncpg://", 1)
             else:
                 raise ValueError(
                     "PostgreSQL connection string must use postgresql+asyncpg:// scheme"
                 )
-        
+
         # Default PostgreSQL engine configuration
         default_config = {
-            'pool_size': 20,
-            'max_overflow': 40,
-            'pool_timeout': 30,
-            'pool_recycle': 3600,
-            'pool_pre_ping': True,
-            'echo': False,
+            "pool_size": 20,
+            "max_overflow": 40,
+            "pool_timeout": 30,
+            "pool_recycle": 3600,
+            "pool_pre_ping": True,
+            "echo": False,
         }
         default_config.update(kwargs)
-        
+
         try:
             engine = create_async_engine(connection_string, **default_config)
             return engine
@@ -72,15 +69,14 @@ class PostgreSQLAdapter:
             raise ConnectionError(f"Failed to create PostgreSQL engine: {e}") from e
 
     async def create_session_factory(
-        self, 
-        engine: AsyncEngine
+        self, engine: AsyncEngine
     ) -> Callable[[], AsyncContextManager[AsyncSession]]:
         """
         Create session factory for PostgreSQL async sessions.
-        
+
         Args:
             engine: PostgreSQL AsyncEngine instance
-            
+
         Returns:
             Session factory function that returns context manager
         """
@@ -90,7 +86,7 @@ class PostgreSQLAdapter:
             class_=AsyncSession,
             expire_on_commit=False,
         )
-        
+
         @asynccontextmanager
         async def session_factory():
             async with async_session_maker() as session:
@@ -100,21 +96,19 @@ class PostgreSQLAdapter:
                 except Exception:
                     await session.rollback()
                     raise
-        
+
         return session_factory
 
     async def initialize_schema(
-        self, 
-        engine: AsyncEngine, 
-        models: list[type[SQLModel]] = None
+        self, engine: AsyncEngine, models: list[type[SQLModel]] = None
     ) -> None:
         """
         Initialize PostgreSQL schema from SQLModel definitions.
-        
+
         Args:
             engine: PostgreSQL AsyncEngine instance
             models: List of SQLModel classes to create tables for
-            
+
         Raises:
             DatabaseError: If schema creation fails
         """
@@ -128,10 +122,10 @@ class PostgreSQLAdapter:
     async def health_check(self, engine: AsyncEngine) -> bool:
         """
         Perform PostgreSQL health check.
-        
+
         Args:
             engine: PostgreSQL AsyncEngine instance
-            
+
         Returns:
             True if database is healthy and responsive
         """
@@ -145,10 +139,10 @@ class PostgreSQLAdapter:
     async def get_connection_info(self, engine: AsyncEngine) -> dict[str, Any]:
         """
         Get PostgreSQL connection information.
-        
+
         Args:
             engine: PostgreSQL AsyncEngine instance
-            
+
         Returns:
             Dictionary with PostgreSQL connection details
         """
@@ -156,20 +150,20 @@ class PostgreSQLAdapter:
             async with engine.begin() as conn:
                 version_result = await conn.execute("SELECT version()")
                 version = version_result.scalar()
-                
+
                 return {
-                    'driver': 'asyncpg',
-                    'database': 'postgresql',
-                    'version': version,
-                    'pool_size': engine.pool.size(),
-                    'pool_checked_in': engine.pool.checkedin(),
-                    'pool_checked_out': engine.pool.checkedout(),
-                    'pool_invalid': engine.pool.invalidated(),
+                    "driver": "asyncpg",
+                    "database": "postgresql",
+                    "version": version,
+                    "pool_size": engine.pool.size(),
+                    "pool_checked_in": engine.pool.checkedin(),
+                    "pool_checked_out": engine.pool.checkedout(),
+                    "pool_invalid": engine.pool.invalidated(),
                 }
         except Exception as e:
             return {
-                'driver': 'asyncpg',
-                'database': 'postgresql',
-                'error': str(e),
-                'healthy': False,
+                "driver": "asyncpg",
+                "database": "postgresql",
+                "error": str(e),
+                "healthy": False,
             }

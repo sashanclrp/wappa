@@ -11,8 +11,8 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
-from wappa.core.logging.logger import get_logger
 
+from wappa.core.logging.logger import get_logger
 
 
 class ErrorHandlerMiddleware(BaseHTTPMiddleware):

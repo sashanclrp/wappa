@@ -14,16 +14,16 @@ from pydantic import ValidationError
 
 from wappa.core.config.settings import settings
 from wappa.core.logging.context import set_request_context
-from wappa.webhooks.core.base_message import BaseMessage
-from wappa.webhooks.core.base_status import BaseMessageStatus
-from wappa.webhooks.core.base_webhook import BaseWebhook
-from wappa.schemas.core.types import ErrorCode, MessageType, PlatformType
 from wappa.processors.base_processor import (
     BaseWebhookProcessor,
     # ProcessingResult removed - Universal Webhook Interface is the ONLY way
     ProcessorCapabilities,
     ProcessorError,
 )
+from wappa.schemas.core.types import ErrorCode, MessageType, PlatformType
+from wappa.webhooks.core.base_message import BaseMessage
+from wappa.webhooks.core.base_status import BaseMessageStatus
+from wappa.webhooks.core.base_webhook import BaseWebhook
 
 
 class WhatsAppWebhookProcessor(BaseWebhookProcessor):

@@ -165,7 +165,9 @@ class WebhookController:
             platform_type = PlatformType(platform.lower())
         except ValueError as e:
             self.logger.error(f"Invalid platform type: {platform}")
-            raise HTTPException(status_code=400, detail=f"Invalid platform: {platform}") from e
+            raise HTTPException(
+                status_code=400, detail=f"Invalid platform: {platform}"
+            ) from e
 
         try:
             # Process webhook asynchronously to return immediate response
@@ -305,8 +307,17 @@ class WebhookController:
                 tenant_id=tenant_id,  # This is different per request!
             )
 
-            # Create cache factory per request (placeholder for now)
-            cache_factory = self._create_cache_factory(tenant_id)
+            # Extract user_id from context (set by webhook processor) with fallback
+            from wappa.core.logging.context import get_current_user_context
+
+            user_id = get_current_user_context()
+            if not user_id:
+                raise RuntimeError(
+                    "No user context available for cache factory creation"
+                )
+
+            # Create cache factory per request with context injection
+            cache_factory = self._create_cache_factory(request, tenant_id, user_id)
 
             # Inject dependencies into event handler for THIS REQUEST
             event_handler = self.event_dispatcher._event_handler
@@ -330,31 +341,63 @@ class WebhookController:
             )
             raise RuntimeError(f"Dependency injection failed: {e}") from e
 
-    def _create_cache_factory(self, tenant_id: str):
+    def _create_cache_factory(self, request: Request, tenant_id: str, user_id: str):
         """
-        Create tenant-specific cache factory.
+        Create context-aware cache factory using unified plugin architecture.
 
-        Placeholder implementation for future cache factory integration.
-        Each tenant will get their own cache namespace.
+        Gets cache type from app.state.wappa_cache_type (set by WappaCorePlugin) as the
+        single source of truth. Validates Redis availability for redis cache type.
 
         Args:
+            request: FastAPI request object
             tenant_id: Tenant identifier for cache isolation
+            user_id: User identifier for user-specific cache contexts
 
         Returns:
-            Cache factory instance (currently None)
-        """
-        # TODO: Implement tenant-specific cache factory
-        # if self.storage_type == "redis":
-        #     return RedisCacheFactory(tenant_id)
-        # elif self.storage_type == "json":
-        #     return JsonCacheFactory(tenant_id)
-        # elif self.storage_type == "memory":
-        #     return MemoryCacheFactory(tenant_id)
-        # else:  # auto
-        #     return AutoCacheFactory(tenant_id)
+            Cache factory instance with injected context
 
-        self.logger.debug(f"Cache factory placeholder created for tenant: {tenant_id}")
-        return None
+        Raises:
+            RuntimeError: If Redis not available or cache creation fails
+        """
+        try:
+            # Single source of truth: app.state.wappa_cache_type (set by WappaCorePlugin)
+            cache_type = getattr(request.app.state, "wappa_cache_type", "memory")
+
+            self.logger.debug(
+                f"Creating {cache_type} cache factory for tenant: {tenant_id}, user: {user_id}"
+            )
+
+            # Validate Redis availability if redis cache type is requested
+            if cache_type == "redis":
+                if not hasattr(request.app.state, "redis_manager"):
+                    raise RuntimeError(
+                        "Redis cache requested but RedisPlugin not available. "
+                        "Ensure Wappa(cache='redis') is used or RedisPlugin is added manually."
+                    )
+
+                redis_manager = request.app.state.redis_manager
+                if not redis_manager.is_initialized():
+                    raise RuntimeError(
+                        "Redis cache requested but RedisManager not initialized. "
+                        "Check Redis server connectivity and startup logs."
+                    )
+
+            # Create cache factory using the detected cache type
+            from wappa.persistence.cache_factory import create_cache_factory
+
+            factory_class = create_cache_factory(cache_type)
+            cache_factory = factory_class(tenant_id=tenant_id, user_id=user_id)
+
+            self.logger.debug(f"✅ Created {cache_factory.__class__.__name__} successfully")
+            return cache_factory
+
+        except Exception as e:
+            self.logger.error(
+                f"❌ Failed to create cache factory for tenant {tenant_id}: {e}",
+                exc_info=True,
+            )
+            # FAIL FAST - no fallback to prevent silent failures
+            raise RuntimeError(f"Cache factory creation failed: {e}") from e
 
     def _is_supported_platform(self, platform: str) -> bool:
         """

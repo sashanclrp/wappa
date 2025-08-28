@@ -15,12 +15,15 @@ which violated the Interface Segregation Principle.
 
 from pathlib import Path
 
+from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
     WhatsAppInteractiveHandler,
 )
-from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import WhatsAppMediaHandler
+from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
+    WhatsAppMediaHandler,
+)
 from wappa.messaging.whatsapp.handlers.whatsapp_specialized_handler import (
     WhatsAppSpecializedHandler,
 )
@@ -34,7 +37,6 @@ from wappa.messaging.whatsapp.models.interactive_models import (
 )
 from wappa.messaging.whatsapp.models.media_models import MediaType
 from wappa.schemas.core.types import PlatformType
-from wappa.core.logging.logger import get_logger
 
 
 class WhatsAppMessenger(IMessenger):

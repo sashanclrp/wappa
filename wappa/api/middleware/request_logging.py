@@ -12,7 +12,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 
-
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """
     Middleware for logging HTTP requests and responses with context.
@@ -46,6 +45,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
 
         # Get logger with context (context is set by OwnerMiddleware and processors)
         from wappa.core.logging.logger import get_logger
+
         logger = get_logger(__name__)
 
         # Log incoming request

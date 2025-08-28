@@ -66,9 +66,7 @@ class IRepositoryFactory(ABC):
         pass
 
     @abstractmethod
-    def create_expiry_repository(
-        self, tenant_id: str
-    ) -> IExpiryRepository:
+    def create_expiry_repository(self, tenant_id: str) -> IExpiryRepository:
         """
         Create expiry repository with context binding.
 
@@ -97,9 +95,7 @@ class IRepositoryFactory(ABC):
         pass
 
     @abstractmethod
-    def create_tables_repository(
-        self, tenant_id: str
-    ) -> ITablesRepository:
+    def create_tables_repository(self, tenant_id: str) -> ITablesRepository:
         """
         Create tables repository with context binding.
 

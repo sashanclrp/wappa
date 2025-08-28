@@ -4,18 +4,23 @@ Main cache factory selector for Wappa framework.
 Provides factory selector based on cache type configuration.
 """
 
+
 from ..domain.interfaces.cache_factory import ICacheFactory
 
 
-def create_cache_factory(cache_type: str) -> ICacheFactory:
+def create_cache_factory(cache_type: str) -> type[ICacheFactory]:
     """
-    Create cache factory instance based on cache type.
+    Create cache factory class based on cache type.
+
+    Returns factory classes that can be instantiated with context parameters.
+    This supports the new context-aware cache factory pattern where context
+    (tenant_id, user_id) is injected at construction time.
 
     Args:
         cache_type: Type of cache to create ("redis", "json", "memory")
 
     Returns:
-        Cache factory instance for the specified type
+        Cache factory class for the specified type
 
     Raises:
         ValueError: If cache_type is not supported
@@ -25,24 +30,31 @@ def create_cache_factory(cache_type: str) -> ICacheFactory:
         try:
             from .redis.redis_cache_factory import RedisCacheFactory
 
-            return RedisCacheFactory()
+            return RedisCacheFactory
         except ImportError as e:
             raise ImportError(
                 f"Redis dependencies not available for cache_type='redis': {e}"
             ) from e
 
     elif cache_type == "json":
-        # TODO: Implement JSON cache factory
-        raise NotImplementedError(
-            "JSON cache factory not yet implemented. "
-            "Use cache_type='memory' or cache_type='redis'"
-        )
+        try:
+            from .json.json_cache_factory import JSONCacheFactory
+
+            return JSONCacheFactory
+        except ImportError as e:
+            raise ImportError(
+                f"JSON cache dependencies not available for cache_type='json': {e}"
+            ) from e
 
     elif cache_type == "memory":
-        # TODO: Implement memory cache factory
-        raise NotImplementedError(
-            "Memory cache factory not yet implemented. Use cache_type='redis' for now"
-        )
+        try:
+            from .memory.memory_cache_factory import MemoryCacheFactory
+
+            return MemoryCacheFactory
+        except ImportError as e:
+            raise ImportError(
+                f"Memory cache dependencies not available for cache_type='memory': {e}"
+            ) from e
 
     else:
         raise ValueError(
@@ -54,16 +66,16 @@ def create_cache_factory(cache_type: str) -> ICacheFactory:
 # Convenience function for getting cache factory with validation
 def get_cache_factory(
     cache_type: str, *, validate_redis_url: bool = True
-) -> ICacheFactory:
+) -> type[ICacheFactory]:
     """
-    Get cache factory with validation.
+    Get cache factory class with validation.
 
     Args:
         cache_type: Type of cache to create
         validate_redis_url: Whether to validate Redis URL for redis cache type
 
     Returns:
-        Configured cache factory instance
+        Configured cache factory class
 
     Raises:
         ValueError: If configuration is invalid

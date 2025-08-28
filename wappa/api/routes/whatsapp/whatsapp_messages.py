@@ -17,6 +17,7 @@ from wappa.api.dependencies.whatsapp_dependencies import (
     get_whatsapp_message_factory,
     get_whatsapp_messenger,
 )
+from wappa.core.logging.logger import get_logger
 from wappa.domain.factories.message_factory import MessageFactory
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.messaging.whatsapp.models.basic_models import (
@@ -24,7 +25,6 @@ from wappa.messaging.whatsapp.models.basic_models import (
     MessageResult,
     ReadStatusMessage,
 )
-from wappa.core.logging.logger import get_logger
 
 # Create router with WhatsApp Messages configuration
 router = APIRouter(

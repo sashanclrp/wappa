@@ -5,27 +5,28 @@ Plugin for adding Cross-Origin Resource Sharing (CORS) middleware to Wappa appli
 Provides a simple wrapper around FastAPI's CORSMiddleware with sensible defaults.
 """
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ...core.logging.logger import get_app_logger
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+
     from ...core.factory.wappa_builder import WappaBuilder
 
 
 class CORSPlugin:
     """
     CORS middleware plugin for Wappa applications.
-    
+
     Provides Cross-Origin Resource Sharing support with configurable
     origins, methods, and headers. Uses FastAPI's built-in CORSMiddleware
     with sensible defaults for most use cases.
-    
+
     Example:
         # Basic CORS (allow all origins)
         cors_plugin = CORSPlugin(allow_origins=["*"])
-        
+
         # Production CORS (specific origins)
         cors_plugin = CORSPlugin(
             allow_origins=["https://myapp.com", "https://www.myapp.com"],
@@ -44,11 +45,11 @@ class CORSPlugin:
         expose_headers: list[str] = None,
         max_age: int = 600,
         priority: int = 90,  # High priority - runs early (outer middleware)
-        **cors_kwargs: Any
+        **cors_kwargs: Any,
     ):
         """
         Initialize CORS plugin.
-        
+
         Args:
             allow_origins: List of allowed origins (defaults to ["*"])
             allow_methods: List of allowed HTTP methods (defaults to ["GET"])
@@ -71,34 +72,36 @@ class CORSPlugin:
     async def configure(self, builder: "WappaBuilder") -> None:
         """
         Configure CORS plugin with WappaBuilder.
-        
+
         Adds CORSMiddleware to the application with specified configuration.
-        
+
         Args:
             builder: WappaBuilder instance
         """
         logger = get_app_logger()
-        
+
         try:
             from fastapi.middleware.cors import CORSMiddleware
         except ImportError:
-            logger.error("CORSMiddleware not available - ensure FastAPI is properly installed")
+            logger.error(
+                "CORSMiddleware not available - ensure FastAPI is properly installed"
+            )
             raise RuntimeError("CORSMiddleware not available")
-        
+
         # Build CORS configuration
         cors_config = {
-            'allow_origins': self.allow_origins,
-            'allow_methods': self.allow_methods,
-            'allow_headers': self.allow_headers,
-            'allow_credentials': self.allow_credentials,
-            'expose_headers': self.expose_headers,
-            'max_age': self.max_age,
-            **self.cors_kwargs
+            "allow_origins": self.allow_origins,
+            "allow_methods": self.allow_methods,
+            "allow_headers": self.allow_headers,
+            "allow_credentials": self.allow_credentials,
+            "expose_headers": self.expose_headers,
+            "max_age": self.max_age,
+            **self.cors_kwargs,
         }
-        
+
         # Add middleware to builder with specified priority
         builder.add_middleware(CORSMiddleware, priority=self.priority, **cors_config)
-        
+
         logger.debug(
             f"CORSPlugin configured - Origins: {self.allow_origins}, "
             f"Methods: {self.allow_methods}, Credentials: {self.allow_credentials}"
@@ -107,7 +110,7 @@ class CORSPlugin:
     async def startup(self, app: "FastAPI") -> None:
         """
         CORS plugin startup - no startup tasks needed.
-        
+
         Args:
             app: FastAPI application instance
         """
@@ -117,7 +120,7 @@ class CORSPlugin:
     async def shutdown(self, app: "FastAPI") -> None:
         """
         CORS plugin shutdown - no cleanup tasks needed.
-        
+
         Args:
             app: FastAPI application instance
         """

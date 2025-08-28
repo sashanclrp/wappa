@@ -13,6 +13,6 @@ from .adapters.sqlite_adapter import SQLiteAdapter
 __all__ = [
     "DatabaseAdapter",
     "PostgreSQLAdapter",
-    "SQLiteAdapter", 
+    "SQLiteAdapter",
     "MySQLAdapter",
 ]

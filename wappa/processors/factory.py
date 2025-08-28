@@ -7,10 +7,10 @@ schemas, and webhook containers based on incoming webhook data.
 
 from typing import Any, Optional
 
+from wappa.core.logging.logger import get_logger
+from wappa.processors.base_processor import BaseWebhookProcessor, ProcessorError
 from wappa.schemas.core.base_webhook import BaseWebhook
 from wappa.schemas.core.types import ErrorCode, PlatformType
-from wappa.processors.base_processor import BaseWebhookProcessor, ProcessorError
-from wappa.core.logging.logger import get_logger
 
 
 class PlatformDetector:

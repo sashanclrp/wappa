@@ -11,11 +11,11 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from wappa.api.controllers import WebhookController
 from wappa.core.events import (
     WappaEventDispatcher,
-    webhook_url_factory,
     WebhookEndpointType,
+    webhook_url_factory,
 )
-from wappa.schemas.core.types import PlatformType
 from wappa.core.logging.logger import get_logger
+from wappa.schemas.core.types import PlatformType
 
 
 def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
@@ -33,7 +33,7 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
     """
     # Create controller instance for this router
     webhook_controller = WebhookController(event_dispatcher)
-    
+
     router = APIRouter(
         prefix="/webhook",
         tags=["Webhooks"],
@@ -88,7 +88,7 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
     ):
         """
         Handle webhook verification at the same URL used for processing.
-        
+
         WhatsApp and other platforms send verification requests to the same URL
         they use for webhook processing. This handles GET requests with verification.
         """
@@ -162,11 +162,11 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         try:
             platform_type = PlatformType(platform.lower())
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Unsupported platform: {platform}")
+            raise HTTPException(
+                status_code=400, detail=f"Unsupported platform: {platform}"
+            )
 
-        webhook_url = webhook_url_factory.generate_webhook_url(
-            platform_type, tenant_id
-        )
+        webhook_url = webhook_url_factory.generate_webhook_url(platform_type, tenant_id)
         verify_url = webhook_url_factory.generate_webhook_url(
             platform_type, "", WebhookEndpointType.VERIFY
         )

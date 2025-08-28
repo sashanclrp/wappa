@@ -9,11 +9,11 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from typing import Any
 
+from wappa.core.logging.logger import get_logger
 from wappa.schemas.core.base_message import BaseMessage
 from wappa.schemas.core.base_status import BaseMessageStatus
 from wappa.schemas.core.base_webhook import BaseWebhook
 from wappa.schemas.core.types import ErrorCode, MessageType, PlatformType
-from wappa.core.logging.logger import get_logger
 
 # Legacy ProcessingResult class removed - Universal Webhook Interface is now the ONLY way
 # Use processor.create_universal_webhook() method instead for type-safe webhook handling
