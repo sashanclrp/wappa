@@ -477,3 +477,13 @@ class WhatsAppStatusWebhook(BaseModel):
             else 0,
             "failed_message_ids": [status.id for status in self.get_failed_statuses()],
         }
+
+
+# Type aliases for convenience
+StatusType = MessageStatus
+
+# Status class aliases for compatibility
+DeliveryStatus = WhatsAppMessageStatus
+ReadStatus = WhatsAppMessageStatus
+SentStatus = WhatsAppMessageStatus
+FailedStatus = WhatsAppMessageStatus

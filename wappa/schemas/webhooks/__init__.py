@@ -1,3 +1,0 @@
-"""
-Webhook schemas package.
-"""

@@ -149,9 +149,19 @@ class WappaCorePlugin:
             app.state.wappa_cache_type = self.cache_type.value
             logger.debug(f"💾 Set app.state.wappa_cache_type = {self.cache_type.value}")
 
-            # Initialize HTTP session for connection pooling (correct scope for app lifecycle)
-            app.state.http_session = aiohttp.ClientSession()
-            logger.debug("🌐 HTTP session initialized for connection pooling")
+            # Create persistent HTTP session with optimized connection pooling
+            logger.info("🌐 Creating persistent HTTP session...")
+            connector = aiohttp.TCPConnector(
+                limit=100,                    # Max connections
+                keepalive_timeout=30,         # Keep alive timeout
+                enable_cleanup_closed=True    # Auto cleanup closed connections
+            )
+            session = aiohttp.ClientSession(
+                connector=connector,
+                timeout=aiohttp.ClientTimeout(total=30)
+            )
+            app.state.http_session = session
+            logger.info("✅ Persistent HTTP session created - connections: 100, keepalive: 30s")
 
             # Log available endpoints
             base_url = (
@@ -198,10 +208,10 @@ class WappaCorePlugin:
         logger.info("🛑 Starting Wappa core shutdown...")
 
         try:
-            # Close HTTP session if it exists
+            # Close HTTP session and connector if it exists
             if hasattr(app.state, "http_session"):
                 await app.state.http_session.close()
-                logger.debug("🌐 HTTP session closed")
+                logger.info("🌐 Persistent HTTP session closed cleanly")
 
             # Clear cache type from app state
             if hasattr(app.state, "wappa_cache_type"):

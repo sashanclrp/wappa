@@ -5,8 +5,8 @@ Creates JSON-backed cache instances using file-based storage
 with ICache adapters for uniform interface.
 """
 
-from ..domain.interfaces.cache_factory import ICacheFactory
-from ..domain.interfaces.cache_interface import ICache
+from ...domain.interfaces.cache_factory import ICacheFactory
+from ...domain.interfaces.cache_interface import ICache
 from .cache_adapters import (
     JSONStateCacheAdapter,
     JSONTableCacheAdapter,

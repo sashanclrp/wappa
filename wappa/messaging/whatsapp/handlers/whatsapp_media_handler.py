@@ -6,10 +6,13 @@ to follow SOLID principles with dependency injection and proper separation of co
 """
 
 import mimetypes
+import os
+import tempfile
 import time
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, AsyncContextManager
 
 from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.media_interface import IMediaHandler
@@ -319,12 +322,23 @@ class WhatsAppMediaHandler(IMediaHandler):
         media_id: str,
         destination_path: str | Path | None = None,
         sender_id: str | None = None,
+        use_tempfile: bool = False,
+        temp_suffix: str | None = None,
+        auto_cleanup: bool = True,
     ) -> MediaDownloadResult:
         """
         Download WhatsApp media using its media ID.
 
         Based on existing WhatsAppServiceMedia.download_media() method.
         Implements workflow: GET /MEDIA_ID -> GET /MEDIA_URL
+        
+        Args:
+            media_id: Platform-specific media identifier
+            destination_path: Optional path to save file (ignored if use_tempfile=True)
+            sender_id: Optional sender ID for filename generation
+            use_tempfile: If True, creates a temporary file with automatic cleanup
+            temp_suffix: Custom suffix for temporary file (e.g., '.mp3', '.jpg')
+            auto_cleanup: If True, temp files are cleaned up automatically
         """
         try:
             # Get media info first
@@ -395,9 +409,35 @@ class WhatsAppMediaHandler(IMediaHandler):
                             )
                         data.extend(chunk)
 
-                # Save to file if destination_path provided
+                # Save to file if destination_path provided or tempfile requested
                 final_path = None
-                if destination_path:
+                is_temp_file = False
+                
+                if use_tempfile:
+                    # Create temporary file
+                    extension_map = self._get_extension_map()
+                    extension = temp_suffix or extension_map.get(response_content_type, "")
+                    
+                    # Create named temporary file
+                    temp_fd, temp_path = tempfile.mkstemp(suffix=extension, prefix="wappa_media_")
+                    try:
+                        with os.fdopen(temp_fd, 'wb') as temp_file:
+                            temp_file.write(data)
+                        final_path = Path(temp_path)
+                        is_temp_file = True
+                        self.logger.info(
+                            f"Media downloaded to temp file {final_path} ({downloaded_size} bytes)"
+                        )
+                    except Exception:
+                        # Clean up on error
+                        try:
+                            os.unlink(temp_path)
+                        except Exception:
+                            pass
+                        raise
+                        
+                elif destination_path:
+                    # Original destination path logic
                     extension_map = self._get_extension_map()
                     extension = extension_map.get(response_content_type, "")
                     media_type_base = response_content_type.split("/")[0]
@@ -415,7 +455,8 @@ class WhatsAppMediaHandler(IMediaHandler):
                         f"Media successfully downloaded to {final_path} ({downloaded_size} bytes)"
                     )
 
-                return MediaDownloadResult(
+                # Create result with temp file handling
+                result = MediaDownloadResult(
                     success=True,
                     file_data=bytes(data),
                     file_path=str(final_path) if final_path else None,
@@ -425,6 +466,12 @@ class WhatsAppMediaHandler(IMediaHandler):
                     platform=PlatformType.WHATSAPP,
                     tenant_id=self._tenant_id,
                 )
+                
+                # Mark as temp file if needed
+                if is_temp_file:
+                    result.mark_as_temp_file(cleanup_on_exit=auto_cleanup)
+                    
+                return result
 
             finally:
                 # Ensure response is closed
@@ -439,6 +486,67 @@ class WhatsAppMediaHandler(IMediaHandler):
                 error_code="DOWNLOAD_FAILED",
                 tenant_id=self._tenant_id,
             )
+
+    @asynccontextmanager
+    async def download_media_tempfile(
+        self,
+        media_id: str,
+        temp_suffix: str | None = None,
+        sender_id: str | None = None,
+    ) -> AsyncContextManager[MediaDownloadResult]:
+        """
+        Download media to a temporary file with automatic cleanup.
+
+        Convenience method that provides a context manager for temporary file handling.
+        The temporary file is automatically deleted when the context exits.
+
+        Args:
+            media_id: Platform-specific media identifier
+            temp_suffix: Custom suffix for temporary file (e.g., '.mp3', '.jpg')
+            sender_id: Optional sender ID for logging/debugging
+
+        Returns:
+            Async context manager yielding MediaDownloadResult with temp file path
+
+        Example:
+            async with handler.download_media_tempfile(media_id, '.mp3') as result:
+                if result.success:
+                    # Use result.file_path - file auto-deleted on exit
+                    process_audio(result.file_path)
+        """
+        result = await self.download_media(
+            media_id=media_id,
+            use_tempfile=True,
+            temp_suffix=temp_suffix,
+            sender_id=sender_id,
+            auto_cleanup=True
+        )
+        
+        try:
+            yield result
+        finally:
+            # Context manager cleanup handled by MediaDownloadResult
+            result._cleanup_temp_file()
+
+    async def get_media_as_bytes(
+        self, media_id: str
+    ) -> MediaDownloadResult:
+        """
+        Download media as bytes without creating any files.
+
+        Memory-only download for processing that doesn't require file system access.
+
+        Args:
+            media_id: Platform-specific media identifier
+
+        Returns:
+            MediaDownloadResult with file_data bytes (file_path will be None)
+        """
+        return await self.download_media(
+            media_id=media_id,
+            destination_path=None,
+            use_tempfile=False
+        )
 
     async def stream_media(
         self, media_id: str, chunk_size: int = 8192

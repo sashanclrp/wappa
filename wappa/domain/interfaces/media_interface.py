@@ -14,8 +14,9 @@ and WhatsApp Cloud API 2025 specifications for the 4 core endpoints:
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, AsyncContextManager
 
 from wappa.domain.models.media_result import (
     MediaDeleteResult,
@@ -197,6 +198,9 @@ class IMediaHandler(ABC):
         media_id: str,
         destination_path: str | Path | None = None,
         sender_id: str | None = None,
+        use_tempfile: bool = False,
+        temp_suffix: str | None = None,
+        auto_cleanup: bool = True,
     ) -> MediaDownloadResult:
         """
         Download media by ID.
@@ -206,16 +210,66 @@ class IMediaHandler(ABC):
 
         Args:
             media_id: Platform-specific media identifier
-            destination_path: Optional path to save file
+            destination_path: Optional path to save file (ignored if use_tempfile=True)
             sender_id: Optional sender ID for filename generation
+            use_tempfile: If True, creates a temporary file with automatic cleanup
+            temp_suffix: Custom suffix for temporary file (e.g., '.mp3', '.jpg')
+            auto_cleanup: If True, temp files are cleaned up automatically
 
         Returns:
             MediaDownloadResult with file data and metadata
 
         Note:
             If destination_path provided, saves file to disk.
-            If not provided, returns file data in memory.
+            If use_tempfile=True, creates temporary file that can be auto-cleaned.
+            If neither provided, returns file data in memory.
             Handles URL expiration by re-fetching URL if needed.
+        """
+        pass
+
+    @abstractmethod
+    async def download_media_tempfile(
+        self,
+        media_id: str,
+        temp_suffix: str | None = None,
+        sender_id: str | None = None,
+    ) -> AsyncContextManager[MediaDownloadResult]:
+        """
+        Download media to a temporary file with automatic cleanup.
+
+        Convenience method that provides a context manager for temporary file handling.
+        The temporary file is automatically deleted when the context exits.
+
+        Args:
+            media_id: Platform-specific media identifier
+            temp_suffix: Custom suffix for temporary file (e.g., '.mp3', '.jpg')
+            sender_id: Optional sender ID for logging/debugging
+
+        Returns:
+            Async context manager yielding MediaDownloadResult with temp file path
+
+        Example:
+            async with handler.download_media_tempfile(media_id, '.mp3') as result:
+                if result.success:
+                    # Use result.file_path - file auto-deleted on exit
+                    process_audio(result.file_path)
+        """
+        pass
+
+    @abstractmethod
+    async def get_media_as_bytes(
+        self, media_id: str
+    ) -> MediaDownloadResult:
+        """
+        Download media as bytes without creating any files.
+
+        Memory-only download for processing that doesn't require file system access.
+
+        Args:
+            media_id: Platform-specific media identifier
+
+        Returns:
+            MediaDownloadResult with file_data bytes (file_path will be None)
         """
         pass
 

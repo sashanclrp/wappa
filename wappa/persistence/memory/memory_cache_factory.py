@@ -5,8 +5,8 @@ Creates memory-backed cache instances using in-memory storage
 with ICache adapters for uniform interface.
 """
 
-from ..domain.interfaces.cache_factory import ICacheFactory
-from ..domain.interfaces.cache_interface import ICache
+from ...domain.interfaces.cache_factory import ICacheFactory
+from ...domain.interfaces.cache_interface import ICache
 from .cache_adapters import (
     MemoryStateCacheAdapter,
     MemoryTableCacheAdapter,

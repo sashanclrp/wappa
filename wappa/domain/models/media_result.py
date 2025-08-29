@@ -6,7 +6,10 @@ messaging platforms, providing consistent response structures while
 maintaining compatibility with platform-specific response formats.
 """
 
+import os
 from datetime import datetime
+from pathlib import Path
+from typing import AsyncContextManager, Optional
 
 from pydantic import BaseModel, Field
 
@@ -71,6 +74,7 @@ class MediaDownloadResult(BaseModel):
 
     Standard response model for media download operations.
     Compatible with existing handle_media.py download patterns.
+    Supports context manager for automatic temporary file cleanup.
     """
 
     success: bool
@@ -84,11 +88,50 @@ class MediaDownloadResult(BaseModel):
     error_code: str | None = None
     downloaded_at: datetime = Field(default_factory=datetime.utcnow)
     tenant_id: str | None = None
+    _is_temp_file: bool = False
+    _cleanup_on_exit: bool = False
 
     class Config:
         use_enum_values = True
         # Allow bytes in file_data field
         arbitrary_types_allowed = True
+
+    def __enter__(self):
+        """Synchronous context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Synchronous context manager exit with cleanup."""
+        self._cleanup_temp_file()
+
+    async def __aenter__(self):
+        """Async context manager entry."""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit with cleanup."""
+        self._cleanup_temp_file()
+
+    def _cleanup_temp_file(self):
+        """Clean up temporary file if configured for auto-cleanup."""
+        if self._cleanup_on_exit and self._is_temp_file and self.file_path:
+            try:
+                file_path = Path(self.file_path)
+                if file_path.exists():
+                    file_path.unlink()
+            except Exception:
+                # Silently ignore cleanup errors - temp files will be cleaned by OS eventually
+                pass
+
+    def mark_as_temp_file(self, cleanup_on_exit: bool = True):
+        """Mark this result as containing a temporary file for cleanup.
+        
+        Args:
+            cleanup_on_exit: Whether to automatically delete the temp file when context exits
+        """
+        self._is_temp_file = True
+        self._cleanup_on_exit = cleanup_on_exit
+        return self
 
 
 class MediaDeleteResult(BaseModel):

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wappa"
-version = "0.1.4"
+version = "0.1.7"
 description = "Open Source Framework to develop smart Workflows, Agents and full chat applications through WhatsApp"
 authors = [
     {name = "Sasha Canal", email = "contact@mimeia.com"},
@@ -25,8 +25,9 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 
-# Core dependencies - minimal for basic functionality
+# All dependencies included by default for simplicity
 dependencies = [
+    # Core framework
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.24.0",
     "hypercorn>=0.17.0",
@@ -38,44 +39,16 @@ dependencies = [
     "aiofiles>=24.1.0",
     "typer>=0.9.0",
     "rich>=13.0.0",
-]
-
-[project.optional-dependencies]
-# Redis cache support
-redis = [
+    # Cache support
     "redis>=5.2.0",
-]
-
-# Database support
-database = [
+    # Database support
     "sqlmodel>=0.0.24",
-]
-
-# AI/ML features
-ai = [
+    # AI/ML features
     "openai>=1.69.0",
     "numpy>=2.2.0",
-]
-
-# Image processing
-media = [
+    # Image processing
     "pillow>=11.1.0",
     "opencv-python-headless>=4.11.0",
-]
-
-# Development tools
-dev = [
-    "pytest>=8.4.0",
-    "pytest-asyncio>=1.1.0",
-    "ruff>=0.9.0",
-    "black>=25.1.0",
-    "mypy>=1.0.0",
-    "pre-commit>=3.0.0",
-]
-
-# Full installation with all features
-all = [
-    "wappa[redis,database,ai,media]",
 ]
 
 [project.urls]

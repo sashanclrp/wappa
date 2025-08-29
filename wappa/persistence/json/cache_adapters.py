@@ -9,7 +9,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from ..domain.interfaces.cache_interface import ICache
+from ...domain.interfaces.cache_interface import ICache
 from .handlers.state_handler import JSONStateHandler
 from .handlers.table_handler import JSONTable
 from .handlers.user_handler import JSONUser
