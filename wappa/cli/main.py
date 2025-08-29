@@ -127,7 +127,7 @@ def _initialize_project(directory: str) -> None:
     try:
         # Create directory structure
         (project_path / "app").mkdir(exist_ok=True)
-        (project_path / "scores").mkdir(exist_ok=True)
+        (project_path / "app" / "scores").mkdir(exist_ok=True)
 
         typer.echo("📁 Created directory structure")
 
@@ -136,7 +136,7 @@ def _initialize_project(directory: str) -> None:
             "app/__init__.py": "__init__.py.template",
             "app/main.py": "main.py.template",
             "app/master_event.py": "master_event.py.template",
-            "scores/__init__.py": "__init__.py.template",
+            "app/scores/__init__.py": "__init__.py.template",
             ".gitignore": "gitignore.template",
             ".env": "env.template",
         }
@@ -493,13 +493,17 @@ def _copy_example(example_key: str, target_directory: str) -> None:
 
         console.print(f"🚀 Copying {EXAMPLES[example_key]['name']} to {target_path}")
 
-        # Copy all files from the example
+        # Copy all files from the example (including hidden files, excluding .git and __pycache__)
         for item in source_path.iterdir():
+            # Skip .git and __pycache__ directories
+            if item.name in {'.git', '__pycache__'}:
+                continue
+                
             if item.is_file():
                 shutil.copy2(item, target_path / item.name)
                 console.print(f"📝 Copied: {item.name}")
             elif item.is_dir():
-                shutil.copytree(item, target_path / item.name, dirs_exist_ok=True)
+                shutil.copytree(item, target_path / item.name, dirs_exist_ok=True, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
                 console.print(f"📁 Copied: {item.name}/")
 
         console.print("\n✅ Example copied successfully!")

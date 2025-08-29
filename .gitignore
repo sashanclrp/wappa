@@ -1,7 +1,6 @@
 # AI
 .claude/
 CLAUDE.md
-app/
 logs/
 .ruff_cache
 # Python-related files

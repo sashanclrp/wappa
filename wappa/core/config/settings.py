@@ -5,6 +5,7 @@ Simple, reliable environment variable configuration focused on core WhatsApp fun
 """
 
 import os
+import sys
 import tomllib
 from pathlib import Path
 
@@ -39,6 +40,34 @@ def _get_version_from_pyproject() -> str:
 
     # Fallback version if pyproject.toml not found or doesn't contain version
     return "0.1.0"
+
+
+def _is_cli_context() -> bool:
+    """
+    Detect if we're running in CLI context (help, init, examples) vs server context (dev, prod).
+    
+    Returns:
+        True if running CLI commands that don't need WhatsApp credentials
+    """
+    # Check command line arguments
+    if len(sys.argv) > 1:
+        # Direct CLI commands that don't need credentials
+        cli_only_commands = {"--help", "-h", "init", "examples"}
+        
+        # Check for help flag or CLI-only commands
+        for arg in sys.argv[1:]:
+            if arg in cli_only_commands:
+                return True
+        
+        # Check if we're running wappa command directly (not through uvicorn)
+        if any("wappa" in arg for arg in sys.argv):
+            # If no server commands (dev/prod) are present, assume CLI context
+            server_commands = {"dev", "prod"}
+            has_server_command = any(cmd in sys.argv for cmd in server_commands)
+            if not has_server_command:
+                return True
+    
+    return False
 
 
 class Settings:
@@ -98,9 +127,12 @@ class Settings:
         # Development/Production detection
         self.environment: str = os.getenv("ENVIRONMENT", "DEV")
 
-        # Apply validation
+        # Apply validation (skip WhatsApp validation for CLI-only commands)
         self._validate_settings()
-        self._validate_whatsapp_credentials()
+        
+        # Only validate WhatsApp credentials for server operations
+        if not _is_cli_context():
+            self._validate_whatsapp_credentials()
 
     def _validate_settings(self):
         """Validate settings values."""
