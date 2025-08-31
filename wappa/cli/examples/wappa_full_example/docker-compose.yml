@@ -1,0 +1,170 @@
+# ================================================================
+# WAPPA FULL EXAMPLE - DOCKER COMPOSE CONFIGURATION
+# ================================================================
+# Production-ready deployment with Redis, health checks, and scaling
+# ================================================================
+
+version: '3.8'
+
+services:
+  # ================================================================
+  # Redis Cache Service
+  # ================================================================
+  redis:
+    image: redis:7.2-alpine
+    container_name: wappa-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/etc/redis/redis.conf:ro
+    networks:
+      - wappa-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ================================================================
+  # Wappa Application Service
+  # ================================================================
+  wappa-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILD_DATE: ${BUILD_DATE:-2024-01-01}
+        VCS_REF: ${VCS_REF:-dev}
+    image: wappa-full-example:latest
+    container_name: wappa-app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Production environment variables
+      ENVIRONMENT: PROD
+      LOG_LEVEL: INFO
+      PORT: 8000
+      
+      # Redis configuration
+      REDIS_URL: redis://redis:6379/
+      REDIS_MAX_CONNECTIONS: 64
+      
+      # WhatsApp API credentials (from .env file)
+      WP_ACCESS_TOKEN: ${WP_ACCESS_TOKEN}
+      WP_PHONE_ID: ${WP_PHONE_ID}
+      WP_BID: ${WP_BID}
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${WHATSAPP_WEBHOOK_VERIFY_TOKEN}
+      
+      # Optional AI tools
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      
+      # Framework configuration
+      BASE_URL: https://graph.facebook.com/
+      API_VERSION: v23.0
+      TIME_ZONE: America/Bogota
+    volumes:
+      # Persistent logs
+      - app_logs:/app/logs
+      # Media files (if you want to persist them)
+      - app_media:/app/media
+    networks:
+      - wappa-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ================================================================
+  # Nginx Reverse Proxy (Optional - for SSL termination)
+  # ================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: wappa-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/ssl/certs:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - wappa-network
+    depends_on:
+      - wappa-app
+    profiles:
+      - nginx
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ================================================================
+# Networks
+# ================================================================
+networks:
+  wappa-network:
+    driver: bridge
+    name: wappa-network
+
+# ================================================================
+# Persistent Volumes
+# ================================================================
+volumes:
+  redis_data:
+    driver: local
+    name: wappa-redis-data
+  app_logs:
+    driver: local
+    name: wappa-app-logs
+  app_media:
+    driver: local
+    name: wappa-app-media
+  nginx_logs:
+    driver: local
+    name: wappa-nginx-logs
+
+# ================================================================
+# DEPLOYMENT COMMANDS:
+# ================================================================
+# Development:
+#   docker-compose up -d
+#
+# Production:
+#   docker-compose --profile nginx up -d
+#
+# Scaling:
+#   docker-compose up --scale wappa-app=3 -d
+#
+# Monitoring:
+#   docker-compose logs -f wappa-app
+#   docker-compose ps
+#
+# Health Checks:
+#   curl http://localhost:8000/health
+#   docker-compose exec wappa-app curl http://localhost:8000/health/detailed
+#
+# Cleanup:
+#   docker-compose down -v
+# ================================================================

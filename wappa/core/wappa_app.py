@@ -167,7 +167,7 @@ class Wappa:
         Return a FastAPI ASGI application, building synchronously if needed.
 
         This property enables uvicorn reload compatibility by providing a synchronous
-        way to access the FastAPI app. Plugin configuration is deferred to lifespan 
+        way to access the FastAPI app. Plugin configuration is deferred to lifespan
         hooks to maintain async initialization while keeping this property sync.
 
         Returns:
@@ -205,7 +205,7 @@ class Wappa:
             redoc_url="/redoc" if settings.is_development else None,
         )
 
-        # Use WappaBuilder.build() - creates app with lifespan, 
+        # Use WappaBuilder.build() - creates app with lifespan,
         # defers plugin configuration to startup hooks
         app = self._builder.build()
 
@@ -329,10 +329,12 @@ class Wappa:
 
         return self
 
-    def add_middleware(self, middleware_class: type, priority: int = 50, **kwargs) -> "Wappa":
+    def add_middleware(
+        self, middleware_class: type, priority: int = 50, **kwargs
+    ) -> "Wappa":
         """
         Add middleware to the application with priority ordering.
-        
+
         This provides access to the underlying WappaBuilder's middleware system.
         Priority determines execution order:
         - Lower numbers run first (outer middleware)
@@ -349,7 +351,7 @@ class Wappa:
 
         Example:
             from fastapi.middleware.cors import CORSMiddleware
-            
+
             app = Wappa(cache="redis")
             app.add_middleware(CORSMiddleware, allow_origins=["*"], priority=30)
             app.set_event_handler(MyHandler())
@@ -379,9 +381,9 @@ class Wappa:
 
         Example:
             from fastapi import APIRouter
-            
+
             custom_router = APIRouter()
-            
+
             app = Wappa(cache="redis")
             app.add_router(custom_router, prefix="/api/v1", tags=["custom"])
             app.set_event_handler(MyHandler())
@@ -411,7 +413,7 @@ class Wappa:
             app = Wappa(cache="redis")
             app.configure(
                 title="My WhatsApp Bot",
-                version="2.0.0", 
+                version="2.0.0",
                 description="Custom bot with advanced features"
             )
             app.set_event_handler(MyHandler())

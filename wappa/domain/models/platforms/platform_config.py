@@ -51,9 +51,7 @@ class PlatformCredentials(BaseModel):
     def is_configured(self) -> bool:
         """Check if minimum required credentials are present."""
         # For WhatsApp, we need access_token and phone_id
-        if self.access_token and self.phone_id:
-            return True
-        return False
+        return bool(self.access_token and self.phone_id)
 
 
 class PlatformLimits(BaseModel):

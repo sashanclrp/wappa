@@ -12,7 +12,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from wappa.webhooks.core.base_message import BaseMessageContext, BaseVideoMessage
 from wappa.webhooks.core.types import (
     ConversationType,
-    MediaType,
     PlatformType,
     UniversalMessageData,
 )
@@ -300,25 +299,7 @@ class WhatsAppVideoMessage(BaseVideoMessage):
             "video_content": self.video.model_dump(),
         }
 
-    # Implement abstract methods from BaseMediaMessage
-    @property
-    def media_id(self) -> str:
-        return self.video.id
-
-    @property
-    def media_type(self) -> MediaType:
-        try:
-            return MediaType(self.video.mime_type)
-        except ValueError:
-            return MediaType.VIDEO_MP4
-
-    @property
-    def file_size(self) -> int | None:
-        return None
-
-    @property
-    def caption(self) -> str | None:
-        return self.video.caption
+    # Abstract methods already implemented above
 
     def get_download_info(self) -> dict[str, Any]:
         return {

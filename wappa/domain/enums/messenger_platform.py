@@ -36,8 +36,7 @@ def create_messenger_platform_enum() -> type[Enum]:
 
     # Create enum members dynamically based on enabled platforms
     enum_members = {
-        platform_name.upper(): platform_name
-        for platform_name in enabled_platforms.keys()
+        platform_name.upper(): platform_name for platform_name in enabled_platforms
     }
 
     # Create the enum class

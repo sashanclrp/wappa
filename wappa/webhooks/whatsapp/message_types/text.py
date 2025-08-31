@@ -397,12 +397,6 @@ class WhatsAppTextMessage(BaseTextMessage):
         """Get the text content of the message."""
         return self.text.body
 
-    def get_reply_context(self) -> tuple[str | None, str | None]:
-        """Get reply context information."""
-        if self.is_reply and self.context:
-            return (self.context.from_, self.context.id)
-        return (None, None)
-
     @classmethod
     def from_platform_data(
         cls, data: dict[str, Any], **kwargs

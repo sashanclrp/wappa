@@ -169,31 +169,31 @@ class ICache(ABC):
             True if successful, False otherwise
         """
         pass
-    
+
     @staticmethod
     def create_table_key(table_name: str, pkid: str) -> str:
         """
         Create a properly formatted table cache key.
-        
+
         This is a static utility method available on all cache implementations
         to ensure consistent key formatting across cache backends.
-        
+
         Args:
             table_name: Name of the table (e.g., "user_profiles", "message_logs")
             pkid: Primary key ID (e.g., user_id, message_id)
-            
+
         Returns:
             Formatted key string for use with cache methods
-            
+
         Example:
             key = ICache.create_table_key("user_profiles", "12345")
             # Returns: "user_profiles:12345"
         """
         if not table_name or not pkid:
             raise ValueError("Both table_name and pkid must be provided and non-empty")
-        
+
         # Sanitize inputs to avoid conflicts
         safe_table_name = str(table_name).replace(":", "_")
         safe_pkid = str(pkid).replace(":", "_")
-        
+
         return f"{safe_table_name}:{safe_pkid}"

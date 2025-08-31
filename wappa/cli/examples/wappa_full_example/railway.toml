@@ -1,0 +1,30 @@
+# ================================================================
+# RAILWAY CONFIGURATION FOR WAPPA FULL EXAMPLE
+# ================================================================
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+# ================================================================
+# RAILWAY ENVIRONMENT VARIABLES (Set via Railway Dashboard)
+# ================================================================
+# Required variables to set in Railway:
+#
+# WP_ACCESS_TOKEN=your_whatsapp_access_token
+# WP_PHONE_ID=your_phone_number_id  
+# WP_BID=your_business_id
+# WHATSAPP_WEBHOOK_VERIFY_TOKEN=your_webhook_token
+# REDIS_URL=redis://redis.railway.internal:6379
+# OPENAI_API_KEY=your_openai_key (optional)
+#
+# Railway automatically sets:
+# PORT (dynamic port assignment)
+# RAILWAY_ENVIRONMENT (production/staging)
+# ================================================================

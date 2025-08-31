@@ -116,7 +116,7 @@ class PlatformDetector:
 
     @classmethod
     def detect_platform(
-        self,
+        cls,
         payload: dict[str, Any],
         url_path: str | None = None,
         headers: dict[str, str] | None = None,
@@ -136,19 +136,19 @@ class PlatformDetector:
             ProcessorError: If platform cannot be detected
         """
         # Try payload detection first (most reliable)
-        platform = self.detect_from_payload(payload)
+        platform = cls.detect_from_payload(payload)
         if platform:
             return platform
 
         # Try URL path detection
         if url_path:
-            platform = self.detect_from_url(url_path)
+            platform = cls.detect_from_url(url_path)
             if platform:
                 return platform
 
         # Try header detection
         if headers:
-            platform = self.detect_from_headers(headers)
+            platform = cls.detect_from_headers(headers)
             if platform:
                 return platform
 
@@ -371,7 +371,7 @@ class ProcessorFactory:
         """
         return {
             "cached_processors": len(self._processors),
-            "cached_platforms": [p.value for p in self._processors.keys()],
+            "cached_platforms": [p.value for p in self._processors],
             "supported_platforms": [p.value for p in self.get_supported_platforms()],
             "cache_size_bytes": sum(
                 len(str(processor)) for processor in self._processors.values()

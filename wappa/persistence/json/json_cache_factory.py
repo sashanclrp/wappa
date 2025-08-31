@@ -20,7 +20,7 @@ class JSONCacheFactory(ICacheFactory):
 
     Uses file-based JSON storage with proper file management:
     - State cache: Uses states subdirectory
-    - User cache: Uses users subdirectory  
+    - User cache: Uses users subdirectory
     - Table cache: Uses tables subdirectory
 
     All instances implement the ICache interface through adapters.
@@ -45,9 +45,7 @@ class JSONCacheFactory(ICacheFactory):
         Returns:
             ICache adapter wrapping JSONStateHandler
         """
-        return JSONStateCacheAdapter(
-            tenant_id=self.tenant_id, user_id=self.user_id
-        )
+        return JSONStateCacheAdapter(tenant_id=self.tenant_id, user_id=self.user_id)
 
     def create_user_cache(self) -> ICache:
         """
@@ -59,9 +57,7 @@ class JSONCacheFactory(ICacheFactory):
         Returns:
             ICache adapter wrapping JSONUser
         """
-        return JSONUserCacheAdapter(
-            tenant_id=self.tenant_id, user_id=self.user_id
-        )
+        return JSONUserCacheAdapter(tenant_id=self.tenant_id, user_id=self.user_id)
 
     def create_table_cache(self) -> ICache:
         """

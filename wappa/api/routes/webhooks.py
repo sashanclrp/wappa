@@ -161,10 +161,10 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         # Generate webhook URLs for this platform and tenant
         try:
             platform_type = PlatformType(platform.lower())
-        except ValueError:
+        except ValueError as e:
             raise HTTPException(
                 status_code=400, detail=f"Unsupported platform: {platform}"
-            )
+            ) from e
 
         webhook_url = webhook_url_factory.generate_webhook_url(platform_type, tenant_id)
         verify_url = webhook_url_factory.generate_webhook_url(

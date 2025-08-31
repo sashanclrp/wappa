@@ -116,7 +116,7 @@ class DefaultMessageHandler:
         self._update_stats(webhook)
 
         # Get logger with tenant context
-        tenant_id = webhook.tenant.get_tenant_key() if webhook.tenant else "unknown"
+        webhook.tenant.get_tenant_key() if webhook.tenant else "unknown"
         logger = get_logger(__name__)
 
         # Log based on strategy

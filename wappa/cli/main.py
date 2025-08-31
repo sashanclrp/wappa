@@ -398,7 +398,7 @@ def _show_examples_menu(target_directory: str) -> None:
     table.add_column("Key Features", style="yellow")
 
     example_keys = list(EXAMPLES.keys())
-    for i, (key, example) in enumerate(EXAMPLES.items(), 1):
+    for i, (_key, example) in enumerate(EXAMPLES.items(), 1):
         features_text = ", ".join(example["features"][:3])  # Show first 3 features
         if len(example["features"]) > 3:
             features_text += "..."
@@ -496,14 +496,19 @@ def _copy_example(example_key: str, target_directory: str) -> None:
         # Copy all files from the example (including hidden files, excluding .git and __pycache__)
         for item in source_path.iterdir():
             # Skip .git and __pycache__ directories
-            if item.name in {'.git', '__pycache__'}:
+            if item.name in {".git", "__pycache__"}:
                 continue
-                
+
             if item.is_file():
                 shutil.copy2(item, target_path / item.name)
                 console.print(f"📝 Copied: {item.name}")
             elif item.is_dir():
-                shutil.copytree(item, target_path / item.name, dirs_exist_ok=True, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+                shutil.copytree(
+                    item,
+                    target_path / item.name,
+                    dirs_exist_ok=True,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+                )
                 console.print(f"📁 Copied: {item.name}/")
 
         console.print("\n✅ Example copied successfully!")

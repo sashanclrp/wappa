@@ -28,7 +28,9 @@ class MemoryStateCacheAdapter(ICache):
         """Get cached data by key."""
         return await self._handler.get(key, models=models)
 
-    async def set(self, key: str, data: dict[str, Any] | BaseModel, ttl: int | None = None) -> bool:
+    async def set(
+        self, key: str, data: dict[str, Any] | BaseModel, ttl: int | None = None
+    ) -> bool:
         """Set cached data with optional TTL."""
         return await self._handler.upsert(key, data, ttl=ttl)
 
@@ -84,7 +86,9 @@ class MemoryUserCacheAdapter(ICache):
         """Get cached data by key. For user cache, key is ignored as it uses user_id."""
         return await self._handler.get(models=models)
 
-    async def set(self, key: str, data: dict[str, Any] | BaseModel, ttl: int | None = None) -> bool:
+    async def set(
+        self, key: str, data: dict[str, Any] | BaseModel, ttl: int | None = None
+    ) -> bool:
         """Set cached data with optional TTL."""
         return await self._handler.upsert(data, ttl=ttl)
 
@@ -131,15 +135,15 @@ class MemoryUserCacheAdapter(ICache):
 class MemoryTableCacheAdapter(ICache):
     """
     Adapter that makes MemoryTable implement ICache interface.
-    
+
     Table Key Format Guide:
     Use create_table_key(table_name, pkid) to generate proper keys.
-    
+
     Examples:
         # Good - using helper method
         key = cache.create_table_key("user_profiles", "12345")
         await cache.set(key, user_data)
-        
+
         # Also supported - manual format
         key = "user_profiles:12345"
         await cache.set(key, user_data)
@@ -147,29 +151,29 @@ class MemoryTableCacheAdapter(ICache):
 
     def __init__(self, tenant_id: str):
         self._handler = MemoryTable(tenant=tenant_id)
-    
+
     def create_table_key(self, table_name: str, pkid: str) -> str:
         """
         Create a properly formatted table cache key.
-        
+
         Args:
             table_name: Name of the table (e.g., "user_profiles", "message_logs")
             pkid: Primary key ID (e.g., user_id, message_id)
-            
+
         Returns:
             Formatted key string for use with cache methods
-            
+
         Example:
             key = cache.create_table_key("user_profiles", "12345")
             # Returns: "user_profiles:12345"
         """
         if not table_name or not pkid:
             raise ValueError("Both table_name and pkid must be provided and non-empty")
-        
+
         # Sanitize inputs to avoid conflicts
         safe_table_name = str(table_name).replace(":", "_")
         safe_pkid = str(pkid).replace(":", "_")
-        
+
         return f"{safe_table_name}:{safe_pkid}"
 
     async def get(
@@ -179,7 +183,9 @@ class MemoryTableCacheAdapter(ICache):
         table_name, pkid = self._parse_key(key)
         return await self._handler.get(table_name, pkid, models=models)
 
-    async def set(self, key: str, data: dict[str, Any] | BaseModel, ttl: int | None = None) -> bool:
+    async def set(
+        self, key: str, data: dict[str, Any] | BaseModel, ttl: int | None = None
+    ) -> bool:
         """Set cached data with optional TTL."""
         table_name, pkid = self._parse_key(key)
         return await self._handler.upsert(table_name, pkid, data, ttl=ttl)
@@ -236,36 +242,42 @@ class MemoryTableCacheAdapter(ICache):
     def _parse_key(self, key: str) -> tuple[str, str]:
         """
         Parse key into table_name and pkid with validation.
-        
+
         Args:
             key: Cache key in format "table_name:pkid"
-            
+
         Returns:
             Tuple of (table_name, pkid)
-            
+
         Raises:
             ValueError: If key format is invalid
         """
         if not key:
             raise ValueError("Key cannot be empty")
-            
+
         if ":" not in key:
             raise ValueError(
                 f"Invalid table cache key format: '{key}'. "
                 f"Expected format: 'table_name:pkid'. "
                 f"Use create_table_key(table_name, pkid) to generate proper keys."
             )
-        
+
         parts = key.split(":", 1)
         if len(parts) != 2:
-            raise ValueError(f"Invalid table cache key format: '{key}'. Expected exactly one ':' separator.")
-            
+            raise ValueError(
+                f"Invalid table cache key format: '{key}'. Expected exactly one ':' separator."
+            )
+
         table_name, pkid = parts
-        
+
         if not table_name.strip():
-            raise ValueError(f"Invalid table cache key: '{key}'. Table name cannot be empty.")
-            
+            raise ValueError(
+                f"Invalid table cache key: '{key}'. Table name cannot be empty."
+            )
+
         if not pkid.strip():
-            raise ValueError(f"Invalid table cache key: '{key}'. Primary key ID cannot be empty.")
-            
+            raise ValueError(
+                f"Invalid table cache key: '{key}'. Primary key ID cannot be empty."
+            )
+
         return table_name.strip(), pkid.strip()

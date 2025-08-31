@@ -288,11 +288,7 @@ class WhatsAppStickerMessage(BaseMediaMessage):
             },
         }
 
-    # Implement abstract methods from BaseMediaMessage
-
-    @property
-    def media_id(self) -> str:
-        return self.sticker.id
+    # Abstract methods already implemented above
 
     @property
     def media_type(self) -> MediaType:

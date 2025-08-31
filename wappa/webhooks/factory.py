@@ -11,6 +11,7 @@ from wappa.core.logging.logger import get_logger
 from wappa.webhooks.core.base_message import BaseMessage
 from wappa.webhooks.core.base_webhook import BaseWebhook
 from wappa.webhooks.core.types import MessageType, PlatformType
+from wappa.webhooks.core.webhook_interfaces.universal_webhooks import UniversalWebhook
 
 
 class SchemaRegistryError(Exception):
@@ -183,7 +184,7 @@ class MessageSchemaRegistry:
         for platform, schemas in self._message_schemas.items():
             stats["platforms"][platform.value] = {
                 "message_types": len(schemas),
-                "supported_types": [mt.value for mt in schemas.keys()],
+                "supported_types": [mt.value for mt in schemas],
             }
 
         return stats
@@ -720,10 +721,7 @@ class SchemaFactory:
                 return False
 
             # Should have metadata at minimum
-            if "metadata" not in value:
-                return False
-
-            return True
+            return "metadata" in value
 
         except (KeyError, IndexError, TypeError):
             return False

@@ -45,9 +45,7 @@ class MemoryCacheFactory(ICacheFactory):
         Returns:
             ICache adapter wrapping MemoryStateHandler
         """
-        return MemoryStateCacheAdapter(
-            tenant_id=self.tenant_id, user_id=self.user_id
-        )
+        return MemoryStateCacheAdapter(tenant_id=self.tenant_id, user_id=self.user_id)
 
     def create_user_cache(self) -> ICache:
         """
@@ -59,9 +57,7 @@ class MemoryCacheFactory(ICacheFactory):
         Returns:
             ICache adapter wrapping MemoryUser
         """
-        return MemoryUserCacheAdapter(
-            tenant_id=self.tenant_id, user_id=self.user_id
-        )
+        return MemoryUserCacheAdapter(tenant_id=self.tenant_id, user_id=self.user_id)
 
     def create_table_cache(self) -> ICache:
         """

@@ -417,11 +417,11 @@ class WhatsAppErrorHandler:
             True if error is recoverable, False otherwise
         """
         # Validation errors are not recoverable
-        if isinstance(error, (ValidationError, WhatsAppValidationError)):
+        if isinstance(error, ValidationError | WhatsAppValidationError):
             return False
 
         # Network/timeout errors might be recoverable
-        if isinstance(error, (ConnectionError, TimeoutError)):
+        if isinstance(error, ConnectionError | TimeoutError):
             return True
 
         # Generic exceptions might be recoverable
@@ -446,7 +446,7 @@ class WhatsAppErrorHandler:
             # WhatsApp-specific validation errors are medium priority
             return "medium"
 
-        if isinstance(error, (ConnectionError, TimeoutError)):
+        if isinstance(error, ConnectionError | TimeoutError):
             # Network issues are high priority - service availability
             return "high"
 

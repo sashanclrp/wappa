@@ -304,10 +304,6 @@ class WhatsAppAudioMessage(BaseAudioMessage):
     # Implement abstract methods from BaseMediaMessage
 
     @property
-    def media_id(self) -> str:
-        return self.audio.id
-
-    @property
     def media_type(self) -> MediaType:
         mime_str = self.audio.mime_type
         try:

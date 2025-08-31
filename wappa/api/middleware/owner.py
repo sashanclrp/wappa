@@ -32,14 +32,16 @@ class OwnerMiddleware(BaseHTTPMiddleware):
 
         try:
             # ENHANCED DEBUGGING: Log all request details
-            logger.debug(f"🔍 OwnerMiddleware processing: {request.method} {request.url.path}")
-            
+            logger.debug(
+                f"🔍 OwnerMiddleware processing: {request.method} {request.url.path}"
+            )
+
             # Extract owner_id from webhook URL pattern: /webhook/messenger/{owner_id}/{platform}
             if request.url.path.startswith("/webhook/"):
                 logger.debug(f"🎯 Webhook request detected: {request.url.path}")
                 path_parts = request.url.path.strip("/").split("/")
                 logger.debug(f"📋 Path parts: {path_parts} (length: {len(path_parts)})")
-                
+
                 if len(path_parts) >= 4:
                     # path_parts = ["webhook", "messenger", "owner_id", "platform"]
                     owner_id = path_parts[2]
@@ -49,14 +51,18 @@ class OwnerMiddleware(BaseHTTPMiddleware):
                     if self._is_valid_owner_id(owner_id):
                         # Set owner_id context from URL
                         set_request_context(owner_id=owner_id)
-                        logger.debug(f"✅ Owner ID context set successfully: {owner_id}")
+                        logger.debug(
+                            f"✅ Owner ID context set successfully: {owner_id}"
+                        )
                     else:
                         logger.error(f"❌ Invalid owner ID format: {owner_id}")
                         raise HTTPException(
                             status_code=400, detail=f"Invalid owner ID: {owner_id}"
                         )
                 else:
-                    logger.warning(f"⚠️ Webhook URL does not have enough parts: {path_parts}")
+                    logger.warning(
+                        f"⚠️ Webhook URL does not have enough parts: {path_parts}"
+                    )
 
             # For non-webhook endpoints, use default owner from settings
             elif not self._is_public_endpoint(request.url.path):

@@ -322,9 +322,9 @@ class WhatsAppMessageStatus(BaseMessageStatus):
             )
         return (None, None, None)
 
-    def get_error_info(self) -> list[dict[str, str | int]]:
+    def get_all_errors(self) -> list[dict[str, str | int]]:
         """
-        Get error information for failed messages.
+        Get all error information for failed messages.
 
         Returns:
             List of error dictionaries with code, title, message, and details.

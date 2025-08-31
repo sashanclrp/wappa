@@ -1,0 +1,171 @@
+# ================================================================
+# DOCKERIGNORE - Optimize Docker Build Context
+# ================================================================
+
+# Version Control
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Environments
+.env.local
+.env.development
+.env.test
+.env.production
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs (keep structure but ignore actual log files)
+logs/*.log
+logs/*.txt
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+.temp/
+
+# Docker (keep Dockerfile for Railway)
+docker-compose*.yml
+nginx.conf
+
+# Documentation (included in image via COPY if needed)
+README.md
+docs/
+*.md
+
+# Development files
+.editorconfig
+.prettierrc
+.eslintrc*
+.flake8
+.mypy.ini
+tox.ini
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+Jenkinsfile
+.travis.yml
+
+# Node.js (if any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Media files (selectively copied)
+# Keep app/media/ structure but ignore large files
+app/media/**/*.mov
+app/media/**/*.avi
+app/media/**/*.mkv
+app/media/**/*.mp4
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Database files
+*.sqlite
+*.sqlite3
+*.db
+
+# Cache directories
+.cache/
+.npm/
+.yarn/
+
+# Coverage reports
+.nyc_output
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# Security files
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Configuration overrides
+config.local.*
+.env.override

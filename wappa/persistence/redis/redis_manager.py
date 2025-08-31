@@ -50,7 +50,9 @@ class RedisManager:
             url = redis_url or settings.redis_url
             connections = max_connections or settings.redis_max_connections
 
-            logger.info(f"Setting up Redis pools from {url} (max_connections: {connections})")
+            logger.info(
+                f"Setting up Redis pools from {url} (max_connections: {connections})"
+            )
 
             # Use Wappa's RedisClient.setup_single_url
             RedisClient.setup_single_url(
@@ -66,7 +68,9 @@ class RedisManager:
 
             # Success confirmation with pool details
             pool_count = len(POOL_DB_MAPPING)
-            pool_details = ", ".join(f"{alias}:db{db}" for alias, db in POOL_DB_MAPPING.items())
+            pool_details = ", ".join(
+                f"{alias}:db{db}" for alias, db in POOL_DB_MAPPING.items()
+            )
             logger.info(f"✅ Redis pools ready: {pool_count} pools ({pool_details})")
 
         except Exception as e:
@@ -89,10 +93,14 @@ class RedisManager:
                 redis = await RedisClient.get(pool_alias)
                 await redis.ping()
                 successful_pools.append(f"{alias}:db{POOL_DB_MAPPING[alias]}")
-                logger.debug(f"✅ Redis pool '{alias}' (db{POOL_DB_MAPPING[alias]}) health check passed")
+                logger.debug(
+                    f"✅ Redis pool '{alias}' (db{POOL_DB_MAPPING[alias]}) health check passed"
+                )
             except Exception as e:
                 failed_pools.append(f"{alias}:db{POOL_DB_MAPPING[alias]}")
-                logger.error(f"❌ Redis pool '{alias}' (db{POOL_DB_MAPPING[alias]}) health check failed: {e}")
+                logger.error(
+                    f"❌ Redis pool '{alias}' (db{POOL_DB_MAPPING[alias]}) health check failed: {e}"
+                )
 
         if failed_pools:
             raise ConnectionError(f"Failed Redis pools: {', '.join(failed_pools)}")

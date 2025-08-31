@@ -11,19 +11,18 @@ Clean Import Interface (SRP Compliance):
 """
 
 # Framework Essentials Only (SRP: Framework Foundation)
-from .core.wappa_app import Wappa
-from .core.events.event_handler import WappaEventHandler
-from .core.factory import WappaBuilder, WappaPlugin
-
 # Dynamic version from pyproject.toml
 from .core.config.settings import settings
+from .core.events.event_handler import WappaEventHandler
+from .core.factory import WappaBuilder, WappaPlugin
+from .core.wappa_app import Wappa
 
 __version__ = settings.version
 
 __all__ = [
     # Core Framework Components
     "Wappa",
-    "WappaEventHandler", 
+    "WappaEventHandler",
     "WappaBuilder",
     "WappaPlugin",
 ]

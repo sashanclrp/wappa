@@ -279,10 +279,7 @@ class WhatsAppMessageFactory(MessageFactory):
         }
 
         # Create media object based on reference type
-        if is_url:
-            media_obj = {"link": media_reference}
-        else:
-            media_obj = {"id": media_reference}
+        media_obj = {"link": media_reference} if is_url else {"id": media_reference}
 
         # Add optional caption
         if caption:
@@ -313,10 +310,7 @@ class WhatsAppMessageFactory(MessageFactory):
         }
 
         # Create media object based on reference type
-        if is_url:
-            media_obj = {"link": media_reference}
-        else:
-            media_obj = {"id": media_reference}
+        media_obj = {"link": media_reference} if is_url else {"id": media_reference}
 
         # Add optional caption
         if caption:
@@ -346,10 +340,7 @@ class WhatsAppMessageFactory(MessageFactory):
         }
 
         # Create media object based on reference type
-        if is_url:
-            media_obj = {"link": media_reference}
-        else:
-            media_obj = {"id": media_reference}
+        media_obj = {"link": media_reference} if is_url else {"id": media_reference}
 
         payload["audio"] = media_obj
 
@@ -376,10 +367,7 @@ class WhatsAppMessageFactory(MessageFactory):
         }
 
         # Create media object based on reference type
-        if is_url:
-            media_obj = {"link": media_reference}
-        else:
-            media_obj = {"id": media_reference}
+        media_obj = {"link": media_reference} if is_url else {"id": media_reference}
 
         # Add optional filename
         if filename:
@@ -409,10 +397,7 @@ class WhatsAppMessageFactory(MessageFactory):
         }
 
         # Create media object based on reference type
-        if is_url:
-            media_obj = {"link": media_reference}
-        else:
-            media_obj = {"id": media_reference}
+        media_obj = {"link": media_reference} if is_url else {"id": media_reference}
 
         payload["sticker"] = media_obj
 

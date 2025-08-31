@@ -152,16 +152,17 @@ class WappaCorePlugin:
             # Create persistent HTTP session with optimized connection pooling
             logger.info("🌐 Creating persistent HTTP session...")
             connector = aiohttp.TCPConnector(
-                limit=100,                    # Max connections
-                keepalive_timeout=30,         # Keep alive timeout
-                enable_cleanup_closed=True    # Auto cleanup closed connections
+                limit=100,  # Max connections
+                keepalive_timeout=30,  # Keep alive timeout
+                enable_cleanup_closed=True,  # Auto cleanup closed connections
             )
             session = aiohttp.ClientSession(
-                connector=connector,
-                timeout=aiohttp.ClientTimeout(total=30)
+                connector=connector, timeout=aiohttp.ClientTimeout(total=30)
             )
             app.state.http_session = session
-            logger.info("✅ Persistent HTTP session created - connections: 100, keepalive: 30s")
+            logger.info(
+                "✅ Persistent HTTP session created - connections: 100, keepalive: 30s"
+            )
 
             # Log available endpoints
             base_url = (

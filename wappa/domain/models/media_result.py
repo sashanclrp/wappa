@@ -6,10 +6,8 @@ messaging platforms, providing consistent response structures while
 maintaining compatibility with platform-specific response formats.
 """
 
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import AsyncContextManager, Optional
 
 from pydantic import BaseModel, Field
 
@@ -125,7 +123,7 @@ class MediaDownloadResult(BaseModel):
 
     def mark_as_temp_file(self, cleanup_on_exit: bool = True):
         """Mark this result as containing a temporary file for cleanup.
-        
+
         Args:
             cleanup_on_exit: Whether to automatically delete the temp file when context exits
         """

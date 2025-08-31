@@ -91,10 +91,7 @@ class WhatsAppWebhookError(BaseModel):
         This is a heuristic and may need adjustment based on documentation.
         """
         # System errors often start with 1, API errors with other digits
-        for code in self.error_codes:
-            if 100000 <= code <= 199999:  # System error range (heuristic)
-                return True
-        return False
+        return any(100000 <= code <= 199999 for code in self.error_codes)
 
     def is_app_error(self) -> bool:
         """
@@ -103,10 +100,7 @@ class WhatsAppWebhookError(BaseModel):
         App errors typically relate to configuration or permissions.
         """
         # App/permission errors often in different ranges
-        for code in self.error_codes:
-            if 200000 <= code <= 299999:  # App error range (heuristic)
-                return True
-        return False
+        return any(200000 <= code <= 299999 for code in self.error_codes)
 
     def is_account_error(self) -> bool:
         """
@@ -115,10 +109,7 @@ class WhatsAppWebhookError(BaseModel):
         Account errors typically relate to quotas, limits, or account status.
         """
         # Account errors often in different ranges
-        for code in self.error_codes:
-            if 300000 <= code <= 399999:  # Account error range (heuristic)
-                return True
-        return False
+        return any(300000 <= code <= 399999 for code in self.error_codes)
 
     def get_error_severity(self) -> str:
         """

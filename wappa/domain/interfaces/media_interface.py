@@ -14,9 +14,8 @@ and WhatsApp Cloud API 2025 specifications for the 4 core endpoints:
 
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import BinaryIO, AsyncContextManager
+from typing import AsyncContextManager, BinaryIO
 
 from wappa.domain.models.media_result import (
     MediaDeleteResult,
@@ -257,9 +256,7 @@ class IMediaHandler(ABC):
         pass
 
     @abstractmethod
-    async def get_media_as_bytes(
-        self, media_id: str
-    ) -> MediaDownloadResult:
+    async def get_media_as_bytes(self, media_id: str) -> MediaDownloadResult:
         """
         Download media as bytes without creating any files.
 

@@ -33,7 +33,7 @@ async def set(
         try:
             # Ensure value is a type redis-py can handle directly (str, bytes, int, float)
             # Assuming decode_responses=True, strings are preferred.
-            if not isinstance(value, (str, bytes, int, float)):
+            if not isinstance(value, str | bytes | int | float):
                 # Log a warning if a complex type is passed unexpectedly
                 logger.warning(
                     f"RedisCoreMethods.set received non-primitive type for key '{key}'. Attempting str conversion. Type: {type(value)}"
@@ -62,7 +62,7 @@ async def setex(
     """
     async with RedisClient.connection(alias=alias) as redis:
         try:
-            if not isinstance(value, (str, bytes, int, float)):
+            if not isinstance(value, str | bytes | int | float):
                 logger.warning(
                     f"RedisCoreMethods.setex received non-primitive type for key '{key}'. Attempting str conversion. Type: {type(value)}"
                 )
@@ -185,7 +185,7 @@ async def hset_with_expire(
                 # Ensure mapping values are suitable primitive types
                 checked_mapping = {}
                 for k, v in mapping.items():
-                    if not isinstance(v, (str, bytes, int, float)):
+                    if not isinstance(v, str | bytes | int | float):
                         logger.warning(
                             f"RedisCoreMethods.hset_with_expire received non-primitive type for field '{k}' in mapping for key '{key}'. Attempting str conversion. Type: {type(v)}"
                         )
@@ -288,7 +288,7 @@ async def rpush_and_sadd(
             # Ensure values/members are primitive types
             checked_list_values = []
             for v in list_values:
-                if not isinstance(v, (str, bytes, int, float)):
+                if not isinstance(v, str | bytes | int | float):
                     logger.warning(
                         f"RedisCoreMethods.rpush_and_sadd received non-primitive type in list_values for key '{list_key}'. Attempting str conversion. Type: {type(v)}"
                     )
@@ -298,7 +298,7 @@ async def rpush_and_sadd(
 
             checked_set_members = []
             for m in set_members:
-                if not isinstance(m, (str, bytes, int, float)):
+                if not isinstance(m, str | bytes | int | float):
                     logger.warning(
                         f"RedisCoreMethods.rpush_and_sadd received non-primitive type in set_members for key '{set_key}'. Attempting str conversion. Type: {type(m)}"
                     )
@@ -355,7 +355,7 @@ async def scan_keys(
     # redis-py >= 4.2 prefers int cursor, older versions might use bytes/str
     # Let's try to stick to int/str representation for broader compatibility
     current_cursor: str | int = (
-        cursor if isinstance(cursor, (str, int)) else str(int(cursor))
+        cursor if isinstance(cursor, str | int) else str(int(cursor))
     )  # Prefer string '0' if bytes 'b0' is passed. Assume int 0 is start.
 
     async with RedisClient.connection(alias=alias) as redis:
@@ -482,7 +482,7 @@ async def hset(
                 # Ensure mapping values are strings (or bytes/int/float)
                 checked_mapping = {}
                 for k, v in mapping.items():
-                    if not isinstance(v, (str, bytes, int, float)):
+                    if not isinstance(v, str | bytes | int | float):
                         logger.warning(
                             f"RedisCoreMethods.hset received non-primitive type for field '{k}' in mapping for key '{key}'. Attempting str conversion. Type: {type(v)}"
                         )
@@ -492,7 +492,7 @@ async def hset(
                 return await redis.hset(key, mapping=checked_mapping)
             else:
                 # Handle single field/value
-                if not isinstance(value, (str, bytes, int, float)):
+                if not isinstance(value, str | bytes | int | float):
                     logger.warning(
                         f"RedisCoreMethods.hset received non-primitive type for field '{field}' for key '{key}'. Attempting str conversion. Type: {type(value)}"
                     )
@@ -646,7 +646,7 @@ async def rpush(key: str, *values: str, alias: PoolAlias = "default") -> int:
             # Ensure values are primitive types suitable for redis-py
             checked_values = []
             for v in values:
-                if not isinstance(v, (str, bytes, int, float)):
+                if not isinstance(v, str | bytes | int | float):
                     logger.warning(
                         f"RedisCoreMethods.rpush received non-primitive type in values for key '{key}'. Attempting str conversion. Type: {type(v)}"
                     )
@@ -780,7 +780,7 @@ async def sadd(key: str, *members: str, alias: PoolAlias = "default") -> int:
             # Ensure members are primitive types suitable for redis-py
             checked_members = []
             for m in members:
-                if not isinstance(m, (str, bytes, int, float)):
+                if not isinstance(m, str | bytes | int | float):
                     logger.warning(
                         f"RedisCoreMethods.sadd received non-primitive type in members for key '{key}'. Attempting str conversion. Type: {type(m)}"
                     )
@@ -834,7 +834,7 @@ async def srem(key: str, *members: str, alias: PoolAlias = "default") -> int:
             # Ensure members are primitive types suitable for redis-py
             checked_members = []
             for m in members:
-                if not isinstance(m, (str, bytes, int, float)):
+                if not isinstance(m, str | bytes | int | float):
                     logger.warning(
                         f"RedisCoreMethods.srem received non-primitive type in members for key '{key}'. Attempting str conversion. Type: {type(m)}"
                     )

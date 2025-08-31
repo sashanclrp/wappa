@@ -120,9 +120,7 @@ class RedisPlugin:
             max_conn = self.max_connections or settings.redis_max_connections
 
             logger.info("=== REDIS CACHE INITIALIZATION ===")
-            logger.info(
-                f"🔴 Redis URL: {redis_url} (max_connections: {max_conn})"
-            )
+            logger.info(f"🔴 Redis URL: {redis_url} (max_connections: {max_conn})")
 
             # Initialize Redis pools with explicit settings
             await RedisManager.initialize(

@@ -144,8 +144,9 @@ class WebhookController:
 
         # ENHANCED DEBUGGING: Show context details
         from wappa.core.logging.context import get_context_info
+
         context_info = get_context_info()
-        
+
         self.logger.debug(
             f"Processing webhook for platform: {platform}, owner: {owner_id}"
         )
@@ -395,7 +396,9 @@ class WebhookController:
             factory_class = create_cache_factory(cache_type)
             cache_factory = factory_class(tenant_id=tenant_id, user_id=user_id)
 
-            self.logger.debug(f"✅ Created {cache_factory.__class__.__name__} successfully")
+            self.logger.debug(
+                f"✅ Created {cache_factory.__class__.__name__} successfully"
+            )
             return cache_factory
 
         except Exception as e:

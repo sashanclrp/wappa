@@ -382,27 +382,7 @@ class WhatsAppLocationMessage(BaseLocationMessage):
             },
         }
 
-    # Implement abstract methods from BaseLocationMessage
-
-    @property
-    def latitude(self) -> float:
-        return self.location.latitude
-
-    @property
-    def longitude(self) -> float:
-        return self.location.longitude
-
-    @property
-    def address(self) -> str | None:
-        return self.location.address
-
-    @property
-    def name(self) -> str | None:
-        return self.location.name
-
-    @property
-    def url(self) -> str | None:
-        return self.location.url
+    # Abstract methods already implemented above
 
     @property
     def location_name(self) -> str | None:

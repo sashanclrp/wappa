@@ -183,7 +183,7 @@ class MessageSchemaRegistry:
         for platform, schemas in self._message_schemas.items():
             stats["platforms"][platform.value] = {
                 "message_types": len(schemas),
-                "supported_types": [mt.value for mt in schemas.keys()],
+                "supported_types": [mt.value for mt in schemas],
             }
 
         return stats
@@ -720,10 +720,7 @@ class SchemaFactory:
                 return False
 
             # Should have metadata at minimum
-            if "metadata" not in value:
-                return False
-
-            return True
+            return "metadata" in value
 
         except (KeyError, IndexError, TypeError):
             return False

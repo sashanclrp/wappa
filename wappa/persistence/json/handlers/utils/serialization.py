@@ -60,30 +60,32 @@ def deserialize_from_json(data: Any, model: type[BaseModel] | None = None) -> An
     """Deserialize data from JSON storage."""
     if data is None:
         return None
-    
+
     # Convert datetime strings back to datetime objects
     data = _convert_iso_strings_to_datetime(data)
-    
+
     if model is not None:
         return model.model_validate(data)
-    
+
     return data
 
 
-def create_cache_file_data(data: dict[str, Any], ttl: int | None = None) -> dict[str, Any]:
+def create_cache_file_data(
+    data: dict[str, Any], ttl: int | None = None
+) -> dict[str, Any]:
     """Create JSON cache file structure with metadata."""
     now = datetime.now()
     expires_at = None
     if ttl:
         expires_at = datetime.fromtimestamp(now.timestamp() + ttl)
-    
+
     return {
         "_metadata": {
             "created_at": now.isoformat(),
             "expires_at": expires_at.isoformat() if expires_at else None,
-            "version": "1.0"
+            "version": "1.0",
         },
-        "data": serialize_for_json(data)
+        "data": serialize_for_json(data),
     }
 
 
@@ -91,10 +93,10 @@ def extract_cache_file_data(file_data: dict[str, Any]) -> dict[str, Any] | None:
     """Extract data from JSON cache file, checking expiration."""
     if not isinstance(file_data, dict):
         return None
-    
+
     metadata = file_data.get("_metadata", {})
     expires_at_str = metadata.get("expires_at")
-    
+
     # Check expiration
     if expires_at_str:
         try:
@@ -103,7 +105,7 @@ def extract_cache_file_data(file_data: dict[str, Any]) -> dict[str, Any] | None:
                 return None  # Expired
         except ValueError:
             logger.warning(f"Invalid expires_at format: {expires_at_str}")
-    
+
     return file_data.get("data", {})
 
 

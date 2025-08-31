@@ -4,7 +4,6 @@ Main cache factory selector for Wappa framework.
 Provides factory selector based on cache type configuration.
 """
 
-
 from ..domain.interfaces.cache_factory import ICacheFactory
 
 

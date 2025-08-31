@@ -40,11 +40,11 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
 
     async def _log_http_exception(self, request: Request, exc: HTTPException) -> None:
         """Log HTTP exceptions with tenant context."""
-        tenant_id = getattr(request.state, "tenant_id", "unknown")
+        getattr(request.state, "tenant_id", "unknown")
         logger = get_logger(__name__)
 
         # Extract user context from request if available
-        user_id = getattr(request.state, "user_id", "unknown")
+        getattr(request.state, "user_id", "unknown")
 
         logger.warning(
             f"HTTP {exc.status_code} - {request.method} {request.url.path} - "
@@ -55,8 +55,8 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
         self, request: Request, exc: Exception
     ) -> JSONResponse:
         """Handle unexpected exceptions with proper logging and response."""
-        tenant_id = getattr(request.state, "tenant_id", "unknown")
-        user_id = getattr(request.state, "user_id", "unknown")
+        getattr(request.state, "tenant_id", "unknown")
+        getattr(request.state, "user_id", "unknown")
 
         # Get context-aware logger
         logger = get_logger(__name__)

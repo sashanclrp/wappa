@@ -102,9 +102,7 @@ class RedisClient:
         if missing:
             raise ValueError(f"Missing required pool aliases: {missing}")
 
-        extra = set(str(k) for k in urls) - set(
-            str(k) for k in POOL_DB_MAPPING
-        )
+        extra = {str(k) for k in urls} - {str(k) for k in POOL_DB_MAPPING}
         if extra:
             raise ValueError(
                 f"Unknown pool aliases: {extra}. Only {list(POOL_DB_MAPPING.keys())} are allowed."
@@ -202,7 +200,7 @@ A fork-safe, asyncio-native helper with **3 predefined Redis pools** for Wappa c
 
 | Pool         | Database | Purpose                    |
 |--------------|----------|----------------------------|
-| users        | 0        | User-specific cache data   |  
+| users        | 0        | User-specific cache data   |
 | state_handler| 1        | Handler state cache data   |
 | table        | 2        | Table/data cache           |
 
@@ -215,14 +213,14 @@ RedisClient.setup_single_url("redis://localhost:6379")
 # Option 2: Explicit URLs per pool
 RedisClient.setup_multiple_urls({
     "users": "redis://localhost:6379/0",
-    "state_handler": "redis://cache:6379/1", 
+    "state_handler": "redis://cache:6379/1",
     "table": "redis://localhost:6379/2"
 })
 
 # Usage
 async with RedisClient.connection("state_handler") as r:
     await r.set("key", "value")
-    
+
 redis = await RedisClient.get("users")
 await redis.hset("user:123", "name", "Alice")
 ```

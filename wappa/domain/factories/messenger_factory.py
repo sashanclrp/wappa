@@ -210,7 +210,7 @@ class MessengerFactory:
             # Clear all messengers for a platform
             to_remove = [
                 key
-                for key in self._messenger_cache.keys()
+                for key in self._messenger_cache
                 if key.startswith(f"{platform.value}:")
             ]
             for key in to_remove:
@@ -219,9 +219,7 @@ class MessengerFactory:
         elif tenant_id:
             # Clear all messengers for a tenant
             to_remove = [
-                key
-                for key in self._messenger_cache.keys()
-                if key.endswith(f":{tenant_id}")
+                key for key in self._messenger_cache if key.endswith(f":{tenant_id}")
             ]
             for key in to_remove:
                 del self._messenger_cache[key]

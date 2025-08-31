@@ -10,9 +10,9 @@ import os
 import tempfile
 import time
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
-from typing import Any, BinaryIO, AsyncContextManager
+from typing import Any, AsyncContextManager, BinaryIO
 
 from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.media_interface import IMediaHandler
@@ -331,7 +331,7 @@ class WhatsAppMediaHandler(IMediaHandler):
 
         Based on existing WhatsAppServiceMedia.download_media() method.
         Implements workflow: GET /MEDIA_ID -> GET /MEDIA_URL
-        
+
         Args:
             media_id: Platform-specific media identifier
             destination_path: Optional path to save file (ignored if use_tempfile=True)
@@ -412,16 +412,20 @@ class WhatsAppMediaHandler(IMediaHandler):
                 # Save to file if destination_path provided or tempfile requested
                 final_path = None
                 is_temp_file = False
-                
+
                 if use_tempfile:
                     # Create temporary file
                     extension_map = self._get_extension_map()
-                    extension = temp_suffix or extension_map.get(response_content_type, "")
-                    
+                    extension = temp_suffix or extension_map.get(
+                        response_content_type, ""
+                    )
+
                     # Create named temporary file
-                    temp_fd, temp_path = tempfile.mkstemp(suffix=extension, prefix="wappa_media_")
+                    temp_fd, temp_path = tempfile.mkstemp(
+                        suffix=extension, prefix="wappa_media_"
+                    )
                     try:
-                        with os.fdopen(temp_fd, 'wb') as temp_file:
+                        with os.fdopen(temp_fd, "wb") as temp_file:
                             temp_file.write(data)
                         final_path = Path(temp_path)
                         is_temp_file = True
@@ -430,12 +434,10 @@ class WhatsAppMediaHandler(IMediaHandler):
                         )
                     except Exception:
                         # Clean up on error
-                        try:
+                        with suppress(Exception):
                             os.unlink(temp_path)
-                        except Exception:
-                            pass
                         raise
-                        
+
                 elif destination_path:
                     # Original destination path logic
                     extension_map = self._get_extension_map()
@@ -466,11 +468,11 @@ class WhatsAppMediaHandler(IMediaHandler):
                     platform=PlatformType.WHATSAPP,
                     tenant_id=self._tenant_id,
                 )
-                
+
                 # Mark as temp file if needed
                 if is_temp_file:
                     result.mark_as_temp_file(cleanup_on_exit=auto_cleanup)
-                    
+
                 return result
 
             finally:
@@ -519,18 +521,16 @@ class WhatsAppMediaHandler(IMediaHandler):
             use_tempfile=True,
             temp_suffix=temp_suffix,
             sender_id=sender_id,
-            auto_cleanup=True
+            auto_cleanup=True,
         )
-        
+
         try:
             yield result
         finally:
             # Context manager cleanup handled by MediaDownloadResult
             result._cleanup_temp_file()
 
-    async def get_media_as_bytes(
-        self, media_id: str
-    ) -> MediaDownloadResult:
+    async def get_media_as_bytes(self, media_id: str) -> MediaDownloadResult:
         """
         Download media as bytes without creating any files.
 
@@ -543,9 +543,7 @@ class WhatsAppMediaHandler(IMediaHandler):
             MediaDownloadResult with file_data bytes (file_path will be None)
         """
         return await self.download_media(
-            media_id=media_id,
-            destination_path=None,
-            use_tempfile=False
+            media_id=media_id, destination_path=None, use_tempfile=False
         )
 
     async def stream_media(
