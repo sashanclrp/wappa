@@ -60,7 +60,7 @@ Each score handles a single responsibility:
 WHATSAPP_API_URL=https://graph.facebook.com/v18.0
 WHATSAPP_ACCESS_TOKEN=your_access_token
 WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
-WHATSAPP_VERIFY_TOKEN=your_webhook_verify_token
+WHATSAPP_WEBHOOK_VERIFY_TOKEN=your_webhook_verify_token
 WHATSAPP_WEBHOOK_SECRET=your_webhook_secret
 
 # Application Settings

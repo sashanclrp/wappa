@@ -160,6 +160,7 @@ def _initialize_project(directory: str) -> None:
         typer.echo("   WP_ACCESS_TOKEN=your_access_token")
         typer.echo("   WP_PHONE_ID=your_phone_id")
         typer.echo("   WP_BID=your_business_id")
+        typer.echo("   WHATSAPP_WEBHOOK_VERIFY_TOKEN=your_webhook_verify_token")
 
     except Exception as e:
         typer.echo(f"❌ Failed to initialize project: {e}", err=True)

@@ -14,6 +14,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from wappa.core.events import WappaEventDispatcher
+from wappa.core.config.settings import settings
 from wappa.core.logging.context import (
     get_current_owner_context,
     get_current_tenant_context,
@@ -97,18 +98,20 @@ class WebhookController:
 
         # Check if this is a verification request
         if hub_mode == "subscribe" and hub_challenge:
-            # For now, accept any verification token (production should validate)
-            # TODO: Implement proper token validation per platform
-            if hub_verify_token:
-                self.logger.info(
-                    f"✅ Webhook verification successful for {platform}, owner: {owner_id}"
-                )
-                return PlainTextResponse(content=hub_challenge)
-            else:
+            # Enforce verify token equals configured value
+            expected = settings.whatsapp_webhook_verify_token
+            if not hub_verify_token:
                 self.logger.error(f"❌ Missing verification token for {platform}")
-                raise HTTPException(
-                    status_code=403, detail="Missing verification token"
-                )
+                raise HTTPException(status_code=403, detail="Missing verification token")
+
+            if not expected or hub_verify_token != expected:
+                self.logger.error("❌ Invalid verification token received")
+                raise HTTPException(status_code=403, detail="Invalid verification token")
+
+            self.logger.info(
+                f"✅ Webhook verification successful for {platform}, owner: {owner_id}"
+            )
+            return PlainTextResponse(content=hub_challenge)
 
         # If not a verification request, return method not allowed
         raise HTTPException(

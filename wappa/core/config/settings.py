@@ -96,8 +96,9 @@ class Settings:
         self.wp_bid: str | None = os.getenv("WP_BID")
 
         # Common WhatsApp settings
-        self.whatsapp_webhook_verify_token: str = os.getenv(
-            "WHATSAPP_WEBHOOK_VERIFY_TOKEN", "demo_verify_token"
+        # Required for webhook verification and signature validation
+        self.whatsapp_webhook_verify_token: str | None = os.getenv(
+            "WHATSAPP_WEBHOOK_VERIFY_TOKEN"
         )
 
         # ================================================================
