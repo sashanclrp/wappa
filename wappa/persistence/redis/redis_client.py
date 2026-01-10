@@ -185,12 +185,9 @@ class RedisClient:
             async with RedisClient.connection("state_handler") as r:
                 await r.set("key", "value")
         """
+        # Pool handles connection lifecycle - no explicit cleanup needed
         client = await cls.get(alias)
-        try:
-            yield client
-        finally:
-            # Nothing to close – pool handles connections
-            pass
+        yield client
 
 
 """

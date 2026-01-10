@@ -5,7 +5,7 @@ This module provides factory classes for creating platform-specific processors,
 schemas, and webhook containers based on incoming webhook data.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from wappa.core.logging.logger import get_logger
 from wappa.processors.base_processor import BaseWebhookProcessor, ProcessorError
@@ -168,7 +168,7 @@ class ProcessorFactory:
     and provides automatic platform detection and processor instantiation.
     """
 
-    _instance: Optional["ProcessorFactory"] = None
+    _instance: "ProcessorFactory | None" = None
     _processors: dict[PlatformType, BaseWebhookProcessor] = {}
 
     def __new__(cls) -> "ProcessorFactory":

@@ -179,20 +179,94 @@ def _resolve_module_name(file_path: str) -> tuple[str, Path]:
     Returns:
         tuple[str, Path]: (module_name, working_directory)
     """
-    # Convert to Path object for better handling
     path = Path(file_path)
-
-    # Always use current directory as working dir and create dotted module name
     working_dir = Path(".")
 
-    # Convert path to dotted module name (remove .py extension)
     if path.suffix == ".py":
         path = path.with_suffix("")
 
-    # Convert path separators to dots for Python import
     module_name = str(path).replace(os.path.sep, ".")
 
     return module_name, working_dir
+
+
+def _run_server(
+    file_path: str,
+    app_var: str,
+    host: str,
+    port: int,
+    workers: int = 1,
+    reload: bool = False,
+) -> None:
+    """
+    Run uvicorn server with the specified configuration.
+
+    Shared logic for both development and production server commands.
+
+    Args:
+        file_path: Path to the Python file containing the Wappa app
+        app_var: Name of the Wappa instance variable
+        host: Host address to bind to
+        port: Port number to bind to
+        workers: Number of worker processes (production only)
+        reload: Enable auto-reload (development only)
+    """
+    if not Path(file_path).exists():
+        typer.echo(f"❌ File not found: {file_path}", err=True)
+        raise typer.Exit(1)
+
+    module_name, working_dir = _resolve_module_name(file_path)
+    import_string = f"{module_name}:{app_var}.asgi"
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "uvicorn",
+        import_string,
+        "--host",
+        host,
+        "--port",
+        str(port),
+    ]
+
+    if reload:
+        cmd.append("--reload")
+        mode = "development"
+    else:
+        cmd.extend(["--workers", str(workers)])
+        mode = "production"
+
+    typer.echo(f"🚀 Starting Wappa {mode} server...")
+    typer.echo(f"📡 Import: {working_dir / module_name}:{app_var}.asgi")
+    typer.echo(f"🌐 Server: http://{host}:{port}")
+
+    if reload:
+        typer.echo(f"📝 Docs: http://{host}:{port}/docs")
+    else:
+        typer.echo(f"👥 Workers: {workers}")
+
+    typer.echo("💡 Press CTRL+C to stop")
+    typer.echo()
+
+    try:
+        subprocess.run(cmd, check=True, cwd=working_dir)
+    except subprocess.CalledProcessError as e:
+        typer.echo(
+            f"❌ Server failed to start (exit code: {e.returncode})",
+            err=True,
+        )
+        typer.echo("", err=True)
+        typer.echo("Common issues:", err=True)
+        typer.echo(f"• No module-level '{app_var}' variable in {file_path}", err=True)
+        typer.echo(f"• Port {port} already in use", err=True)
+        typer.echo(f"• Import errors in {file_path} or its dependencies", err=True)
+        typer.echo("", err=True)
+        typer.echo(
+            f"Make sure your file has: {app_var} = Wappa(...) at module level", err=True
+        )
+        raise typer.Exit(1)
+    except KeyboardInterrupt:
+        typer.echo("👋 Server stopped")
 
 
 @app.command()
@@ -205,7 +279,7 @@ def dev(
     ),
     host: str = typer.Option("0.0.0.0", "--host", "-h", help="Host to bind to"),
     port: int = typer.Option(8000, "--port", "-p", help="Port to bind to"),
-):
+) -> None:
     """
     Run development server with auto-reload.
 
@@ -214,56 +288,7 @@ def dev(
         wappa dev examples/redis_demo/main.py --port 8080
         wappa dev src/app.py --app my_wappa_app
     """
-    # Validate file exists
-    if not Path(file_path).exists():
-        typer.echo(f"❌ File not found: {file_path}", err=True)
-        raise typer.Exit(1)
-
-    # Convert file path to module name and working directory
-    module_name, working_dir = _resolve_module_name(file_path)
-    import_string = f"{module_name}:{app_var}.asgi"
-
-    # Build uvicorn command
-    cmd = [
-        sys.executable,
-        "-m",
-        "uvicorn",
-        import_string,
-        "--reload",
-        "--host",
-        host,
-        "--port",
-        str(port),
-    ]
-
-    typer.echo("🚀 Starting Wappa development server...")
-    typer.echo(f"📡 Import: {working_dir / module_name}:{app_var}.asgi")
-    typer.echo(f"🌐 Server: http://{host}:{port}")
-    typer.echo(f"📝 Docs: http://{host}:{port}/docs")
-    typer.echo("💡 Press CTRL+C to stop")
-    typer.echo()
-
-    try:
-        subprocess.run(cmd, check=True, cwd=working_dir)
-    except subprocess.CalledProcessError as e:
-        typer.echo(
-            f"❌ Development server failed to start (exit code: {e.returncode})",
-            err=True,
-        )
-        typer.echo("", err=True)
-        typer.echo("Common issues:", err=True)
-        typer.echo(f"• No module-level '{app_var}' variable in {file_path}", err=True)
-        typer.echo(
-            f"• Port {port} already in use (try --port with different number)", err=True
-        )
-        typer.echo(f"• Import errors in {file_path} or its dependencies", err=True)
-        typer.echo("", err=True)
-        typer.echo(
-            f"Make sure your file has: {app_var} = Wappa(...) at module level", err=True
-        )
-        raise typer.Exit(1)
-    except KeyboardInterrupt:
-        typer.echo("👋 Development server stopped")
+    _run_server(file_path, app_var, host, port, reload=True)
 
 
 @app.command()
@@ -279,7 +304,7 @@ def prod(
     workers: int = typer.Option(
         1, "--workers", "-w", help="Number of worker processes"
     ),
-):
+) -> None:
     """
     Run production server (no auto-reload).
 
@@ -287,51 +312,7 @@ def prod(
         wappa prod main.py
         wappa prod main.py --workers 4 --port 8080
     """
-    # Validate file exists
-    if not Path(file_path).exists():
-        typer.echo(f"❌ File not found: {file_path}", err=True)
-        raise typer.Exit(1)
-
-    # Convert file path to module name and working directory
-    module_name, working_dir = _resolve_module_name(file_path)
-    import_string = f"{module_name}:{app_var}.asgi"
-
-    # Build uvicorn command (no reload for production)
-    cmd = [
-        sys.executable,
-        "-m",
-        "uvicorn",
-        import_string,
-        "--host",
-        host,
-        "--port",
-        str(port),
-        "--workers",
-        str(workers),
-    ]
-
-    typer.echo("🚀 Starting Wappa production server...")
-    typer.echo(f"📡 Import: {working_dir / module_name}:{app_var}.asgi")
-    typer.echo(f"🌐 Server: http://{host}:{port}")
-    typer.echo(f"👥 Workers: {workers}")
-    typer.echo("💡 Press CTRL+C to stop")
-    typer.echo()
-
-    try:
-        subprocess.run(cmd, check=True, cwd=working_dir)
-    except subprocess.CalledProcessError as e:
-        typer.echo(
-            f"❌ Production server failed to start (exit code: {e.returncode})",
-            err=True,
-        )
-        typer.echo("", err=True)
-        typer.echo("Common issues:", err=True)
-        typer.echo(f"• No module-level '{app_var}' variable in {file_path}", err=True)
-        typer.echo(f"• Port {port} already in use", err=True)
-        typer.echo(f"• Import errors in {file_path} or its dependencies", err=True)
-        raise typer.Exit(1)
-    except KeyboardInterrupt:
-        typer.echo("👋 Production server stopped")
+    _run_server(file_path, app_var, host, port, workers=workers, reload=False)
 
 
 @app.command()

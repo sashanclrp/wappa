@@ -99,6 +99,31 @@ class WhatsAppMessenger(IMessenger):
         """Get the tenant ID this messenger serves."""
         return self._tenant_id
 
+    def _convert_body_parameters(
+        self, body_parameters: list[dict] | None
+    ) -> list | None:
+        """Convert dict parameters to TemplateParameter objects.
+
+        Args:
+            body_parameters: List of parameter dicts with 'type' and 'text' keys
+
+        Returns:
+            List of TemplateParameter objects or None if no parameters provided
+        """
+        if not body_parameters:
+            return None
+
+        from wappa.messaging.whatsapp.models.template_models import (
+            TemplateParameter,
+            TemplateParameterType,
+        )
+
+        return [
+            TemplateParameter(type=TemplateParameterType.TEXT, text=p.get("text"))
+            for p in body_parameters
+            if isinstance(p, dict) and p.get("type") == "text"
+        ]
+
     # Basic Messaging Methods (from WhatsAppBasicMessenger)
 
     async def send_text(
@@ -630,27 +655,10 @@ class WhatsAppMessenger(IMessenger):
         Returns:
             MessageResult with operation status and metadata
         """
-        # Convert Dict parameters to TemplateParameter objects if needed
-        template_parameters = None
-        if body_parameters:
-            from wappa.messaging.whatsapp.models.template_models import (
-                TemplateParameter,
-                TemplateParameterType,
-            )
-
-            template_parameters = []
-            for param in body_parameters:
-                if isinstance(param, dict) and param.get("type") == "text":
-                    template_parameters.append(
-                        TemplateParameter(
-                            type=TemplateParameterType.TEXT, text=param.get("text")
-                        )
-                    )
-
         return await self.template_handler.send_text_template(
             phone_number=recipient,
             template_name=template_name,
-            body_parameters=template_parameters,
+            body_parameters=self._convert_body_parameters(body_parameters),
             language_code=language_code,
         )
 
@@ -694,30 +702,13 @@ class WhatsAppMessenger(IMessenger):
                 error_code="INVALID_MEDIA_TYPE",
             )
 
-        # Convert Dict parameters to TemplateParameter objects if needed
-        template_parameters = None
-        if body_parameters:
-            from wappa.messaging.whatsapp.models.template_models import (
-                TemplateParameter,
-                TemplateParameterType,
-            )
-
-            template_parameters = []
-            for param in body_parameters:
-                if isinstance(param, dict) and param.get("type") == "text":
-                    template_parameters.append(
-                        TemplateParameter(
-                            type=TemplateParameterType.TEXT, text=param.get("text")
-                        )
-                    )
-
         return await self.template_handler.send_media_template(
             phone_number=recipient,
             template_name=template_name,
             media_type=media_type_enum,
             media_id=media_id,
             media_url=media_url,
-            body_parameters=template_parameters,
+            body_parameters=self._convert_body_parameters(body_parameters),
             language_code=language_code,
         )
 
@@ -750,23 +741,6 @@ class WhatsAppMessenger(IMessenger):
         Returns:
             MessageResult with operation status and metadata
         """
-        # Convert Dict parameters to TemplateParameter objects if needed
-        template_parameters = None
-        if body_parameters:
-            from wappa.messaging.whatsapp.models.template_models import (
-                TemplateParameter,
-                TemplateParameterType,
-            )
-
-            template_parameters = []
-            for param in body_parameters:
-                if isinstance(param, dict) and param.get("type") == "text":
-                    template_parameters.append(
-                        TemplateParameter(
-                            type=TemplateParameterType.TEXT, text=param.get("text")
-                        )
-                    )
-
         return await self.template_handler.send_location_template(
             phone_number=recipient,
             template_name=template_name,
@@ -774,7 +748,7 @@ class WhatsAppMessenger(IMessenger):
             longitude=longitude,
             name=name,
             address=address,
-            body_parameters=template_parameters,
+            body_parameters=self._convert_body_parameters(body_parameters),
             language_code=language_code,
         )
 

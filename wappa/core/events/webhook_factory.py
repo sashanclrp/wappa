@@ -156,6 +156,27 @@ class WebhookURLFactory:
         expected_url = self.generate_webhook_url(platform, tenant_id)
         return url == expected_url
 
+    def _parse_webhook_path(self, webhook_path: str) -> tuple[str, str] | None:
+        """
+        Parse webhook URL path and extract tenant_id and platform.
+
+        Args:
+            webhook_path: Webhook URL path (e.g., "/webhook/messenger/123/whatsapp")
+
+        Returns:
+            Tuple of (tenant_id, platform) if valid, None otherwise
+        """
+        path_parts = webhook_path.strip("/").split("/")
+
+        if (
+            len(path_parts) >= 4
+            and path_parts[0] == "webhook"
+            and path_parts[1] == "messenger"
+        ):
+            return path_parts[2], path_parts[3]
+
+        return None
+
     def extract_platform_from_url(self, webhook_path: str) -> PlatformType | None:
         """
         Extract platform type from a webhook URL path.
@@ -166,21 +187,15 @@ class WebhookURLFactory:
         Returns:
             PlatformType if found, None otherwise
         """
-        # Expected pattern: /webhook/messenger/{tenant_id}/{platform}
-        path_parts = webhook_path.strip("/").split("/")
+        parsed = self._parse_webhook_path(webhook_path)
+        if parsed is None:
+            return None
 
-        if (
-            len(path_parts) >= 4
-            and path_parts[0] == "webhook"
-            and path_parts[1] == "messenger"
-        ):
-            platform_name = path_parts[3]  # platform is at index 3
-            try:
-                return PlatformType(platform_name.lower())
-            except ValueError:
-                return None
-
-        return None
+        _, platform_name = parsed
+        try:
+            return PlatformType(platform_name.lower())
+        except ValueError:
+            return None
 
     def extract_tenant_from_url(self, webhook_path: str) -> str | None:
         """
@@ -192,17 +207,12 @@ class WebhookURLFactory:
         Returns:
             Tenant ID if found, None otherwise
         """
-        # Expected pattern: /webhook/messenger/{tenant_id}/{platform}
-        path_parts = webhook_path.strip("/").split("/")
+        parsed = self._parse_webhook_path(webhook_path)
+        if parsed is None:
+            return None
 
-        if (
-            len(path_parts) >= 4
-            and path_parts[0] == "webhook"
-            and path_parts[1] == "messenger"
-        ):
-            return path_parts[2]  # tenant_id is at index 2
-
-        return None
+        tenant_id, _ = parsed
+        return tenant_id
 
 
 # Global factory instance
