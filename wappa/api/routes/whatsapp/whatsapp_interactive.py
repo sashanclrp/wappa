@@ -104,7 +104,7 @@ async def send_button_message(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to send button message: {str(e)}"
-        )
+        ) from e
 
 
 @router.post(
@@ -173,7 +173,7 @@ async def send_list_message(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to send list message: {str(e)}"
-        )
+        ) from e
 
 
 @router.post(
@@ -218,7 +218,7 @@ async def send_cta_message(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to send CTA message: {str(e)}"
-        )
+        ) from e
 
 
 @router.get(
@@ -340,7 +340,7 @@ async def send_complex_button_message(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to send complex button message: {str(e)}"
-        )
+        ) from e
 
 
 # Example endpoint for list messages
@@ -426,4 +426,4 @@ async def send_menu_list_message(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to send menu list message: {str(e)}"
-        )
+        ) from e

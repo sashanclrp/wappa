@@ -139,10 +139,10 @@ def create_memory_rate_limit_plugin(
             window_seconds=window_seconds,
             **kwargs,
         )
-    except ImportError:
+    except ImportError as e:
         raise ImportError(
             "Rate limiting middleware not found. Please implement or install a rate limiting middleware library."
-        )
+        ) from e
 
 
 def create_redis_rate_limit_plugin(
@@ -177,7 +177,7 @@ def create_redis_rate_limit_plugin(
             redis_url=redis_url,
             **kwargs,
         )
-    except ImportError:
+    except ImportError as e:
         raise ImportError(
             "Redis rate limiting middleware not found. Please implement or install a Redis rate limiting middleware library."
-        )
+        ) from e

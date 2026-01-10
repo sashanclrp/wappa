@@ -86,7 +86,7 @@ class MessageSchemaRegistry:
 
         except ImportError as e:
             self.logger.error(f"Failed to import WhatsApp schemas: {e}")
-            raise SchemaRegistryError(f"Failed to register WhatsApp schemas: {e}")
+            raise SchemaRegistryError(f"Failed to register WhatsApp schemas: {e}") from e
 
     def register_message_schema(
         self,
@@ -221,7 +221,7 @@ class WebhookSchemaRegistry:
             self.logger.error(f"Failed to import WhatsApp webhook schema: {e}")
             raise SchemaRegistryError(
                 f"Failed to register WhatsApp webhook schema: {e}"
-            )
+            ) from e
 
     def register_webhook_schema(
         self, platform: PlatformType, schema_class: type[BaseWebhook]
@@ -595,7 +595,7 @@ class SchemaFactory:
                 f"Failed to create universal webhook for {platform.value}: {e}",
                 exc_info=True,
             )
-            raise SchemaRegistryError(f"Failed to create universal webhook: {e}")
+            raise SchemaRegistryError(f"Failed to create universal webhook: {e}") from e
 
     def create_universal_webhook_from_payload(
         self,
@@ -632,7 +632,7 @@ class SchemaFactory:
             self.logger.error(
                 f"Failed to create universal webhook from payload: {e}", exc_info=True
             )
-            raise SchemaRegistryError(f"Failed to create universal webhook: {e}")
+            raise SchemaRegistryError(f"Failed to create universal webhook: {e}") from e
 
     def validate_universal_webhook_payload(
         self, payload: dict[str, Any], expected_type: str | None = None

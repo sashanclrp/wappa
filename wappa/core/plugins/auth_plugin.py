@@ -136,10 +136,10 @@ def create_jwt_auth_plugin(
         return AuthPlugin(
             JWTMiddleware, secret_key=secret_key, algorithm=algorithm, **kwargs
         )
-    except ImportError:
+    except ImportError as e:
         raise ImportError(
             "JWT middleware not found. Please implement or install a JWT middleware library."
-        )
+        ) from e
 
 
 def create_api_key_auth_plugin(
@@ -163,7 +163,7 @@ def create_api_key_auth_plugin(
         from your_auth_library import APIKeyMiddleware
 
         return AuthPlugin(APIKeyMiddleware, api_key_header=api_key_header, **kwargs)
-    except ImportError:
+    except ImportError as e:
         raise ImportError(
             "API key middleware not found. Please implement or install an API key middleware library."
-        )
+        ) from e

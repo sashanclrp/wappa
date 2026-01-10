@@ -62,12 +62,12 @@ def validate_cache_type(cache_type: str) -> CacheType:
     """
     try:
         return CacheType(cache_type.lower())
-    except ValueError:
+    except ValueError as e:
         supported_types = [ct.value for ct in CacheType]
         raise ValueError(
             f"Unsupported cache type: {cache_type}. "
             f"Supported types: {', '.join(supported_types)}"
-        )
+        ) from e
 
 
 def get_supported_cache_types() -> list[str]:

@@ -89,7 +89,7 @@ async def send_text_template(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to send text template: {str(e)}"
-        )
+        ) from e
 
 
 @router.post(
@@ -147,7 +147,7 @@ async def send_media_template(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to send media template: {str(e)}"
-        )
+        ) from e
 
 
 @router.post(
@@ -202,7 +202,7 @@ async def send_location_template(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to send location template: {str(e)}"
-        )
+        ) from e
 
 
 @router.get(
@@ -297,7 +297,7 @@ async def get_template_status(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to get template status: {str(e)}"
-        )
+        ) from e
 
 
 @router.get(
@@ -382,7 +382,7 @@ async def send_welcome_template(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to send welcome template: {str(e)}"
-        )
+        ) from e
 
 
 # Example endpoint for media template with location
@@ -428,4 +428,4 @@ async def send_store_location_template(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to send store location template: {str(e)}"
-        )
+        ) from e

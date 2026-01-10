@@ -55,10 +55,10 @@ def create_messenger_platform_enum() -> type[Enum]:
         """Convert platform name to PlatformType enum."""
         try:
             return PlatformType(platform_name.lower())
-        except ValueError:
+        except ValueError as e:
             raise ValueError(
                 f"Platform '{platform_name}' is not supported by PlatformType enum"
-            )
+            ) from e
 
     # Add methods to the enum class
     MessengerPlatformEnum.get_platform_names = staticmethod(get_platform_names)

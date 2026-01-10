@@ -307,7 +307,7 @@ class ProcessorFactory:
                 f"Failed to create processor: {e}",
                 ErrorCode.PROCESSING_ERROR,
                 PlatformType.WHATSAPP,  # Default for error reporting
-            )
+            ) from e
 
     def get_supported_platforms(self) -> set[PlatformType]:
         """
@@ -446,7 +446,7 @@ class WebhookFactory:
                 f"Failed to create webhook: {e}",
                 ErrorCode.PROCESSING_ERROR,
                 PlatformType.WHATSAPP,  # Default for error reporting
-            )
+            ) from e
 
     def create_webhook_for_platform(
         self, platform: PlatformType, payload: dict[str, Any], **kwargs

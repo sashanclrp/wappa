@@ -112,7 +112,7 @@ async def upload_media(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}") from e
 
 
 @router.post(
@@ -144,7 +144,7 @@ async def send_image_message(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send image: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send image: {str(e)}") from e
 
 
 @router.post(
@@ -176,7 +176,7 @@ async def send_video_message(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send video: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send video: {str(e)}") from e
 
 
 @router.post(
@@ -208,7 +208,7 @@ async def send_audio_message(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send audio: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send audio: {str(e)}") from e
 
 
 @router.post(
@@ -242,7 +242,7 @@ async def send_document_message(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to send document: {str(e)}"
-        )
+        ) from e
 
 
 @router.post(
@@ -274,7 +274,7 @@ async def send_sticker_message(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send sticker: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send sticker: {str(e)}") from e
 
 
 @router.get(
@@ -306,7 +306,7 @@ async def get_media_info(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to get media info: {str(e)}"
-        )
+        ) from e
 
 
 @router.get(
@@ -369,7 +369,7 @@ async def download_media(
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to download media: {str(e)}"
-        )
+        ) from e
 
 
 @router.delete(
@@ -400,7 +400,7 @@ async def delete_media(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete media: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete media: {str(e)}") from e
 
 
 @router.get(

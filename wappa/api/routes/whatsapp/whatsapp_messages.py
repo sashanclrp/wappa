@@ -88,10 +88,10 @@ async def send_text_message(
 
     except ValueError as e:
         logger.error(f"Validation error sending text message: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error sending text message: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to send message")
+        raise HTTPException(status_code=500, detail="Failed to send message") from e
 
 
 @router.post(
@@ -141,10 +141,10 @@ async def mark_message_as_read(
 
     except ValueError as e:
         logger.error(f"Validation error marking message as read: {str(e)}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error marking message as read: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to mark message as read")
+        raise HTTPException(status_code=500, detail="Failed to mark message as read") from e
 
 
 @router.get(

@@ -168,7 +168,7 @@ async def send_contact_card(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Contact validation failed: {str(e)}",
-        )
+        ) from e
     except HTTPException:
         raise
     except Exception as e:
@@ -176,7 +176,7 @@ async def send_contact_card(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}",
-        )
+        ) from e
 
 
 @router.post("/send-location", response_model=MessageResult)
@@ -248,7 +248,7 @@ async def send_location_message(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Location validation failed: {str(e)}",
-        )
+        ) from e
     except HTTPException:
         raise
     except Exception as e:
@@ -256,7 +256,7 @@ async def send_location_message(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}",
-        )
+        ) from e
 
 
 @router.post("/send-location-request", response_model=MessageResult)
@@ -324,7 +324,7 @@ async def send_location_request_message(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Location request validation failed: {str(e)}",
-        )
+        ) from e
     except HTTPException:
         raise
     except Exception as e:
@@ -332,7 +332,7 @@ async def send_location_request_message(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}",
-        )
+        ) from e
 
 
 @router.post("/validate-contact", response_model=ContactValidationResult)
@@ -394,13 +394,13 @@ async def validate_contact_data(contact: ContactCard) -> ContactValidationResult
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Contact validation failed: {str(e)}",
-        )
+        ) from e
     except Exception as e:
         logger.error(f"Unexpected error validating contact: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}",
-        )
+        ) from e
 
 
 @router.post("/validate-coordinates", response_model=LocationValidationResult)
@@ -473,13 +473,13 @@ async def validate_coordinates(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Coordinate validation failed: {str(e)}",
-        )
+        ) from e
     except Exception as e:
         logger.error(f"Unexpected error validating coordinates: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}",
-        )
+        ) from e
 
 
 @router.get("/health")
@@ -513,4 +513,4 @@ async def specialized_service_health() -> dict:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Service health check failed: {str(e)}",
-        )
+        ) from e

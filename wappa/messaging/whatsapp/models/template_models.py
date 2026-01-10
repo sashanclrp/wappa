@@ -211,7 +211,7 @@ class LocationTemplateMessage(BaseTemplateMessage):
                 raise ValueError("Latitude must be between -90 and 90 degrees")
         except ValueError as e:
             if "could not convert" in str(e):
-                raise ValueError("Latitude must be a valid number")
+                raise ValueError("Latitude must be a valid number") from e
             raise
         return v
 
@@ -225,7 +225,7 @@ class LocationTemplateMessage(BaseTemplateMessage):
                 raise ValueError("Longitude must be between -180 and 180 degrees")
         except ValueError as e:
             if "could not convert" in str(e):
-                raise ValueError("Longitude must be a valid number")
+                raise ValueError("Longitude must be a valid number") from e
             raise
         return v
 

@@ -82,11 +82,11 @@ class CORSPlugin:
 
         try:
             from fastapi.middleware.cors import CORSMiddleware
-        except ImportError:
+        except ImportError as e:
             logger.error(
                 "CORSMiddleware not available - ensure FastAPI is properly installed"
             )
-            raise RuntimeError("CORSMiddleware not available")
+            raise RuntimeError("CORSMiddleware not available") from e
 
         # Build CORS configuration
         cors_config = {

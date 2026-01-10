@@ -104,7 +104,7 @@ def _initialize_project(directory: str) -> None:
             typer.echo(f"📁 Created directory: {project_path}")
         except Exception as e:
             typer.echo(f"❌ Failed to create directory {project_path}: {e}", err=True)
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
 
     # Check if directory is empty (except for hidden files and common files like pyproject.toml)
     existing_files = [
@@ -164,7 +164,7 @@ def _initialize_project(directory: str) -> None:
 
     except Exception as e:
         typer.echo(f"❌ Failed to initialize project: {e}", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 def _resolve_module_name(file_path: str) -> tuple[str, Path]:
@@ -264,7 +264,7 @@ def _run_server(
         typer.echo(
             f"Make sure your file has: {app_var} = Wappa(...) at module level", err=True
         )
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except KeyboardInterrupt:
         typer.echo("👋 Server stopped")
 
@@ -431,7 +431,7 @@ def _show_examples_menu(target_directory: str) -> None:
             console.print("❌ Invalid input. Please enter a number or 'q' to quit")
         except KeyboardInterrupt:
             console.print("\n👋 Goodbye!")
-            raise typer.Exit(0)
+            raise typer.Exit(0) from None
 
 
 def _copy_example(example_key: str, target_directory: str) -> None:
@@ -514,7 +514,7 @@ def _copy_example(example_key: str, target_directory: str) -> None:
 
     except Exception as e:
         console.print(f"❌ Failed to copy example: {e}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 if __name__ == "__main__":
