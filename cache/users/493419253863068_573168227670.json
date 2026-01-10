@@ -1,0 +1,17 @@
+{
+  "_metadata": {
+    "created_at": "2026-01-10T09:46:40.351744",
+    "expires_at": "2026-01-11T09:46:40.351744",
+    "version": "1.0"
+  },
+  "data": {
+    "493419253863068:user:573168227670": {
+      "phone_number": "573168227670",
+      "user_name": "Sasha Nicolai Canal",
+      "first_seen": "2026-01-10T14:46:32.123309",
+      "last_seen": "2026-01-10T14:46:40.351025",
+      "message_count": 2,
+      "is_active": true
+    }
+  }
+}

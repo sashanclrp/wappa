@@ -13,8 +13,10 @@ Based on WhatsApp Cloud API 2025 specifications for specialized messaging.
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, ValidationError
 
+from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_messenger
-from wappa.api.utils import map_whatsapp_api_error_to_status
+from wappa.api.utils import dispatch_message_event, map_whatsapp_api_error_to_status
+from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
@@ -124,8 +126,11 @@ class CoordinateValidationRequest(BaseModel):
 
 
 @router.post("/send-contact", response_model=MessageResult)
+@dispatch_message_event("contact")
 async def send_contact_card(
-    request: ContactRequest, messenger: IMessenger = Depends(get_whatsapp_messenger)
+    request: ContactRequest,
+    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """
     Send contact card message using WhatsApp API.
@@ -136,6 +141,7 @@ async def send_contact_card(
     Args:
         request: Contact card request with recipient and contact information
         messenger: Injected WhatsApp messenger implementation
+        api_dispatcher: API event dispatcher for tracking (injected)
 
     Returns:
         MessageResult with operation status and metadata
@@ -176,8 +182,11 @@ async def send_contact_card(
 
 
 @router.post("/send-location", response_model=MessageResult)
+@dispatch_message_event("location")
 async def send_location_message(
-    request: LocationRequest, messenger: IMessenger = Depends(get_whatsapp_messenger)
+    request: LocationRequest,
+    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """
     Send location message using WhatsApp API.
@@ -188,6 +197,7 @@ async def send_location_message(
     Args:
         request: Location request with coordinates and optional details
         messenger: Injected WhatsApp messenger implementation
+        api_dispatcher: API event dispatcher for tracking (injected)
 
     Returns:
         MessageResult with operation status and metadata
@@ -233,9 +243,11 @@ async def send_location_message(
 
 
 @router.post("/send-location-request", response_model=MessageResult)
+@dispatch_message_event("location_request")
 async def send_location_request_message(
     request: LocationRequestRequest,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """
     Send location request message using WhatsApp API.
@@ -246,6 +258,7 @@ async def send_location_request_message(
     Args:
         request: Location request with message text
         messenger: Injected WhatsApp messenger implementation
+        api_dispatcher: API event dispatcher for tracking (injected)
 
     Returns:
         MessageResult with operation status and metadata

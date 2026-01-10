@@ -14,13 +14,16 @@ Router configuration:
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_messenger
 from wappa.api.utils import (
     convert_buttons_to_dict,
     convert_header_to_dict,
     convert_list_sections_to_dict,
+    dispatch_message_event,
     raise_for_failed_result,
 )
+from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.interactive_models import (
@@ -80,8 +83,11 @@ router = APIRouter(
     summary="Send Button Message",
     description="Send an interactive button message with up to 3 quick reply buttons",
 )
+@dispatch_message_event("button")
 async def send_button_message(
-    request: ButtonMessage, messenger: IMessenger = Depends(get_whatsapp_messenger)
+    request: ButtonMessage,
+    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send interactive button message via WhatsApp.
 
@@ -115,8 +121,11 @@ async def send_button_message(
     summary="Send List Message",
     description="Send an interactive list message with sectioned rows",
 )
+@dispatch_message_event("list")
 async def send_list_message(
-    request: ListMessage, messenger: IMessenger = Depends(get_whatsapp_messenger)
+    request: ListMessage,
+    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send interactive list message via WhatsApp.
 
@@ -151,8 +160,11 @@ async def send_list_message(
     summary="Send Call-to-Action Message",
     description="Send an interactive call-to-action message with URL button",
 )
+@dispatch_message_event("cta")
 async def send_cta_message(
-    request: CTAMessage, messenger: IMessenger = Depends(get_whatsapp_messenger)
+    request: CTAMessage,
+    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send interactive call-to-action message via WhatsApp.
 

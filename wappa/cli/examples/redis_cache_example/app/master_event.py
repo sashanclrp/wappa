@@ -11,10 +11,13 @@ This module defines the main WappaEventHandler that:
 - Follows Dependency Inversion with injected dependencies
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from wappa import WappaEventHandler
 from wappa.webhooks import ErrorWebhook, IncomingMessageWebhook, StatusWebhook
+
+if TYPE_CHECKING:
+    from wappa.domain.events.api_message_event import APIMessageEvent
 
 from .scores import AVAILABLE_SCORES, ScoreDependencies
 from .scores.score_base import ScoreRegistry
@@ -155,6 +158,48 @@ class RedisCacheExampleHandler(WappaEventHandler):
 
         except Exception as e:
             self.logger.error(f"❌ Error processing error webhook: {e}", exc_info=True)
+
+    async def process_api_message(self, event: "APIMessageEvent") -> None:
+        """
+        Process API-sent message events for tracking and analytics.
+
+        This optional method is called when messages are sent via the REST API
+        (not webhooks). Use it to track outgoing messages, update databases,
+        or trigger workflows based on API message activity.
+
+        Args:
+            event: APIMessageEvent containing:
+                - message_type: Type of message (text, image, template, etc.)
+                - message_id: WhatsApp message ID from Meta response
+                - recipient: Recipient phone number
+                - request_payload: Original API request body
+                - response_success: Whether the send was successful
+                - response_error: Error message if failed
+                - tenant_id: Current tenant context
+                - owner_id: Current owner context
+        """
+        try:
+            # Log the API message event
+            status = "✅" if event.response_success else "❌"
+            self.logger.info(
+                f"📤 API message sent: {status} {event.message_type} to {event.recipient} "
+                f"(id={event.message_id})"
+            )
+
+            # Example: Track API message statistics
+            # You could extend this to:
+            # - Store message history in cache/database
+            # - Update user interaction counts
+            # - Trigger follow-up workflows
+            # - Send analytics events
+
+            if not event.response_success:
+                self.logger.warning(
+                    f"⚠️ API message failed: {event.response_error}"
+                )
+
+        except Exception as e:
+            self.logger.error(f"❌ Error processing API message event: {e}", exc_info=True)
 
     async def _initialize_solid_architecture(self) -> None:
         """

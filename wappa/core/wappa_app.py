@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from wappa.api.routes.webhooks import create_webhook_router
 
 from .config.settings import settings
-from .events import WappaEventDispatcher
+from .events import APIEventDispatcher, WappaEventDispatcher
 from .factory.wappa_builder import WappaBuilder
 from .logging.logger import get_app_logger
 from .plugins.wappa_core_plugin import WappaCorePlugin
@@ -209,16 +209,23 @@ class Wappa:
         # defers plugin configuration to startup hooks
         app = self._builder.build()
 
+        # Create both dispatchers for the event handler
+        webhook_dispatcher = WappaEventDispatcher(self._event_handler)
+        api_dispatcher = APIEventDispatcher(self._event_handler)
+
         # Add webhook routes to the built app
-        dispatcher = WappaEventDispatcher(self._event_handler)
-        webhook_router = create_webhook_router(dispatcher)
+        webhook_router = create_webhook_router(webhook_dispatcher)
         app.include_router(webhook_router)
+
+        # Store API dispatcher in app.state for dependency injection
+        app.state.api_event_dispatcher = api_dispatcher
 
         logger.info(
             f"✅ Wappa ASGI app built synchronously - cache: {self.cache_type.value}, "
             f"plugins: {len(self._builder.plugins)}, "
             f"event_handler: {self._event_handler.__class__.__name__}"
         )
+        logger.debug("API event dispatcher registered in app.state")
 
         return app
 

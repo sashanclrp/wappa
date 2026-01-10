@@ -13,10 +13,13 @@ Router configuration:
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.whatsapp_dependencies import (
     get_whatsapp_message_factory,
     get_whatsapp_messenger,
 )
+from wappa.api.utils import dispatch_message_event
+from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.logger import get_logger
 from wappa.domain.factories.message_factory import MessageFactory
 from wappa.domain.interfaces.messaging_interface import IMessenger
@@ -45,8 +48,11 @@ router = APIRouter(
     summary="Send Text Message",
     description="Send a text message via WhatsApp with optional reply and preview control",
 )
+@dispatch_message_event("text")
 async def send_text_message(
-    request: BasicTextMessage, messenger: IMessenger = Depends(get_whatsapp_messenger)
+    request: BasicTextMessage,
+    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send a text message via WhatsApp.
 
@@ -58,6 +64,7 @@ async def send_text_message(
     Args:
         request: Text message payload with recipient, content, and options
         messenger: WhatsApp messenger implementation (injected)
+        api_dispatcher: API event dispatcher for tracking (injected)
 
     Returns:
         MessageResult with operation status, message ID, and metadata

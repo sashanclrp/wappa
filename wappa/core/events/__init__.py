@@ -8,6 +8,7 @@ This module contains all event-related functionality including:
 - Webhook URL factory
 """
 
+from .api_event_dispatcher import APIEventDispatcher
 from .default_handlers import (
     DefaultErrorHandler,
     DefaultHandlerFactory,
@@ -25,6 +26,7 @@ __all__ = [
     # Event Handlers
     "WappaEventHandler",
     "WappaEventDispatcher",
+    "APIEventDispatcher",
     # Default Handlers
     "DefaultMessageHandler",
     "DefaultStatusHandler",

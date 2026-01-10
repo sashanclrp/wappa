@@ -14,6 +14,7 @@ from .default_handlers import (
 )
 
 if TYPE_CHECKING:
+    from wappa.domain.events.api_message_event import APIMessageEvent
     from wappa.domain.interfaces.messaging_interface import IMessenger
     from wappa.webhooks import (
         ErrorWebhook,
@@ -148,6 +149,84 @@ class WappaEventHandler(ABC):
             webhook: ErrorWebhook containing error information
         """
         # Default implementation: no additional processing
+        pass
+
+    # =========== OUTGOING API MESSAGE HANDLING ===========
+
+    async def handle_api_message(self, event: "APIMessageEvent") -> None:
+        """
+        Handle API-sent message events using Template Method pattern.
+
+        This method provides a structured flow for outgoing messages sent
+        via the REST API (not webhooks):
+        1. Pre-processing: Framework logging
+        2. User processing: Custom business logic (implemented in process_api_message)
+        3. Post-processing: Framework cleanup
+
+        DO NOT OVERRIDE - implement process_api_message() instead.
+
+        Args:
+            event: APIMessageEvent containing the outgoing message context
+        """
+        await self._pre_process_api_message(event)
+        await self.process_api_message(event)
+        await self._post_process_api_message(event)
+
+    async def process_api_message(self, event: "APIMessageEvent") -> None:
+        """
+        Process API-sent message event with custom business logic.
+
+        Optional method - override to track outgoing messages, update databases,
+        or trigger workflows when messages are sent via the REST API.
+
+        This method is NOT called for webhook-received messages - those go through
+        process_message(). This is specifically for messages sent via:
+        - POST /api/whatsapp/messages/*
+        - POST /api/whatsapp/media/*
+        - POST /api/whatsapp/templates/*
+        - POST /api/whatsapp/interactive/*
+
+        Default: no-op (does nothing unless overridden).
+
+        Args:
+            event: APIMessageEvent with full context (request, response, tenant)
+
+        Example:
+            async def process_api_message(self, event: APIMessageEvent) -> None:
+                # Log outgoing message to database
+                await self.db.insert_message(
+                    recipient=event.recipient,
+                    message_type=event.message_type,
+                    message_id=event.message_id,
+                    success=event.response_success,
+                )
+
+                # Trigger analytics
+                if event.response_success:
+                    await self.analytics.track_message_sent(event)
+        """
+        # Default implementation: no additional processing
+        pass
+
+    async def _pre_process_api_message(self, event: "APIMessageEvent") -> None:
+        """
+        Pre-processing hook for API messages.
+
+        Override to customize pre-processing behavior.
+        Default: logs the API message event.
+        """
+        self.logger.debug(
+            f"API message sent: {event.message_type} to {event.recipient} "
+            f"(success={event.response_success})"
+        )
+
+    async def _post_process_api_message(self, event: "APIMessageEvent") -> None:
+        """
+        Post-processing hook for API messages.
+
+        Override to customize post-processing behavior.
+        Default: no additional processing.
+        """
         pass
 
     def configure_default_handlers(

@@ -21,6 +21,7 @@ Router configuration:
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
+from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.whatsapp_dependencies import (
     get_whatsapp_media_handler,
     get_whatsapp_messenger,
@@ -28,6 +29,8 @@ from wappa.api.dependencies.whatsapp_dependencies import (
 from wappa.api.dependencies.whatsapp_media_dependencies import (
     get_whatsapp_media_factory,
 )
+from wappa.api.utils import dispatch_message_event
+from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.domain.factories.media_factory import MediaFactory
 from wappa.domain.interfaces.media_interface import IMediaHandler
 from wappa.domain.interfaces.messaging_interface import IMessenger
@@ -121,8 +124,11 @@ async def upload_media(
     summary="Send Image Message",
     description="Send an image message with optional caption and reply context",
 )
+@dispatch_message_event("image")
 async def send_image_message(
-    request: ImageMessage, messenger: IMessenger = Depends(get_whatsapp_messenger)
+    request: ImageMessage,
+    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send image message via WhatsApp.
 
@@ -155,8 +161,11 @@ async def send_image_message(
     summary="Send Video Message",
     description="Send a video message with optional caption and reply context",
 )
+@dispatch_message_event("video")
 async def send_video_message(
-    request: VideoMessage, messenger: IMessenger = Depends(get_whatsapp_messenger)
+    request: VideoMessage,
+    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send video message via WhatsApp.
 
@@ -189,8 +198,11 @@ async def send_video_message(
     summary="Send Audio Message",
     description="Send an audio message with optional reply context",
 )
+@dispatch_message_event("audio")
 async def send_audio_message(
-    request: AudioMessage, messenger: IMessenger = Depends(get_whatsapp_messenger)
+    request: AudioMessage,
+    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send audio message via WhatsApp.
 
@@ -223,8 +235,11 @@ async def send_audio_message(
     summary="Send Document Message",
     description="Send a document message with optional filename and reply context",
 )
+@dispatch_message_event("document")
 async def send_document_message(
-    request: DocumentMessage, messenger: IMessenger = Depends(get_whatsapp_messenger)
+    request: DocumentMessage,
+    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send document message via WhatsApp.
 
@@ -258,8 +273,11 @@ async def send_document_message(
     summary="Send Sticker Message",
     description="Send a sticker message with optional reply context",
 )
+@dispatch_message_event("sticker")
 async def send_sticker_message(
-    request: StickerMessage, messenger: IMessenger = Depends(get_whatsapp_messenger)
+    request: StickerMessage,
+    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send sticker message via WhatsApp.
 

@@ -21,9 +21,15 @@ responses to specific handlers based on the template context.
 from fastapi import APIRouter, Depends, HTTPException
 
 from wappa.api.dependencies.cache_dependencies import get_template_state_service
+from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_messenger
 from wappa.api.services.template_state_service import TemplateStateService
-from wappa.api.utils import convert_body_parameters, raise_for_failed_result
+from wappa.api.utils import (
+    convert_body_parameters,
+    dispatch_message_event,
+    raise_for_failed_result,
+)
+from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.template_models import (
@@ -88,10 +94,12 @@ router = APIRouter(
     summary="Send Text Template Message",
     description="Send a text-only template message with optional state configuration",
 )
+@dispatch_message_event("text_template")
 async def send_text_template(
     request: TextTemplateMessage,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     state_service: TemplateStateService = Depends(get_template_state_service),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send text-only template message via WhatsApp.
 
@@ -107,6 +115,7 @@ async def send_text_template(
         body_parameters=convert_body_parameters(request.body_parameters),
         language_code=request.language.code,
     )
+
     raise_for_failed_result(result, "send text template", TEMPLATE_ERROR_GROUPS)
     await _maybe_set_template_state(result, request, state_service)
     return result
@@ -118,10 +127,12 @@ async def send_text_template(
     summary="Send Media Template Message",
     description="Send a template message with media header and optional state configuration",
 )
+@dispatch_message_event("media_template")
 async def send_media_template(
     request: MediaTemplateMessage,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     state_service: TemplateStateService = Depends(get_template_state_service),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send template message with media header via WhatsApp.
 
@@ -140,6 +151,7 @@ async def send_media_template(
         body_parameters=convert_body_parameters(request.body_parameters),
         language_code=request.language.code,
     )
+
     raise_for_failed_result(result, "send media template", TEMPLATE_ERROR_GROUPS)
     await _maybe_set_template_state(result, request, state_service)
     return result
@@ -151,10 +163,12 @@ async def send_media_template(
     summary="Send Location Template Message",
     description="Send a template message with location header and optional state configuration",
 )
+@dispatch_message_event("location_template")
 async def send_location_template(
     request: LocationTemplateMessage,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     state_service: TemplateStateService = Depends(get_template_state_service),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send template message with location header via WhatsApp.
 
@@ -174,6 +188,7 @@ async def send_location_template(
         body_parameters=convert_body_parameters(request.body_parameters),
         language_code=request.language.code,
     )
+
     raise_for_failed_result(result, "send location template", TEMPLATE_ERROR_GROUPS)
     await _maybe_set_template_state(result, request, state_service)
     return result
