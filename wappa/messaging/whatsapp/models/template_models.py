@@ -10,16 +10,9 @@ Based on WhatsApp Cloud API 2025 template message specifications.
 """
 
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
-
-
-class TemplateType(str, Enum):
-    """Template message types supported by WhatsApp."""
-
-    TEXT = "text"
-    MEDIA = "media"
-    LOCATION = "location"
 
 
 class MediaType(str, Enum):
@@ -66,6 +59,46 @@ class TemplateComponent(BaseModel):
     parameters: list[TemplateParameter] | None = Field(
         None, description="Component parameters"
     )
+
+
+class TemplateStateConfig(BaseModel):
+    """Configuration for template-triggered state management.
+
+    When a template is sent with state_config, the system creates a
+    user-scoped cache entry that can be retrieved when the user responds.
+    This enables routing subsequent user responses to specific handlers.
+
+    Example:
+        Send a template with state_config:
+        {
+            "state_value": "reschedule_flow",
+            "ttl_seconds": 3600,
+            "initial_context": {"appointment_id": "apt-123"}
+        }
+
+        When user responds, the handler can check for state:
+        state = await cache.get_state("template-reschedule_flow")
+    """
+
+    state_value: str = Field(
+        ...,
+        min_length=1,
+        max_length=128,
+        pattern=r"^[a-zA-Z0-9_-]+$",
+        description="State identifier. Creates cache key: template-{state_value}",
+    )
+    ttl_seconds: int = Field(
+        default=3600,
+        ge=60,
+        le=86400,
+        description="State time-to-live in seconds (1 minute to 24 hours)",
+    )
+    initial_context: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional context data to store with the state",
+    )
+
+    model_config = {"extra": "forbid"}
 
 
 class TemplateLanguage(BaseModel):
@@ -119,17 +152,17 @@ class BaseTemplateMessage(BaseModel):
     language: TemplateLanguage = Field(
         default_factory=lambda: TemplateLanguage(), description="Template language"
     )
-    template_type: TemplateType = Field(..., description="Type of template message")
 
 
 class TextTemplateMessage(BaseTemplateMessage):
     """Text-only template message."""
 
-    template_type: TemplateType = Field(
-        default=TemplateType.TEXT, description="Template type"
-    )
     body_parameters: list[TemplateParameter] | None = Field(
         None, max_length=10, description="Body parameters for text replacement"
+    )
+    state_config: TemplateStateConfig | None = Field(
+        default=None,
+        description="Optional state configuration for response routing",
     )
 
     @field_validator("body_parameters")
@@ -148,14 +181,15 @@ class TextTemplateMessage(BaseTemplateMessage):
 class MediaTemplateMessage(BaseTemplateMessage):
     """Template message with media header."""
 
-    template_type: TemplateType = Field(
-        default=TemplateType.MEDIA, description="Template type"
-    )
     media_type: MediaType = Field(..., description="Media type for header")
     media_id: str | None = Field(None, min_length=1, description="Uploaded media ID")
     media_url: str | None = Field(None, pattern=r"^https?://", description="Media URL")
     body_parameters: list[TemplateParameter] | None = Field(
         None, max_length=10, description="Body parameters for text replacement"
+    )
+    state_config: TemplateStateConfig | None = Field(
+        default=None,
+        description="Optional state configuration for response routing",
     )
 
     @field_validator("media_id", "media_url")
@@ -188,9 +222,6 @@ class MediaTemplateMessage(BaseTemplateMessage):
 class LocationTemplateMessage(BaseTemplateMessage):
     """Template message with location header."""
 
-    template_type: TemplateType = Field(
-        default=TemplateType.LOCATION, description="Template type"
-    )
     latitude: str = Field(..., description="Location latitude as string")
     longitude: str = Field(..., description="Location longitude as string")
     name: str = Field(..., min_length=1, max_length=100, description="Location name")
@@ -199,6 +230,10 @@ class LocationTemplateMessage(BaseTemplateMessage):
     )
     body_parameters: list[TemplateParameter] | None = Field(
         None, max_length=10, description="Body parameters for text replacement"
+    )
+    state_config: TemplateStateConfig | None = Field(
+        default=None,
+        description="Optional state configuration for response routing",
     )
 
     @field_validator("latitude")

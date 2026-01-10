@@ -53,7 +53,6 @@ from ..messaging.whatsapp.models import (
     TemplateMessageStatus,
     TemplateParameter,
     # Template Models
-    TemplateType,
     TemplateValidationResult,
     TextTemplateMessage,
     VideoMessage,
@@ -85,7 +84,6 @@ __all__ = [
     "BusinessContact",
     "PersonalContact",
     # Template Models
-    "TemplateType",
     "TemplateParameter",
     "TextTemplateMessage",
     "MediaTemplateMessage",

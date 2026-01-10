@@ -25,7 +25,6 @@ from .template_models import (
     MediaTemplateMessage,
     TemplateMessageStatus,
     TemplateParameter,
-    TemplateType,
     TemplateValidationResult,
     TextTemplateMessage,
 )
@@ -51,7 +50,6 @@ __all__ = [
     "LocationValidationResult",
     "BusinessContact",
     "PersonalContact",
-    "TemplateType",
     "TemplateParameter",
     "TextTemplateMessage",
     "MediaTemplateMessage",

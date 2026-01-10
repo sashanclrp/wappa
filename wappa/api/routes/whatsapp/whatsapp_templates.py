@@ -11,11 +11,18 @@ Router configuration:
 - Prefix: /whatsapp/templates
 - Tags: ["WhatsApp - Templates"]
 - Full URL: /api/whatsapp/templates/ (when included with /api prefix)
+
+State Management:
+All send endpoints support optional state_config for creating user cache state
+when the template is sent successfully. This enables routing subsequent user
+responses to specific handlers based on the template context.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from wappa.api.dependencies.cache_dependencies import get_template_state_service
 from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_messenger
+from wappa.api.services.template_state_service import TemplateStateService
 from wappa.api.utils import convert_body_parameters, raise_for_failed_result
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
@@ -26,27 +33,38 @@ from wappa.messaging.whatsapp.models.template_models import (
     TextTemplateMessage,
 )
 
-# Error code groups for template operations
-_TEMPLATE_AUTH_ERRORS = ("TEMPLATE_NOT_FOUND", "TEMPLATE_NOT_APPROVED")
-_TEMPLATE_VALIDATION_ERRORS = (
-    "INVALID_PARAMETERS",
-    "MISSING_PARAMETERS",
-    "INVALID_MEDIA_TYPE",
-    "MEDIA_NOT_FOUND",
-    "INVALID_COORDINATES",
-)
-_TEMPLATE_SERVER_ERRORS = (
-    "TEMPLATE_SEND_FAILED",
-    "MEDIA_TEMPLATE_SEND_FAILED",
-    "LOCATION_TEMPLATE_SEND_FAILED",
-)
-
 # Error code to HTTP status mapping for template operations
 TEMPLATE_ERROR_GROUPS = {
-    _TEMPLATE_AUTH_ERRORS: 403,
-    _TEMPLATE_VALIDATION_ERRORS: 400,
-    _TEMPLATE_SERVER_ERRORS: 500,
+    ("TEMPLATE_NOT_FOUND", "TEMPLATE_NOT_APPROVED"): 403,
+    (
+        "INVALID_PARAMETERS",
+        "MISSING_PARAMETERS",
+        "INVALID_MEDIA_TYPE",
+        "MEDIA_NOT_FOUND",
+        "INVALID_COORDINATES",
+    ): 400,
+    (
+        "TEMPLATE_SEND_FAILED",
+        "MEDIA_TEMPLATE_SEND_FAILED",
+        "LOCATION_TEMPLATE_SEND_FAILED",
+    ): 500,
 }
+
+
+async def _maybe_set_template_state(
+    result: MessageResult,
+    request: TextTemplateMessage | MediaTemplateMessage | LocationTemplateMessage,
+    state_service: TemplateStateService,
+) -> None:
+    """Set template state if configured and send was successful."""
+    if request.state_config and result.success:
+        await state_service.set_template_state(
+            recipient=request.recipient,
+            state_config=request.state_config,
+            message_id=result.message_id,
+            template_name=request.template_name,
+        )
+
 
 # Create router with WhatsApp Templates configuration
 router = APIRouter(
@@ -68,109 +86,97 @@ router = APIRouter(
     "/send-text",
     response_model=MessageResult,
     summary="Send Text Template Message",
-    description="Send a text-only template message with parameter substitution",
+    description="Send a text-only template message with optional state configuration",
 )
 async def send_text_template(
     request: TextTemplateMessage,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
+    state_service: TemplateStateService = Depends(get_template_state_service),
 ) -> MessageResult:
     """Send text-only template message via WhatsApp.
 
     Sends pre-approved business templates with dynamic parameter substitution.
     Templates must be approved by WhatsApp before use.
+
+    If state_config is provided, creates a user cache state for routing
+    subsequent responses based on template-{state_value}.
     """
-    try:
-        result = await messenger.send_text_template(
-            template_name=request.template_name,
-            recipient=request.recipient,
-            body_parameters=convert_body_parameters(request.body_parameters),
-            language_code=request.language.code,
-        )
-
-        raise_for_failed_result(result, "send text template", TEMPLATE_ERROR_GROUPS)
-        return result
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to send text template: {str(e)}"
-        ) from e
+    result = await messenger.send_text_template(
+        template_name=request.template_name,
+        recipient=request.recipient,
+        body_parameters=convert_body_parameters(request.body_parameters),
+        language_code=request.language.code,
+    )
+    raise_for_failed_result(result, "send text template", TEMPLATE_ERROR_GROUPS)
+    await _maybe_set_template_state(result, request, state_service)
+    return result
 
 
 @router.post(
     "/send-media",
     response_model=MessageResult,
     summary="Send Media Template Message",
-    description="Send a template message with media header (image, video, or document)",
+    description="Send a template message with media header and optional state configuration",
 )
 async def send_media_template(
     request: MediaTemplateMessage,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
+    state_service: TemplateStateService = Depends(get_template_state_service),
 ) -> MessageResult:
     """Send template message with media header via WhatsApp.
 
     Supports templates with image, video, or document headers.
     Either media_id (uploaded media) or media_url (external media) must be provided.
+
+    If state_config is provided, creates a user cache state for routing
+    subsequent responses based on template-{state_value}.
     """
-    try:
-        result = await messenger.send_media_template(
-            template_name=request.template_name,
-            recipient=request.recipient,
-            media_type=request.media_type.value,
-            media_id=request.media_id,
-            media_url=request.media_url,
-            body_parameters=convert_body_parameters(request.body_parameters),
-            language_code=request.language.code,
-        )
-
-        raise_for_failed_result(result, "send media template", TEMPLATE_ERROR_GROUPS)
-        return result
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to send media template: {str(e)}"
-        ) from e
+    result = await messenger.send_media_template(
+        template_name=request.template_name,
+        recipient=request.recipient,
+        media_type=request.media_type.value,
+        media_id=request.media_id,
+        media_url=request.media_url,
+        body_parameters=convert_body_parameters(request.body_parameters),
+        language_code=request.language.code,
+    )
+    raise_for_failed_result(result, "send media template", TEMPLATE_ERROR_GROUPS)
+    await _maybe_set_template_state(result, request, state_service)
+    return result
 
 
 @router.post(
     "/send-location",
     response_model=MessageResult,
     summary="Send Location Template Message",
-    description="Send a template message with location header and map preview",
+    description="Send a template message with location header and optional state configuration",
 )
 async def send_location_template(
     request: LocationTemplateMessage,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
+    state_service: TemplateStateService = Depends(get_template_state_service),
 ) -> MessageResult:
     """Send template message with location header via WhatsApp.
 
     Supports templates with geographic location headers showing a map preview.
     Coordinates must be valid latitude (-90 to 90) and longitude (-180 to 180).
+
+    If state_config is provided, creates a user cache state for routing
+    subsequent responses based on template-{state_value}.
     """
-    try:
-        result = await messenger.send_location_template(
-            template_name=request.template_name,
-            recipient=request.recipient,
-            latitude=request.latitude,
-            longitude=request.longitude,
-            name=request.name,
-            address=request.address,
-            body_parameters=convert_body_parameters(request.body_parameters),
-            language_code=request.language.code,
-        )
-
-        raise_for_failed_result(result, "send location template", TEMPLATE_ERROR_GROUPS)
-        return result
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to send location template: {str(e)}"
-        ) from e
+    result = await messenger.send_location_template(
+        template_name=request.template_name,
+        recipient=request.recipient,
+        latitude=request.latitude,
+        longitude=request.longitude,
+        name=request.name,
+        address=request.address,
+        body_parameters=convert_body_parameters(request.body_parameters),
+        language_code=request.language.code,
+    )
+    raise_for_failed_result(result, "send location template", TEMPLATE_ERROR_GROUPS)
+    await _maybe_set_template_state(result, request, state_service)
+    return result
 
 
 @router.get(
