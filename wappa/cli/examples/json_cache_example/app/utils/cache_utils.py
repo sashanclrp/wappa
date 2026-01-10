@@ -120,26 +120,6 @@ def validate_cache_key(key: str) -> bool:
     return "::" not in key
 
 
-def create_user_profile_key(user_id: str) -> str:
-    """Create standardized user profile cache key."""
-    return generate_cache_key("user", user_id, "profile")
-
-
-def create_message_history_key(user_id: str) -> str:
-    """Create standardized message history cache key."""
-    return generate_cache_key("msg_history", user_id)
-
-
-def create_state_key(user_id: str, state_type: str = "wappa") -> str:
-    """Create standardized state cache key."""
-    return generate_cache_key("state", user_id, state_type)
-
-
-def create_statistics_key(scope: str = "global") -> str:
-    """Create standardized cache statistics key."""
-    return generate_cache_key("stats", scope)
-
-
 def format_cache_error(operation: str, key: str, error: Exception) -> str:
     """
     Format cache operation error messages consistently.

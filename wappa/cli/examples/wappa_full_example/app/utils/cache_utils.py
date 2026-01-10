@@ -3,6 +3,11 @@ Cache utilities for Redis operations in the Wappa Full Example application.
 
 This module provides helper functions and classes for working with Redis cache,
 including user management, state management, and statistics tracking.
+
+Uses the new type-specific cache interfaces:
+- IUserCache: get(models=...) - user identity baked in at construction
+- IStateCache: get(handler_name, models=...) - handler_name as the key
+- ITableCache: get(table_name, pkid, models=...) - separate table_name and pkid parameters
 """
 
 from datetime import datetime
@@ -15,16 +20,24 @@ from ..models.user_models import UserProfile
 
 T = TypeVar("T", bound=BaseModel)
 
+# Handler name constants for state cache
+STATE_HANDLER_PREFIX = "interactive_state"
+
+
+def get_state_handler_name(state_type: StateType) -> str:
+    """Generate handler name for state cache."""
+    return f"{STATE_HANDLER_PREFIX}_{state_type.value}"
+
 
 class CacheHelper:
-    """Helper class for common cache operations."""
+    """Helper class for common cache operations using type-specific cache interfaces."""
 
     def __init__(self, cache_factory):
         """
         Initialize CacheHelper with cache factory.
 
         Args:
-            cache_factory: Wappa cache factory instance
+            cache_factory: Wappa cache factory instance (ICacheFactory)
         """
         self.cache_factory = cache_factory
         self._user_cache = None
@@ -33,21 +46,21 @@ class CacheHelper:
 
     @property
     def user_cache(self):
-        """Get user cache instance."""
+        """Get user cache instance (IUserCache - pre-bound to user context)."""
         if not self._user_cache:
             self._user_cache = self.cache_factory.create_user_cache()
         return self._user_cache
 
     @property
     def state_cache(self):
-        """Get state cache instance."""
+        """Get state cache instance (IStateCache - pre-bound to user context)."""
         if not self._state_cache:
             self._state_cache = self.cache_factory.create_state_cache()
         return self._state_cache
 
     @property
     def table_cache(self):
-        """Get table cache instance."""
+        """Get table cache instance (ITableCache - pre-bound to tenant context)."""
         if not self._table_cache:
             self._table_cache = self.cache_factory.create_table_cache()
         return self._table_cache
@@ -56,16 +69,18 @@ class CacheHelper:
         """
         Get user profile from cache.
 
+        Note: user_id parameter is kept for API compatibility but the actual
+        user identity is bound in the cache factory at construction time.
+
         Args:
-            user_id: User phone number/ID
+            user_id: User phone number/ID (for compatibility, not used directly)
 
         Returns:
             UserProfile object or None if not found
         """
         try:
-            profile_data = await self.user_cache.get(
-                f"user_profile_{user_id}", models=UserProfile
-            )
+            # IUserCache.get() - no key needed, user identity is baked in
+            profile_data = await self.user_cache.get(models=UserProfile)
             return profile_data
         except Exception as e:
             print(f"Error getting user profile {user_id}: {e}")
@@ -85,8 +100,8 @@ class CacheHelper:
             True if successful, False otherwise
         """
         try:
-            cache_key = f"user_profile_{user_profile.phone_number}"
-            await self.user_cache.set(cache_key, user_profile, ttl=ttl_seconds)
+            # IUserCache.upsert() - takes data dict and optional ttl
+            await self.user_cache.upsert(user_profile.model_dump(), ttl=ttl_seconds)
             return True
         except Exception as e:
             print(f"Error saving user profile {user_profile.phone_number}: {e}")
@@ -116,19 +131,19 @@ class CacheHelper:
             # Update profile information if provided
             profile.update_profile_info(user_name, profile_name)
             return profile
-        else:
-            # Create new profile
-            profile = UserProfile(
-                phone_number=user_id,
-                user_name=user_name,
-                profile_name=profile_name,
-                is_first_time_user=True,
-                has_received_welcome=False,
-            )
 
-            # Save new profile
-            await self.save_user_profile(profile)
-            return profile
+        # Create new profile
+        profile = UserProfile(
+            phone_number=user_id,
+            user_name=user_name,
+            profile_name=profile_name,
+            is_first_time_user=True,
+            has_received_welcome=False,
+        )
+
+        # Save new profile
+        await self.save_user_profile(profile)
+        return profile
 
     async def update_user_activity(
         self,
@@ -178,15 +193,15 @@ class CacheHelper:
         Get user interactive state.
 
         Args:
-            user_id: User phone number/ID
+            user_id: User phone number/ID (for compatibility, not used directly)
             state_type: Type of state to get
 
         Returns:
             InteractiveState object or None if not found/expired
         """
         try:
-            # Use simpler cache key format: state_{state_type}
-            cache_key = f"state_{state_type.value}"
+            # IStateCache.get(handler_name, models=...) - handler_name as key
+            handler_name = get_state_handler_name(state_type)
 
             # Import the specific state classes for proper type casting
             from ..models.state_models import ButtonState, ListState
@@ -198,11 +213,11 @@ class CacheHelper:
             elif state_type == StateType.LIST:
                 model_class = ListState
 
-            state_data = await self.state_cache.get(cache_key, models=model_class)
+            state_data = await self.state_cache.get(handler_name, models=model_class)
 
             if state_data and state_data.is_expired():
                 # Remove expired state
-                await self.state_cache.delete(cache_key)
+                await self.state_cache.delete(handler_name)
                 return None
 
             return state_data
@@ -221,15 +236,15 @@ class CacheHelper:
             True if successful, False otherwise
         """
         try:
-            # Use simpler cache key format: state_{state_type}
-            cache_key = f"state_{state.state_type.value}"
+            # IStateCache.upsert(handler_name, data, ttl=...) - handler_name as key
+            handler_name = get_state_handler_name(state.state_type)
             ttl = state.time_remaining_seconds()
 
             if ttl <= 0:
                 # Don't save expired states
                 return False
 
-            await self.state_cache.set(cache_key, state, ttl=ttl)
+            await self.state_cache.upsert(handler_name, state.model_dump(), ttl=ttl)
             return True
         except Exception as e:
             print(f"Error saving user state {state.state_type.value}: {e}")
@@ -240,16 +255,16 @@ class CacheHelper:
         Remove user interactive state.
 
         Args:
-            user_id: User phone number/ID
+            user_id: User phone number/ID (for compatibility, not used directly)
             state_type: Type of state to remove
 
         Returns:
             True if successful, False otherwise
         """
         try:
-            # Use simpler cache key format: state_{state_type}
-            cache_key = f"state_{state_type.value}"
-            result = await self.state_cache.delete(cache_key)
+            # IStateCache.delete(handler_name) - handler_name as key
+            handler_name = get_state_handler_name(state_type)
+            result = await self.state_cache.delete(handler_name)
             return result
         except Exception as e:
             print(f"Error removing user state {state_type.value}: {e}")
@@ -301,14 +316,6 @@ class CacheHelper:
                 },
             }
 
-            # Add cache-specific info if available
-            try:
-                # Try to get cache info from Redis if available
-                # This would require implementing Redis-specific info commands
-                pass
-            except:
-                pass
-
             return stats
         except Exception as e:
             print(f"Error getting cache statistics: {e}")
@@ -329,10 +336,12 @@ class CacheHelper:
             True if successful, False otherwise
         """
         try:
-            history_key = f"history_{user_id}"
+            # ITableCache.get(table_name, pkid, models=...) - separate params
+            table_name = "message_history"
+            pkid = user_id
 
             # Get existing history
-            history = await self.table_cache.get(history_key, models=list) or []
+            history = await self.table_cache.get(table_name, pkid, models=list) or []
 
             # Add new message with timestamp
             message_entry = {**message_data, "stored_at": datetime.now().isoformat()}
@@ -343,8 +352,10 @@ class CacheHelper:
             if len(history) > max_history:
                 history = history[-max_history:]
 
-            # Save updated history
-            await self.table_cache.set(history_key, history, ttl=604800)  # 7 days
+            # ITableCache.upsert(table_name, pkid, data, ttl=...) - save updated history
+            await self.table_cache.upsert(
+                table_name, pkid, history, ttl=604800
+            )  # 7 days
             return True
 
         except Exception as e:
@@ -365,8 +376,10 @@ class CacheHelper:
             List of message history entries
         """
         try:
-            history_key = f"history_{user_id}"
-            history = await self.table_cache.get(history_key, models=list) or []
+            # ITableCache.get(table_name, pkid, models=...) - separate params
+            table_name = "message_history"
+            pkid = user_id
+            history = await self.table_cache.get(table_name, pkid, models=list) or []
 
             # Return recent messages
             return history[-limit:] if history else []
@@ -376,13 +389,14 @@ class CacheHelper:
             return []
 
     async def store_application_data(
-        self, key: str, data: Any, ttl_seconds: int | None = None
+        self, table_name: str, key: str, data: Any, ttl_seconds: int | None = None
     ) -> bool:
         """
         Store application-specific data.
 
         Args:
-            key: Cache key
+            table_name: Name of the table/category
+            key: Primary key for the data
             data: Data to store
             ttl_seconds: Optional TTL in seconds
 
@@ -390,48 +404,51 @@ class CacheHelper:
             True if successful, False otherwise
         """
         try:
-            await self.table_cache.set(key, data, ttl=ttl_seconds)
+            # ITableCache.upsert(table_name, pkid, data, ttl=...)
+            await self.table_cache.upsert(table_name, key, data, ttl=ttl_seconds)
             return True
         except Exception as e:
-            print(f"Error storing application data {key}: {e}")
+            print(f"Error storing application data {table_name}/{key}: {e}")
             return False
 
     async def get_application_data(
-        self, key: str, model_class: type[T] | None = None
+        self, table_name: str, key: str, model_class: type[T] | None = None
     ) -> Any:
         """
         Get application-specific data.
 
         Args:
-            key: Cache key
+            table_name: Name of the table/category
+            key: Primary key for the data
             model_class: Optional Pydantic model class for validation
 
         Returns:
             Stored data or None if not found
         """
         try:
-            return await self.table_cache.get(key, models=model_class)
+            # ITableCache.get(table_name, pkid, models=...)
+            return await self.table_cache.get(table_name, key, models=model_class)
         except Exception as e:
-            print(f"Error getting application data {key}: {e}")
+            print(f"Error getting application data {table_name}/{key}: {e}")
             return None
 
 
 class CacheKeys:
-    """Centralized cache key management."""
+    """Centralized cache key management (legacy - kept for backward compatibility)."""
 
     @staticmethod
     def user_profile(user_id: str) -> str:
-        """Get cache key for user profile."""
+        """Get cache key for user profile (legacy - no longer used directly)."""
         return f"user_profile_{user_id}"
 
     @staticmethod
     def user_state(user_id: str, state_type: str) -> str:
-        """Get cache key for user state."""
-        return f"state_{state_type}"
+        """Get handler name for user state."""
+        return get_state_handler_name(StateType(state_type))
 
     @staticmethod
     def message_history(user_id: str) -> str:
-        """Get cache key for message history."""
+        """Get cache key for message history (legacy - use table_name + pkid now)."""
         return f"history_{user_id}"
 
     @staticmethod

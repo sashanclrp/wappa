@@ -176,17 +176,12 @@ class RedisCacheExampleHandler(WappaEventHandler):
                 )
                 return
 
-            # Create cache instances from factory (Dependency Inversion)
-            user_cache = self.cache_factory.create_user_cache()
-            table_cache = self.cache_factory.create_table_cache()
-            state_cache = self.cache_factory.create_state_cache()
-
-            # Create dependencies container
+            # Create dependencies container with cache factory (Dependency Inversion)
+            # The cache factory creates context-aware cache instances per-request
+            # with tenant and user identity already bound
             dependencies = ScoreDependencies(
                 messenger=self.messenger,
-                user_cache=user_cache,
-                table_cache=table_cache,
-                state_cache=state_cache,
+                cache_factory=self.cache_factory,
                 logger=self.logger,
             )
 

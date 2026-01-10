@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from logging import Logger
 
-from wappa.domain.interfaces.cache_interface import ICache
+from wappa.domain.interfaces.cache_factory import ICacheFactory
 from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
 from wappa.webhooks import IncomingMessageWebhook
 
@@ -21,12 +21,13 @@ class ScoreDependencies:
 
     This follows Dependency Inversion Principle by providing
     abstractions that score modules depend on.
+
+    The cache_factory provides context-aware cache instances that are created
+    per-request with tenant and user identity already injected.
     """
 
     messenger: WhatsAppMessenger
-    user_cache: ICache
-    table_cache: ICache
-    state_cache: ICache
+    cache_factory: ICacheFactory
     logger: Logger
 
 
@@ -46,14 +47,28 @@ class ScoreBase(ABC):
             dependencies: Required dependencies for the score
         """
         self.messenger = dependencies.messenger
-        self.user_cache = dependencies.user_cache
-        self.table_cache = dependencies.table_cache
-        self.state_cache = dependencies.state_cache
+        self.cache_factory = dependencies.cache_factory
         self.logger = dependencies.logger
 
         # Track processing statistics
         self._processing_count = 0
         self._error_count = 0
+
+    # ---- Cache accessor properties for cleaner code in subclasses ----
+    @property
+    def user_cache(self):
+        """Get user cache from factory (pre-bound to current user context)."""
+        return self.cache_factory.create_user_cache()
+
+    @property
+    def table_cache(self):
+        """Get table cache from factory (pre-bound to current tenant context)."""
+        return self.cache_factory.create_table_cache()
+
+    @property
+    def state_cache(self):
+        """Get state cache from factory (pre-bound to current user context)."""
+        return self.cache_factory.create_state_cache()
 
     @property
     def score_name(self) -> str:
@@ -106,15 +121,7 @@ class ScoreBase(ABC):
         Returns:
             True if all dependencies are valid
         """
-        if not all(
-            [
-                self.messenger,
-                self.user_cache,
-                self.table_cache,
-                self.state_cache,
-                self.logger,
-            ]
-        ):
+        if not all([self.messenger, self.cache_factory, self.logger]):
             self.logger.error(f"{self.score_name}: Missing required dependencies")
             return False
         return True

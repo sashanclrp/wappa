@@ -37,10 +37,10 @@ from wappa import Wappa, __version__
 from wappa.core.config.settings import settings
 from wappa.core.logging import get_logger
 
-logger = get_logger(__name__)
-
 # Import our SOLID architecture WappaEventHandler implementation
 from .master_event import JSONCacheExampleHandler
+
+logger = get_logger(__name__)
 
 
 def validate_configuration() -> bool:

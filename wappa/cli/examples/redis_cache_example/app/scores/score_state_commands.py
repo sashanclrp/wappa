@@ -10,8 +10,9 @@ This module handles all state-related commands including:
 from wappa.webhooks import IncomingMessageWebhook
 
 from ..models.redis_demo_models import StateHandler
-from ..utils.cache_utils import create_state_key, get_cache_ttl
+from ..utils.cache_utils import get_cache_ttl
 from ..utils.message_utils import extract_command_from_message, extract_user_data
+from .constants import WAPPA_HANDLER
 from .score_base import ScoreBase
 
 
@@ -43,14 +44,12 @@ class StateCommandsScore(ScoreBase):
             return True
 
         # Check if user is in WAPPA state (need to handle regular messages in state)
-        user_data = extract_user_data(webhook)
-        user_id = user_data["user_id"]
-
+        # User identity is already bound in cache_factory
         try:
-            state_key = create_state_key(user_id)
-            state = await self.state_cache.get(state_key, models=StateHandler)
+            # IStateCache.get() takes (handler_name, models=...)
+            state = await self.state_cache.get(WAPPA_HANDLER, models=StateHandler)
             return state is not None and state.is_wappa
-        except:
+        except Exception:
             return False
 
     async def process(self, webhook: IncomingMessageWebhook) -> bool:
@@ -105,10 +104,10 @@ class StateCommandsScore(ScoreBase):
             state = StateHandler()
             state.activate_wappa()
 
-            # Store state with TTL
-            state_key = create_state_key(user_id)
+            # Store state with TTL using IStateCache interface
+            # IStateCache.upsert() takes (handler_name, data, ttl=...)
             ttl = get_cache_ttl("state")
-            await self.state_cache.set(state_key, state, ttl=ttl)
+            await self.state_cache.upsert(WAPPA_HANDLER, state.model_dump(), ttl=ttl)
 
             # Mark message as read with typing indicator first
             await self.messenger.mark_as_read(
@@ -152,18 +151,16 @@ class StateCommandsScore(ScoreBase):
             user_id: User's phone number ID
         """
         try:
-            state_key = create_state_key(user_id)
-
-            # Check if user has WAPPA state
-            state = await self.state_cache.get(state_key, models=StateHandler)
+            # Check if user has WAPPA state using IStateCache interface
+            state = await self.state_cache.get(WAPPA_HANDLER, models=StateHandler)
 
             if state and state.is_wappa:
                 # Calculate session stats
                 duration = state.get_state_duration() or 0
                 command_count = state.command_count
 
-                # Deactivate and delete state
-                await self.state_cache.delete(state_key)
+                # Deactivate and delete state using IStateCache interface
+                await self.state_cache.delete(WAPPA_HANDLER)
 
                 # Mark message as read with typing indicator first
                 await self.messenger.mark_as_read(
@@ -217,16 +214,18 @@ class StateCommandsScore(ScoreBase):
             message_text: Message content
         """
         try:
-            state_key = create_state_key(user_id)
-            state = await self.state_cache.get(state_key, models=StateHandler)
+            # Get state using IStateCache interface
+            state = await self.state_cache.get(WAPPA_HANDLER, models=StateHandler)
 
             if state and state.is_wappa:
                 # Update state with command processing
                 state.process_command(message_text)
 
-                # Save updated state
+                # Save updated state using IStateCache interface
                 ttl = get_cache_ttl("state")
-                await self.state_cache.set(state_key, state, ttl=ttl)
+                await self.state_cache.upsert(
+                    WAPPA_HANDLER, state.model_dump(), ttl=ttl
+                )
 
                 # Mark message as read with typing indicator first
                 await self.messenger.mark_as_read(
@@ -253,20 +252,18 @@ class StateCommandsScore(ScoreBase):
             self.logger.error(f"Error handling WAPPA state message: {e}")
             raise
 
-    async def is_user_in_wappa_state(self, user_id: str) -> bool:
+    async def is_user_in_wappa_state(self) -> bool:
         """
         Check if user is currently in WAPPA state (for other score modules).
 
-        Args:
-            user_id: User's phone number ID
+        User identity is bound in cache_factory, so no explicit user_id needed.
 
         Returns:
             True if user is in WAPPA state
         """
         try:
-            state_key = create_state_key(user_id)
-            state = await self.state_cache.get(state_key, models=StateHandler)
+            state = await self.state_cache.get(WAPPA_HANDLER, models=StateHandler)
             return state is not None and state.is_wappa
         except Exception as e:
-            self.logger.error(f"Error checking WAPPA state for {user_id}: {e}")
+            self.logger.error(f"Error checking WAPPA state: {e}")
             return False

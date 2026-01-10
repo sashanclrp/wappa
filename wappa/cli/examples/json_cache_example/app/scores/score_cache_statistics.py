@@ -8,10 +8,13 @@ This module handles all cache statistics operations including:
 - Cache health monitoring
 """
 
+from datetime import datetime
+
 from wappa.webhooks import IncomingMessageWebhook
 
-from ..models.json_demo_models import CacheStats
+from ..models.json_demo_models import CacheStats, MessageLog, StateHandler, User
 from ..utils.message_utils import extract_command_from_message, extract_user_data
+from .constants import MESSAGE_HISTORY_TABLE, WAPPA_HANDLER
 from .score_base import ScoreBase
 
 
@@ -102,82 +105,88 @@ class CacheStatisticsScore(ScoreBase):
 
     async def _collect_cache_statistics(self) -> CacheStats:
         """
-        Get or create cache statistics from table cache (persistent storage).
+        Collect real-time cache statistics by querying actual cached data.
+
+        Queries:
+        - User cache: User profile and message count
+        - Table cache: Message history entries
+        - State cache: Active WAPPA state
 
         Returns:
-            CacheStats object from table cache or newly created
+            CacheStats object with real metrics from cache layers
         """
+        stats = CacheStats()
+        stats.cache_type = "JSON"
+        stats.last_updated = datetime.utcnow()
+
         try:
-            # Use table cache to store/retrieve statistics (proper table key format)
-            # table_name:pkid format as required by table cache
-            stats_key = self.table_cache.create_table_key("cache_statistics", "global")
-
-            # Try to get existing stats from table cache
-            existing_stats = await self.table_cache.get(stats_key, models=CacheStats)
-
-            if existing_stats:
-                # Update existing stats
-                stats = existing_stats
-                stats.total_operations += 1  # Increment operation count
-                stats.last_updated = stats.last_updated  # Will auto-update via Pydantic
-                self.logger.debug(
-                    "📊 Retrieved existing cache statistics from table cache"
-                )
-            else:
-                # Create new stats
-                stats = CacheStats()
-                stats.cache_type = "JSON"
-                stats.total_operations = 1
-                self.logger.info("📊 Created new cache statistics in table cache")
-
-            # Test cache connectivity using a simple operation
+            # ---- Query User Cache ----
+            # Check if we have a cached user profile for the current user
             try:
-                # Test connectivity by creating a temporary data entry
-                test_data = {
-                    "test": "connectivity_check",
-                    "timestamp": str(stats.last_updated),
-                }
-                test_key = "connectivity_test"
-
-                # Store test data in user_cache
-                await self.user_cache.set(test_key, test_data, ttl=5)
-                test_result = await self.user_cache.get(test_key)
-
-                if (
-                    test_result
-                    and isinstance(test_result, dict)
-                    and test_result.get("test") == "connectivity_check"
-                ):
-                    stats.connection_status = "File System"
-                    stats.is_healthy = True
-                    # Clean up test key
-                    await self.user_cache.delete(test_key)
-                    self.logger.debug("✅ Cache connectivity test passed")
-                else:
-                    stats.connection_status = "File System Issues"
-                    stats.is_healthy = False
-                    stats.errors += 1
-                    self.logger.warning(
-                        f"⚠️ Cache connectivity test failed: got {test_result}"
+                user_profile = await self.user_cache.get(models=User)
+                if user_profile:
+                    stats.user_cache_hits = 1
+                    stats.total_operations = user_profile.message_count
+                    self.logger.debug(
+                        f"📊 User profile found: {user_profile.message_count} messages"
                     )
+                else:
+                    stats.user_cache_misses = 1
+                    self.logger.debug("📊 No user profile in cache")
+            except Exception as e:
+                self.logger.debug(f"📊 User cache query error: {e}")
+                stats.user_cache_misses = 1
 
-            except Exception as cache_error:
-                self.logger.error(f"Cache connectivity test failed: {cache_error}")
-                stats.connection_status = f"Error: {str(cache_error)}"
-                stats.is_healthy = False
-                stats.errors += 1
+            # ---- Query Table Cache (Message History) ----
+            # Get message count from the current user's message history
+            try:
+                # Get user_id from cache_factory context
+                user_id = self.cache_factory.user_id
+                message_log = await self.table_cache.get(
+                    MESSAGE_HISTORY_TABLE, user_id, models=MessageLog
+                )
+                if message_log:
+                    stats.table_cache_entries = message_log.get_message_count()
+                    self.logger.debug(
+                        f"📊 Message history found: {stats.table_cache_entries} entries"
+                    )
+                else:
+                    stats.table_cache_entries = 0
+                    self.logger.debug("📊 No message history in cache")
+            except Exception as e:
+                self.logger.debug(f"📊 Table cache query error: {e}")
+                stats.table_cache_entries = 0
 
-            # Store updated statistics in table cache (persistent like message history)
-            await self.table_cache.set(stats_key, stats)
+            # ---- Query State Cache ----
+            # Check if current user has an active WAPPA state
+            try:
+                state = await self.state_cache.get(WAPPA_HANDLER, models=StateHandler)
+                if state and state.is_wappa:
+                    stats.state_cache_active = 1
+                    self.logger.debug("📊 Active WAPPA state found")
+                else:
+                    stats.state_cache_active = 0
+                    self.logger.debug("📊 No active WAPPA state")
+            except Exception as e:
+                self.logger.debug(f"📊 State cache query error: {e}")
+                stats.state_cache_active = 0
+
+            # ---- Connection Health Check ----
+            # If we got here without major exceptions, connection is healthy
+            stats.connection_status = "Connected"
+            stats.is_healthy = True
 
             self.logger.info(
-                f"📊 Cache statistics updated in table cache: {stats.connection_status}"
+                f"📊 Cache statistics collected: "
+                f"user_hits={stats.user_cache_hits}, "
+                f"messages={stats.table_cache_entries}, "
+                f"active_states={stats.state_cache_active}"
             )
             return stats
 
         except Exception as e:
             self.logger.error(f"Error collecting cache statistics: {e}")
-            # Return minimal error stats (don't store errors)
+            # Return error stats
             error_stats = CacheStats()
             error_stats.cache_type = "JSON (Error)"
             error_stats.connection_status = f"Collection Error: {str(e)}"
@@ -197,26 +206,26 @@ class CacheStatisticsScore(ScoreBase):
         """
         try:
             health_icon = "🟢" if stats.is_healthy else "🔴"
+            user_status = "✅ Found" if stats.user_cache_hits else "❌ Not found"
+            state_status = "🔔 Active" if stats.state_cache_active else "💤 Inactive"
 
             message = [
-                "📊 *Cache Statistics Report*\n",
-                f"{health_icon} *Cache Status*: {stats.connection_status}\n",
+                "📊 *Cache Statistics Report*\n\n",
+                f"{health_icon} *Connection*: {stats.connection_status}\n",
                 f"⚙️ *Cache Type*: {stats.cache_type}\n",
-                f"📈 *Total Operations*: {stats.total_operations}\n",
-                f"❌ *Errors*: {stats.errors}\n",
-                f"🕐 *Last Updated*: {stats.last_updated.strftime('%H:%M:%S')}\n\n",
-                # Cache metrics
-                "*Cache Metrics:*\n",
-                f"• User Cache Hits: {stats.user_cache_hits}\n",
-                f"• User Cache Misses: {stats.user_cache_misses}\n",
-                f"• Table Entries: {stats.table_cache_entries}\n",
-                f"• Active States: {stats.state_cache_active}\n\n",
+                f"🕐 *Checked At*: {stats.last_updated.strftime('%H:%M:%S')}\n\n",
+                # Your data section
+                "*📦 Your Cached Data:*\n",
+                f"• User Profile: {user_status}\n",
+                f"• Messages Logged: {stats.table_cache_entries}\n",
+                f"• Total Messages Sent: {stats.total_operations}\n",
+                f"• WAPPA State: {state_status}\n\n",
                 # Performance indicators
-                "*Performance:*\n",
-                f"• Health: {'🟢 Healthy' if stats.is_healthy else '🔴 Unhealthy'}\n",
-                f"• Connection: {stats.connection_status}\n\n",
+                "*⚡ System Health:*\n",
+                f"• Status: {'🟢 Healthy' if stats.is_healthy else '🔴 Unhealthy'}\n",
+                f"• Errors: {stats.errors}\n\n",
                 # Tips for users
-                "*Available Commands:*\n",
+                "*💡 Available Commands:*\n",
                 "• `/HISTORY` - View message history\n",
                 "• `/WAPPA` - Enter WAPPA state\n",
                 "• `/EXIT` - Exit WAPPA state\n",

@@ -10,13 +10,14 @@ This module handles all message history operations including:
 from wappa.webhooks import IncomingMessageWebhook
 
 from ..models.redis_demo_models import MessageLog
-from ..utils.cache_utils import create_message_history_key, get_cache_ttl
+from ..utils.cache_utils import get_cache_ttl
 from ..utils.message_utils import (
     extract_command_from_message,
     extract_user_data,
     format_message_history_display,
     sanitize_message_text,
 )
+from .constants import MESSAGE_HISTORY_TABLE
 from .score_base import ScoreBase
 
 
@@ -86,11 +87,11 @@ class MessageHistoryScore(ScoreBase):
             message_text = webhook.get_message_text()
             message_type = webhook.get_message_type_name()
 
-            # Generate cache key using utility function
-            log_key = create_message_history_key(user_id)
-
-            # Try to get existing message history
-            message_log = await self.table_cache.get(log_key, models=MessageLog)
+            # ITableCache.get() requires (table_name, pkid, models=...)
+            # Use user_id as the primary key for their message history
+            message_log = await self.table_cache.get(
+                MESSAGE_HISTORY_TABLE, user_id, models=MessageLog
+            )
 
             if message_log:
                 self.logger.debug(
@@ -109,8 +110,11 @@ class MessageHistoryScore(ScoreBase):
             message_log.add_message(message_content, message_type)
 
             # Store back to Redis with TTL
+            # ITableCache.upsert() takes (table_name, pkid, data, ttl=...)
             ttl = get_cache_ttl("message")
-            await self.table_cache.set(log_key, message_log, ttl=ttl)
+            await self.table_cache.upsert(
+                MESSAGE_HISTORY_TABLE, user_id, message_log.model_dump(), ttl=ttl
+            )
 
             self.logger.info(
                 f"📝 Message logged: {user_id} "
@@ -132,9 +136,10 @@ class MessageHistoryScore(ScoreBase):
             user_data = extract_user_data(webhook)
             user_id = user_data["user_id"]
 
-            # Get user's message history
-            log_key = create_message_history_key(user_id)
-            message_log = await self.table_cache.get(log_key, models=MessageLog)
+            # Get user's message history using ITableCache interface
+            message_log = await self.table_cache.get(
+                MESSAGE_HISTORY_TABLE, user_id, models=MessageLog
+            )
 
             if message_log:
                 # User has message history
@@ -179,8 +184,9 @@ class MessageHistoryScore(ScoreBase):
             Number of messages from user, 0 if no history
         """
         try:
-            log_key = create_message_history_key(user_id)
-            message_log = await self.table_cache.get(log_key, models=MessageLog)
+            message_log = await self.table_cache.get(
+                MESSAGE_HISTORY_TABLE, user_id, models=MessageLog
+            )
             return message_log.get_message_count() if message_log else 0
         except Exception as e:
             self.logger.error(f"Error getting message count for {user_id}: {e}")

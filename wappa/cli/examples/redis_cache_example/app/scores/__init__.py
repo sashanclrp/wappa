@@ -10,6 +10,7 @@ Each score module handles a specific business concern:
 This architecture follows the Single Responsibility and Open/Closed principles.
 """
 
+from .constants import MESSAGE_HISTORY_TABLE, WAPPA_HANDLER
 from .score_base import ScoreBase, ScoreDependencies
 from .score_cache_statistics import CacheStatisticsScore
 from .score_message_history import MessageHistoryScore
@@ -25,6 +26,8 @@ AVAILABLE_SCORES = [
 ]
 
 __all__ = [
+    "MESSAGE_HISTORY_TABLE",
+    "WAPPA_HANDLER",
     "ScoreBase",
     "ScoreDependencies",
     "UserManagementScore",

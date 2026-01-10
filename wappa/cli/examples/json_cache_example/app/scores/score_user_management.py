@@ -10,7 +10,7 @@ This module handles all user-related operations including:
 from wappa.webhooks import IncomingMessageWebhook
 
 from ..models.json_demo_models import User
-from ..utils.cache_utils import create_user_profile_key, get_cache_ttl
+from ..utils.cache_utils import get_cache_ttl
 from ..utils.message_utils import extract_user_data
 from .score_base import ScoreBase
 
@@ -90,11 +90,9 @@ class UserManagementScore(ScoreBase):
             User profile instance
         """
         try:
-            # Generate cache key using utility function
-            cache_key = create_user_profile_key(user_id)
-
-            # Try to get existing user with BaseModel deserialization
-            user = await self.user_cache.get(cache_key, models=User)
+            # User identity is already bound in cache_factory, so no key needed
+            # The IUserCache.get() method takes only an optional models parameter
+            user = await self.user_cache.get(models=User)
 
             if user:
                 # User exists, update name if provided and different
@@ -138,10 +136,9 @@ class UserManagementScore(ScoreBase):
             user.increment_message_count()
 
             # Save updated user data with TTL
-            cache_key = create_user_profile_key(user_id)
+            # IUserCache.upsert() takes data dict and optional ttl
             ttl = get_cache_ttl("user")
-
-            await self.user_cache.set(cache_key, user, ttl=ttl)
+            await self.user_cache.upsert(user.model_dump(), ttl=ttl)
 
             self.logger.debug(
                 f"User activity updated: {user_id} (count: {user.message_count})"
@@ -151,21 +148,19 @@ class UserManagementScore(ScoreBase):
             self.logger.error(f"Error updating user activity {user_id}: {e}")
             raise
 
-    async def get_user_profile(self, user_id: str) -> User:
+    async def get_user_profile(self) -> User | None:
         """
         Get user profile for other score modules.
 
-        Args:
-            user_id: User's phone number ID
+        User identity is bound in cache_factory, so no explicit user_id needed.
 
         Returns:
             User profile or None if not found
         """
         try:
-            cache_key = create_user_profile_key(user_id)
-            return await self.user_cache.get(cache_key, models=User)
+            return await self.user_cache.get(models=User)
         except Exception as e:
-            self.logger.error(f"Error getting user profile {user_id}: {e}")
+            self.logger.error(f"Error getting user profile: {e}")
             return None
 
     async def _send_welcome_message(
