@@ -10,12 +10,12 @@ Follows SOLID principles with proper error handling and Pydantic v2 validation.
 Based on WhatsApp Cloud API 2025 specifications for specialized messaging.
 """
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, ValidationError
 
 from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_messenger
+from wappa.api.utils import map_whatsapp_api_error_to_status
+from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.specialized_models import (
@@ -24,8 +24,30 @@ from wappa.messaging.whatsapp.models.specialized_models import (
     LocationValidationResult,
 )
 
-# Configure route logger
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
+
+
+def _raise_for_whatsapp_error(result, operation_name: str) -> None:
+    """Raise HTTPException based on WhatsApp API error message patterns.
+
+    Centralizes the repeated error mapping logic for specialized routes.
+
+    Args:
+        result: Messaging operation result
+        operation_name: Human-readable operation name for error messages
+
+    Raises:
+        HTTPException: With appropriate status code based on error pattern
+    """
+    if result.success:
+        return
+
+    error_str = str(result.error or "")
+    status_code = map_whatsapp_api_error_to_status(error_str)
+    raise HTTPException(
+        status_code=status_code, detail=f"{operation_name}: {result.error}"
+    )
+
 
 router = APIRouter(
     prefix="/specialized",
@@ -124,39 +146,13 @@ async def send_contact_card(
     try:
         logger.info(f"Sending contact card to {request.recipient}")
 
-        # Convert ContactCard to dict for messenger interface
-        contact_dict = request.contact.model_dump()
-
         result = await messenger.send_contact(
-            contact=contact_dict,
+            contact=request.contact.model_dump(),
             recipient=request.recipient,
             reply_to_message_id=request.reply_to_message_id,
         )
 
-        if not result.success:
-            # Map WhatsApp API errors to appropriate HTTP status codes
-            if "401" in str(result.error) or "Unauthorized" in str(result.error):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=f"WhatsApp authentication failed: {result.error}",
-                )
-            elif "400" in str(result.error) or "invalid" in str(result.error).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid contact data: {result.error}",
-                )
-            elif (
-                "429" in str(result.error) or "rate limit" in str(result.error).lower()
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"Rate limit exceeded: {result.error}",
-                )
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to send contact card: {result.error}",
-                )
+        _raise_for_whatsapp_error(result, "Failed to send contact card")
 
         logger.info(
             f"Contact card sent successfully to {request.recipient}, message_id: {result.message_id}"
@@ -213,30 +209,7 @@ async def send_location_message(
             reply_to_message_id=request.reply_to_message_id,
         )
 
-        if not result.success:
-            # Map WhatsApp API errors to appropriate HTTP status codes
-            if "401" in str(result.error) or "Unauthorized" in str(result.error):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=f"WhatsApp authentication failed: {result.error}",
-                )
-            elif "400" in str(result.error) or "invalid" in str(result.error).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid location data: {result.error}",
-                )
-            elif (
-                "429" in str(result.error) or "rate limit" in str(result.error).lower()
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"Rate limit exceeded: {result.error}",
-                )
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to send location: {result.error}",
-                )
+        _raise_for_whatsapp_error(result, "Failed to send location")
 
         logger.info(
             f"Location sent successfully to {request.recipient}, message_id: {result.message_id}"
@@ -289,30 +262,7 @@ async def send_location_request_message(
             reply_to_message_id=request.reply_to_message_id,
         )
 
-        if not result.success:
-            # Map WhatsApp API errors to appropriate HTTP status codes
-            if "401" in str(result.error) or "Unauthorized" in str(result.error):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=f"WhatsApp authentication failed: {result.error}",
-                )
-            elif "400" in str(result.error) or "invalid" in str(result.error).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid request data: {result.error}",
-                )
-            elif (
-                "429" in str(result.error) or "rate limit" in str(result.error).lower()
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"Rate limit exceeded: {result.error}",
-                )
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=f"Failed to send location request: {result.error}",
-                )
+        _raise_for_whatsapp_error(result, "Failed to send location request")
 
         logger.info(
             f"Location request sent successfully to {request.recipient}, message_id: {result.message_id}"
@@ -479,38 +429,4 @@ async def validate_coordinates(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal server error: {str(e)}",
-        ) from e
-
-
-@router.get("/health")
-async def specialized_service_health() -> dict:
-    """
-    Health check endpoint for specialized messaging service.
-
-    Provides service status and capability information for monitoring
-    and operational visibility.
-
-    Returns:
-        Service health status and capabilities
-    """
-    try:
-        # Basic health check - can be extended with actual service tests
-        return {
-            "status": "healthy",
-            "service": "whatsapp-specialized",
-            "capabilities": [
-                "contact_cards",
-                "location_sharing",
-                "location_requests",
-                "contact_validation",
-                "coordinate_validation",
-            ],
-            "api_version": "2025",
-            "whatsapp_api": "cloud_api",
-        }
-    except Exception as e:
-        logger.error(f"Health check failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Service health check failed: {str(e)}",
         ) from e

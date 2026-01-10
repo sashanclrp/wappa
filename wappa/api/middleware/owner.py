@@ -64,11 +64,24 @@ class OwnerMiddleware(BaseHTTPMiddleware):
                         f"⚠️ Webhook URL does not have enough parts: {path_parts}"
                     )
 
-            # For non-webhook endpoints, use default owner from settings
-            elif not self._is_public_endpoint(request.url.path):
-                default_owner = settings.owner_id
-                set_request_context(owner_id=default_owner)
-                logger.debug(f"Using default owner ID: {default_owner}")
+            # For non-webhook endpoints (API routes), use default owner from settings
+            # and also set tenant context for direct API access (N8N, frontends, etc.)
+            else:
+                is_public = self._is_public_endpoint(request.url.path)
+                logger.debug(f"🔍 Non-webhook route - is_public: {is_public}")
+
+                if not is_public:
+                    default_owner = settings.owner_id
+                    # For direct API calls, the tenant_id is the phone_number_id from settings
+                    # This enables sending messages without going through webhook flow
+                    tenant_id = settings.wp_phone_id
+                    logger.debug(
+                        f"🔑 Setting context - owner: {default_owner}, tenant: {tenant_id}"
+                    )
+                    set_request_context(owner_id=default_owner, tenant_id=tenant_id)
+                    logger.debug(
+                        f"✅ API route context set - owner: {default_owner}, tenant: {tenant_id}"
+                    )
 
             # Process request
             response = await call_next(request)
@@ -94,12 +107,15 @@ class OwnerMiddleware(BaseHTTPMiddleware):
 
     def _is_public_endpoint(self, path: str) -> bool:
         """Check if endpoint is public and doesn't require owner context."""
-        public_paths = [
-            "/",
+        # Exact match for root path
+        if path == "/":
+            return True
+
+        # Prefix match for other public paths
+        public_prefixes = [
             "/health",
-            "/health/detailed",
             "/docs",
             "/redoc",
             "/openapi.json",
         ]
-        return any(path.startswith(p) for p in public_paths)
+        return any(path.startswith(prefix) for prefix in public_prefixes)

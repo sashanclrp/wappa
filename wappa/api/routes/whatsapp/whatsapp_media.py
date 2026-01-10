@@ -144,7 +144,9 @@ async def send_image_message(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send image: {str(e)}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to send image: {str(e)}"
+        ) from e
 
 
 @router.post(
@@ -176,7 +178,9 @@ async def send_video_message(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send video: {str(e)}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to send video: {str(e)}"
+        ) from e
 
 
 @router.post(
@@ -208,7 +212,9 @@ async def send_audio_message(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send audio: {str(e)}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to send audio: {str(e)}"
+        ) from e
 
 
 @router.post(
@@ -229,6 +235,7 @@ async def send_document_message(
             document_source=request.media_source,
             recipient=request.recipient,
             filename=request.filename,
+            caption=request.caption,
             reply_to_message_id=request.reply_to_message_id,
         )
 
@@ -274,7 +281,9 @@ async def send_sticker_message(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send sticker: {str(e)}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to send sticker: {str(e)}"
+        ) from e
 
 
 @router.get(
@@ -400,7 +409,9 @@ async def delete_media(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to delete media: {str(e)}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete media: {str(e)}"
+        ) from e
 
 
 @router.get(
@@ -416,25 +427,3 @@ async def get_media_limits(
     Returns supported MIME types, file size limits, and platform constraints.
     """
     return media_factory.get_media_limits()
-
-
-@router.get(
-    "/health",
-    summary="Media Service Health Check",
-    description="Check health status of media services",
-)
-async def health_check(
-    media_handler: IMediaHandler = Depends(get_whatsapp_media_handler),
-) -> dict:
-    """Health check for media services.
-
-    Returns service status and configuration information.
-    """
-    return {
-        "status": "healthy",
-        "service": "whatsapp-media",
-        "platform": media_handler.platform.value,
-        "tenant_id": media_handler.tenant_id,
-        "supported_types": len(media_handler.supported_media_types),
-        "max_file_sizes": media_handler.max_file_size,
-    }

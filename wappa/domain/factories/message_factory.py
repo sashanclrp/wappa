@@ -198,10 +198,15 @@ class MessageFactory(ABC):
 
     @abstractmethod
     def get_message_limits(self) -> dict[str, Any]:
-        """Get platform-specific message limits.
+        """Get platform-specific text message limits.
+
+        Returns only text message limits. For other domain limits, use:
+        - MediaFactory.get_media_limits() for media limits
+        - Interactive endpoint for interactive message limits
+        - Templates endpoint for template limits
 
         Returns:
-            Dictionary containing platform-specific limits
+            Dictionary containing text message limits (max lengths, etc.)
         """
         pass
 
@@ -442,41 +447,15 @@ class WhatsAppMessageFactory(MessageFactory):
             return False
 
     def get_message_limits(self) -> dict[str, Any]:
-        """Get WhatsApp-specific message limits.
+        """Get WhatsApp-specific text message limits.
 
-        Returns current WhatsApp Business API limits for message validation.
+        Returns current WhatsApp Business API limits for text message validation.
+        Note: For media limits, use MediaFactory.get_media_limits().
+              For interactive limits, see /api/whatsapp/interactive/limits.
+              For template limits, see /api/whatsapp/templates/limits.
         """
         return {
             "max_text_length": 4096,
-            "max_caption_length": 1024,
-            "max_buttons": 3,
-            "max_button_title_length": 20,
-            "max_list_sections": 10,
-            "max_list_items_per_section": 10,
-            "max_list_item_title_length": 24,
-            "max_list_item_description_length": 72,
-            "supported_media_types": [
-                "image/jpeg",
-                "image/png",
-                "image/webp",
-                "video/mp4",
-                "video/3gpp",
-                "audio/aac",
-                "audio/amr",
-                "audio/mpeg",
-                "audio/mp4",
-                "audio/ogg",
-                "application/pdf",
-                "text/plain",
-                "application/vnd.ms-excel",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                "application/msword",
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            ],
-            "max_media_size": {
-                "image": 5242880,  # 5MB
-                "video": 16777216,  # 16MB
-                "audio": 16777216,  # 16MB
-                "document": 104857600,  # 100MB
-            },
+            "max_preview_url_text_length": 4096,
+            "max_recipient_phone_length": 20,
         }

@@ -4,11 +4,16 @@ Basic message models for WhatsApp messaging.
 Pydantic schemas for basic messaging operations: send_text and mark_as_read.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from wappa.schemas.core.types import PlatformType
+
+
+def _utc_now() -> datetime:
+    """Return current UTC datetime."""
+    return datetime.now(UTC)
 
 
 class MessageResult(BaseModel):
@@ -17,17 +22,16 @@ class MessageResult(BaseModel):
     Standard response model for all messaging operations across platforms.
     """
 
+    model_config = ConfigDict(use_enum_values=True)
+
     success: bool
     platform: PlatformType = PlatformType.WHATSAPP
     message_id: str | None = None
     recipient: str | None = None
     error: str | None = None
     error_code: str | None = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utc_now)
     tenant_id: str | None = None  # phone_number_id in WhatsApp context
-
-    class Config:
-        use_enum_values = True
 
 
 class BasicTextMessage(BaseModel):

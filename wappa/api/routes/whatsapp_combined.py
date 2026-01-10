@@ -8,6 +8,7 @@ in the main Wappa application.
 from fastapi import APIRouter
 
 from .whatsapp import (
+    whatsapp_health_router,
     whatsapp_interactive_router,
     whatsapp_media_router,
     whatsapp_messages_router,
@@ -28,6 +29,7 @@ whatsapp_router = APIRouter(
 )
 
 # Include all WhatsApp sub-routers
+whatsapp_router.include_router(whatsapp_health_router)
 whatsapp_router.include_router(whatsapp_messages_router)
 whatsapp_router.include_router(whatsapp_media_router)
 whatsapp_router.include_router(whatsapp_interactive_router)

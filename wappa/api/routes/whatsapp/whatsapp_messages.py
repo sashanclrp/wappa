@@ -144,52 +144,33 @@ async def mark_message_as_read(
         raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error marking message as read: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to mark message as read") from e
+        raise HTTPException(
+            status_code=500, detail="Failed to mark message as read"
+        ) from e
 
 
 @router.get(
     "/limits",
-    summary="Get Message Limits",
-    description="Get WhatsApp platform-specific message limits and constraints",
+    summary="Get Text Message Limits",
+    description="Get WhatsApp text message limits. Other limits at separate endpoints.",
 )
 async def get_message_limits(
     factory: MessageFactory = Depends(get_whatsapp_message_factory),
 ) -> dict:
-    """Get WhatsApp platform-specific message limits.
+    """Get WhatsApp text message limits.
 
-    Returns current WhatsApp Business API limits for message validation
-    including text length limits, media size limits, and interactive message constraints.
+    Returns current WhatsApp Business API limits for text message validation.
+    This endpoint follows Single Responsibility Principle - returns only text limits.
+
+    For other domain limits, use:
+    - /api/whatsapp/media/limits for media limits
+    - /api/whatsapp/interactive/limits for button/list/CTA limits
+    - /api/whatsapp/templates/limits for template limits
 
     Args:
         factory: WhatsApp message factory (injected)
 
     Returns:
-        Dictionary containing platform-specific limits and constraints
+        Dictionary containing text message limits (max_text_length, etc.)
     """
     return factory.get_message_limits()
-
-
-@router.get(
-    "/health",
-    summary="Health Check",
-    description="Check WhatsApp messaging service health",
-)
-async def health_check(messenger: IMessenger = Depends(get_whatsapp_messenger)) -> dict:
-    """Health check for WhatsApp messaging service.
-
-    Verifies that the WhatsApp messaging service is properly configured
-    and ready to handle requests.
-
-    Args:
-        messenger: WhatsApp messenger implementation (injected)
-
-    Returns:
-        Health status information
-    """
-    return {
-        "status": "healthy",
-        "service": "whatsapp-messages",
-        "platform": messenger.platform.value,
-        "tenant_id": messenger.tenant_id,
-        "timestamp": "2025-01-26T00:00:00Z",
-    }

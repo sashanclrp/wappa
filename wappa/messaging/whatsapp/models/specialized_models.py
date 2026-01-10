@@ -173,22 +173,6 @@ class LocationMessage(BaseModel):
     address: str | None = Field(None, max_length=1000, description="Location address")
     reply_to_message_id: str | None = Field(None, description="Message ID to reply to")
 
-    @field_validator("latitude")
-    @classmethod
-    def validate_latitude_range(cls, v):
-        """Validate latitude is within valid range."""
-        if not -90 <= v <= 90:
-            raise ValueError("Latitude must be between -90 and 90 degrees")
-        return v
-
-    @field_validator("longitude")
-    @classmethod
-    def validate_longitude_range(cls, v):
-        """Validate longitude is within valid range."""
-        if not -180 <= v <= 180:
-            raise ValueError("Longitude must be between -180 and 180 degrees")
-        return v
-
 
 class LocationRequestMessage(BaseModel):
     """Location request message (asks user to share their location)."""
@@ -200,14 +184,6 @@ class LocationRequestMessage(BaseModel):
         ..., min_length=1, max_length=1024, description="Request message text"
     )
     reply_to_message_id: str | None = Field(None, description="Message ID to reply to")
-
-    @field_validator("body")
-    @classmethod
-    def validate_body_length(cls, v):
-        """Validate body text length."""
-        if len(v) > 1024:
-            raise ValueError("Body text cannot exceed 1024 characters")
-        return v
 
 
 class ContactValidationResult(BaseModel):

@@ -11,7 +11,6 @@ Supports three types of interactive messages:
 """
 
 from enum import Enum
-from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -101,9 +100,6 @@ class ButtonMessage(InteractiveMessage):
     Based on existing send_buttons_menu() implementation.
     """
 
-    interactive_type: Literal[InteractiveType.BUTTON] = Field(
-        default=InteractiveType.BUTTON
-    )
     buttons: list[ReplyButton] = Field(
         ..., min_length=1, max_length=3, description="List of reply buttons (max 3)"
     )
@@ -160,9 +156,6 @@ class ListMessage(InteractiveMessage):
     Based on existing send_list_menu() implementation.
     """
 
-    interactive_type: Literal[InteractiveType.LIST] = Field(
-        default=InteractiveType.LIST
-    )
     button_text: str = Field(
         ..., max_length=20, description="Text for the button that opens the list"
     )
@@ -195,9 +188,6 @@ class CTAMessage(InteractiveMessage):
     Based on existing send_cta_button() implementation.
     """
 
-    interactive_type: Literal[InteractiveType.CTA_URL] = Field(
-        default=InteractiveType.CTA_URL
-    )
     button_text: str = Field(
         ..., min_length=1, description="Text to display on the button"
     )
@@ -214,21 +204,6 @@ class CTAMessage(InteractiveMessage):
         if not (v.startswith("http://") or v.startswith("https://")):
             raise ValueError("button_url must start with http:// or https://")
         return v
-
-
-class InteractiveResponse(BaseModel):
-    """Response model for interactive message operations."""
-
-    success: bool = Field(..., description="Whether the operation succeeded")
-    message_id: str | None = Field(
-        None, description="WhatsApp message ID if successful"
-    )
-    interactive_type: InteractiveType = Field(
-        ..., description="Type of interactive message sent"
-    )
-    recipient: str = Field(..., description="Recipient phone number")
-    error: str | None = Field(None, description="Error message if failed")
-    error_code: str | None = Field(None, description="Error code for specific failures")
 
 
 # Validation utility functions for use in handlers

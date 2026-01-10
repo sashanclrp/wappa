@@ -7,7 +7,7 @@ factory pattern, client management, and messenger implementations.
 
 from fastapi import Depends, Request
 
-# Note: Using context-based tenant access instead of request-based
+from wappa.api.utils.tenant_helpers import require_tenant_context
 from wappa.core.logging.logger import get_logger
 from wappa.domain.builders.message_builder import MessageBuilder
 from wappa.domain.factories.message_factory import (
@@ -53,15 +53,11 @@ async def get_whatsapp_client(request: Request) -> WhatsAppClient:
     Raises:
         ValueError: If tenant credentials are invalid
     """
-    from wappa.core.logging.context import get_current_tenant_context
-
     # Get persistent HTTP session from app state (created in main.py lifespan)
     session = request.app.state.http_session
 
-    # Get tenant ID from context (set by webhook processing)
-    tenant_id = get_current_tenant_context()
-    if not tenant_id:
-        raise ValueError("No tenant context available - webhook processing required")
+    # Get tenant ID from context (set by webhook processing or API middleware)
+    tenant_id = require_tenant_context()
 
     # Get tenant-specific access token (future: from database)
     access_token = TenantCredentialsService.get_whatsapp_access_token(tenant_id)
@@ -74,14 +70,12 @@ async def get_whatsapp_client(request: Request) -> WhatsAppClient:
     logger = get_logger(__name__)
 
     # Create WhatsApp client with dependency injection
-    client = WhatsAppClient(
+    return WhatsAppClient(
         session=session,
         access_token=access_token,
         phone_number_id=tenant_id,  # tenant_id IS the phone_number_id
         logger=logger,
     )
-
-    return client
 
 
 async def get_whatsapp_media_handler(
@@ -95,11 +89,7 @@ async def get_whatsapp_media_handler(
     Returns:
         Configured WhatsApp media handler for upload/download operations
     """
-    from wappa.core.logging.context import get_current_tenant_context
-
-    tenant_id = get_current_tenant_context()
-    if not tenant_id:
-        raise ValueError("No tenant context available")
+    tenant_id = require_tenant_context()
     return WhatsAppMediaHandler(client=client, tenant_id=tenant_id)
 
 
@@ -114,11 +104,7 @@ async def get_whatsapp_interactive_handler(
     Returns:
         Configured WhatsApp interactive handler for button/list/CTA operations
     """
-    from wappa.core.logging.context import get_current_tenant_context
-
-    tenant_id = get_current_tenant_context()
-    if not tenant_id:
-        raise ValueError("No tenant context available")
+    tenant_id = require_tenant_context()
     return WhatsAppInteractiveHandler(client=client, tenant_id=tenant_id)
 
 
@@ -133,11 +119,7 @@ async def get_whatsapp_template_handler(
     Returns:
         Configured WhatsApp template handler for business template operations
     """
-    from wappa.core.logging.context import get_current_tenant_context
-
-    tenant_id = get_current_tenant_context()
-    if not tenant_id:
-        raise ValueError("No tenant context available")
+    tenant_id = require_tenant_context()
     return WhatsAppTemplateHandler(client=client, tenant_id=tenant_id)
 
 
@@ -152,11 +134,7 @@ async def get_whatsapp_specialized_handler(
     Returns:
         Configured WhatsApp specialized handler for contact and location operations
     """
-    from wappa.core.logging.context import get_current_tenant_context
-
-    tenant_id = get_current_tenant_context()
-    if not tenant_id:
-        raise ValueError("No tenant context available")
+    tenant_id = require_tenant_context()
     return WhatsAppSpecializedHandler(client=client, tenant_id=tenant_id)
 
 
@@ -183,12 +161,7 @@ async def get_whatsapp_messenger(
     Returns:
         Complete IMessenger implementation for WhatsApp messaging (text + media + interactive + template + specialized)
     """
-    from wappa.core.logging.context import get_current_tenant_context
-
-    tenant_id = get_current_tenant_context()
-    if not tenant_id:
-        raise ValueError("No tenant context available")
-
+    tenant_id = require_tenant_context()
     return WhatsAppMessenger(
         client=client,
         media_handler=media_handler,

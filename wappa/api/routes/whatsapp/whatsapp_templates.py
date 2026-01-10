@@ -16,6 +16,7 @@ Router configuration:
 from fastapi import APIRouter, Depends, HTTPException
 
 from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_messenger
+from wappa.api.utils import convert_body_parameters, raise_for_failed_result
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.template_models import (
@@ -24,6 +25,28 @@ from wappa.messaging.whatsapp.models.template_models import (
     TemplateMessageStatus,
     TextTemplateMessage,
 )
+
+# Error code groups for template operations
+_TEMPLATE_AUTH_ERRORS = ("TEMPLATE_NOT_FOUND", "TEMPLATE_NOT_APPROVED")
+_TEMPLATE_VALIDATION_ERRORS = (
+    "INVALID_PARAMETERS",
+    "MISSING_PARAMETERS",
+    "INVALID_MEDIA_TYPE",
+    "MEDIA_NOT_FOUND",
+    "INVALID_COORDINATES",
+)
+_TEMPLATE_SERVER_ERRORS = (
+    "TEMPLATE_SEND_FAILED",
+    "MEDIA_TEMPLATE_SEND_FAILED",
+    "LOCATION_TEMPLATE_SEND_FAILED",
+)
+
+# Error code to HTTP status mapping for template operations
+TEMPLATE_ERROR_GROUPS = {
+    _TEMPLATE_AUTH_ERRORS: 403,
+    _TEMPLATE_VALIDATION_ERRORS: 400,
+    _TEMPLATE_SERVER_ERRORS: 500,
+}
 
 # Create router with WhatsApp Templates configuration
 router = APIRouter(
@@ -57,31 +80,14 @@ async def send_text_template(
     Templates must be approved by WhatsApp before use.
     """
     try:
-        # Convert Pydantic model to dict format expected by messenger
-        body_parameters = None
-        if request.body_parameters:
-            body_parameters = []
-            for param in request.body_parameters:
-                body_parameters.append({"type": param.type.value, "text": param.text})
-
         result = await messenger.send_text_template(
             template_name=request.template_name,
             recipient=request.recipient,
-            body_parameters=body_parameters,
+            body_parameters=convert_body_parameters(request.body_parameters),
             language_code=request.language.code,
         )
 
-        if not result.success:
-            # Map specific template error codes to HTTP status codes
-            if result.error_code in ["TEMPLATE_NOT_FOUND", "TEMPLATE_NOT_APPROVED"]:
-                raise HTTPException(status_code=403, detail=result.error)
-            elif result.error_code in ["INVALID_PARAMETERS", "MISSING_PARAMETERS"]:
-                raise HTTPException(status_code=400, detail=result.error)
-            elif result.error_code in ["TEMPLATE_SEND_FAILED"]:
-                raise HTTPException(status_code=500, detail=result.error)
-            else:
-                raise HTTPException(status_code=400, detail=result.error)
-
+        raise_for_failed_result(result, "send text template", TEMPLATE_ERROR_GROUPS)
         return result
 
     except HTTPException:
@@ -108,38 +114,17 @@ async def send_media_template(
     Either media_id (uploaded media) or media_url (external media) must be provided.
     """
     try:
-        # Convert Pydantic model to dict format expected by messenger
-        body_parameters = None
-        if request.body_parameters:
-            body_parameters = []
-            for param in request.body_parameters:
-                body_parameters.append({"type": param.type.value, "text": param.text})
-
         result = await messenger.send_media_template(
             template_name=request.template_name,
             recipient=request.recipient,
             media_type=request.media_type.value,
             media_id=request.media_id,
             media_url=request.media_url,
-            body_parameters=body_parameters,
+            body_parameters=convert_body_parameters(request.body_parameters),
             language_code=request.language.code,
         )
 
-        if not result.success:
-            # Map specific template error codes to HTTP status codes
-            if result.error_code in ["TEMPLATE_NOT_FOUND", "TEMPLATE_NOT_APPROVED"]:
-                raise HTTPException(status_code=403, detail=result.error)
-            elif result.error_code in [
-                "INVALID_MEDIA_TYPE",
-                "MEDIA_NOT_FOUND",
-                "INVALID_PARAMETERS",
-            ]:
-                raise HTTPException(status_code=400, detail=result.error)
-            elif result.error_code in ["MEDIA_TEMPLATE_SEND_FAILED"]:
-                raise HTTPException(status_code=500, detail=result.error)
-            else:
-                raise HTTPException(status_code=400, detail=result.error)
-
+        raise_for_failed_result(result, "send media template", TEMPLATE_ERROR_GROUPS)
         return result
 
     except HTTPException:
@@ -166,13 +151,6 @@ async def send_location_template(
     Coordinates must be valid latitude (-90 to 90) and longitude (-180 to 180).
     """
     try:
-        # Convert Pydantic model to dict format expected by messenger
-        body_parameters = None
-        if request.body_parameters:
-            body_parameters = []
-            for param in request.body_parameters:
-                body_parameters.append({"type": param.type.value, "text": param.text})
-
         result = await messenger.send_location_template(
             template_name=request.template_name,
             recipient=request.recipient,
@@ -180,21 +158,11 @@ async def send_location_template(
             longitude=request.longitude,
             name=request.name,
             address=request.address,
-            body_parameters=body_parameters,
+            body_parameters=convert_body_parameters(request.body_parameters),
             language_code=request.language.code,
         )
 
-        if not result.success:
-            # Map specific template error codes to HTTP status codes
-            if result.error_code in ["TEMPLATE_NOT_FOUND", "TEMPLATE_NOT_APPROVED"]:
-                raise HTTPException(status_code=403, detail=result.error)
-            elif result.error_code in ["INVALID_COORDINATES", "INVALID_PARAMETERS"]:
-                raise HTTPException(status_code=400, detail=result.error)
-            elif result.error_code in ["LOCATION_TEMPLATE_SEND_FAILED"]:
-                raise HTTPException(status_code=500, detail=result.error)
-            else:
-                raise HTTPException(status_code=400, detail=result.error)
-
+        raise_for_failed_result(result, "send location template", TEMPLATE_ERROR_GROUPS)
         return result
 
     except HTTPException:
@@ -298,46 +266,6 @@ async def get_template_status(
         raise HTTPException(
             status_code=500, detail=f"Failed to get template status: {str(e)}"
         ) from e
-
-
-@router.get(
-    "/health",
-    summary="Template Service Health Check",
-    description="Check health status of template messaging services",
-)
-async def health_check(messenger: IMessenger = Depends(get_whatsapp_messenger)) -> dict:
-    """Health check for template messaging services.
-
-    Returns service status and configuration information.
-    """
-    return {
-        "status": "healthy",
-        "service": "whatsapp-templates",
-        "platform": messenger.platform.value,
-        "tenant_id": messenger.tenant_id,
-        "template_types": ["text", "media", "location"],
-        "message_types_supported": [
-            "text",
-            "image",
-            "video",
-            "audio",
-            "document",
-            "sticker",
-            "button",
-            "list",
-            "cta_url",
-            "text_template",
-            "media_template",
-            "location_template",
-        ],
-        "features": [
-            "Parameter substitution",
-            "Multi-language support",
-            "Media header templates",
-            "Location header templates",
-            "Template approval status",
-        ],
-    }
 
 
 # Example endpoint demonstrating complex template usage

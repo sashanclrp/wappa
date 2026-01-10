@@ -7,7 +7,6 @@ specifications and existing handle_media.py implementation patterns.
 
 from enum import Enum
 from pathlib import Path
-from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -33,7 +32,7 @@ class MediaType(Enum):
         Extracted from existing WhatsAppServiceMedia.MediaType.get_supported_mime_types()
         and validated against WhatsApp Cloud API 2025 specifications.
         """
-        SUPPORTED_TYPES = {
+        supported_types = {
             cls.AUDIO: {
                 "audio/aac",
                 "audio/mp4",
@@ -55,7 +54,7 @@ class MediaType(Enum):
             cls.STICKER: {"image/webp"},
             cls.VIDEO: {"video/3gp", "video/mp4"},
         }
-        return SUPPORTED_TYPES[media_type]
+        return supported_types[media_type]
 
     @classmethod
     def get_max_file_size(cls, media_type: "MediaType") -> int:
@@ -65,14 +64,14 @@ class MediaType(Enum):
         Based on WhatsApp Cloud API 2025 specifications and existing
         validation logic from handle_media.py.
         """
-        MAX_SIZES = {
+        max_sizes = {
             cls.AUDIO: 16 * 1024 * 1024,  # 16MB
             cls.DOCUMENT: 100 * 1024 * 1024,  # 100MB
             cls.IMAGE: 5 * 1024 * 1024,  # 5MB
             cls.STICKER: 500 * 1024,  # 500KB (animated), 100KB (static)
             cls.VIDEO: 16 * 1024 * 1024,  # 16MB
         }
-        return MAX_SIZES[media_type]
+        return max_sizes[media_type]
 
 
 class MediaMessage(BaseModel):
@@ -128,20 +127,28 @@ class MediaMessage(BaseModel):
         return v
 
 
-class ImageMessage(MediaMessage):
+class ImageMessage(BaseModel):
     """Image message schema for send_image operations.
 
     Supports JPEG and PNG images up to 5MB.
     Images must be 8-bit, RGB or RGBA (WhatsApp Cloud API 2025).
     """
 
-    media_type: Literal[MediaType.IMAGE] = Field(default=MediaType.IMAGE)
+    recipient: str = Field(
+        ..., min_length=1, description="Recipient phone number or user identifier"
+    )
+    media_source: str | Path = Field(
+        ..., description="Either a URL string or a Path object to the local media file"
+    )
     caption: str | None = Field(
         None, max_length=1024, description="Optional caption for the image"
     )
+    reply_to_message_id: str | None = Field(
+        None, description="Optional message ID for replies"
+    )
 
 
-class VideoMessage(MediaMessage):
+class VideoMessage(BaseModel):
     """Video message schema for send_video operations.
 
     Supports MP4 and 3GP videos up to 16MB.
@@ -149,45 +156,76 @@ class VideoMessage(MediaMessage):
     Single audio stream or no audio stream only (WhatsApp Cloud API 2025).
     """
 
-    media_type: Literal[MediaType.VIDEO] = Field(default=MediaType.VIDEO)
+    recipient: str = Field(
+        ..., min_length=1, description="Recipient phone number or user identifier"
+    )
+    media_source: str | Path = Field(
+        ..., description="Either a URL string or a Path object to the local media file"
+    )
     caption: str | None = Field(
         None, max_length=1024, description="Optional caption for the video"
     )
+    reply_to_message_id: str | None = Field(
+        None, description="Optional message ID for replies"
+    )
 
 
-class AudioMessage(MediaMessage):
+class AudioMessage(BaseModel):
     """Audio message schema for send_audio operations.
 
     Supports AAC, AMR, MP3, M4A, and OGG audio up to 16MB.
     OGG must use OPUS codecs only, mono input only (WhatsApp Cloud API 2025).
+    Note: Captions are not supported for audio messages.
     """
 
-    media_type: Literal[MediaType.AUDIO] = Field(default=MediaType.AUDIO)
-    caption: Literal[None] = Field(
-        default=None, description="Caption not supported for audio"
+    recipient: str = Field(
+        ..., min_length=1, description="Recipient phone number or user identifier"
+    )
+    media_source: str | Path = Field(
+        ..., description="Either a URL string or a Path object to the local media file"
+    )
+    reply_to_message_id: str | None = Field(
+        None, description="Optional message ID for replies"
     )
 
 
-class DocumentMessage(MediaMessage):
+class DocumentMessage(BaseModel):
     """Document message schema for send_document operations.
 
     Supports TXT, PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX up to 100MB.
     """
 
-    media_type: Literal[MediaType.DOCUMENT] = Field(default=MediaType.DOCUMENT)
+    recipient: str = Field(
+        ..., min_length=1, description="Recipient phone number or user identifier"
+    )
+    media_source: str | Path = Field(
+        ..., description="Either a URL string or a Path object to the local media file"
+    )
+    caption: str | None = Field(
+        None, max_length=1024, description="Optional caption for the document"
+    )
     filename: str | None = Field(None, description="Optional filename for the document")
+    reply_to_message_id: str | None = Field(
+        None, description="Optional message ID for replies"
+    )
 
 
-class StickerMessage(MediaMessage):
+class StickerMessage(BaseModel):
     """Sticker message schema for send_sticker operations.
 
     Supports WebP images only.
     Static stickers: 100KB max, Animated stickers: 500KB max.
+    Note: Captions are not supported for sticker messages.
     """
 
-    media_type: Literal[MediaType.STICKER] = Field(default=MediaType.STICKER)
-    caption: Literal[None] = Field(
-        default=None, description="Caption not supported for stickers"
+    recipient: str = Field(
+        ..., min_length=1, description="Recipient phone number or user identifier"
+    )
+    media_source: str | Path = Field(
+        ..., description="Either a URL string or a Path object to the local media file"
+    )
+    reply_to_message_id: str | None = Field(
+        None, description="Optional message ID for replies"
     )
 
 
