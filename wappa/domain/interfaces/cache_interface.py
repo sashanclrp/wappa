@@ -1,9 +1,21 @@
 """
 Cache interface definition for Wappa framework.
 
-Defines the contract for cache implementations (Redis, Memory, JSON).
+DEPRECATED: This generic ICache interface is deprecated in favor of the
+type-specific interfaces in cache_interfaces.py:
+- IUserCache: For user-scoped data
+- IStateCache: For handler/session state
+- ITableCache: For table/row data
+
+The type-specific interfaces provide domain-appropriate method signatures
+and eliminate the N×M adapter problem. New code should use the type-specific
+interfaces directly.
+
+This interface is kept for backwards compatibility but may be removed in
+a future version.
 """
 
+import warnings
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -12,11 +24,26 @@ from pydantic import BaseModel
 
 class ICache(ABC):
     """
-    Interface for cache implementations in the Wappa framework.
+    Generic interface for cache implementations in the Wappa framework.
 
-    Provides basic cache operations with context awareness for tenant and user isolation.
-    All cache implementations must support these core operations.
+    DEPRECATED: Use type-specific interfaces instead:
+    - IUserCache: For user-scoped data (identity implicit via constructor)
+    - IStateCache: For handler/session state (keyed by handler_name)
+    - ITableCache: For table/row data (composite key: table_name + pkid)
+
+    This interface is maintained for backwards compatibility only.
     """
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        # Only warn for direct subclasses, not for the type-specific interfaces
+        if cls.__module__.startswith("wappa."):
+            warnings.warn(
+                f"Class {cls.__name__} inherits from deprecated ICache interface. "
+                "Use IUserCache, IStateCache, or ITableCache instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
     @abstractmethod
     async def get(
@@ -174,6 +201,8 @@ class ICache(ABC):
     def create_table_key(table_name: str, pkid: str) -> str:
         """
         Create a properly formatted table cache key.
+
+        DEPRECATED: Use ITableCache.get(table_name, pkid) directly instead.
 
         This is a static utility method available on all cache implementations
         to ensure consistent key formatting across cache backends.

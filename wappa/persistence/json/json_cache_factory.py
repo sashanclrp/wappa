@@ -2,16 +2,14 @@
 JSON cache factory implementation for Wappa framework.
 
 Creates JSON-backed cache instances using file-based storage
-with ICache adapters for uniform interface.
+with handlers implementing type-specific interfaces directly.
 """
 
 from ...domain.interfaces.cache_factory import ICacheFactory
-from ...domain.interfaces.cache_interface import ICache
-from .cache_adapters import (
-    JSONStateCacheAdapter,
-    JSONTableCacheAdapter,
-    JSONUserCacheAdapter,
-)
+from ...domain.interfaces.cache_interfaces import IStateCache, ITableCache, IUserCache
+from .handlers.state_handler import JSONStateHandler
+from .handlers.table_handler import JSONTable
+from .handlers.user_handler import JSONUser
 
 
 class JSONCacheFactory(ICacheFactory):
@@ -23,7 +21,7 @@ class JSONCacheFactory(ICacheFactory):
     - User cache: Uses users subdirectory
     - Table cache: Uses tables subdirectory
 
-    All instances implement the ICache interface through adapters.
+    All instances implement the type-specific cache interfaces directly.
 
     Context (tenant_id, user_id) is injected at construction time, eliminating
     manual parameter passing.
@@ -35,7 +33,7 @@ class JSONCacheFactory(ICacheFactory):
         """Initialize JSON cache factory with context injection."""
         super().__init__(tenant_id, user_id)
 
-    def create_state_cache(self) -> ICache:
+    def create_state_cache(self) -> IStateCache:
         """
         Create JSON state cache instance.
 
@@ -43,11 +41,11 @@ class JSONCacheFactory(ICacheFactory):
         Stores data in {project_root}/cache/states/ directory.
 
         Returns:
-            ICache adapter wrapping JSONStateHandler
+            JSONStateHandler implementing IStateCache
         """
-        return JSONStateCacheAdapter(tenant_id=self.tenant_id, user_id=self.user_id)
+        return JSONStateHandler(tenant=self.tenant_id, user_id=self.user_id)
 
-    def create_user_cache(self) -> ICache:
+    def create_user_cache(self) -> IUserCache:
         """
         Create JSON user cache instance.
 
@@ -55,11 +53,11 @@ class JSONCacheFactory(ICacheFactory):
         Stores data in {project_root}/cache/users/ directory.
 
         Returns:
-            ICache adapter wrapping JSONUser
+            JSONUser implementing IUserCache
         """
-        return JSONUserCacheAdapter(tenant_id=self.tenant_id, user_id=self.user_id)
+        return JSONUser(tenant=self.tenant_id, user_id=self.user_id)
 
-    def create_table_cache(self) -> ICache:
+    def create_table_cache(self) -> ITableCache:
         """
         Create JSON table cache instance.
 
@@ -67,6 +65,6 @@ class JSONCacheFactory(ICacheFactory):
         Stores data in {project_root}/cache/tables/ directory.
 
         Returns:
-            ICache adapter wrapping JSONTable
+            JSONTable implementing ITableCache
         """
-        return JSONTableCacheAdapter(tenant_id=self.tenant_id)
+        return JSONTable(tenant=self.tenant_id)

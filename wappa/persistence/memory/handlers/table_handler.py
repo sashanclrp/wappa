@@ -9,13 +9,14 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from ....domain.interfaces.cache_interfaces import ITableCache
 from ..storage_manager import storage_manager
 from .utils.key_factory import default_key_factory
 
 logger = logging.getLogger("MemoryTable")
 
 
-class MemoryTable:
+class MemoryTable(ITableCache):
     """
     Memory-based table cache handler.
 
@@ -243,44 +244,31 @@ class MemoryTable:
 
         return await self.upsert(table_name, pkid, row_data, ttl)
 
-    async def get_ttl(self, key: str) -> int:
+    async def get_ttl(self, table_name: str, pkid: str) -> int:
         """
-        Get remaining time to live for table cache.
+        Get remaining time to live for table row.
+
+        Args:
+            table_name: Table name identifier
+            pkid: Primary key ID
 
         Returns:
             Remaining TTL in seconds, -1 if no expiry, -2 if doesn't exist
         """
-        # For table cache, TTL is per key, not per cache file
-        # Extract table_name and pkid from key to build proper key
-        if ":" in key:
-            parts = key.split(":", 1)
-            if len(parts) == 2:
-                table_name, pkid = parts
-                actual_key = self._key(table_name, pkid)
-                return await storage_manager.get_ttl(
-                    "tables", self.tenant, None, actual_key
-                )
-
+        key = self._key(table_name, pkid)
         return await storage_manager.get_ttl("tables", self.tenant, None, key)
 
-    async def renew_ttl(self, key: str, ttl: int) -> bool:
+    async def renew_ttl(self, table_name: str, pkid: str, ttl: int) -> bool:
         """
-        Renew time to live for table cache.
+        Renew time to live for table row.
 
         Args:
+            table_name: Table name identifier
+            pkid: Primary key ID
             ttl: New time to live in seconds
 
         Returns:
             True if successful, False otherwise
         """
-        # For table cache, TTL is per key, not per cache file
-        if ":" in key:
-            parts = key.split(":", 1)
-            if len(parts) == 2:
-                table_name, pkid = parts
-                actual_key = self._key(table_name, pkid)
-                return await storage_manager.set_ttl(
-                    "tables", self.tenant, None, actual_key, ttl
-                )
-
+        key = self._key(table_name, pkid)
         return await storage_manager.set_ttl("tables", self.tenant, None, key, ttl)

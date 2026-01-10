@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from ....domain.interfaces.cache_interfaces import IUserCache
 from ..ops import hdel, hget, hincrby_with_expire
 from .utils.serde import loads
 from .utils.tenant_cache import TenantCache
@@ -12,7 +13,7 @@ from .utils.tenant_cache import TenantCache
 logger = logging.getLogger("RedisUser")
 
 
-class RedisUser(TenantCache):
+class RedisUser(TenantCache, IUserCache):
     """
     Repository for user-specific operations.
 
@@ -136,3 +137,26 @@ class RedisUser(TenantCache):
         key = self._key()
         raw_value = await hget(key, field, alias=self.redis_alias)
         return loads(raw_value) if raw_value is not None else None
+
+    async def get_ttl(self) -> int:
+        """
+        Get remaining time to live for user data.
+
+        Returns:
+            Remaining TTL in seconds, -1 if no expiry, -2 if doesn't exist
+        """
+        key = self._key()
+        return await super().get_ttl(key)
+
+    async def renew_ttl(self, ttl: int) -> bool:
+        """
+        Renew time to live for user data.
+
+        Args:
+            ttl: New time to live in seconds
+
+        Returns:
+            True if successful, False otherwise
+        """
+        key = self._key()
+        return await super().renew_ttl(key, ttl)

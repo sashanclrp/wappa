@@ -6,7 +6,7 @@ Defines the contract for creating context-aware cache instances.
 
 from abc import ABC, abstractmethod
 
-from .cache_interface import ICache
+from .cache_interfaces import IStateCache, ITableCache, IUserCache
 
 
 class ICacheFactory(ABC):
@@ -18,6 +18,10 @@ class ICacheFactory(ABC):
 
     Context (tenant_id, user_id) is injected at construction time, eliminating
     the need for manual parameter passing in cache creation methods.
+
+    The factory returns type-specific cache interfaces (IUserCache, IStateCache,
+    ITableCache) which provide domain-appropriate method signatures rather than
+    the generic ICache interface.
     """
 
     def __init__(self, tenant_id: str, user_id: str):
@@ -38,7 +42,7 @@ class ICacheFactory(ABC):
         self.user_id = user_id
         self._validate_context()
 
-    def _validate_context(self):
+    def _validate_context(self) -> None:
         """Validate that required context is available."""
         if not self.tenant_id or not self.user_id:
             raise ValueError(
@@ -46,7 +50,7 @@ class ICacheFactory(ABC):
             )
 
     @abstractmethod
-    def create_state_cache(self) -> ICache:
+    def create_state_cache(self) -> IStateCache:
         """
         Create state cache instance with context binding.
 
@@ -54,12 +58,12 @@ class ICacheFactory(ABC):
         Context (tenant_id, user_id) is automatically injected from constructor.
 
         Returns:
-            Context-bound state cache instance
+            Context-bound state cache instance implementing IStateCache
         """
         pass
 
     @abstractmethod
-    def create_user_cache(self) -> ICache:
+    def create_user_cache(self) -> IUserCache:
         """
         Create user cache instance with context binding.
 
@@ -67,12 +71,12 @@ class ICacheFactory(ABC):
         Context (tenant_id, user_id) is automatically injected from constructor.
 
         Returns:
-            Context-bound user cache instance
+            Context-bound user cache instance implementing IUserCache
         """
         pass
 
     @abstractmethod
-    def create_table_cache(self) -> ICache:
+    def create_table_cache(self) -> ITableCache:
         """
         Create table cache instance with context binding.
 
@@ -80,6 +84,6 @@ class ICacheFactory(ABC):
         Context (tenant_id) is automatically injected from constructor.
 
         Returns:
-            Context-bound table cache instance
+            Context-bound table cache instance implementing ITableCache
         """
         pass

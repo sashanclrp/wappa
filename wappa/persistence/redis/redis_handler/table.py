@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from ....domain.interfaces.cache_interfaces import ITableCache
 from ..ops import hget, hincrby_with_expire
 from .utils.serde import loads
 from .utils.tenant_cache import TenantCache
@@ -12,7 +13,7 @@ from .utils.tenant_cache import TenantCache
 logger = logging.getLogger("RedisTable")
 
 
-class RedisTable(TenantCache):
+class RedisTable(TenantCache, ITableCache):
     """
     Repository for table data management (generic DataFrames/rows).
 
@@ -156,3 +157,32 @@ class RedisTable(TenantCache):
             f"Deleting all table data with pkid '{pkid}' (pattern: '{pattern}')"
         )
         return await self._delete_by_pattern(pattern)
+
+    async def get_ttl(self, table_name: str, pkid: str) -> int:
+        """
+        Get remaining time to live for table row.
+
+        Args:
+            table_name: Table name identifier
+            pkid: Primary key ID
+
+        Returns:
+            Remaining TTL in seconds, -1 if no expiry, -2 if doesn't exist
+        """
+        key = self._key(table_name, pkid)
+        return await super().get_ttl(key)
+
+    async def renew_ttl(self, table_name: str, pkid: str, ttl: int) -> bool:
+        """
+        Renew time to live for table row.
+
+        Args:
+            table_name: Table name identifier
+            pkid: Primary key ID
+            ttl: New time to live in seconds
+
+        Returns:
+            True if successful, False otherwise
+        """
+        key = self._key(table_name, pkid)
+        return await super().renew_ttl(key, ttl)

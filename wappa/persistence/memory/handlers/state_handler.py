@@ -9,13 +9,14 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from ....domain.interfaces.cache_interfaces import IStateCache
 from ..storage_manager import storage_manager
 from .utils.key_factory import default_key_factory
 
 logger = logging.getLogger("MemoryStateHandler")
 
 
-class MemoryStateHandler:
+class MemoryStateHandler(IStateCache):
     """
     Memory-based state cache handler.
 
@@ -236,25 +237,31 @@ class MemoryStateHandler:
 
         return await self.upsert(handler_name, state_data, ttl)
 
-    async def get_ttl(self, key: str) -> int:
+    async def get_ttl(self, handler_name: str) -> int:
         """
-        Get remaining time to live for state cache.
+        Get remaining time to live for handler state.
+
+        Args:
+            handler_name: Handler name identifier
 
         Returns:
             Remaining TTL in seconds, -1 if no expiry, -2 if doesn't exist
         """
+        key = self._key(handler_name)
         return await storage_manager.get_ttl("states", self.tenant, self.user_id, key)
 
-    async def renew_ttl(self, key: str, ttl: int) -> bool:
+    async def renew_ttl(self, handler_name: str, ttl: int) -> bool:
         """
-        Renew time to live for state cache.
+        Renew time to live for handler state.
 
         Args:
+            handler_name: Handler name identifier
             ttl: New time to live in seconds
 
         Returns:
             True if successful, False otherwise
         """
+        key = self._key(handler_name)
         return await storage_manager.set_ttl(
             "states", self.tenant, self.user_id, key, ttl
         )

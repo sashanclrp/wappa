@@ -9,13 +9,14 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from ....domain.interfaces.cache_interfaces import IUserCache
 from ..storage_manager import storage_manager
 from .utils.key_factory import default_key_factory
 
 logger = logging.getLogger("JSONUser")
 
 
-class JSONUser:
+class JSONUser(IUserCache):
     """
     JSON-based user cache handler.
 
@@ -207,18 +208,18 @@ class JSONUser:
 
         return await self.upsert(user_data, ttl)
 
-    async def get_ttl(self, key: str) -> int:
+    async def get_ttl(self) -> int:
         """
-        Get remaining time to live.
+        Get remaining time to live for user data.
 
         Returns:
             Remaining TTL in seconds, -1 if no expiry, -2 if doesn't exist
         """
         return await storage_manager.get_ttl("users", self.tenant, self.user_id)
 
-    async def renew_ttl(self, key: str, ttl: int) -> bool:
+    async def renew_ttl(self, ttl: int) -> bool:
         """
-        Renew time to live.
+        Renew time to live for user data.
 
         Args:
             ttl: New time to live in seconds

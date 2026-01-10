@@ -2,16 +2,14 @@
 Memory cache factory implementation for Wappa framework.
 
 Creates memory-backed cache instances using in-memory storage
-with ICache adapters for uniform interface.
+with handlers implementing type-specific interfaces directly.
 """
 
 from ...domain.interfaces.cache_factory import ICacheFactory
-from ...domain.interfaces.cache_interface import ICache
-from .cache_adapters import (
-    MemoryStateCacheAdapter,
-    MemoryTableCacheAdapter,
-    MemoryUserCacheAdapter,
-)
+from ...domain.interfaces.cache_interfaces import IStateCache, ITableCache, IUserCache
+from .handlers.state_handler import MemoryStateHandler
+from .handlers.table_handler import MemoryTable
+from .handlers.user_handler import MemoryUser
 
 
 class MemoryCacheFactory(ICacheFactory):
@@ -23,7 +21,7 @@ class MemoryCacheFactory(ICacheFactory):
     - User cache: Uses users namespace with context isolation
     - Table cache: Uses tables namespace with tenant isolation
 
-    All instances implement the ICache interface through adapters.
+    All instances implement the type-specific cache interfaces directly.
 
     Context (tenant_id, user_id) is injected at construction time, eliminating
     manual parameter passing.
@@ -35,7 +33,7 @@ class MemoryCacheFactory(ICacheFactory):
         """Initialize Memory cache factory with context injection."""
         super().__init__(tenant_id, user_id)
 
-    def create_state_cache(self) -> ICache:
+    def create_state_cache(self) -> IStateCache:
         """
         Create Memory state cache instance.
 
@@ -43,11 +41,11 @@ class MemoryCacheFactory(ICacheFactory):
         Stores data in memory with namespace isolation and automatic TTL cleanup.
 
         Returns:
-            ICache adapter wrapping MemoryStateHandler
+            MemoryStateHandler implementing IStateCache
         """
-        return MemoryStateCacheAdapter(tenant_id=self.tenant_id, user_id=self.user_id)
+        return MemoryStateHandler(tenant=self.tenant_id, user_id=self.user_id)
 
-    def create_user_cache(self) -> ICache:
+    def create_user_cache(self) -> IUserCache:
         """
         Create Memory user cache instance.
 
@@ -55,11 +53,11 @@ class MemoryCacheFactory(ICacheFactory):
         Stores data in memory with namespace isolation and automatic TTL cleanup.
 
         Returns:
-            ICache adapter wrapping MemoryUser
+            MemoryUser implementing IUserCache
         """
-        return MemoryUserCacheAdapter(tenant_id=self.tenant_id, user_id=self.user_id)
+        return MemoryUser(tenant=self.tenant_id, user_id=self.user_id)
 
-    def create_table_cache(self) -> ICache:
+    def create_table_cache(self) -> ITableCache:
         """
         Create Memory table cache instance.
 
@@ -67,6 +65,6 @@ class MemoryCacheFactory(ICacheFactory):
         Stores data in memory with namespace isolation and automatic TTL cleanup.
 
         Returns:
-            ICache adapter wrapping MemoryTable
+            MemoryTable implementing ITableCache
         """
-        return MemoryTableCacheAdapter(tenant_id=self.tenant_id)
+        return MemoryTable(tenant=self.tenant_id)

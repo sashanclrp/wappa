@@ -2,16 +2,14 @@
 Redis cache factory implementation for Wappa framework.
 
 Creates Redis-backed cache instances using the existing Redis handler infrastructure
-with ICache adapters for uniform interface.
+with handlers implementing type-specific interfaces directly.
 """
 
 from ...domain.interfaces.cache_factory import ICacheFactory
-from ...domain.interfaces.cache_interface import ICache
-from .cache_adapters import (
-    RedisStateCacheAdapter,
-    RedisTableCacheAdapter,
-    RedisUserCacheAdapter,
-)
+from ...domain.interfaces.cache_interfaces import IStateCache, ITableCache, IUserCache
+from .redis_handler.state_handler import RedisStateHandler
+from .redis_handler.table import RedisTable
+from .redis_handler.user import RedisUser
 
 
 class RedisCacheFactory(ICacheFactory):
@@ -23,7 +21,7 @@ class RedisCacheFactory(ICacheFactory):
     - User cache: Uses users pool (db0)
     - Table cache: Uses table pool (db2)
 
-    All instances implement the ICache interface through adapters.
+    All instances implement the type-specific cache interfaces directly.
 
     Context (tenant_id, user_id) is injected at construction time, eliminating
     manual parameter passing.
@@ -33,39 +31,39 @@ class RedisCacheFactory(ICacheFactory):
         """Initialize Redis cache factory with context injection."""
         super().__init__(tenant_id, user_id)
 
-    def create_state_cache(self) -> ICache:
+    def create_state_cache(self) -> IStateCache:
         """
         Create Redis state cache instance.
 
         Uses context (tenant_id, user_id) injected at construction time.
 
         Returns:
-            ICache adapter wrapping RedisStateHandler configured for state_handler pool
+            RedisStateHandler implementing IStateCache configured for state_handler pool
         """
-        return RedisStateCacheAdapter(
-            tenant_id=self.tenant_id, user_id=self.user_id, redis_alias="state_handler"
+        return RedisStateHandler(
+            tenant=self.tenant_id, user_id=self.user_id, redis_alias="state_handler"
         )
 
-    def create_user_cache(self) -> ICache:
+    def create_user_cache(self) -> IUserCache:
         """
         Create Redis user cache instance.
 
         Uses context (tenant_id, user_id) injected at construction time.
 
         Returns:
-            ICache adapter wrapping RedisUser configured for users pool
+            RedisUser implementing IUserCache configured for users pool
         """
-        return RedisUserCacheAdapter(
-            tenant_id=self.tenant_id, user_id=self.user_id, redis_alias="users"
+        return RedisUser(
+            tenant=self.tenant_id, user_id=self.user_id, redis_alias="users"
         )
 
-    def create_table_cache(self) -> ICache:
+    def create_table_cache(self) -> ITableCache:
         """
         Create Redis table cache instance.
 
         Uses context (tenant_id) injected at construction time.
 
         Returns:
-            ICache adapter wrapping RedisTable configured for table pool
+            RedisTable implementing ITableCache configured for table pool
         """
-        return RedisTableCacheAdapter(tenant_id=self.tenant_id, redis_alias="table")
+        return RedisTable(tenant=self.tenant_id, redis_alias="table")
