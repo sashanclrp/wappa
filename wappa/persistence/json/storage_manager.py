@@ -267,6 +267,39 @@ class JSONStorageManager:
             logger.error(f"Failed to set TTL for {cache_type} cache: {e}")
             return False
 
+    async def get_all_keys(
+        self, cache_type: str, tenant_id: str, user_id: str | None
+    ) -> dict[str, Any]:
+        """
+        Get all keys for a cache file.
+
+        Args:
+            cache_type: "users", "tables", or "states"
+            tenant_id: Tenant identifier
+            user_id: User identifier (required for users/states)
+
+        Returns:
+            Dictionary of all non-expired key-value pairs
+        """
+        try:
+            file_path = file_manager.get_cache_file_path(cache_type, tenant_id, user_id)
+            file_data = await file_manager.read_file(file_path)
+
+            if not file_data:
+                return {}
+
+            cache_data = extract_cache_file_data(file_data)
+            if cache_data is None:
+                # Expired - delete the file
+                await file_manager.delete_file(file_path)
+                return {}
+
+            return cache_data
+
+        except Exception as e:
+            logger.error(f"Failed to get all keys from {cache_type} cache: {e}")
+            return {}
+
 
 # Global storage manager instance
 storage_manager = JSONStorageManager()

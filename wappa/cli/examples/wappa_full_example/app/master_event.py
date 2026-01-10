@@ -28,7 +28,7 @@ class WappaFullExampleHandler(WappaEventHandler):
 
     Features:
     - Complete message type handling with metadata extraction
-    - Interactive commands (/button, /list, /cta, /location) with state management
+    - Interactive commands (/button, /list, /cta, /location, /template, /api-stats, /docs) with state management
     - Media relay functionality using media_id
     - User tracking and analytics with Redis cache
     - Professional error handling and logging
@@ -218,6 +218,100 @@ class WappaFullExampleHandler(WappaEventHandler):
         except Exception as e:
             self.logger.error(f"❌ Error processing error webhook: {e}", exc_info=True)
 
+    async def process_api_message(self, event) -> None:
+        """
+        Process API-sent message events for comprehensive tracking.
+
+        Tracks ALL API messages (text, media, interactive, templates, specialized)
+        in Redis for analytics and monitoring.
+
+        Stores:
+        1. Individual message history (7-day TTL)
+        2. Global statistics with type breakdown (30-day TTL)
+        3. Per-user activity logs (30-day TTL)
+
+        Args:
+            event: APIMessageEvent containing message details
+        """
+        try:
+            # Log the API event
+            status = "✅" if event.response_success else "❌"
+            self.logger.info(
+                f"📤 API message sent: {status} {event.message_type} to {event.recipient} "
+                f"(id={event.message_id})"
+            )
+
+            # Ensure cache helper is available
+            if not self.cache_factory:
+                self.logger.warning("Cache factory not available, skipping API tracking")
+                return
+
+            cache_helper = CacheHelper(self.cache_factory)
+
+            # Import models
+            from datetime import UTC, datetime
+
+            from .models.api_tracking_models import (
+                APIMessageHistoryEntry,
+            )
+
+            recipient = event.recipient
+            message_type = event.message_type
+
+            # 1. Record message history
+            history_entry = APIMessageHistoryEntry(
+                entry_id=f"api_{int(datetime.now(UTC).timestamp())}_{recipient}",
+                timestamp=event.timestamp,
+                message_type=message_type,
+                recipient=recipient,
+                message_id=event.message_id,
+                success=event.response_success,
+                error=event.response_error,
+                request_payload=event.request_payload,
+                tenant_id=event.tenant_id,
+                owner_id=event.owner_id,
+            )
+            await cache_helper.save_api_message_history(history_entry)
+            self.logger.debug(f"📝 Saved API message history: {history_entry.entry_id}")
+
+            # 2. Update global statistics
+            stats = await cache_helper.get_api_message_statistics()
+
+            # Get all unique recipients
+            all_activities = await cache_helper.get_all_user_api_activities()
+            unique_recipients = {activity.user_id for activity in all_activities}
+            unique_recipients.add(recipient)
+
+            stats.update_from_event(
+                message_type=message_type,
+                success=event.response_success,
+                recipient=recipient,
+                unique_recipients=unique_recipients,
+            )
+            await cache_helper.save_api_message_statistics(stats)
+            self.logger.debug(
+                f"📊 Updated API stats: {stats.total_messages_sent} total, "
+                f"{stats.success_rate:.1f}% success rate"
+            )
+
+            # 3. Update per-user activity
+            user_activity = await cache_helper.get_or_create_user_api_activity(recipient)
+            user_activity.add_message_event(
+                message_type=message_type,
+                message_id=event.message_id,
+                success=event.response_success,
+            )
+            await cache_helper.save_user_api_activity(user_activity)
+            self.logger.debug(
+                f"👤 Updated user API activity: {recipient} "
+                f"({user_activity.messages_received} received)"
+            )
+
+        except Exception as e:
+            self.logger.error(
+                f"❌ Error processing API message event: {e}", exc_info=True
+            )
+
     async def _setup_dependencies(self) -> bool:
         """Setup handler dependencies and validate state."""
         if not self.validate_dependencies():
@@ -291,15 +385,18 @@ class WappaFullExampleHandler(WappaEventHandler):
             f"This is a comprehensive demonstration of the Wappa framework capabilities.\n\n"
             f"🚀 *What this example does:*\n"
             f"• Echoes all message types with detailed metadata\n"
-            f"• Demonstrates interactive features (buttons, lists, CTA, locations)\n"
+            f"• Demonstrates interactive features (buttons, lists, CTA, locations, templates)\n"
             f"• Shows state management with TTL\n"
-            f"• Tracks user activity with Redis cache\n"
+            f"• Tracks user activity and API messages with Redis cache\n"
             f"• Handles media relay using media_id\n\n"
             f"🎯 *Try these special commands:*\n"
             f"• `/button` - Interactive button demo with animal selection\n"
             f"• `/list` - Interactive list demo with media files\n"
             f"• `/cta` - Call-to-action button with external link\n"
-            f"• `/location` - Location sharing demonstration\n\n"
+            f"• `/location` - Location sharing demonstration\n"
+            f"• `/template` - Template state handler instructions\n"
+            f"• `/api-stats` - View comprehensive API activity statistics\n"
+            f"• `/docs` - API documentation and help\n\n"
             f"📨 *Send any message type to see it echoed with metadata:*\n"
             f"• Text messages → Echo with metadata\n"
             f"• Images/Videos/Audio/Documents → Relayed using media_id\n"
@@ -363,6 +460,18 @@ class WappaFullExampleHandler(WappaEventHandler):
                 result = await self.command_handlers.handle_location_command(
                     webhook, user_profile
                 )
+            elif command == "/template":
+                result = await self.command_handlers.handle_template_command(
+                    webhook, user_profile
+                )
+            elif command == "/api-stats":
+                result = await self.command_handlers.handle_api_stats_command(
+                    webhook, user_profile
+                )
+            elif command == "/docs":
+                result = await self.command_handlers.handle_docs_command(
+                    webhook, user_profile
+                )
             else:
                 self.logger.warning(f"Unsupported command: {command}")
                 return
@@ -393,7 +502,7 @@ class WappaFullExampleHandler(WappaEventHandler):
                 "Our comprehensive demo system encountered an issue.\n\n"
                 "🔄 *Please try again* or contact support if the problem persists.\n\n"
                 "💡 *Tip*: Try using one of our special commands:\n"
-                "`/button` • `/list` • `/cta` • `/location`"
+                "`/button` • `/list` • `/cta` • `/location` • `/template` • `/api-stats` • `/docs`"
             )
 
             result = await self.messenger.send_text(
@@ -462,7 +571,7 @@ class WappaFullExampleHandler(WappaEventHandler):
                     "commands_processed": self._commands_processed,
                     "interactive_responses": self._interactive_responses,
                 },
-                "supported_commands": ["/button", "/list", "/cta", "/location"],
+                "supported_commands": ["/button", "/list", "/cta", "/location", "/template", "/api-stats", "/docs"],
                 "supported_message_types": [
                     "text",
                     "image",

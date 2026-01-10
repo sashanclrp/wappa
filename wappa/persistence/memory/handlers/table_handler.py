@@ -272,3 +272,40 @@ class MemoryTable(ITableCache):
         """
         key = self._key(table_name, pkid)
         return await storage_manager.set_ttl("tables", self.tenant, None, key, ttl)
+
+    async def get_all(
+        self,
+        table_name: str,
+        models: type[BaseModel] | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Get all rows for a table by scanning keys matching the table pattern.
+
+        Args:
+            table_name: Table name identifier
+            models: Optional BaseModel class for deserialization
+
+        Returns:
+            List of table row data dictionaries
+        """
+        results: list[dict[str, Any]] = []
+        key_prefix = self.keys.table(self.tenant, table_name, "")
+
+        try:
+            all_keys = await storage_manager.get_all_keys("tables", self.tenant, None)
+
+            for key, value in all_keys.items():
+                if key.startswith(key_prefix):
+                    if models is not None and isinstance(value, dict):
+                        results.append(models.model_validate(value))
+                    else:
+                        results.append(value)
+
+            logger.debug(f"Retrieved {len(results)} rows from table '{table_name}'")
+            return results
+
+        except Exception as e:
+            logger.error(
+                f"Error getting all rows from table '{table_name}': {e}", exc_info=True
+            )
+            return []

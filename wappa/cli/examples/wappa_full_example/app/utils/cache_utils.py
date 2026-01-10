@@ -432,6 +432,164 @@ class CacheHelper:
             print(f"Error getting application data {table_name}/{key}: {e}")
             return None
 
+    # =========== API MESSAGE TRACKING METHODS ===========
+
+    async def get_api_message_history(
+        self, limit: int = 100, offset: int = 0
+    ) -> list:
+        """Get API message history from Redis."""
+        from ..models.api_tracking_models import APIMessageHistoryEntry
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            # Use get_all method (available in RedisTable)
+            entries_data = await self.table_cache.get_all(
+                table_name="api_message_history"
+            )
+
+            logger.debug(f"get_all returned {len(entries_data)} entries")
+            if not entries_data:
+                return []
+
+            # Debug: check first entry structure
+            if entries_data:
+                logger.debug(f"First entry keys: {list(entries_data[0].keys())}")
+                logger.debug(f"First entry success type: {type(entries_data[0].get('success'))}")
+
+            entries = [APIMessageHistoryEntry(**data) for data in entries_data]
+            logger.debug(f"Successfully created {len(entries)} model instances")
+            entries.sort(key=lambda e: e.timestamp, reverse=True)
+
+            # Apply offset and limit
+            start = offset
+            end = offset + limit if limit > 0 else None
+            return entries[start:end]
+        except Exception as e:
+            logger.error(f"Error getting API message history: {e}", exc_info=True)
+            return []
+
+    async def save_api_message_history(
+        self, entry, ttl_seconds: int = 604800  # 7 days
+    ) -> bool:
+        """Save API message history entry."""
+        try:
+            return await self.table_cache.upsert(
+                table_name="api_message_history",
+                pkid=entry.entry_id,
+                data=entry.model_dump(),
+                ttl=ttl_seconds,
+            )
+        except Exception as e:
+            print(f"Error saving API message history: {e}")
+            return False
+
+    async def get_api_message_statistics(self):
+        """Get global API message statistics."""
+        from ..models.api_tracking_models import APIMessageStatistics
+
+        try:
+            stats_data = await self.table_cache.get(
+                table_name="api_message_stats",
+                pkid="global",
+            )
+
+            if not stats_data:
+                return APIMessageStatistics()
+
+            return APIMessageStatistics(**stats_data)
+        except Exception as e:
+            print(f"Error getting API message statistics: {e}")
+            return APIMessageStatistics()
+
+    async def save_api_message_statistics(
+        self, stats, ttl_seconds: int = 2592000  # 30 days
+    ) -> bool:
+        """Save global API message statistics."""
+        try:
+            return await self.table_cache.upsert(
+                table_name="api_message_stats",
+                pkid="global",
+                data=stats.model_dump(),
+                ttl=ttl_seconds,
+            )
+        except Exception as e:
+            print(f"Error saving API message statistics: {e}")
+            return False
+
+    async def get_user_api_activity(self, user_id: str):
+        """Get per-user API activity log."""
+        from ..models.api_tracking_models import UserAPIActivity
+
+        try:
+            log_data = await self.table_cache.get(
+                table_name="user_api_activity",
+                pkid=user_id,
+            )
+
+            if not log_data:
+                return None
+
+            return UserAPIActivity(**log_data)
+        except Exception as e:
+            print(f"Error getting user API activity: {e}")
+            return None
+
+    async def get_or_create_user_api_activity(self, user_id: str):
+        """Get or create user API activity log."""
+        from ..models.api_tracking_models import UserAPIActivity
+
+        activity = await self.get_user_api_activity(user_id)
+        if activity:
+            return activity
+
+        return UserAPIActivity(user_id=user_id)
+
+    async def save_user_api_activity(
+        self, activity, ttl_seconds: int = 2592000  # 30 days
+    ) -> bool:
+        """Save per-user API activity log."""
+        try:
+            return await self.table_cache.upsert(
+                table_name="user_api_activity",
+                pkid=activity.user_id,
+                data=activity.model_dump(),
+                ttl=ttl_seconds,
+            )
+        except Exception as e:
+            print(f"Error saving user API activity: {e}")
+            return False
+
+    async def get_all_user_api_activities(self) -> list:
+        """Get all user API activity logs (for /API-STATS command)."""
+        from ..models.api_tracking_models import UserAPIActivity
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        try:
+            # Use get_all method (available in RedisTable)
+            logs_data = await self.table_cache.get_all(
+                table_name="user_api_activity"
+            )
+
+            logger.debug(f"get_all returned {len(logs_data)} user activities")
+            if not logs_data:
+                return []
+
+            # Debug: check first entry
+            if logs_data:
+                logger.debug(f"First activity keys: {list(logs_data[0].keys())}")
+                logger.debug(f"First activity user_id: {logs_data[0].get('user_id')}")
+
+            activities = [UserAPIActivity(**data) for data in logs_data]
+            logger.debug(f"Successfully created {len(activities)} UserAPIActivity instances")
+            return activities
+        except Exception as e:
+            logger.error(f"Error getting all user API activities: {e}", exc_info=True)
+            return []
+
 
 class CacheKeys:
     """Centralized cache key management (legacy - kept for backward compatibility)."""

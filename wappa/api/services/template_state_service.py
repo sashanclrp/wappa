@@ -15,6 +15,7 @@ from typing import Any
 from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.cache_factory import ICacheFactory
 from wappa.messaging.whatsapp.models.template_models import TemplateStateConfig
+from wappa.persistence.cache_factory import create_cache_factory
 
 
 class TemplateStateService:
@@ -90,10 +91,20 @@ class TemplateStateService:
                 **(state_config.initial_context or {}),
             }
 
-            state_cache = self.cache_factory.create_state_cache()
+            # Create a new cache factory with the recipient as user_id
+            # This ensures the state key includes the correct user_id
+            cache_type = self.cache_factory.__class__.__name__.replace("CacheFactory", "").lower()
+            tenant_id = self.cache_factory.tenant_id
+
+            recipient_cache_factory = create_cache_factory(cache_type)(
+                tenant_id=tenant_id,
+                user_id=recipient
+            )
+
+            state_cache = recipient_cache_factory.create_state_cache()
             success = await state_cache.upsert(
                 handler_name=state_key,
-                data=state_data,
+                state_data=state_data,
                 ttl=state_config.ttl_seconds,
             )
 

@@ -413,6 +413,296 @@ class CommandHandlers:
             )
             return {"success": False, "error": str(e)}
 
+    async def handle_template_command(
+        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+    ) -> dict[str, any]:
+        """
+        Handle /template command - explains template state demonstration.
+
+        This command does NOT create state. State is created by template API
+        when state_config is provided in the request.
+
+        Args:
+            webhook: IncomingMessageWebhook with command
+            user_profile: User profile for tracking
+
+        Returns:
+            Result dictionary with operation status
+        """
+        try:
+
+            start_time = time.time()
+
+            user_id = webhook.user.user_id
+            message_id = webhook.message.message_id
+
+            self.logger.info(f"📋 Processing /template command for user {user_id}")
+
+            instructions = (
+                "📬 *Template State Demo Guide*\n\n"
+                "This demo shows how WhatsApp templates can trigger interactive state handlers.\n\n"
+                "*How to Send a Template with State:*\n\n"
+                "Use the API endpoint with `state_config` parameter:\n"
+                "`POST /api/whatsapp/templates/send-text`\n\n"
+                "*Example JSON:*\n"
+                "```json\n"
+                "{\n"
+                '  "recipient": "your_phone_number",\n'
+                '  "template_name": "hello_world",\n'
+                '  "language": {"code": "en_US"},\n'
+                '  "body_parameters": [{"type": "text", "text": "John"}],\n'
+                '  "state_config": {\n'
+                '    "state_value": "example",\n'
+                '    "ttl_seconds": 1800,\n'
+                '    "initial_context": {}\n'
+                '  }\n'
+                "}\n"
+                "```\n\n"
+                "*What Happens Next:*\n\n"
+                "1️⃣ Template is sent to you via WhatsApp\n"
+                "2️⃣ State `template-example` is created (30 min TTL)\n"
+                "3️⃣ Any message you send triggers template echo\n"
+                "4️⃣ Type */EXIT* to leave the demo\n\n"
+                "*Template Types Supported:*\n"
+                "• `/send-text` - Text templates\n"
+                "• `/send-media` - Media templates (image/video/document)\n"
+                "• `/send-location` - Location templates\n\n"
+                "💡 *Tip:* Visit `/docs` for interactive API documentation\n\n"
+                "Ready to try? Send a template with `state_value: example`! ✨"
+            )
+
+            await self.messenger.send_text(
+                text=instructions,
+                recipient=user_id,
+                reply_to_message_id=message_id,
+            )
+
+            await self.cache_helper.update_user_activity(
+                user_id=user_id,
+                message_type="command",
+                command="/template",
+            )
+
+            processing_time = int((time.time() - start_time) * 1000)
+
+            return {
+                "success": True,
+                "command": "/template",
+                "processing_time_ms": processing_time,
+            }
+
+        except Exception as e:
+            self.logger.error(
+                f"❌ Error handling /template command: {e}", exc_info=True
+            )
+            return {"success": False, "error": str(e)}
+
+    async def handle_api_stats_command(
+        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+    ) -> dict[str, any]:
+        """
+        Handle /API-STATS command - displays comprehensive API activity statistics.
+
+        Shows:
+        - Global API message statistics
+        - Message type breakdown
+        - Per-user activity logs
+        - Recent message history
+
+        Args:
+            webhook: IncomingMessageWebhook with command
+            user_profile: User profile for tracking
+
+        Returns:
+            Result dictionary with operation status
+        """
+        try:
+            from datetime import UTC, datetime
+
+            start_time = time.time()
+
+            user_id = webhook.user.user_id
+            message_id = webhook.message.message_id
+
+            self.logger.info(f"📊 Processing /API-STATS command for user {user_id}")
+
+            # Get global statistics
+            stats = await self.cache_helper.get_api_message_statistics()
+
+            # Get all user activities
+            user_activities = await self.cache_helper.get_all_user_api_activities()
+            user_activities.sort(key=lambda a: a.messages_received, reverse=True)
+
+            # Get recent history
+            recent_history = await self.cache_helper.get_api_message_history(limit=10)
+
+            # Build stats message
+            stats_message = (
+                "📊 *API Activity Statistics*\n\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
+                "*Global Statistics*\n"
+                f"• Total messages: {stats.total_messages_sent}\n"
+                f"• Successful: {stats.successful_sends} ✅\n"
+                f"• Failed: {stats.failed_sends} ❌\n"
+                f"• Success rate: {stats.success_rate:.1f}%\n"
+                f"• Unique recipients: {stats.total_recipients}\n\n"
+            )
+
+            # Message type breakdown
+            if stats.message_type_counts:
+                stats_message += "*📈 Message Type Breakdown*\n"
+                # Sort by count (descending)
+                sorted_types = sorted(
+                    stats.message_type_counts.items(), key=lambda x: x[1], reverse=True
+                )
+                for msg_type, count in sorted_types[:10]:  # Top 10
+                    stats_message += f"• {msg_type}: {count}\n"
+                stats_message += "\n"
+
+            if stats.first_message_sent:
+                stats_message += (
+                    f"*🕐 Timeline*\n"
+                    f"• First: {stats.first_message_sent.strftime('%Y-%m-%d %H:%M UTC')}\n"
+                    f"• Last: {stats.last_message_sent.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+                )
+
+            # User activity logs
+            stats_message += "━━━━━━━━━━━━━━━━━━━━\n"
+            stats_message += f"*👥 User Activity* ({len(user_activities)} users)\n\n"
+
+            if user_activities:
+                for i, activity in enumerate(user_activities[:10], 1):
+                    stats_message += (
+                        f"{i}. *User:* `{activity.user_id[-10:]}`\n"
+                        f"   • Messages: {activity.messages_received} 📬\n"
+                    )
+                    if activity.last_message_received:
+                        stats_message += f"   • Last: {activity.last_message_received.strftime('%Y-%m-%d %H:%M')}\n"
+                    stats_message += "\n"
+
+                if len(user_activities) > 10:
+                    stats_message += (
+                        f"_...and {len(user_activities) - 10} more users_\n\n"
+                    )
+            else:
+                stats_message += "_No user activity yet_\n\n"
+
+            # Recent history
+            stats_message += "━━━━━━━━━━━━━━━━━━━━\n"
+            stats_message += "*📜 Recent Messages* (last 10)\n\n"
+
+            if recent_history:
+                for i, entry in enumerate(recent_history, 1):
+                    status_icon = "✅" if entry.success else "❌"
+                    stats_message += (
+                        f"{i}. {status_icon} *{entry.message_type}*\n"
+                        f"   • To: `{entry.recipient[-10:]}`\n"
+                        f"   • Time: {entry.timestamp.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    )
+                    if not entry.success and entry.error:
+                        stats_message += f"   • Error: {entry.error[:50]}...\n"
+                    stats_message += "\n"
+            else:
+                stats_message += "_No history yet_\n\n"
+
+            stats_message += "━━━━━━━━━━━━━━━━━━━━\n"
+            stats_message += f"*Generated:* {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+
+            # Send stats message
+            await self.messenger.send_text(
+                text=stats_message,
+                recipient=user_id,
+                reply_to_message_id=message_id,
+            )
+
+            await self.cache_helper.update_user_activity(
+                user_id=user_id,
+                message_type="command",
+                command="/API-STATS",
+            )
+
+            processing_time = int((time.time() - start_time) * 1000)
+
+            return {
+                "success": True,
+                "command": "/API-STATS",
+                "total_users": len(user_activities),
+                "total_messages": stats.total_messages_sent,
+                "processing_time_ms": processing_time,
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ Failed to generate API stats: {e}", exc_info=True)
+
+            await self.messenger.send_text(
+                text=f"⚠️ Failed to generate API statistics.\n\nError: {str(e)}",
+                recipient=user_id,
+            )
+
+            processing_time = int((time.time() - start_time) * 1000)
+
+            return {
+                "success": False,
+                "command": "/API-STATS",
+                "error": str(e),
+                "processing_time_ms": processing_time,
+            }
+
+    async def handle_docs_command(
+        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+    ) -> dict[str, any]:
+        """
+        Handle /docs command - provides API documentation links and information.
+        """
+        start_time = time.time()
+        user_id = webhook.user.user_id
+
+        self.logger.info(f"📚 Processing /docs command for user {user_id}")
+
+        docs_info = (
+            "📚 *Wappa Framework Documentation*\n\n"
+            "🌐 *Interactive API Documentation:*\n"
+            "Visit the Swagger UI for complete API reference:\n"
+            "`http://localhost:8000/docs`\n\n"
+            "📖 *Main Endpoints:*\n\n"
+            "*WhatsApp Messaging:*\n"
+            "• `/api/whatsapp/messages/*` - Send messages\n"
+            "• `/api/whatsapp/templates/*` - Send templates\n"
+            "• `/api/whatsapp/interactive/*` - Interactive messages\n\n"
+            "*Webhooks:*\n"
+            "• `/webhook/messenger/{tenant_id}/whatsapp` - Receive webhooks\n\n"
+            "💡 *Template State Example:*\n"
+            "Use `/template` command to learn how to send templates with state handlers\n\n"
+            "📊 *Statistics:*\n"
+            "Use `/api-stats` to view comprehensive API activity\n\n"
+            "🚀 *Getting Started:*\n"
+            "1. Visit `/docs` in your browser\n"
+            "2. Explore the available endpoints\n"
+            "3. Test API calls using the Swagger UI\n"
+            "4. Check `/template` for state handler examples\n\n"
+            "Need help? Ask any question about the Wappa framework!"
+        )
+
+        await self.messenger.send_text(
+            text=docs_info,
+            recipient=user_id,
+            reply_to_message_id=webhook.message.message_id,
+        )
+
+        await self.cache_helper.update_user_activity(
+            user_id=user_id,
+            message_type="command",
+            command="/docs",
+        )
+
+        processing_time = int((time.time() - start_time) * 1000)
+
+        return {
+            "success": True,
+            "command": "/docs",
+            "processing_time_ms": processing_time,
+        }
+
 
 # Command mapping for easy lookup
 COMMAND_HANDLERS = {
@@ -420,6 +710,9 @@ COMMAND_HANDLERS = {
     "/list": "handle_list_command",
     "/cta": "handle_cta_command",
     "/location": "handle_location_command",
+    "/template": "handle_template_command",
+    "/api-stats": "handle_api_stats_command",
+    "/docs": "handle_docs_command",
 }
 
 
@@ -457,6 +750,12 @@ async def handle_command(
         return await handlers.handle_cta_command(webhook, user_profile)
     elif command_lower == "/location":
         return await handlers.handle_location_command(webhook, user_profile)
+    elif command_lower == "/template":
+        return await handlers.handle_template_command(webhook, user_profile)
+    elif command_lower == "/api-stats":
+        return await handlers.handle_api_stats_command(webhook, user_profile)
+    elif command_lower == "/docs":
+        return await handlers.handle_docs_command(webhook, user_profile)
     else:
         logger.warning(f"Unsupported command: {command}")
         return {"success": False, "error": f"Unsupported command: {command}"}
@@ -473,7 +772,15 @@ def is_special_command(text: str) -> bool:
         True if it's a special command, False otherwise
     """
     text_lower = text.strip().lower()
-    return text_lower in ["/button", "/list", "/cta", "/location"]
+    return text_lower in [
+        "/button",
+        "/list",
+        "/cta",
+        "/location",
+        "/template",
+        "/api-stats",
+        "/docs",
+    ]
 
 
 def get_command_from_text(text: str) -> str:

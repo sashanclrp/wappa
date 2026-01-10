@@ -552,3 +552,21 @@ class ITableCache(ABC):
             True if successful, False otherwise
         """
         pass
+
+    @abstractmethod
+    async def get_all(
+        self,
+        table_name: str,
+        models: type[BaseModel] | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Get all rows for a table.
+
+        Args:
+            table_name: Table name identifier
+            models: Optional BaseModel class for deserialization
+
+        Returns:
+            List of table row data dictionaries
+        """
+        pass

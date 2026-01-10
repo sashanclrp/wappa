@@ -423,6 +423,205 @@ class StateHandlers:
             recipient=user_id, text=error_text, reply_to_message_id=message_id
         )
 
+    async def handle_template_example_state(
+        self,
+        webhook: IncomingMessageWebhook,
+        user_profile: UserProfile,
+        state_data: dict[str, any],
+    ) -> dict[str, any]:
+        """
+        Handle template-example state responses.
+
+        When user is in template-example state:
+        - Any text message → Echo back the original template
+        - /EXIT command → Exit state with summary
+        - Other messages → Show reminder
+
+        Args:
+            webhook: IncomingMessageWebhook from WhatsApp
+            user_profile: User profile from cache
+            state_data: State data from cache (template_name, message_id, etc.)
+
+        Returns:
+            Dict with processing results
+        """
+        try:
+            start_time = time.time()
+            user_id = webhook.user.user_id
+
+            self.logger.info(f"📬 Processing template-example state for user {user_id}")
+
+            # Check if user wants to exit
+            if webhook.get_message_type_name() == "text":
+                text = webhook.get_message_text()
+                if text and text.strip().upper() == "/EXIT":
+                    return await self._exit_template_example_state(
+                        webhook, user_profile, state_data, start_time
+                    )
+
+            # Echo the template back
+            return await self._echo_template_example(
+                webhook, user_profile, state_data, start_time
+            )
+
+        except Exception as e:
+            self.logger.error(
+                f"❌ Error handling template-example state: {e}", exc_info=True
+            )
+            return {"success": False, "error": str(e)}
+
+    async def _echo_template_example(
+        self,
+        webhook: IncomingMessageWebhook,
+        user_profile: UserProfile,
+        state_data: dict[str, any],
+        start_time: float,
+    ) -> dict[str, any]:
+        """Echo back the template that triggered the state."""
+        user_id = webhook.user.user_id
+        template_name = state_data.get("template_name", "hello_world")
+
+        self.logger.info(f"🔄 Echoing template '{template_name}' to user {user_id}")
+
+        try:
+            # Echo template back (simple text template)
+            result = await self.messenger.send_text_template(
+                recipient=user_id,
+                template_name=template_name,
+                language_code="en_US"
+            )
+
+            if not result.success:
+                self.logger.error(f"Failed to echo template: {result.error}")
+                await self.messenger.send_text(
+                    text=(
+                        "⚠️ Sorry, couldn't echo the template back.\n\n"
+                        "Type */EXIT* to leave template demo."
+                    ),
+                    recipient=user_id,
+                )
+
+                processing_time = int((time.time() - start_time) * 1000)
+
+                return {
+                    "success": False,
+                    "action": "template_echo_failed",
+                    "error": result.error,
+                    "processing_time_ms": processing_time,
+                }
+
+            # Update state data to track echoes
+            state_data["echo_count"] = state_data.get("echo_count", 0) + 1
+
+            # Save updated state
+            state_cache = self.cache_helper.state_cache
+            await state_cache.upsert(
+                handler_name="template-example",
+                state_data=state_data,
+                ttl=1800,  # Reset TTL to 30 minutes
+            )
+
+            # Send follow-up
+            follow_up = (
+                f"✅ Template echoed! (Total: {state_data['echo_count']})\n\n"
+                f"Send another message to see the template again, "
+                f"or type */EXIT* to leave template demo."
+            )
+            await self.messenger.send_text(text=follow_up, recipient=user_id)
+
+            processing_time = int((time.time() - start_time) * 1000)
+
+            return {
+                "success": True,
+                "action": "template_echo",
+                "template_name": template_name,
+                "echo_count": state_data["echo_count"],
+                "processing_time_ms": processing_time,
+            }
+
+        except Exception as e:
+            self.logger.error(f"❌ Failed to echo template: {e}", exc_info=True)
+
+            await self.messenger.send_text(
+                text=(
+                    "⚠️ Sorry, couldn't echo the template back.\n\n"
+                    "Type */EXIT* to leave template demo."
+                ),
+                recipient=user_id,
+            )
+
+            processing_time = int((time.time() - start_time) * 1000)
+
+            return {
+                "success": False,
+                "action": "template_echo_failed",
+                "error": str(e),
+                "processing_time_ms": processing_time,
+            }
+
+    async def _exit_template_example_state(
+        self,
+        webhook: IncomingMessageWebhook,
+        user_profile: UserProfile,
+        state_data: dict[str, any],
+        start_time: float,
+    ) -> dict[str, any]:
+        """Exit template-example state and show summary."""
+        from datetime import datetime
+
+        user_id = webhook.user.user_id
+
+        self.logger.info(f"🚪 User {user_id} exiting template-example state")
+
+        # Delete state from cache
+        state_cache = self.cache_helper.state_cache
+        await state_cache.delete(handler_name="template-example")
+
+        # Calculate duration
+        created_at_str = state_data.get("created_at", "")
+        try:
+            created_at = datetime.fromisoformat(created_at_str)
+            duration_seconds = (datetime.now() - created_at).total_seconds()
+            duration_minutes = int(duration_seconds / 60)
+        except Exception:
+            duration_minutes = 0
+
+        # Generate summary
+        echo_count = state_data.get("echo_count", 0)
+        template_name = state_data.get("template_name", "N/A")
+
+        summary = (
+            "👋 *Exiting Template Demo*\n\n"
+            f"📊 *Session Summary:*\n"
+            f"• Templates echoed: {echo_count}\n"
+            f"• Template name: {template_name}\n"
+            f"• Duration: {duration_minutes} minutes\n\n"
+            "✨ Thanks for trying the template demo!\n\n"
+            "💡 *Quick Tips:*\n"
+            "• Use `/template` to see instructions again\n"
+            "• Visit `/docs` for full API documentation\n"
+            "• Try `/button` or `/list` for more interactive features!"
+        )
+
+        await self.messenger.send_text(text=summary, recipient=user_id)
+
+        await self.cache_helper.update_user_activity(
+            user_id=user_id,
+            message_type="command",
+            command="/EXIT",
+            interaction_type="template_exit",
+        )
+
+        processing_time = int((time.time() - start_time) * 1000)
+
+        return {
+            "success": True,
+            "action": "template_state_exit",
+            "echo_count": echo_count,
+            "state_cleaned": True,
+            "processing_time_ms": processing_time,
+        }
+
 
 # Convenience functions for direct use
 async def handle_user_in_state(
@@ -470,6 +669,14 @@ async def handle_user_in_state(
             )
         else:
             logger.warning(f"List state returned wrong type: {type(list_state)}")
+
+    # Check for template-example state
+    state_cache = cache_factory.create_state_cache()
+    template_state = await state_cache.get(handler_name="template-example")
+    if template_state:
+        return await handlers.handle_template_example_state(
+            webhook, user_profile, template_state
+        )
 
     # No active state found
     return None

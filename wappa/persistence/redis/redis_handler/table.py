@@ -32,7 +32,7 @@ class RedisTable(TenantCache, ITableCache):
     Single Responsibility: Table/DataFrame data management only
     """
 
-    redis_alias: str = "handlers"
+    redis_alias: str = "table"
 
     def _key(self, table_name: str, pkid: str) -> str:
         """Build table key using KeyFactory"""
@@ -186,3 +186,51 @@ class RedisTable(TenantCache, ITableCache):
         """
         key = self._key(table_name, pkid)
         return await super().renew_ttl(key, ttl)
+
+    async def get_all(
+        self,
+        table_name: str,
+        models: type[BaseModel] | None = None,
+    ) -> list[dict[str, Any]]:
+        """
+        Get all rows for a table using Redis SCAN.
+
+        Args:
+            table_name: Table name identifier
+            models: Optional BaseModel class for deserialization
+
+        Returns:
+            List of table row data dictionaries
+        """
+        from ..ops import scan_keys
+
+        pattern = self.keys.table(self.tenant, table_name, "*")
+        results = []
+        cursor = "0"
+
+        try:
+            while True:
+                next_cursor, keys_batch = await scan_keys(
+                    match_pattern=pattern,
+                    cursor=cursor,
+                    count=100,
+                    alias=self.redis_alias,
+                )
+
+                for key in keys_batch:
+                    data = await self._get_hash(key, models=models)
+                    if data:
+                        results.append(data)
+
+                if next_cursor == "0":
+                    break
+                cursor = next_cursor
+
+            logger.debug(f"Retrieved {len(results)} rows from table '{table_name}'")
+            return results
+
+        except Exception as e:
+            logger.error(
+                f"Error getting all rows from table '{table_name}': {e}", exc_info=True
+            )
+            return []
