@@ -23,6 +23,7 @@ from wappa.messaging.whatsapp.models.interactive_models import (
     validate_buttons_menu_limits,
     validate_header_constraints,
 )
+from wappa.messaging.whatsapp.utils.error_helpers import handle_whatsapp_error
 from wappa.schemas.core.types import PlatformType
 
 
@@ -49,6 +50,83 @@ class WhatsAppInteractiveHandler:
         self.client = client
         self._tenant_id = tenant_id
         self.logger = get_logger(__name__)
+
+    def _validation_error(
+        self, error: str, error_code: str, recipient: str
+    ) -> MessageResult:
+        """Create a validation error MessageResult.
+
+        Args:
+            error: Human-readable error message
+            error_code: Machine-readable error code
+            recipient: Phone number of the intended recipient
+
+        Returns:
+            MessageResult with success=False and error details
+        """
+        return MessageResult(
+            success=False,
+            error=error,
+            error_code=error_code,
+            recipient=recipient,
+            platform=PlatformType.WHATSAPP,
+            tenant_id=self._tenant_id,
+        )
+
+    def _check_validations(
+        self, validations: list[tuple[bool, str, str]], recipient: str
+    ) -> MessageResult | None:
+        """Check a list of validation rules and return first error if any.
+
+        Args:
+            validations: List of tuples (condition, error_message, error_code)
+                         where condition=True means validation failed
+            recipient: Phone number for error result
+
+        Returns:
+            MessageResult if validation failed, None if all validations pass
+        """
+        for condition, error, code in validations:
+            if condition:
+                return self._validation_error(error, code, recipient)
+        return None
+
+    def _validate_media_header(
+        self, header: InteractiveHeader, recipient: str
+    ) -> MessageResult | None:
+        """Validate media header has required id or link field.
+
+        Args:
+            header: The interactive header to validate
+            recipient: Phone number for error result
+
+        Returns:
+            MessageResult if validation failed, None if valid
+        """
+        media_field_map = {
+            HeaderType.IMAGE: header.image,
+            HeaderType.VIDEO: header.video,
+            HeaderType.DOCUMENT: header.document,
+        }
+        media_names = {
+            HeaderType.IMAGE: "Image",
+            HeaderType.VIDEO: "Video",
+            HeaderType.DOCUMENT: "Document",
+        }
+
+        media_field = media_field_map.get(header.type)
+        media_name = media_names.get(header.type)
+
+        if media_name and (
+            not media_field
+            or (not media_field.get("id") and not media_field.get("link"))
+        ):
+            return self._validation_error(
+                f"{media_name} header must include either 'id' or 'link'",
+                "INVALID_MEDIA_HEADER",
+                recipient,
+            )
+        return None
 
     @property
     def platform(self) -> PlatformType:
@@ -90,121 +168,70 @@ class WhatsAppInteractiveHandler:
             ValueError: If any input parameters are invalid
         """
         try:
-            # Validate input parameters using utility functions
-            if len(body) > 1024:
-                return MessageResult(
-                    success=False,
-                    error="Body text cannot exceed 1024 characters",
-                    error_code="BODY_TOO_LONG",
-                    recipient=to,
-                    platform=PlatformType.WHATSAPP,
-                    tenant_id=self._tenant_id,
-                )
-
+            # Validate using utility functions
             validate_buttons_menu_limits(buttons)
             if header:
                 validate_header_constraints(header, footer_text)
 
-            # Validate footer length
-            if footer_text and len(footer_text) > 60:
-                return MessageResult(
-                    success=False,
-                    error="Footer text cannot exceed 60 characters",
-                    error_code="FOOTER_TOO_LONG",
-                    recipient=to,
-                    platform=PlatformType.WHATSAPP,
-                    tenant_id=self._tenant_id,
-                )
+            # Basic field validations
+            valid_header_types = {
+                HeaderType.TEXT,
+                HeaderType.IMAGE,
+                HeaderType.VIDEO,
+                HeaderType.DOCUMENT,
+            }
+            basic_validations: list[tuple[bool, str, str]] = [
+                (
+                    len(body) > 1024,
+                    "Body text cannot exceed 1024 characters",
+                    "BODY_TOO_LONG",
+                ),
+                (
+                    footer_text is not None and len(footer_text) > 60,
+                    "Footer text cannot exceed 60 characters",
+                    "FOOTER_TOO_LONG",
+                ),
+            ]
+            if error := self._check_validations(basic_validations, to):
+                return error
 
-            # Validate header if provided - adapted for InteractiveHeader model
+            # Header validations
             if header:
-                valid_header_types = {
-                    HeaderType.TEXT,
-                    HeaderType.IMAGE,
-                    HeaderType.VIDEO,
-                    HeaderType.DOCUMENT,
-                }
-                if header.type not in valid_header_types:
-                    return MessageResult(
-                        success=False,
-                        error=f"Header type must be one of {[t.value for t in valid_header_types]}",
-                        error_code="INVALID_HEADER_TYPE",
-                        recipient=to,
-                        platform=PlatformType.WHATSAPP,
-                        tenant_id=self._tenant_id,
-                    )
+                header_validations: list[tuple[bool, str, str]] = [
+                    (
+                        header.type not in valid_header_types,
+                        f"Header type must be one of {[t.value for t in valid_header_types]}",
+                        "INVALID_HEADER_TYPE",
+                    ),
+                    (
+                        header.type == HeaderType.TEXT and not header.text,
+                        "Text header must include 'text' field",
+                        "INVALID_TEXT_HEADER",
+                    ),
+                ]
+                if error := self._check_validations(header_validations, to):
+                    return error
 
-                # Validate text header
-                if header.type == HeaderType.TEXT and not header.text:
-                    return MessageResult(
-                        success=False,
-                        error="Text header must include 'text' field",
-                        error_code="INVALID_TEXT_HEADER",
-                        recipient=to,
-                        platform=PlatformType.WHATSAPP,
-                        tenant_id=self._tenant_id,
-                    )
+                if error := self._validate_media_header(header, to):
+                    return error
 
-                # Validate media headers
-                if header.type == HeaderType.IMAGE:
-                    if not header.image or (
-                        not header.image.get("id") and not header.image.get("link")
-                    ):
-                        return MessageResult(
-                            success=False,
-                            error="Image header must include either 'id' or 'link'",
-                            error_code="INVALID_MEDIA_HEADER",
-                            recipient=to,
-                            platform=PlatformType.WHATSAPP,
-                            tenant_id=self._tenant_id,
-                        )
-                elif header.type == HeaderType.VIDEO:
-                    if not header.video or (
-                        not header.video.get("id") and not header.video.get("link")
-                    ):
-                        return MessageResult(
-                            success=False,
-                            error="Video header must include either 'id' or 'link'",
-                            error_code="INVALID_MEDIA_HEADER",
-                            recipient=to,
-                            platform=PlatformType.WHATSAPP,
-                            tenant_id=self._tenant_id,
-                        )
-                elif header.type == HeaderType.DOCUMENT:
-                    if not header.document or (
-                        not header.document.get("id")
-                        and not header.document.get("link")
-                    ):
-                        return MessageResult(
-                            success=False,
-                            error="Document header must include either 'id' or 'link'",
-                            error_code="INVALID_MEDIA_HEADER",
-                            recipient=to,
-                            platform=PlatformType.WHATSAPP,
-                            tenant_id=self._tenant_id,
-                        )
-
-            # Construct button objects with individual validation
+            # Construct button objects with validation
             formatted_buttons = []
             for button in buttons:
-                if len(button.title) > 20:
-                    return MessageResult(
-                        success=False,
-                        error=f"Button title '{button.title}' exceeds 20 characters",
-                        error_code="BUTTON_TITLE_TOO_LONG",
-                        recipient=to,
-                        platform=PlatformType.WHATSAPP,
-                        tenant_id=self._tenant_id,
-                    )
-                if len(button.id) > 256:
-                    return MessageResult(
-                        success=False,
-                        error=f"Button ID '{button.id}' exceeds 256 characters",
-                        error_code="BUTTON_ID_TOO_LONG",
-                        recipient=to,
-                        platform=PlatformType.WHATSAPP,
-                        tenant_id=self._tenant_id,
-                    )
+                button_validations: list[tuple[bool, str, str]] = [
+                    (
+                        len(button.title) > 20,
+                        f"Button title '{button.title}' exceeds 20 characters",
+                        "BUTTON_TITLE_TOO_LONG",
+                    ),
+                    (
+                        len(button.id) > 256,
+                        f"Button ID '{button.id}' exceeds 256 characters",
+                        "BUTTON_ID_TOO_LONG",
+                    ),
+                ]
+                if error := self._check_validations(button_validations, to):
+                    return error
 
                 formatted_buttons.append(
                     {"type": "reply", "reply": {"id": button.id, "title": button.title}}
@@ -271,24 +298,12 @@ class WhatsAppInteractiveHandler:
             )
 
         except Exception as e:
-            # Check for authentication errors
-            if "401" in str(e) or "Unauthorized" in str(e):
-                self.logger.error(
-                    "🚨 CRITICAL: WhatsApp Authentication Failed - Cannot Send Interactive Messages! 🚨"
-                )
-                self.logger.error(
-                    f"🚨 Check WhatsApp access token for tenant {self._tenant_id}"
-                )
-
-            self.logger.error(
-                f"Failed to send interactive button menu to {to}: {str(e)}"
-            )
-            return MessageResult(
-                success=False,
-                error=str(e),
+            return handle_whatsapp_error(
+                error=e,
+                operation="send interactive button menu",
                 recipient=to,
-                platform=PlatformType.WHATSAPP,
                 tenant_id=self._tenant_id,
+                logger=self.logger,
             )
 
     async def send_list_menu(
@@ -331,127 +346,92 @@ class WhatsAppInteractiveHandler:
             MessageResult with operation status and metadata
         """
         try:
-            # Validate input parameters
-            if len(body) > 4096:
-                return MessageResult(
-                    success=False,
-                    error="Body text cannot exceed 4096 characters",
-                    error_code="BODY_TOO_LONG",
-                    recipient=to,
-                    platform=PlatformType.WHATSAPP,
-                    tenant_id=self._tenant_id,
-                )
-
+            # Log validation error for button text (helpful for debugging config issues)
             if len(button_text) > 20:
                 self.logger.error(
-                    f"⚠️ WhatsApp List Button Text Validation Failed: '{button_text}' "
+                    f"WhatsApp List Button Text Validation Failed: '{button_text}' "
                     f"({len(button_text)} chars) exceeds 20 character limit. "
                     f"Please shorten the button text in your configuration."
                 )
-                return MessageResult(
-                    success=False,
-                    error=f"Button text '{button_text}' ({len(button_text)} chars) exceeds 20 character limit",
-                    error_code="BUTTON_TEXT_TOO_LONG",
-                    recipient=to,
-                    platform=PlatformType.WHATSAPP,
-                    tenant_id=self._tenant_id,
-                )
 
-            if len(sections) > 10:
-                return MessageResult(
-                    success=False,
-                    error="Maximum of 10 sections allowed",
-                    error_code="TOO_MANY_SECTIONS",
-                    recipient=to,
-                    platform=PlatformType.WHATSAPP,
-                    tenant_id=self._tenant_id,
-                )
-
-            if header and len(header) > 60:
-                return MessageResult(
-                    success=False,
-                    error="Header text cannot exceed 60 characters",
-                    error_code="HEADER_TOO_LONG",
-                    recipient=to,
-                    platform=PlatformType.WHATSAPP,
-                    tenant_id=self._tenant_id,
-                )
-
-            if footer_text and len(footer_text) > 60:
-                return MessageResult(
-                    success=False,
-                    error="Footer text cannot exceed 60 characters",
-                    error_code="FOOTER_TOO_LONG",
-                    recipient=to,
-                    platform=PlatformType.WHATSAPP,
-                    tenant_id=self._tenant_id,
-                )
+            # Basic field validations
+            basic_validations: list[tuple[bool, str, str]] = [
+                (
+                    len(body) > 4096,
+                    "Body text cannot exceed 4096 characters",
+                    "BODY_TOO_LONG",
+                ),
+                (
+                    len(button_text) > 20,
+                    f"Button text '{button_text}' ({len(button_text)} chars) exceeds 20 character limit",
+                    "BUTTON_TEXT_TOO_LONG",
+                ),
+                (
+                    len(sections) > 10,
+                    "Maximum of 10 sections allowed",
+                    "TOO_MANY_SECTIONS",
+                ),
+                (
+                    header is not None and len(header) > 60,
+                    "Header text cannot exceed 60 characters",
+                    "HEADER_TOO_LONG",
+                ),
+                (
+                    footer_text is not None and len(footer_text) > 60,
+                    "Footer text cannot exceed 60 characters",
+                    "FOOTER_TOO_LONG",
+                ),
+            ]
+            if error := self._check_validations(basic_validations, to):
+                return error
 
             # Validate and format sections
             formatted_sections = []
-            all_row_ids = []
+            all_row_ids: list[str] = []
 
             for section in sections:
-                if len(section["title"]) > 24:
-                    return MessageResult(
-                        success=False,
-                        error=f"Section title '{section['title']}' exceeds 24 characters",
-                        error_code="SECTION_TITLE_TOO_LONG",
-                        recipient=to,
-                        platform=PlatformType.WHATSAPP,
-                        tenant_id=self._tenant_id,
-                    )
-
-                if len(section["rows"]) > 10:
-                    return MessageResult(
-                        success=False,
-                        error=f"Section '{section['title']}' has more than 10 rows",
-                        error_code="TOO_MANY_ROWS",
-                        recipient=to,
-                        platform=PlatformType.WHATSAPP,
-                        tenant_id=self._tenant_id,
-                    )
+                section_validations: list[tuple[bool, str, str]] = [
+                    (
+                        len(section["title"]) > 24,
+                        f"Section title '{section['title']}' exceeds 24 characters",
+                        "SECTION_TITLE_TOO_LONG",
+                    ),
+                    (
+                        len(section["rows"]) > 10,
+                        f"Section '{section['title']}' has more than 10 rows",
+                        "TOO_MANY_ROWS",
+                    ),
+                ]
+                if error := self._check_validations(section_validations, to):
+                    return error
 
                 formatted_rows = []
                 for row in section["rows"]:
-                    if len(row["id"]) > 200:
-                        return MessageResult(
-                            success=False,
-                            error=f"Row ID '{row['id']}' exceeds 200 characters",
-                            error_code="ROW_ID_TOO_LONG",
-                            recipient=to,
-                            platform=PlatformType.WHATSAPP,
-                            tenant_id=self._tenant_id,
-                        )
-                    if len(row["title"]) > 24:
-                        return MessageResult(
-                            success=False,
-                            error=f"Row title '{row['title']}' exceeds 24 characters",
-                            error_code="ROW_TITLE_TOO_LONG",
-                            recipient=to,
-                            platform=PlatformType.WHATSAPP,
-                            tenant_id=self._tenant_id,
-                        )
-                    if "description" in row and len(row["description"]) > 72:
-                        return MessageResult(
-                            success=False,
-                            error=f"Row description for '{row['title']}' exceeds 72 characters",
-                            error_code="ROW_DESCRIPTION_TOO_LONG",
-                            recipient=to,
-                            platform=PlatformType.WHATSAPP,
-                            tenant_id=self._tenant_id,
-                        )
+                    row_validations: list[tuple[bool, str, str]] = [
+                        (
+                            len(row["id"]) > 200,
+                            f"Row ID '{row['id']}' exceeds 200 characters",
+                            "ROW_ID_TOO_LONG",
+                        ),
+                        (
+                            len(row["title"]) > 24,
+                            f"Row title '{row['title']}' exceeds 24 characters",
+                            "ROW_TITLE_TOO_LONG",
+                        ),
+                        (
+                            "description" in row and len(row["description"]) > 72,
+                            f"Row description for '{row['title']}' exceeds 72 characters",
+                            "ROW_DESCRIPTION_TOO_LONG",
+                        ),
+                        (
+                            row["id"] in all_row_ids,
+                            f"Row ID '{row['id']}' is not unique",
+                            "DUPLICATE_ROW_ID",
+                        ),
+                    ]
+                    if error := self._check_validations(row_validations, to):
+                        return error
 
-                    # Check for duplicate row IDs
-                    if row["id"] in all_row_ids:
-                        return MessageResult(
-                            success=False,
-                            error=f"Row ID '{row['id']}' is not unique",
-                            error_code="DUPLICATE_ROW_ID",
-                            recipient=to,
-                            platform=PlatformType.WHATSAPP,
-                            tenant_id=self._tenant_id,
-                        )
                     all_row_ids.append(row["id"])
 
                     formatted_row = {"id": row["id"], "title": row["title"]}
@@ -509,27 +489,14 @@ class WhatsAppInteractiveHandler:
             )
 
         except Exception as e:
-            # Check for authentication errors
-            if "401" in str(e) or "Unauthorized" in str(e):
-                self.logger.error(
-                    "🚨 CRITICAL: WhatsApp Authentication Failed - Cannot Send List Messages! 🚨"
-                )
-                self.logger.error(
-                    f"🚨 Check WhatsApp access token for tenant {self._tenant_id}"
-                )
-
-            self.logger.error(
-                f"❌ Failed to send list menu to {to}: {str(e)} - "
-                f"button_text: '{button_text}', sections_count: {len(sections)}, "
-                f"body_length: {len(body)}",
-                exc_info=True,
-            )
-            return MessageResult(
-                success=False,
-                error=str(e),
+            return handle_whatsapp_error(
+                error=e,
+                operation="send list menu",
                 recipient=to,
-                platform=PlatformType.WHATSAPP,
                 tenant_id=self._tenant_id,
+                logger=self.logger,
+                extra_context=f"button_text: '{button_text}', sections_count: {len(sections)}, body_length: {len(body)}",
+                include_traceback=True,
             )
 
     async def send_cta_button(
@@ -561,29 +528,24 @@ class WhatsAppInteractiveHandler:
             MessageResult with operation status and metadata
         """
         try:
-            # Validate required parameters
-            if not all([body, button_text, button_url]):
-                return MessageResult(
-                    success=False,
-                    error="body, button_text, and button_url are required parameters",
-                    error_code="MISSING_REQUIRED_PARAMS",
-                    recipient=to,
-                    platform=PlatformType.WHATSAPP,
-                    tenant_id=self._tenant_id,
-                )
-
-            # Validate URL format
-            if not (
-                button_url.startswith("http://") or button_url.startswith("https://")
-            ):
-                return MessageResult(
-                    success=False,
-                    error="button_url must start with http:// or https://",
-                    error_code="INVALID_URL_FORMAT",
-                    recipient=to,
-                    platform=PlatformType.WHATSAPP,
-                    tenant_id=self._tenant_id,
-                )
+            # Validate parameters
+            validations: list[tuple[bool, str, str]] = [
+                (
+                    not all([body, button_text, button_url]),
+                    "body, button_text, and button_url are required parameters",
+                    "MISSING_REQUIRED_PARAMS",
+                ),
+                (
+                    not (
+                        button_url.startswith("http://")
+                        or button_url.startswith("https://")
+                    ),
+                    "button_url must start with http:// or https://",
+                    "INVALID_URL_FORMAT",
+                ),
+            ]
+            if error := self._check_validations(validations, to):
+                return error
 
             # Construct payload
             payload = {
@@ -634,20 +596,10 @@ class WhatsAppInteractiveHandler:
             )
 
         except Exception as e:
-            # Check for authentication errors
-            if "401" in str(e) or "Unauthorized" in str(e):
-                self.logger.error(
-                    "🚨 CRITICAL: WhatsApp Authentication Failed - Cannot Send CTA Messages! 🚨"
-                )
-                self.logger.error(
-                    f"🚨 Check WhatsApp access token for tenant {self._tenant_id}"
-                )
-
-            self.logger.error(f"Failed to send CTA button message to {to}: {str(e)}")
-            return MessageResult(
-                success=False,
-                error=str(e),
+            return handle_whatsapp_error(
+                error=e,
+                operation="send CTA button message",
                 recipient=to,
-                platform=PlatformType.WHATSAPP,
                 tenant_id=self._tenant_id,
+                logger=self.logger,
             )

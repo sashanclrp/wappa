@@ -36,6 +36,7 @@ from wappa.messaging.whatsapp.models.interactive_models import (
     ReplyButton,
 )
 from wappa.messaging.whatsapp.models.media_models import MediaType
+from wappa.messaging.whatsapp.utils.error_helpers import handle_whatsapp_error
 from wappa.schemas.core.types import PlatformType
 
 
@@ -151,22 +152,12 @@ class WhatsAppMessenger(IMessenger):
             )
 
         except Exception as e:
-            # Check for authentication errors
-            if "401" in str(e) or "Unauthorized" in str(e):
-                self.logger.error(
-                    "🚨 CRITICAL: WhatsApp Authentication Failed - Cannot Send Messages! 🚨"
-                )
-                self.logger.error(
-                    f"🚨 Check WhatsApp access token for tenant {self._tenant_id}"
-                )
-
-            self.logger.error(f"Failed to send text to {recipient}: {str(e)}")
-            return MessageResult(
-                success=False,
-                error=str(e),
+            return handle_whatsapp_error(
+                error=e,
+                operation="send text message",
                 recipient=recipient,
-                platform=PlatformType.WHATSAPP,
                 tenant_id=self._tenant_id,
+                logger=self.logger,
             )
 
     async def mark_as_read(
@@ -221,22 +212,12 @@ class WhatsAppMessenger(IMessenger):
             action_msg = (
                 "mark as read with typing indicator" if typing else "mark as read"
             )
-
-            # Check for authentication errors
-            if "401" in str(e) or "Unauthorized" in str(e):
-                self.logger.error(
-                    "🚨 CRITICAL: WhatsApp Authentication Failed - Cannot Mark Messages as Read! 🚨"
-                )
-                self.logger.error(
-                    f"🚨 Check WhatsApp access token for tenant {self._tenant_id}"
-                )
-
-            self.logger.error(f"Failed to {action_msg} message {message_id}: {str(e)}")
-            return MessageResult(
-                success=False,
-                error=str(e),
-                platform=PlatformType.WHATSAPP,
+            return handle_whatsapp_error(
+                error=e,
+                operation=action_msg,
+                recipient=message_id,
                 tenant_id=self._tenant_id,
+                logger=self.logger,
             )
 
     # Media Messaging Methods (from WhatsAppMediaMessenger)
@@ -508,24 +489,12 @@ class WhatsAppMessenger(IMessenger):
             )
 
         except Exception as e:
-            # Check for authentication errors
-            if "401" in str(e) or "Unauthorized" in str(e):
-                self.logger.error(
-                    "🚨 CRITICAL: WhatsApp Authentication Failed - Cannot Send Media Messages! 🚨"
-                )
-                self.logger.error(
-                    f"🚨 Check WhatsApp access token for tenant {self._tenant_id}"
-                )
-
-            self.logger.error(
-                f"Failed to send {media_type.value} to {recipient}: {str(e)}"
-            )
-            return MessageResult(
-                success=False,
-                error=str(e),
+            return handle_whatsapp_error(
+                error=e,
+                operation=f"send {media_type.value}",
                 recipient=recipient,
-                platform=PlatformType.WHATSAPP,
                 tenant_id=self._tenant_id,
+                logger=self.logger,
             )
 
     # Interactive Messaging Methods (from WhatsAppInteractiveHandler)
