@@ -31,6 +31,17 @@ EXAMPLES = {
         "features": ["Message echo", "Media handling", "Clean architecture"],
         "complexity": "🟢 Beginner",
     },
+    "wappa_expiry_example": {
+        "name": "Expiry Actions Demo",
+        "description": "Inactivity detection with message accumulation using ExpiryActions",
+        "features": [
+            "ExpiryActions system",
+            "Timer reset pattern",
+            "Message accumulation",
+            "Batch processing",
+        ],
+        "complexity": "🟡 Intermediate",
+    },
     "json_cache_example": {
         "name": "JSON Cache Demo",
         "description": "File-based caching with user management and state handling",
@@ -349,6 +360,7 @@ def examples(
     Interactive menu to select from various example projects:
     - Basic project template
     - Echo bot example
+    - Expiry actions demo (inactivity detection)
     - JSON cache demo
     - Redis cache demo
     - OpenAI transcription
@@ -399,7 +411,7 @@ def _show_examples_menu(target_directory: str) -> None:
     # Get user selection
     while True:
         try:
-            choice = typer.prompt("Enter your choice (1-6) or 'q' to quit")
+            choice = typer.prompt("Enter your choice (1-7) or 'q' to quit")
 
             if choice.lower() == "q":
                 console.print("👋 Goodbye!")
@@ -505,6 +517,11 @@ def _copy_example(example_key: str, target_directory: str) -> None:
             console.print("\n🔧 Redis-specific setup:")
             console.print("   - Install and start Redis server")
             console.print("   - Add REDIS_URL to .env file")
+        elif example_key == "wappa_expiry_example":
+            console.print("\n🔧 ExpiryActions-specific setup:")
+            console.print("   - Install and start Redis server")
+            console.print("   - Add REDIS_URL to .env file")
+            console.print("   - Redis will auto-configure keyspace notifications")
         elif example_key == "openai_transcript":
             console.print("\n🔧 OpenAI-specific setup:")
             console.print("   - Add OPENAI_API_KEY to .env file")

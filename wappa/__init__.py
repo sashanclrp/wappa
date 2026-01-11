@@ -14,7 +14,9 @@ Clean Import Interface (SRP Compliance):
 # Dynamic version from pyproject.toml
 from .core.config.settings import settings
 from .core.events.event_handler import WappaEventHandler
+from .core.expiry import expiry_registry
 from .core.factory import WappaBuilder, WappaPlugin
+from .core.plugins import ExpiryPlugin
 from .core.wappa_app import Wappa
 
 __version__ = settings.version
@@ -25,4 +27,7 @@ __all__ = [
     "WappaEventHandler",
     "WappaBuilder",
     "WappaPlugin",
+    # Expiry Actions System
+    "expiry_registry",
+    "ExpiryPlugin",
 ]

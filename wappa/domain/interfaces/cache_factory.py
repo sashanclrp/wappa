@@ -6,7 +6,7 @@ Defines the contract for creating context-aware cache instances.
 
 from abc import ABC, abstractmethod
 
-from .cache_interfaces import IStateCache, ITableCache, IUserCache
+from .cache_interfaces import IExpiryCache, IStateCache, ITableCache, IUserCache
 
 
 class ICacheFactory(ABC):
@@ -85,5 +85,23 @@ class ICacheFactory(ABC):
 
         Returns:
             Context-bound table cache instance implementing ITableCache
+        """
+        pass
+
+    @abstractmethod
+    def create_expiry_cache(self) -> IExpiryCache:
+        """
+        Create expiry trigger cache instance with context binding.
+
+        Used for time-based automation (reminders, timeouts, scheduled actions).
+        Context (tenant_id, user_id) is automatically injected from constructor.
+
+        Returns:
+            Context-bound expiry cache instance implementing IExpiryCache
+
+        Example:
+            factory = RedisCacheFactory(tenant_id="wappa", user_id="user_123")
+            expiry_cache = factory.create_expiry_cache()
+            await expiry_cache.set("payment_reminder", "TXN_123", 1800)
         """
         pass

@@ -6,7 +6,13 @@ with handlers implementing type-specific interfaces directly.
 """
 
 from ...domain.interfaces.cache_factory import ICacheFactory
-from ...domain.interfaces.cache_interfaces import IStateCache, ITableCache, IUserCache
+from ...domain.interfaces.cache_interfaces import (
+    IExpiryCache,
+    IStateCache,
+    ITableCache,
+    IUserCache,
+)
+from .redis_handler.expiry import RedisExpiry
 from .redis_handler.state_handler import RedisStateHandler
 from .redis_handler.table import RedisTable
 from .redis_handler.user import RedisUser
@@ -20,6 +26,7 @@ class RedisCacheFactory(ICacheFactory):
     - State cache: Uses state_handler pool (db1)
     - User cache: Uses users pool (db0)
     - Table cache: Uses table pool (db2)
+    - Expiry cache: Uses expiry pool (db3)
 
     All instances implement the type-specific cache interfaces directly.
 
@@ -67,3 +74,21 @@ class RedisCacheFactory(ICacheFactory):
             RedisTable implementing ITableCache configured for table pool
         """
         return RedisTable(tenant=self.tenant_id, redis_alias="table")
+
+    def create_expiry_cache(self) -> IExpiryCache:
+        """
+        Create Redis expiry trigger cache instance.
+
+        Uses context (tenant_id, user_id) injected at construction time.
+
+        Returns:
+            RedisExpiry implementing IExpiryCache configured for expiry pool
+
+        Example:
+            factory = RedisCacheFactory(tenant_id="wappa", user_id="user_123")
+            expiry_cache = factory.create_expiry_cache()
+            await expiry_cache.set("payment_reminder", "TXN_123", 1800)
+        """
+        return RedisExpiry(
+            tenant=self.tenant_id, user_id=self.user_id, redis_alias="expiry"
+        )

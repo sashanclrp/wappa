@@ -9,6 +9,7 @@ Each interface defines methods specific to its domain:
 - IUserCache: User-scoped data (identity implicit via constructor)
 - IStateCache: Handler/session state (keyed by handler_name)
 - ITableCache: Table/row data (composite key: table_name + pkid)
+- IExpiryCache: Expiry triggers (composite key: action + identifier)
 """
 
 from abc import ABC, abstractmethod
@@ -568,5 +569,124 @@ class ITableCache(ABC):
 
         Returns:
             List of table row data dictionaries
+        """
+        pass
+
+
+class IExpiryCache(ABC):
+    """
+    Interface for expiry trigger cache operations.
+
+    Expiry triggers are simple key-value pairs with TTL that fire notifications
+    when they expire. Used for time-based automation (reminders, timeouts, etc.).
+
+    The key is composite: (action, identifier)
+    - action: Type of trigger (e.g., "payment_reminder")
+    - identifier: Unique ID (e.g., "TXN_12345")
+
+    Triggers are fire-and-forget - no data retrieval needed. When a trigger
+    expires, a registered handler is called with the identifier.
+
+    Example:
+        expiry = RedisExpiry(tenant="myapp", user_id="user123")
+        await expiry.set("payment_reminder", "TXN_123", ttl_seconds=1800)
+        # After 30 minutes, handler for "payment_reminder" is called
+        # with identifier="TXN_123"
+    """
+
+    @abstractmethod
+    async def set(self, action: str, identifier: str, ttl_seconds: int) -> bool:
+        """
+        Create expiry trigger that fires after TTL expires.
+
+        Args:
+            action: Action name (e.g., "reservation_reminder")
+            identifier: Unique identifier (e.g., "TXN_12345")
+            ttl_seconds: Time-to-live in seconds
+
+        Returns:
+            True if trigger created successfully
+
+        Example:
+            await expiry_cache.set("payment_reminder", "TXN_123", 1800)
+            # After 30 minutes, handler for "payment_reminder" will be called
+            # with identifier="TXN_123"
+        """
+        pass
+
+    @abstractmethod
+    async def delete(self, action: str, identifier: str) -> int:
+        """
+        Delete specific trigger before it fires.
+
+        Args:
+            action: Action name
+            identifier: Unique identifier
+
+        Returns:
+            Number of triggers deleted (0 or 1)
+
+        Example:
+            # Cancel payment reminder
+            count = await expiry_cache.delete("payment_reminder", "TXN_123")
+        """
+        pass
+
+    @abstractmethod
+    async def delete_all_by_identifier(self, identifier: str) -> int:
+        """
+        Delete all triggers for an identifier (all actions).
+
+        This is useful for cleaning up all triggers related to a transaction
+        or entity when it's cancelled or completed.
+
+        Args:
+            identifier: Unique identifier
+
+        Returns:
+            Number of triggers deleted
+
+        Example:
+            # Delete all triggers for transaction (reminder, expiry, etc.)
+            count = await expiry_cache.delete_all_by_identifier("TXN_123")
+        """
+        pass
+
+    @abstractmethod
+    async def exists(self, action: str, identifier: str) -> bool:
+        """
+        Check if trigger exists (hasn't fired yet).
+
+        Args:
+            action: Action name
+            identifier: Unique identifier
+
+        Returns:
+            True if trigger exists, False otherwise
+
+        Example:
+            if await expiry_cache.exists("payment_reminder", "TXN_123"):
+                print("Reminder is still scheduled")
+        """
+        pass
+
+    @abstractmethod
+    async def get_ttl(self, action: str, identifier: str) -> int:
+        """
+        Get remaining time-to-live in seconds.
+
+        Args:
+            action: Action name
+            identifier: Unique identifier
+
+        Returns:
+            Positive int: Seconds remaining until trigger fires
+            -1: Trigger doesn't exist
+            -2: Trigger exists but has no expiry (shouldn't happen for triggers)
+
+        Example:
+            ttl = await expiry_cache.get_ttl("payment_reminder", "TXN_123")
+            if ttl > 0:
+                print(f"Reminder fires in {ttl} seconds")
         """
         pass

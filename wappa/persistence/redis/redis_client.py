@@ -25,12 +25,13 @@ from redis.asyncio import ConnectionPool, Redis
 log = logging.getLogger("RedisClient")
 
 # Predefined Redis pool aliases with their database numbers for Wappa cache
-PoolAlias = Literal["users", "state_handler", "table"]
+PoolAlias = Literal["users", "state_handler", "table", "expiry"]
 
 POOL_DB_MAPPING = {
     "users": 0,  # User-specific cache operations
     "state_handler": 1,  # Handler state cache operations
     "table": 2,  # Table/data cache operations
+    "expiry": 3,  # Expiry trigger cache operations
 }
 
 
@@ -38,10 +39,11 @@ class RedisClient:
     """
     Fork-safe, asyncio-native **multi-pool** Redis manager for Wappa cache.
 
-    Supports exactly 3 predefined pools:
+    Supports exactly 4 predefined pools:
     - "users" (db 0): User-specific cache operations
     - "state_handler" (db 1): Handler state cache operations
     - "table" (db 2): Table/data cache operations
+    - "expiry" (db 3): Expiry trigger cache operations
 
     Every worker process keeps its own pools to avoid post-fork descriptor reuse.
     """
@@ -55,7 +57,7 @@ class RedisClient:
     @classmethod
     def setup_single_url(cls, base_url: str, *, max_connections: int = 64) -> None:
         """
-        Set up all 3 Redis pools from a single base URL by appending database numbers.
+        Set up all 4 Redis pools from a single base URL by appending database numbers.
 
         Args:
             base_url: Base Redis URL (e.g., "redis://localhost:6379")
@@ -67,6 +69,7 @@ class RedisClient:
             # - users: redis://localhost:6379/0
             # - state_handler: redis://localhost:6379/1
             # - table: redis://localhost:6379/2
+            # - expiry: redis://localhost:6379/3
         """
         # Ensure base URL doesn't already have a database
         if base_url.rstrip("/").split("/")[-1].isdigit():
@@ -193,25 +196,27 @@ class RedisClient:
 """
 # RedisClient 🔌
 
-A fork-safe, asyncio-native helper with **3 predefined Redis pools** for Wappa cache:
+A fork-safe, asyncio-native helper with **4 predefined Redis pools** for Wappa cache:
 
 | Pool         | Database | Purpose                    |
 |--------------|----------|----------------------------|
 | users        | 0        | User-specific cache data   |
 | state_handler| 1        | Handler state cache data   |
 | table        | 2        | Table/data cache           |
+| expiry       | 3        | Expiry trigger cache data  |
 
 ```python
 from wappa.persistence.redis.redis_client import RedisClient
 
-# Option 1: Single URL (creates all 3 pools automatically)
+# Option 1: Single URL (creates all 4 pools automatically)
 RedisClient.setup_single_url("redis://localhost:6379")
 
 # Option 2: Explicit URLs per pool
 RedisClient.setup_multiple_urls({
     "users": "redis://localhost:6379/0",
     "state_handler": "redis://cache:6379/1",
-    "table": "redis://localhost:6379/2"
+    "table": "redis://localhost:6379/2",
+    "expiry": "redis://localhost:6379/3"
 })
 
 # Usage
