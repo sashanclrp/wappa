@@ -11,6 +11,7 @@ from .cache_interfaces import IStateCache, ITableCache, IUserCache
 from .expiry_repository import IExpiryRepository
 from .media_interface import IMediaHandler
 from .messaging_interface import IMessenger
+from .pubsub_interface import IPubSubPublisher, PubSubEventType
 from .pubsub_repository import IPubSubRepository
 from .repository_factory import IRepositoryFactory
 from .shared_state_repository import ISharedStateRepository
@@ -34,4 +35,7 @@ __all__ = [
     "ICacheFactory",
     # Cache interface (deprecated - use type-specific interfaces instead)
     "ICache",
+    # PubSub interface
+    "IPubSubPublisher",
+    "PubSubEventType",
 ]

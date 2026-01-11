@@ -17,6 +17,7 @@ from .database_plugin import DatabasePlugin
 from .expiry_plugin import ExpiryPlugin
 from .rate_limit_plugin import RateLimitPlugin
 from .redis_plugin import RedisPlugin
+from .redis_pubsub_plugin import RedisPubSubPlugin
 from .wappa_core_plugin import WappaCorePlugin
 from .webhook_plugin import WebhookPlugin
 
@@ -26,6 +27,7 @@ __all__ = [
     # Core Infrastructure
     "DatabasePlugin",
     "RedisPlugin",
+    "RedisPubSubPlugin",
     "ExpiryPlugin",
     # Middleware
     "CORSPlugin",

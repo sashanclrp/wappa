@@ -15,6 +15,7 @@ class KeyFactory(BaseModel):
     table_prefix: str = Field(default="df")
     trigger_prefix: str = Field(default="EXPTRIGGER")
     aistate_prefix: str = Field(default="aistate")
+    pubsub_prefix: str = Field(default="notify")
     pk_marker: str = Field(default="pkid")
 
     # ---- builders ---------------------------------------------------------
@@ -77,6 +78,61 @@ class KeyFactory(BaseModel):
         """
         safe_agent = agent_name.replace(":", "_")
         return f"{tenant}:{self.aistate_prefix}:{safe_agent}:{user_id}"
+
+    def channel(self, tenant: str, user_id: str, event_type: str) -> str:
+        """
+        Build PubSub channel name for real-time notifications.
+
+        Pattern: wappa:notify:{tenant}:{user_id}:{event_type}
+
+        Args:
+            tenant: Tenant identifier
+            user_id: User/phone identifier
+            event_type: Event type (incoming_message, outgoing_message, status_change)
+
+        Returns:
+            Formatted channel name
+
+        Example:
+            >>> keys.channel("mimeia", "5511999887766", "status_change")
+            "wappa:notify:mimeia:5511999887766:status_change"
+
+        Note:
+            Colons in user_id/event_type are replaced with underscores for safety.
+        """
+        safe_user = user_id.replace(":", "_")
+        safe_event = event_type.replace(":", "_").lower()
+        return f"wappa:{self.pubsub_prefix}:{tenant}:{safe_user}:{safe_event}"
+
+    def channel_pattern(
+        self, tenant: str, user_id: str = "*", event_type: str = "*"
+    ) -> str:
+        """
+        Build PubSub channel pattern for PSUBSCRIBE.
+
+        Supports wildcard (*) for flexible subscription patterns.
+
+        Args:
+            tenant: Tenant identifier (required)
+            user_id: User/phone identifier (default "*" for all users)
+            event_type: Event type (default "*" for all events)
+
+        Returns:
+            Channel pattern string
+
+        Example:
+            >>> keys.channel_pattern("mimeia")  # All events for tenant
+            "wappa:notify:mimeia:*:*"
+
+            >>> keys.channel_pattern("mimeia", "5511999887766")  # All events for user
+            "wappa:notify:mimeia:5511999887766:*"
+
+            >>> keys.channel_pattern("mimeia", event_type="status_change")
+            "wappa:notify:mimeia:*:status_change"
+        """
+        safe_user = user_id.replace(":", "_") if user_id != "*" else "*"
+        safe_event = event_type.replace(":", "_").lower() if event_type != "*" else "*"
+        return f"wappa:{self.pubsub_prefix}:{tenant}:{safe_user}:{safe_event}"
 
     # ---- parsers ----------------------------------------------------------
     def parse_trigger(self, key: str) -> tuple[str, str, str] | None:

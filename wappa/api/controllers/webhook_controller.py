@@ -326,9 +326,20 @@ class WebhookController:
             from wappa.core.logging.context import get_current_user_context
 
             user_id = get_current_user_context()
+
             if not user_id:
                 raise RuntimeError(
                     "No user context available for cache factory creation"
+                )
+
+            # Wrap messenger with PubSub if plugin is active
+            if getattr(request.app.state, "pubsub_wrap_messenger", False):
+                from wappa.core.pubsub import PubSubMessengerWrapper
+
+                messenger = PubSubMessengerWrapper(
+                    inner=messenger,
+                    tenant=tenant_id,
+                    user_id=user_id,
                 )
 
             # Create cache factory per request with context injection
