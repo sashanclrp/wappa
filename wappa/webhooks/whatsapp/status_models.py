@@ -20,6 +20,11 @@ class WhatsAppMessageStatus(BaseMessageStatus):
 
     Represents status updates for messages sent by the business to WhatsApp users.
     Status updates include sent, delivered, read, or failed notifications.
+
+    BSUID Support (v24.0+):
+    - recipient_bsuid: Business Scoped User ID (stable identifier)
+    - wa_recipient_id: Phone number (may be empty for username-only users)
+    - Use recipient_id property for the recommended identifier
     """
 
     model_config = ConfigDict(
@@ -37,9 +42,15 @@ class WhatsAppMessageStatus(BaseMessageStatus):
         description="Unix timestamp when the status event occurred",
     )
     wa_recipient_id: str = Field(
-        ...,
+        default="",
         alias="recipient_id",
-        description="WhatsApp user ID who received (or should have received) the message",
+        description="WhatsApp user phone number (may be empty for username-only users)",
+    )
+    # BSUID support (v24.0+)
+    recipient_bsuid: str | None = Field(
+        None,
+        alias="recipient_user_id",
+        description="Business Scoped User ID (BSUID) - stable recipient identifier from webhook",
     )
 
     # Optional fields
@@ -88,13 +99,15 @@ class WhatsAppMessageStatus(BaseMessageStatus):
             raise ValueError("Timestamp must be a valid Unix timestamp")
         return v
 
-    @field_validator("wa_recipient_id")
-    @classmethod
-    def validate_recipient_id(cls, v: str) -> str:
-        """Validate recipient ID format."""
-        if not v or len(v) < 8:
-            raise ValueError("Recipient ID must be at least 8 characters")
-        return v
+    @property
+    def has_recipient_bsuid(self) -> bool:
+        """Check if this status has a recipient BSUID set."""
+        return bool(self.recipient_bsuid and self.recipient_bsuid.strip())
+
+    @property
+    def has_recipient_phone(self) -> bool:
+        """Check if this status has a recipient phone number set."""
+        return bool(self.wa_recipient_id and self.wa_recipient_id.strip())
 
     @model_validator(mode="after")
     def validate_status_consistency(self):
@@ -127,7 +140,14 @@ class WhatsAppMessageStatus(BaseMessageStatus):
 
     @property
     def recipient_id(self) -> str:
-        """Get the recipient's universal identifier."""
+        """
+        Get the recommended recipient identifier for caching, storage, and messaging.
+
+        Returns:
+            BSUID if available, otherwise phone number (wa_recipient_id).
+        """
+        if self.recipient_bsuid and self.recipient_bsuid.strip():
+            return self.recipient_bsuid.strip()
         return self.wa_recipient_id
 
     @property
@@ -180,10 +200,12 @@ class WhatsAppMessageStatus(BaseMessageStatus):
 
     def get_delivery_info(self) -> dict[str, Any]:
         """Get detailed delivery information."""
-        info = {
+        info: dict[str, Any] = {
             "status": self.wa_status,
             "timestamp": self.timestamp,
-            "recipient_id": self.wa_recipient_id,
+            "recipient_id": self.recipient_id,
+            "recipient_phone": self.wa_recipient_id if self.has_recipient_phone else None,
+            "recipient_bsuid": self.recipient_bsuid,
             "message_id": self.id,
         }
 
@@ -213,7 +235,9 @@ class WhatsAppMessageStatus(BaseMessageStatus):
             "message_id": self.id,
             "status": self.wa_status,
             "timestamp": self.timestamp,
-            "recipient_id": self.wa_recipient_id,
+            "recipient_id": self.recipient_id,
+            "recipient_bsuid": self.recipient_bsuid,
+            "recipient_phone": self.wa_recipient_id if self.has_recipient_phone else None,
             "is_successful": self.is_successful,
             "error_info": self.get_error_info(),
             "delivery_info": self.get_delivery_info(),
@@ -223,6 +247,9 @@ class WhatsAppMessageStatus(BaseMessageStatus):
         """Get platform-specific data for advanced processing."""
         return {
             "whatsapp_message_id": self.id,
+            "wa_recipient_id": self.wa_recipient_id,
+            "recipient_bsuid": self.recipient_bsuid,
+            "recipient_id": self.recipient_id,
             "recipient_identity_key_hash": self.recipient_identity_key_hash,
             "biz_opaque_callback_data": self.biz_opaque_callback_data,
             "conversation": self.conversation.model_dump()
@@ -236,10 +263,12 @@ class WhatsAppMessageStatus(BaseMessageStatus):
 
     def get_status_summary(self) -> dict[str, Any]:
         """Get a summary of the status update for logging and analytics."""
-        summary = {
+        summary: dict[str, Any] = {
             "message_id": self.id,
             "status": self.wa_status,
-            "recipient": self.wa_recipient_id,
+            "recipient": self.recipient_id,
+            "recipient_bsuid": self.recipient_bsuid,
+            "recipient_phone": self.wa_recipient_id if self.has_recipient_phone else None,
             "timestamp": self.timestamp,
         }
 
@@ -361,11 +390,13 @@ class WhatsAppMessageStatus(BaseMessageStatus):
         Returns:
             Dictionary with key status information for structured logging.
         """
-        summary = {
+        summary: dict[str, str | bool | int | None] = {
             "message_id": self.id,
-            "status": self.status,
+            "status": self.status.value,
             "timestamp": self.unix_timestamp,
             "recipient_id": self.recipient_id,
+            "recipient_bsuid": self.recipient_bsuid,
+            "has_recipient_bsuid": self.has_recipient_bsuid,
             "is_successful": self.is_successful,
             "is_billable": self.is_billable,
             "has_callback_data": self.biz_opaque_callback_data is not None,

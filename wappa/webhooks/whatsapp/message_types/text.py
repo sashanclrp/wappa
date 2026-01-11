@@ -111,6 +111,11 @@ class WhatsAppTextMessage(BaseTextMessage):
     - Forwarded text messages
     - Message business button replies (with product context)
     - Click-to-WhatsApp ad messages
+
+    Updated for BSUID support (v24.0+):
+    - from_user_id: Business Scoped User ID (BSUID) - stable identifier
+    - from_: Now optional, may be empty for username-only users
+    - effective_sender_id property: Returns BSUID if available, else phone number
     """
 
     model_config = ConfigDict(
@@ -119,7 +124,14 @@ class WhatsAppTextMessage(BaseTextMessage):
 
     # Standard message fields
     from_: str = Field(
-        ..., alias="from", description="WhatsApp user phone number who sent the message"
+        default="",
+        alias="from",
+        description="WhatsApp user phone number (may be empty for username-only users)",
+    )
+    from_bsuid: str | None = Field(
+        None,
+        alias="from_user_id",
+        description="Business Scoped User ID (BSUID) - stable identifier from webhook",
     )
     id: str = Field(..., description="Unique WhatsApp message ID")
     timestamp_str: str = Field(
@@ -140,17 +152,25 @@ class WhatsAppTextMessage(BaseTextMessage):
         None, description="Click-to-WhatsApp ad referral information"
     )
 
-    @field_validator("from_")
-    @classmethod
-    def validate_from_phone(cls, v: str) -> str:
-        """Validate sender phone number format."""
-        if not v or len(v) < 8:
-            raise ValueError("Sender phone number must be at least 8 characters")
-        # Remove common prefixes and validate numeric
-        phone = v.replace("+", "").replace("-", "").replace(" ", "")
-        if not phone.isdigit():
-            raise ValueError("Phone number must contain only digits (and +)")
-        return v
+    @property
+    def has_bsuid(self) -> bool:
+        """Check if this message has a BSUID set."""
+        return bool(self.from_bsuid and self.from_bsuid.strip())
+
+    @property
+    def has_phone_number(self) -> bool:
+        """Check if this message has a phone number (from_) set."""
+        return bool(self.from_ and self.from_.strip())
+
+    @property
+    def is_username_only_sender(self) -> bool:
+        """
+        Check if the sender is username-only (has BSUID but no phone number visible).
+
+        This happens when the user has enabled usernames and business hasn't
+        messaged them recently or isn't in their contacts.
+        """
+        return self.has_bsuid and not self.has_phone_number
 
     @field_validator("id")
     @classmethod
@@ -228,7 +248,12 @@ class WhatsAppTextMessage(BaseTextMessage):
 
     @property
     def sender_phone(self) -> str:
-        """Get the sender's phone number (clean accessor)."""
+        """
+        Get the sender's phone number (clean accessor).
+
+        Note: May return empty string for username-only senders.
+        Use effective_sender_id for a guaranteed identifier.
+        """
         return self.from_
 
     @property
@@ -316,7 +341,18 @@ class WhatsAppTextMessage(BaseTextMessage):
 
     @property
     def sender_id(self) -> str:
-        """Get the sender's universal identifier."""
+        """
+        Get the recommended sender identifier for caching, storage, and messaging.
+
+        Returns:
+            BSUID if available and non-empty, otherwise phone number (from_).
+            This is the identifier you should use for:
+            - Redis/cache keys
+            - Database user records
+            - Sending messages back to the user
+        """
+        if self.from_bsuid and self.from_bsuid.strip():
+            return self.from_bsuid.strip()
         return self.from_
 
     @property

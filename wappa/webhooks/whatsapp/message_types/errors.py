@@ -83,6 +83,15 @@ class WhatsAppWebhookError(BaseModel):
         """Check if this is a rate limit error (code 130429)."""
         return self.has_error_code(130429)
 
+    def is_bsuid_auth_error(self) -> bool:
+        """Check if this is a BSUID authentication message error (code 131062).
+
+        Error 131062 occurs when attempting to send authentication messages
+        to a user's BSUID instead of their phone number. Authentication messages
+        must be sent to phone numbers only.
+        """
+        return self.has_error_code(131062)
+
     def is_system_error(self) -> bool:
         """
         Check if this is a system-level error.
@@ -160,6 +169,7 @@ class WhatsAppWebhookError(BaseModel):
             "primary_error_details": self.get_primary_error_details(),
             "documentation_url": self.get_documentation_url(),
             "is_rate_limit_error": self.is_rate_limit_error(),
+            "is_bsuid_auth_error": self.is_bsuid_auth_error(),
             "is_system_error": self.is_system_error(),
             "is_app_error": self.is_app_error(),
             "is_account_error": self.is_account_error(),

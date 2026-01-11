@@ -3,12 +3,18 @@ WhatsApp error handling utilities.
 
 Provides centralized error handling for WhatsApp messaging operations,
 including authentication error detection and standardized error responses.
+
+BSUID Support (v24.0+):
+- Error code 131062: Authentication messages cannot be sent to BSUIDs
 """
 
 from logging import Logger
 
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.schemas.core.types import PlatformType
+
+# WhatsApp API error codes
+ERROR_CODE_BSUID_AUTH_NOT_ALLOWED = 131062
 
 
 def is_authentication_error(error: Exception) -> bool:
@@ -22,6 +28,27 @@ def is_authentication_error(error: Exception) -> bool:
     """
     error_str = str(error)
     return "401" in error_str or "Unauthorized" in error_str
+
+
+def is_bsuid_auth_error(error: Exception | dict) -> bool:
+    """Check if an error indicates BSUID auth message restriction (code 131062).
+
+    Error 131062 occurs when attempting to send authentication messages
+    to a user's BSUID instead of their phone number. Authentication messages
+    (OTPs, verification codes, etc.) must be sent to phone numbers only.
+
+    Args:
+        error: The exception or error response dict to check
+
+    Returns:
+        True if the error is code 131062 (auth messages to BSUID not allowed)
+    """
+    if isinstance(error, dict):
+        error_code = error.get("code") or error.get("error_code")
+        return error_code == ERROR_CODE_BSUID_AUTH_NOT_ALLOWED
+
+    error_str = str(error)
+    return str(ERROR_CODE_BSUID_AUTH_NOT_ALLOWED) in error_str
 
 
 def handle_whatsapp_error(
@@ -55,6 +82,12 @@ def handle_whatsapp_error(
             f"CRITICAL: WhatsApp Authentication Failed - Cannot {operation}!"
         )
         logger.error(f"Check WhatsApp access token for tenant {tenant_id}")
+
+    if is_bsuid_auth_error(error):
+        logger.warning(
+            f"BSUID Auth Error: Cannot send authentication messages to BSUID. "
+            f"Use phone number instead for recipient {recipient}"
+        )
 
     error_message = f"Failed to {operation} to {recipient}: {error}"
     if extra_context:

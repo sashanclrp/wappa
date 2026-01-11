@@ -20,7 +20,7 @@ from wappa.webhooks.whatsapp.base_models import MessageContext
 
 
 class SystemContent(BaseModel):
-    """System message content."""
+    """System message content with BSUID support (v24.0+)."""
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -28,8 +28,12 @@ class SystemContent(BaseModel):
     wa_id: str | None = Field(
         None, description="New WhatsApp ID (for user_changed_number events)"
     )
-    type: Literal["user_changed_number"] = Field(
-        ..., description="Type of system event"
+    user_id: str | None = Field(
+        None,
+        description="Business Scoped User ID (BSUID) - for user_changed_user_id events",
+    )
+    type: Literal["user_changed_number", "user_changed_user_id"] = Field(
+        ..., description="Type of system event (user_changed_number or user_changed_user_id)"
     )
 
     @field_validator("body")
@@ -52,6 +56,19 @@ class SystemContent(BaseModel):
                 raise ValueError("WhatsApp ID must be at least 8 characters")
         return v
 
+    @field_validator("user_id")
+    @classmethod
+    def validate_user_id(cls, v: str | None) -> str | None:
+        """Validate BSUID if present."""
+        if v is not None:
+            v = v.strip()
+            if not v:
+                return None
+            # BSUID format: user.XXXXXXX...
+            if not v.startswith("user."):
+                raise ValueError("User ID (BSUID) should start with 'user.'")
+        return v
+
 
 class WhatsAppSystemMessage(BaseMessage):
     """
@@ -68,11 +85,16 @@ class WhatsAppSystemMessage(BaseMessage):
         extra="forbid", str_strip_whitespace=True, validate_assignment=True
     )
 
-    # Standard message fields
+    # Standard message fields (BSUID support v24.0+)
     from_: str = Field(
-        ...,
+        default="",
         alias="from",
-        description="WhatsApp user phone number (old number for number changes)",
+        description="WhatsApp user phone number (may be empty for username-only users)",
+    )
+    from_bsuid: str | None = Field(
+        None,
+        alias="from_user_id",
+        description="Business Scoped User ID (BSUID) - stable identifier from webhook",
     )
     id: str = Field(..., description="Unique WhatsApp message ID")
     timestamp_str: str = Field(
@@ -92,17 +114,17 @@ class WhatsAppSystemMessage(BaseMessage):
         None, description="Context for system messages (rare)"
     )
 
-    @field_validator("from_")
-    @classmethod
-    def validate_from_phone(cls, v: str) -> str:
-        """Validate sender phone number format."""
-        if not v or len(v) < 8:
-            raise ValueError("Sender phone number must be at least 8 characters")
-        # Remove common prefixes and validate numeric
-        phone = v.replace("+", "").replace("-", "").replace(" ", "")
-        if not phone.isdigit():
-            raise ValueError("Phone number must contain only digits (and +)")
-        return v
+    @property
+    def sender_id(self) -> str:
+        """Get the recommended sender identifier (BSUID if available, else phone)."""
+        if self.from_bsuid and self.from_bsuid.strip():
+            return self.from_bsuid.strip()
+        return self.from_
+
+    @property
+    def has_bsuid(self) -> bool:
+        """Check if this message has a BSUID set."""
+        return bool(self.from_bsuid and self.from_bsuid.strip())
 
     @field_validator("id")
     @classmethod
@@ -151,6 +173,16 @@ class WhatsAppSystemMessage(BaseMessage):
     def is_number_change(self) -> bool:
         """Check if this is a phone number change event."""
         return self.system.type == "user_changed_number"
+
+    @property
+    def is_user_id_change(self) -> bool:
+        """Check if this is a BSUID change event (v24.0+)."""
+        return self.system.type == "user_changed_user_id"
+
+    @property
+    def new_user_id(self) -> str | None:
+        """Get the new BSUID (for user_changed_user_id events)."""
+        return self.system.user_id
 
     @property
     def unix_timestamp(self) -> int:
@@ -218,14 +250,17 @@ class WhatsAppSystemMessage(BaseMessage):
         return {
             "message_id": self.id,
             "sender": self.sender_phone,
+            "sender_id": self.sender_id,
             "timestamp": self.unix_timestamp,
             "type": self.type,
             "system_event_type": self.system_event_type,
             "system_message": self.system_message,
             "is_number_change": self.is_number_change,
+            "is_user_id_change": self.is_user_id_change,
             "old_phone_number": old_number,
             "new_phone_number": new_number,
             "new_wa_id": self.new_wa_id,
+            "new_user_id": self.new_user_id,
             "user_name": self.extract_user_name(),
         }
 
@@ -242,10 +277,6 @@ class WhatsAppSystemMessage(BaseMessage):
     @property
     def message_id(self) -> str:
         return self.id
-
-    @property
-    def sender_id(self) -> str:
-        return self.from_
 
     @property
     def timestamp(self) -> int:
@@ -282,8 +313,10 @@ class WhatsAppSystemMessage(BaseMessage):
             "system_event_type": self.system_event_type,
             "system_message": self.system_message,
             "is_number_change": self.is_number_change,
+            "is_user_id_change": self.is_user_id_change,
             "old_phone_number": old_number,
             "new_phone_number": new_number,
+            "new_user_id": self.new_user_id,
             "whatsapp_data": {
                 "whatsapp_id": self.id,
                 "from": self.from_,
@@ -305,8 +338,10 @@ class WhatsAppSystemMessage(BaseMessage):
             "system_analysis": {
                 "event_type": self.system_event_type,
                 "is_number_change": self.is_number_change,
+                "is_user_id_change": self.is_user_id_change,
                 "extracted_user_name": self.extract_user_name(),
                 "phone_numbers": self.extract_phone_numbers(),
+                "new_user_id": self.new_user_id,
             },
         }
 

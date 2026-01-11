@@ -89,9 +89,16 @@ class WhatsAppImageMessage(BaseImageMessage):
         extra="forbid", str_strip_whitespace=True, validate_assignment=True
     )
 
-    # Standard message fields
+    # Standard message fields (BSUID support v24.0+)
     from_: str = Field(
-        ..., alias="from", description="WhatsApp user phone number who sent the image"
+        default="",
+        alias="from",
+        description="WhatsApp user phone number (may be empty for username-only users)",
+    )
+    from_bsuid: str | None = Field(
+        None,
+        alias="from_user_id",
+        description="Business Scoped User ID (BSUID) - stable identifier from webhook",
     )
     id: str = Field(..., description="Unique WhatsApp message ID")
     timestamp_str: str = Field(
@@ -114,17 +121,27 @@ class WhatsAppImageMessage(BaseImageMessage):
         None, description="Click-to-WhatsApp ad referral information"
     )
 
-    @field_validator("from_")
-    @classmethod
-    def validate_from_phone(cls, v: str) -> str:
-        """Validate sender phone number format."""
-        if not v or len(v) < 8:
-            raise ValueError("Sender phone number must be at least 8 characters")
-        # Remove common prefixes and validate numeric
-        phone = v.replace("+", "").replace("-", "").replace(" ", "")
-        if not phone.isdigit():
-            raise ValueError("Phone number must contain only digits (and +)")
-        return v
+    @property
+    def sender_id(self) -> str:
+        """
+        Get the recommended sender identifier for caching, storage, and messaging.
+
+        Returns:
+            BSUID if available, otherwise phone number (from_).
+        """
+        if self.from_bsuid and self.from_bsuid.strip():
+            return self.from_bsuid.strip()
+        return self.from_
+
+    @property
+    def has_bsuid(self) -> bool:
+        """Check if this message has a BSUID set."""
+        return bool(self.from_bsuid and self.from_bsuid.strip())
+
+    @property
+    def has_phone_number(self) -> bool:
+        """Check if this message has a phone number (from_) set."""
+        return bool(self.from_ and self.from_.strip())
 
     @field_validator("id")
     @classmethod
@@ -153,12 +170,14 @@ class WhatsAppImageMessage(BaseImageMessage):
     def validate_message_consistency(self):
         """Validate message field consistency."""
         # If we have a referral, this should be from an ad (no forwarding context)
-        if self.referral and self.context:
-            # Check if context has forwarding info
-            if self.context.forwarded or self.context.frequently_forwarded:
-                raise ValueError(
-                    "Ad images cannot be forwarded (cannot have both referral and forwarding context)"
-                )
+        if (
+            self.referral
+            and self.context
+            and (self.context.forwarded or self.context.frequently_forwarded)
+        ):
+            raise ValueError(
+                "Ad images cannot be forwarded (cannot have both referral and forwarding context)"
+            )
 
         # Images don't support reply context or product context
         if self.context:
@@ -301,11 +320,6 @@ class WhatsAppImageMessage(BaseImageMessage):
     def message_id(self) -> str:
         """Get the unique message identifier."""
         return self.id
-
-    @property
-    def sender_id(self) -> str:
-        """Get the sender's universal identifier."""
-        return self.from_
 
     @property
     def timestamp(self) -> int:

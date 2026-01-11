@@ -172,6 +172,10 @@ class WhatsAppContactAdapter(BaseContact):
     WhatsApp-specific contact adapter for universal interface.
 
     Adapts WhatsApp contact data to the universal contact interface.
+
+    BSUID Support (v24.0+):
+    - user_id: Returns BSUID if available, else wa_id (phone number)
+    - Exposes BSUID-related properties from underlying WhatsAppContact
     """
 
     def __init__(self, whatsapp_contact: WhatsAppContact):
@@ -180,8 +184,8 @@ class WhatsAppContactAdapter(BaseContact):
 
     @property
     def user_id(self) -> str:
-        """Get the universal user identifier (WhatsApp ID)."""
-        return self._contact.wa_id
+        """Get the universal user identifier (BSUID if available, else WhatsApp ID)."""
+        return self._contact.user_id  # Uses WhatsAppContact.user_id property (BSUID-aware)
 
     @property
     def display_name(self) -> str | None:
@@ -193,6 +197,26 @@ class WhatsAppContactAdapter(BaseContact):
         """Always WhatsApp for this implementation."""
         return PlatformType.WHATSAPP
 
+    @property
+    def bsuid(self) -> str | None:
+        """Get the BSUID if available (v24.0+)."""
+        return self._contact.bsuid
+
+    @property
+    def username(self) -> str | None:
+        """Get the WhatsApp username if available (v24.0+)."""
+        return self._contact.profile.username if self._contact.profile else None
+
+    @property
+    def country_code(self) -> str | None:
+        """Get the user's country code if available (v24.0+)."""
+        return self._contact.profile.country_code if self._contact.profile else None
+
+    @property
+    def identity_key_hash(self) -> str | None:
+        """Get the identity key hash for security validation."""
+        return self._contact.identity_key_hash
+
     def to_universal_dict(self) -> dict[str, Any]:
         """Convert to platform-agnostic dictionary representation."""
         return {
@@ -201,6 +225,9 @@ class WhatsAppContactAdapter(BaseContact):
             "display_name": self.display_name,
             "whatsapp_data": {
                 "wa_id": self._contact.wa_id,
+                "bsuid": self._contact.bsuid,
+                "username": self.username,
+                "country_code": self.country_code,
                 "profile": self._contact.profile.model_dump()
                 if self._contact.profile
                 else None,

@@ -44,17 +44,41 @@ class UserBase(BaseModel):
 
     Represents the end user sending messages to the business.
     Based on WhatsApp's contact structure but platform-agnostic.
+
+    Field vs Property Pattern:
+    - platform_user_id: Raw platform-specific ID field (WhatsApp wa_id, Teams user ID, etc.)
+    - phone_number: Raw phone number field from webhook
+    - bsuid: Raw BSUID field from webhook (v24.0+)
+    - user_id: @property returning BSUID if available, else platform_user_id, else phone_number
     """
 
     model_config = ConfigDict(
         extra="forbid", str_strip_whitespace=True, validate_assignment=True
     )
 
-    # Core user identification
-    user_id: str = Field(
-        description="Platform-specific user ID (WhatsApp wa_id, Teams user ID, etc.)"
+    # Core user identification (raw fields from webhook)
+    platform_user_id: str = Field(
+        default="",
+        description="Platform-specific user ID (WhatsApp wa_id, Teams user ID, etc.)",
     )
-    phone_number: str = Field(description="User's phone number")
+    phone_number: str = Field(
+        default="",
+        description="User's phone number (may be empty for username-only users)",
+    )
+
+    # BSUID support (v24.0+)
+    bsuid: str | None = Field(
+        default=None,
+        description="Business Scoped User ID - stable identifier across phone changes",
+    )
+    username: str | None = Field(
+        default=None,
+        description="Platform username (e.g., WhatsApp username)",
+    )
+    country_code: str | None = Field(
+        default=None,
+        description="User's country code from username API",
+    )
 
     # User profile information
     profile_name: str | None = Field(default=None, description="User's display name")
@@ -65,13 +89,46 @@ class UserBase(BaseModel):
         description="Identity key hash for security validation (WhatsApp feature)",
     )
 
+    @property
+    def user_id(self) -> str:
+        """
+        Get the recommended user identifier.
+
+        Returns:
+            BSUID if available, otherwise falls back to platform_user_id, then phone_number.
+        """
+        if self.bsuid and self.bsuid.strip():
+            return self.bsuid.strip()
+        if self.platform_user_id and self.platform_user_id.strip():
+            return self.platform_user_id.strip()
+        return self.phone_number
+
+    @property
+    def has_bsuid(self) -> bool:
+        """Check if this user has a BSUID set."""
+        return bool(self.bsuid and self.bsuid.strip())
+
+    @property
+    def has_phone_number(self) -> bool:
+        """Check if this user has a phone number set."""
+        return bool(self.phone_number and self.phone_number.strip())
+
+    @property
+    def has_username(self) -> bool:
+        """Check if this user has a username set."""
+        return bool(self.username and self.username.strip())
+
     def get_display_name(self) -> str:
-        """Get user's display name or fallback to phone number."""
-        return self.profile_name or self.phone_number
+        """Get user's display name or fallback to username/user_id."""
+        if self.profile_name:
+            return self.profile_name
+        if self.username:
+            return f"@{self.username}"
+        return self.phone_number or self.user_id
 
     def get_user_key(self) -> str:
-        """Get unique user key for this contact."""
-        return f"{self.user_id}:{self.phone_number}"
+        """Get unique user key for this contact (uses BSUID if available)."""
+        return self.user_id
 
 
 class BusinessContextBase(BaseModel):

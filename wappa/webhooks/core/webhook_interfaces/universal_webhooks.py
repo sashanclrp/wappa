@@ -14,7 +14,6 @@ webhook structure. All platforms (Teams, Telegram, Instagram) must adapt to thes
 """
 
 from datetime import datetime
-from typing import Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -216,6 +215,11 @@ class StatusWebhook(BaseModel):
     billing context when available.
 
     All platforms must transform their status webhooks to this format.
+
+    BSUID Support (v24.0+):
+    - recipient_phone_id: Raw phone-based recipient ID from webhook
+    - recipient_bsuid: Business Scoped User ID (stable identifier)
+    - recipient_id: Property that returns BSUID if available, else recipient_phone_id
     """
 
     model_config = ConfigDict(
@@ -228,7 +232,14 @@ class StatusWebhook(BaseModel):
     # Status information
     message_id: str = Field(description="ID of the message this status refers to")
     status: MessageStatus = Field(description="Current status of the message")
-    recipient_id: str = Field(description="ID of the user who received the message")
+    recipient_phone_id: str = Field(
+        default="",
+        description="Raw phone-based recipient ID from webhook (may be empty for BSUID-only)",
+    )
+    recipient_bsuid: str | None = Field(
+        default=None,
+        description="Business Scoped User ID of the recipient - stable identifier",
+    )
     timestamp: datetime = Field(description="When this status update occurred")
 
     # Optional context
@@ -262,6 +273,28 @@ class StatusWebhook(BaseModel):
         description="Original raw webhook JSON payload",
         exclude=True,  # Don't include in serialization by default
     )
+
+    @property
+    def recipient_id(self) -> str:
+        """
+        Get the recommended recipient identifier.
+
+        Returns:
+            BSUID if available, otherwise falls back to recipient_phone_id.
+        """
+        if self.recipient_bsuid and self.recipient_bsuid.strip():
+            return self.recipient_bsuid.strip()
+        return self.recipient_phone_id
+
+    @property
+    def has_recipient_bsuid(self) -> bool:
+        """Check if this status has a recipient BSUID set."""
+        return bool(self.recipient_bsuid and self.recipient_bsuid.strip())
+
+    @property
+    def has_recipient_phone(self) -> bool:
+        """Check if this status has a recipient phone/ID set."""
+        return bool(self.recipient_phone_id and self.recipient_phone_id.strip())
 
     def is_delivered_status(self) -> bool:
         """Check if this status indicates successful delivery."""
@@ -300,6 +333,8 @@ class StatusWebhook(BaseModel):
             "status": self.status.value,
             "message_id": self.message_id,
             "recipient": self.recipient_id,
+            "recipient_bsuid": self.recipient_bsuid,
+            "has_recipient_bsuid": self.has_recipient_bsuid,
             "tenant": self.tenant.get_tenant_key(),
             "is_billable": self.is_billable_message(),
             "has_errors": self.has_errors(),
@@ -434,8 +469,4 @@ class ErrorWebhook(BaseModel):
 
 # Type union for all universal webhook interfaces
 # Note: "Outgoing message" webhooks are actually status updates and use StatusWebhook
-UniversalWebhook = Union[
-    IncomingMessageWebhook,
-    StatusWebhook,
-    ErrorWebhook,
-]
+UniversalWebhook = IncomingMessageWebhook | StatusWebhook | ErrorWebhook

@@ -47,11 +47,24 @@ class WhatsAppMetadata(BaseModel):
 
 
 class ContactProfile(BaseModel):
-    """User profile information from WhatsApp contact."""
+    """
+    User profile information from WhatsApp contact.
+
+    Updated for BSUID support (v24.0+):
+    - username: Optional WhatsApp username (e.g., @username) if user has enabled usernames
+    - country_code: User's country code (subject to change)
+    """
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     name: str = Field(..., description="WhatsApp user's display name")
+    username: str | None = Field(
+        None,
+        description="WhatsApp username (e.g., @username) if user has enabled username feature",
+    )
+    country_code: str | None = Field(
+        None, description="User's country code (subject to change)"
+    )
 
     @field_validator("name")
     @classmethod
@@ -61,31 +74,86 @@ class ContactProfile(BaseModel):
             raise ValueError("Contact name cannot be empty")
         return v.strip()
 
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str | None) -> str | None:
+        """Validate username format if present."""
+        if v is not None:
+            v = v.strip()
+            if v and not v.startswith("@"):
+                # Auto-prefix with @ if not present
+                v = f"@{v}"
+        return v if v else None
+
 
 class WhatsAppContact(BaseModel):
     """
     Contact information for WhatsApp users.
 
     Present in incoming message webhooks to identify the sender.
+
+    Updated for BSUID support (v24.0+):
+    - user_id: Business Scoped User ID (BSUID) - stable identifier for the user
+    - wa_id: Now optional, may be empty if user has enabled usernames and conditions are met
+
+    The effective_user_id property provides the best available identifier:
+    - Returns BSUID (user_id) if available and non-empty
+    - Falls back to wa_id (phone number) otherwise
     """
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     wa_id: str = Field(
-        ..., description="WhatsApp user ID (may differ from phone number)"
+        default="",
+        description="WhatsApp user ID/phone number (may be empty for username-only users)",
+    )
+    bsuid: str | None = Field(
+        None,
+        alias="user_id",
+        description="Business Scoped User ID (BSUID) - stable identifier from webhook",
     )
     profile: ContactProfile = Field(..., description="User profile information")
     identity_key_hash: str | None = Field(
         None, description="Identity key hash (only if identity change check enabled)"
     )
 
-    @field_validator("wa_id")
-    @classmethod
-    def validate_wa_id(cls, v: str) -> str:
-        """Validate WhatsApp ID format."""
-        if not v or len(v) < 8:
-            raise ValueError("WhatsApp ID must be at least 8 characters")
-        return v
+    @property
+    def user_id(self) -> str:
+        """
+        Get the recommended user identifier for caching, storage, and messaging.
+
+        Returns:
+            BSUID if available and non-empty, otherwise wa_id (phone number).
+            This is the identifier you should use for:
+            - Redis/cache keys
+            - Database user records
+            - Sending messages back to the user
+        """
+        if self.bsuid and self.bsuid.strip():
+            return self.bsuid.strip()
+        return self.wa_id
+
+    @property
+    def has_bsuid(self) -> bool:
+        """Check if this contact has a BSUID set."""
+        return bool(self.bsuid and self.bsuid.strip())
+
+    @property
+    def has_phone_number(self) -> bool:
+        """Check if this contact has a phone number (wa_id) set."""
+        return bool(self.wa_id and self.wa_id.strip())
+
+    @property
+    def is_username_only(self) -> bool:
+        """
+        Check if this user is username-only (has BSUID but no phone number visible).
+
+        This happens when:
+        - User has enabled usernames AND
+        - Business hasn't messaged user's phone in 30 days AND
+        - User hasn't added business to contacts
+        """
+        return self.has_bsuid and not self.has_phone_number
 
 
 class ReferredProduct(BaseModel):

@@ -391,6 +391,11 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             # Parse webhook container first
             webhook = self.parse_webhook_container(payload)
 
+            # Log raw webhook payload for debugging
+            self.logger.debug(
+                f"📨 Raw WhatsApp webhook received: {payload}"
+            )
+
             # Create tenant base from webhook metadata
             tenant_base = self._create_tenant_base(webhook, tenant_id)
 
@@ -602,7 +607,8 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             tenant=tenant_base,
             message_id=getattr(status, "message_id", ""),
             status=getattr(status, "status", "unknown"),
-            recipient_id=getattr(status, "recipient_id", ""),
+            recipient_phone_id=getattr(status, "wa_recipient_id", ""),  # Phone number field
+            recipient_bsuid=getattr(status, "recipient_bsuid", None),  # BSUID field (v24.0+)
             timestamp=datetime.fromtimestamp(getattr(status, "timestamp", 0)),
             conversation=conversation,
             errors=errors,
@@ -677,16 +683,22 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         for contact in contacts:
             if contact.user_id == sender_id:
                 return UserBase(
-                    user_id=contact.user_id,
-                    phone_number=contact.user_id,  # For WhatsApp, user_id is the phone number
+                    platform_user_id=contact.user_id,  # BSUID-aware identifier (BSUID if available, else phone)
+                    phone_number=contact.user_id,  # For backwards compatibility
+                    bsuid=contact.bsuid if hasattr(contact, "bsuid") else None,  # BSUID if present (v24.0+)
+                    username=contact.username if hasattr(contact, "username") else None,  # Username if present (v24.0+)
+                    country_code=contact.country_code if hasattr(contact, "country_code") else None,  # Country code if present (v24.0+)
                     profile_name=contact.display_name,
-                    identity_key_hash=getattr(contact, "identity_key_hash", None),
+                    identity_key_hash=contact.identity_key_hash if hasattr(contact, "identity_key_hash") else None,
                 )
 
         # Fallback if no matching contact found
         return UserBase(
-            user_id=sender_id,
+            platform_user_id=sender_id,
             phone_number=sender_id,
+            bsuid=None,  # No BSUID available
+            username=None,
+            country_code=None,
             profile_name=None,
             identity_key_hash=None,
         )
