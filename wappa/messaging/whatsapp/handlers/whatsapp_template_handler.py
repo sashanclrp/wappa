@@ -108,7 +108,7 @@ class WhatsAppTemplateHandler:
                     success=True,
                     message_id=message_id,
                     platform="whatsapp",
-                    raw_response=response,
+                    api_response=response,
                 )
             else:
                 error_msg = f"No message ID in response for template '{template_name}'"
@@ -119,7 +119,7 @@ class WhatsAppTemplateHandler:
                     platform="whatsapp",
                     error=error_msg,
                     error_code="NO_MESSAGE_ID",
-                    raw_response=response,
+                    api_response=response,
                 )
 
         except Exception as e:
@@ -228,7 +228,7 @@ class WhatsAppTemplateHandler:
                     success=True,
                     message_id=message_id,
                     platform="whatsapp",
-                    raw_response=response,
+                    api_response=response,
                 )
             else:
                 error_msg = (
@@ -241,7 +241,7 @@ class WhatsAppTemplateHandler:
                     platform="whatsapp",
                     error=error_msg,
                     error_code="NO_MESSAGE_ID",
-                    raw_response=response,
+                    api_response=response,
                 )
 
         except Exception as e:
@@ -360,7 +360,7 @@ class WhatsAppTemplateHandler:
                     success=True,
                     message_id=message_id,
                     platform="whatsapp",
-                    raw_response=response,
+                    api_response=response,
                 )
             else:
                 error_msg = (
@@ -373,7 +373,7 @@ class WhatsAppTemplateHandler:
                     platform="whatsapp",
                     error=error_msg,
                     error_code="NO_MESSAGE_ID",
-                    raw_response=response,
+                    api_response=response,
                 )
 
         except Exception as e:
