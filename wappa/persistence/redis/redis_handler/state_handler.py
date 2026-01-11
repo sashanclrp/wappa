@@ -38,7 +38,7 @@ class RedisStateHandler(TenantCache, IStateCache):
     """
 
     user_id: str = Field(..., min_length=1)
-    redis_alias: str = "handlers"
+    redis_alias: str = "state_handler"
 
     def _key(self, handler_name: str) -> str:
         """Build handler key using KeyFactory"""

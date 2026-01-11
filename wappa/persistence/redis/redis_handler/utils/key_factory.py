@@ -14,6 +14,7 @@ class KeyFactory(BaseModel):
     handler_prefix: str = Field(default="state")
     table_prefix: str = Field(default="df")
     trigger_prefix: str = Field(default="EXPTRIGGER")
+    aistate_prefix: str = Field(default="aistate")
     pk_marker: str = Field(default="pkid")
 
     # ---- builders ---------------------------------------------------------
@@ -52,6 +53,30 @@ class KeyFactory(BaseModel):
         safe_action = action.replace(":", "_")
         safe_ident = ident.replace(":", "_")
         return f"{tenant}:{self.trigger_prefix}:{safe_action}:{safe_ident}"
+
+    def aistate(self, tenant: str, agent_name: str, user_id: str) -> str:
+        """
+        Build AI state key for agent state management.
+
+        Pattern: {tenant}:aistate:{agent_name}:{user_id}
+
+        Args:
+            tenant: Tenant identifier
+            agent_name: AI agent name (e.g., "summarizer", "analyzer")
+            user_id: User identifier
+
+        Returns:
+            Formatted AI state key
+
+        Example:
+            >>> keys.aistate("wappa", "summarizer", "user123")
+            "wappa:aistate:summarizer:user123"
+
+        Note:
+            Colons in agent_name are replaced with underscores for safety.
+        """
+        safe_agent = agent_name.replace(":", "_")
+        return f"{tenant}:{self.aistate_prefix}:{safe_agent}:{user_id}"
 
     # ---- parsers ----------------------------------------------------------
     def parse_trigger(self, key: str) -> tuple[str, str, str] | None:

@@ -6,7 +6,13 @@ with handlers implementing type-specific interfaces directly.
 """
 
 from ...domain.interfaces.cache_factory import ICacheFactory
-from ...domain.interfaces.cache_interfaces import IStateCache, ITableCache, IUserCache
+from ...domain.interfaces.cache_interfaces import (
+    IAIStateCache,
+    IStateCache,
+    ITableCache,
+    IUserCache,
+)
+from .handlers.ai_state import JSONAIState
 from .handlers.state_handler import JSONStateHandler
 from .handlers.table_handler import JSONTable
 from .handlers.user_handler import JSONUser
@@ -20,6 +26,7 @@ class JSONCacheFactory(ICacheFactory):
     - State cache: Uses states subdirectory
     - User cache: Uses users subdirectory
     - Table cache: Uses tables subdirectory
+    - AI State cache: Uses ai_states subdirectory
 
     All instances implement the type-specific cache interfaces directly.
 
@@ -68,3 +75,15 @@ class JSONCacheFactory(ICacheFactory):
             JSONTable implementing ITableCache
         """
         return JSONTable(tenant=self.tenant_id)
+
+    def create_ai_state_cache(self) -> IAIStateCache:
+        """
+        Create JSON AI state cache instance.
+
+        Uses context (tenant_id, user_id) injected at construction time.
+        Stores data in {project_root}/cache/ai_states/ directory.
+
+        Returns:
+            JSONAIState implementing IAIStateCache
+        """
+        return JSONAIState(tenant=self.tenant_id, user_id=self.user_id)

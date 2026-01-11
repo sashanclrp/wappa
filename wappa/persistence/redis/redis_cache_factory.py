@@ -7,11 +7,13 @@ with handlers implementing type-specific interfaces directly.
 
 from ...domain.interfaces.cache_factory import ICacheFactory
 from ...domain.interfaces.cache_interfaces import (
+    IAIStateCache,
     IExpiryCache,
     IStateCache,
     ITableCache,
     IUserCache,
 )
+from .redis_handler.ai_state import RedisAIState
 from .redis_handler.expiry import RedisExpiry
 from .redis_handler.state_handler import RedisStateHandler
 from .redis_handler.table import RedisTable
@@ -27,6 +29,7 @@ class RedisCacheFactory(ICacheFactory):
     - User cache: Uses users pool (db0)
     - Table cache: Uses table pool (db2)
     - Expiry cache: Uses expiry pool (db3)
+    - AI State cache: Uses ai_state pool (db4)
 
     All instances implement the type-specific cache interfaces directly.
 
@@ -91,4 +94,22 @@ class RedisCacheFactory(ICacheFactory):
         """
         return RedisExpiry(
             tenant=self.tenant_id, user_id=self.user_id, redis_alias="expiry"
+        )
+
+    def create_ai_state_cache(self) -> IAIStateCache:
+        """
+        Create Redis AI state cache instance.
+
+        Uses context (tenant_id, user_id) injected at construction time.
+
+        Returns:
+            RedisAIState implementing IAIStateCache configured for ai_state pool
+
+        Example:
+            factory = RedisCacheFactory(tenant_id="wappa", user_id="user_123")
+            ai_state = factory.create_ai_state_cache()
+            await ai_state.upsert("summarizer", {"context": "meeting notes", "tokens": 1500})
+        """
+        return RedisAIState(
+            tenant=self.tenant_id, user_id=self.user_id, redis_alias="ai_state"
         )

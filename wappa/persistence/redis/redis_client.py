@@ -25,13 +25,14 @@ from redis.asyncio import ConnectionPool, Redis
 log = logging.getLogger("RedisClient")
 
 # Predefined Redis pool aliases with their database numbers for Wappa cache
-PoolAlias = Literal["users", "state_handler", "table", "expiry"]
+PoolAlias = Literal["users", "state_handler", "table", "expiry", "ai_state"]
 
 POOL_DB_MAPPING = {
     "users": 0,  # User-specific cache operations
     "state_handler": 1,  # Handler state cache operations
     "table": 2,  # Table/data cache operations
     "expiry": 3,  # Expiry trigger cache operations
+    "ai_state": 4,  # AI agent state cache operations
 }
 
 
@@ -39,11 +40,12 @@ class RedisClient:
     """
     Fork-safe, asyncio-native **multi-pool** Redis manager for Wappa cache.
 
-    Supports exactly 4 predefined pools:
+    Supports exactly 5 predefined pools:
     - "users" (db 0): User-specific cache operations
     - "state_handler" (db 1): Handler state cache operations
     - "table" (db 2): Table/data cache operations
     - "expiry" (db 3): Expiry trigger cache operations
+    - "ai_state" (db 4): AI agent state cache operations
 
     Every worker process keeps its own pools to avoid post-fork descriptor reuse.
     """

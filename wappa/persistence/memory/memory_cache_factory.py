@@ -6,7 +6,13 @@ with handlers implementing type-specific interfaces directly.
 """
 
 from ...domain.interfaces.cache_factory import ICacheFactory
-from ...domain.interfaces.cache_interfaces import IStateCache, ITableCache, IUserCache
+from ...domain.interfaces.cache_interfaces import (
+    IAIStateCache,
+    IStateCache,
+    ITableCache,
+    IUserCache,
+)
+from .handlers.ai_state import MemoryAIState
 from .handlers.state_handler import MemoryStateHandler
 from .handlers.table_handler import MemoryTable
 from .handlers.user_handler import MemoryUser
@@ -20,6 +26,7 @@ class MemoryCacheFactory(ICacheFactory):
     - State cache: Uses states namespace with automatic TTL cleanup
     - User cache: Uses users namespace with context isolation
     - Table cache: Uses tables namespace with tenant isolation
+    - AI State cache: Uses ai_states namespace with automatic TTL cleanup
 
     All instances implement the type-specific cache interfaces directly.
 
@@ -68,3 +75,15 @@ class MemoryCacheFactory(ICacheFactory):
             MemoryTable implementing ITableCache
         """
         return MemoryTable(tenant=self.tenant_id)
+
+    def create_ai_state_cache(self) -> IAIStateCache:
+        """
+        Create Memory AI state cache instance.
+
+        Uses context (tenant_id, user_id) injected at construction time.
+        Stores data in memory with namespace isolation and automatic TTL cleanup.
+
+        Returns:
+            MemoryAIState implementing IAIStateCache
+        """
+        return MemoryAIState(tenant=self.tenant_id, user_id=self.user_id)

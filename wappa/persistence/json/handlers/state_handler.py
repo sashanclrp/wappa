@@ -247,7 +247,8 @@ class JSONStateHandler(IStateCache):
         Returns:
             Remaining TTL in seconds, -1 if no expiry, -2 if doesn't exist
         """
-        return await storage_manager.get_ttl("states", self.tenant, self.user_id)
+        key = self._key(handler_name)
+        return await storage_manager.get_ttl("states", self.tenant, self.user_id, key)
 
     async def renew_ttl(self, handler_name: str, ttl: int) -> bool:
         """
@@ -260,4 +261,7 @@ class JSONStateHandler(IStateCache):
         Returns:
             True if successful, False otherwise
         """
-        return await storage_manager.set_ttl("states", self.tenant, self.user_id, ttl)
+        key = self._key(handler_name)
+        return await storage_manager.set_ttl(
+            "states", self.tenant, self.user_id, key, ttl
+        )

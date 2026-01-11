@@ -6,7 +6,13 @@ Defines the contract for creating context-aware cache instances.
 
 from abc import ABC, abstractmethod
 
-from .cache_interfaces import IExpiryCache, IStateCache, ITableCache, IUserCache
+from .cache_interfaces import (
+    IAIStateCache,
+    IExpiryCache,
+    IStateCache,
+    ITableCache,
+    IUserCache,
+)
 
 
 class ICacheFactory(ABC):
@@ -103,5 +109,23 @@ class ICacheFactory(ABC):
             factory = RedisCacheFactory(tenant_id="wappa", user_id="user_123")
             expiry_cache = factory.create_expiry_cache()
             await expiry_cache.set("payment_reminder", "TXN_123", 1800)
+        """
+        pass
+
+    @abstractmethod
+    def create_ai_state_cache(self) -> IAIStateCache:
+        """
+        Create AI state cache instance with context binding.
+
+        Used for AI agent state management and context sharing.
+        Context (tenant_id, user_id) is automatically injected from constructor.
+
+        Returns:
+            Context-bound AI state cache instance implementing IAIStateCache
+
+        Example:
+            factory = RedisCacheFactory(tenant_id="wappa", user_id="user_123")
+            ai_state = factory.create_ai_state_cache()
+            await ai_state.upsert("summarizer", {"context": "meeting notes"})
         """
         pass
