@@ -16,11 +16,15 @@ from fastapi.responses import PlainTextResponse
 from wappa.core.config.settings import settings
 from wappa.core.events import WappaEventDispatcher
 from wappa.core.logging.context import (
+    get_context_info,
     get_current_owner_context,
     get_current_tenant_context,
+    get_current_user_context,
 )
 from wappa.core.logging.logger import get_logger
+from wappa.core.pubsub import PubSubMessengerWrapper
 from wappa.domain.factories import MessengerFactory
+from wappa.persistence.cache_factory import create_cache_factory
 from wappa.processors.factory import processor_factory
 from wappa.schemas.core.types import PlatformType
 
@@ -150,8 +154,6 @@ class WebhookController:
         owner_id = get_current_owner_context()
 
         # ENHANCED DEBUGGING: Show context details
-        from wappa.core.logging.context import get_context_info
-
         context_info = get_context_info()
 
         self.logger.debug(
@@ -323,8 +325,6 @@ class WebhookController:
             )
 
             # Extract user_id from context (set by webhook processor) with fallback
-            from wappa.core.logging.context import get_current_user_context
-
             user_id = get_current_user_context()
 
             if not user_id:
@@ -334,8 +334,6 @@ class WebhookController:
 
             # Wrap messenger with PubSub if plugin is active
             if getattr(request.app.state, "pubsub_wrap_messenger", False):
-                from wappa.core.pubsub import PubSubMessengerWrapper
-
                 messenger = PubSubMessengerWrapper(
                     inner=messenger,
                     tenant=tenant_id,
@@ -350,6 +348,17 @@ class WebhookController:
             if event_handler:
                 event_handler.messenger = messenger
                 event_handler.cache_factory = cache_factory
+
+                # Inject database session factory if PostgresDatabasePlugin is registered
+                session_manager = getattr(
+                    request.app.state, "postgres_session_manager", None
+                )
+                if session_manager:
+                    event_handler.db = session_manager.get_session
+                    event_handler.db_read = session_manager.get_read_session
+                    self.logger.debug(
+                        f"✅ Injected database session factory for tenant {tenant_id}"
+                    )
 
                 self.logger.debug(
                     f"✅ Injected per-request dependencies for tenant {tenant_id}: "
@@ -409,8 +418,6 @@ class WebhookController:
                     )
 
             # Create cache factory using the detected cache type
-            from wappa.persistence.cache_factory import create_cache_factory
-
             factory_class = create_cache_factory(cache_type)
             cache_factory = factory_class(tenant_id=tenant_id, user_id=user_id)
 

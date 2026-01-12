@@ -5,7 +5,8 @@ This provides the interface that developers implement to handle WhatsApp webhook
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from collections.abc import AsyncContextManager, Callable
+from typing import TYPE_CHECKING, Any
 
 from .default_handlers import (
     DefaultErrorHandler,
@@ -14,6 +15,8 @@ from .default_handlers import (
 )
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from wappa.domain.events.api_message_event import APIMessageEvent
     from wappa.domain.interfaces.messaging_interface import IMessenger
     from wappa.webhooks import (
@@ -32,17 +35,38 @@ class WappaEventHandler(ABC):
 
     Dependencies are injected PER-REQUEST by WebhookController:
     - messenger: IMessenger created with correct tenant_id for each request
-    - cache_factory: Future cache factory for tenant-specific data persistence (currently None)
+    - cache_factory: Cache factory for tenant-specific data persistence
+    - db: Database session factory for write operations (PostgresDatabasePlugin)
+    - db_read: Database session factory for read operations (uses replicas if configured)
 
     This ensures proper multi-tenant support where each webhook is processed
     with the correct tenant-specific messenger instance.
+
+    Database Usage:
+        async with self.db() as session:
+            user = await session.exec(select(User).where(User.phone == phone))
+            # Auto-commits on context exit if auto_commit=True
+
+        # For read-heavy operations (uses replicas if configured):
+        async with self.db_read() as session:
+            results = await session.exec(select(User))
     """
 
     def __init__(self):
         """Initialize event handler with None dependencies (injected per-request)."""
-        self.messenger: IMessenger = None  # Injected per-request by WebhookController
+        self.messenger: IMessenger | None = (
+            None  # Injected per-request by WebhookController
+        )
         self.cache_factory = (
             None  # Injected per-request by WebhookController (placeholder)
+        )
+        # Database session factories (injected per-request by WebhookController)
+        # Usage: async with self.db() as session: ...
+        self.db: Callable[[], AsyncContextManager[AsyncSession]] | None = (
+            None  # Write session factory (PostgresDatabasePlugin)
+        )
+        self.db_read: Callable[[], AsyncContextManager[AsyncSession]] | None = (
+            None  # Read session factory (uses replicas if configured)
         )
 
         # Set up logger with the actual class module name (not the base class)
@@ -281,28 +305,36 @@ class WappaEventHandler(ABC):
         """
         if self.messenger is None:
             self.logger.error(
-                "❌ Messenger dependency not injected - cannot send messages (check WebhookController)"
+                "Messenger dependency not injected - cannot send messages (check WebhookController)"
             )
             return False
 
         # Cache factory is optional for now (placeholder)
         if self.cache_factory is None:
             self.logger.debug(
-                "ℹ️  Cache factory not injected - using placeholder (expected)"
+                "Cache factory not injected - using placeholder (expected)"
             )
         else:
             self.logger.debug(
-                f"✅ Cache factory injected: {type(self.cache_factory).__name__}"
+                f"Cache factory injected: {type(self.cache_factory).__name__}"
             )
 
+        # Database is optional - only available if PostgresDatabasePlugin is registered
+        if self.db is None:
+            self.logger.debug(
+                "Database not injected - PostgresDatabasePlugin may not be registered"
+            )
+        else:
+            self.logger.debug("Database session factory injected")
+
         self.logger.debug(
-            f"✅ Per-request dependencies validation passed - "
+            f"Per-request dependencies validation passed - "
             f"messenger: {self.messenger.__class__.__name__} "
             f"(platform: {self.messenger.platform.value}, tenant: {self.messenger.tenant_id})"
         )
         return True
 
-    def get_dependency_status(self) -> dict:
+    def get_dependency_status(self) -> dict[str, dict[str, Any]]:
         """
         Get the status of injected dependencies for debugging.
 
@@ -322,5 +354,13 @@ class WappaEventHandler(ABC):
                 if self.cache_factory
                 else None,
                 "status": "placeholder" if self.cache_factory is None else "active",
+            },
+            "db": {
+                "injected": self.db is not None,
+                "status": "active" if self.db is not None else "not_configured",
+            },
+            "db_read": {
+                "injected": self.db_read is not None,
+                "status": "active" if self.db_read is not None else "not_configured",
             },
         }

@@ -15,6 +15,7 @@ from .cors_plugin import CORSPlugin
 from .custom_middleware_plugin import CustomMiddlewarePlugin
 from .database_plugin import DatabasePlugin
 from .expiry_plugin import ExpiryPlugin
+from .postgres_database_plugin import PostgresDatabasePlugin
 from .rate_limit_plugin import RateLimitPlugin
 from .redis_plugin import RedisPlugin
 from .redis_pubsub_plugin import RedisPubSubPlugin
@@ -24,8 +25,10 @@ from .webhook_plugin import WebhookPlugin
 __all__ = [
     # Core Framework
     "WappaCorePlugin",
-    # Core Infrastructure
-    "DatabasePlugin",
+    # Core Infrastructure - Database
+    "DatabasePlugin",  # Legacy adapter-based plugin
+    "PostgresDatabasePlugin",  # 30x-inspired PostgreSQL plugin (recommended)
+    # Core Infrastructure - Redis
     "RedisPlugin",
     "RedisPubSubPlugin",
     "ExpiryPlugin",
