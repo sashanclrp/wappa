@@ -29,20 +29,15 @@ USAGE:
 - Wappa CLI: wappa dev app.main (when CLI is available)
 """
 
-import os
-
 from wappa import Wappa, __version__
-from wappa.core.config.settings import settings
 from wappa.core.logging import get_logger
 from wappa.core.plugins import PostgresDatabasePlugin
 
+from .config.config import settings_with_db
 from .master_event import DBRedisExampleHandler
 from .models.database_models import Chat, Conversation, Message
 
 logger = get_logger(__name__)
-
-# Get database URL from environment variable
-DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 
 def validate_configuration() -> bool:
@@ -54,19 +49,19 @@ def validate_configuration() -> bool:
     """
     missing_configs = []
 
-    if not settings.wp_access_token:
+    if not settings_with_db.wp_access_token:
         missing_configs.append("WP_ACCESS_TOKEN")
 
-    if not settings.wp_phone_id:
+    if not settings_with_db.wp_phone_id:
         missing_configs.append("WP_PHONE_ID")
 
-    if not settings.wp_bid:
+    if not settings_with_db.wp_bid:
         missing_configs.append("WP_BID")
 
-    if not settings.has_redis:
+    if not settings_with_db.has_redis:
         missing_configs.append("REDIS_URL")
 
-    if not DATABASE_URL:
+    if not settings_with_db.database_url:
         missing_configs.append("DATABASE_URL")
 
     if missing_configs:
@@ -92,14 +87,16 @@ def display_startup_information() -> None:
 
     print("CONFIGURATION STATUS:")
     print(
-        f"  - Access Token: {'Configured' if settings.wp_access_token else 'Missing'}"
+        f"  - Access Token: {'Configured' if settings_with_db.wp_access_token else 'Missing'}"
     )
     print(
-        f"  - Phone ID: {settings.wp_phone_id if settings.wp_phone_id else 'Missing'}"
+        f"  - Phone ID: {settings_with_db.wp_phone_id if settings_with_db.wp_phone_id else 'Missing'}"
     )
-    print(f"  - Business ID: {'Configured' if settings.wp_bid else 'Missing'}")
-    print(f"  - Redis URL: {'Configured' if settings.has_redis else 'Missing'}")
-    print(f"  - Database URL: {'Configured' if DATABASE_URL else 'Missing'}")
+    print(f"  - Business ID: {'Configured' if settings_with_db.wp_bid else 'Missing'}")
+    print(f"  - Redis URL: {'Configured' if settings_with_db.has_redis else 'Missing'}")
+    print(
+        f"  - Database URL: {'Configured' if settings_with_db.database_url else 'Missing'}"
+    )
     print()
 
     print("DEMO FEATURES:")
@@ -125,7 +122,7 @@ def create_wappa_application() -> Wappa:
     Raises:
         ValueError: If DATABASE_URL is not configured
     """
-    if not DATABASE_URL:
+    if not settings_with_db.database_url:
         raise ValueError(
             "DATABASE_URL environment variable is required. "
             "Set it in your .env file: DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/db"
@@ -135,11 +132,11 @@ def create_wappa_application() -> Wappa:
         logger.info("Creating Wappa application with Redis cache...")
         app = Wappa(cache="redis")
 
-        # Add PostgreSQL database plugin using environment variable
+        # Add PostgreSQL database plugin using settings
         logger.info("Adding PostgresDatabasePlugin...")
         app.add_plugin(
             PostgresDatabasePlugin(
-                url=DATABASE_URL,
+                url=settings_with_db.database_url,
                 models=[Chat, Conversation, Message],
                 auto_create_tables=False,  # Tables already exist in database
                 auto_commit=True,
@@ -204,15 +201,15 @@ def main() -> None:
 
 # Module-level app instance for uvicorn compatibility
 # Only create if DATABASE_URL is configured
-if DATABASE_URL:
+if settings_with_db.database_url:
     try:
         logger.info("Creating module-level Wappa application instance")
         app = Wappa(cache="redis")
 
-        # Add PostgreSQL database plugin using environment variable
+        # Add PostgreSQL database plugin using settings
         app.add_plugin(
             PostgresDatabasePlugin(
-                url=DATABASE_URL,
+                url=settings_with_db.database_url,
                 models=[Chat, Conversation, Message],
                 auto_create_tables=False,
                 auto_commit=True,
