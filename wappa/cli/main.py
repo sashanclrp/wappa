@@ -65,6 +65,28 @@ EXAMPLES = {
         "features": ["Audio processing", "OpenAI integration", "Voice transcription"],
         "complexity": "🟡 Intermediate",
     },
+    "redis_pubsub_example": {
+        "name": "Redis PubSub Plugin",
+        "description": "Multi-tenant Redis PubSub with self-subscribing pattern",
+        "features": [
+            "Redis PubSub",
+            "Multi-tenant messaging",
+            "Self-subscribing pattern",
+            "Channel management",
+        ],
+        "complexity": "🟡 Intermediate",
+    },
+    "db_redis_echo_example": {
+        "name": "DB + Redis Cache",
+        "description": "PostgreSQL + Redis two-tier storage with SOLID architecture",
+        "features": [
+            "Async PostgreSQL",
+            "Redis caching",
+            "Conversation persistence",
+            "SOLID architecture",
+        ],
+        "complexity": "🔴 Advanced",
+    },
     "wappa_full_example": {
         "name": "Full-Featured Bot",
         "description": "Complete WhatsApp bot with all features and deployment configs",
