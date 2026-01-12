@@ -36,6 +36,10 @@ class ImageContent(BaseModel):
         description="Optional image caption text",
         max_length=1024,  # WhatsApp caption limit
     )
+    url: str | None = Field(
+        None,
+        description="Direct download URL for the image (temporary, requires authentication)",
+    )
 
     @field_validator("id")
     @classmethod
@@ -364,9 +368,9 @@ class WhatsAppImageMessage(BaseImageMessage):
             "caption": self.caption,
             "has_caption": self.has_caption(),
             "is_forwarded": self.is_forwarded,
-            "context": self.get_context().to_universal_dict()
-            if self.has_context()
-            else None,
+            "context": (
+                self.get_context().to_universal_dict() if self.has_context() else None
+            ),
             "whatsapp_data": {
                 "whatsapp_id": self.id,
                 "from": self.from_,

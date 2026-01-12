@@ -32,6 +32,10 @@ class DocumentContent(BaseModel):
     )
     sha256: str = Field(..., description="SHA-256 hash of the document file")
     id: str = Field(..., description="Media asset ID for retrieving the document file")
+    url: str | None = Field(
+        None,
+        description="Direct download URL for the document (temporary, requires authentication)",
+    )
 
     @field_validator("caption")
     @classmethod

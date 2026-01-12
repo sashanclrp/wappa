@@ -29,6 +29,10 @@ class VideoContent(BaseModel):
     )
     sha256: str = Field(..., description="SHA-256 hash of the video file")
     id: str = Field(..., description="Media asset ID for retrieving the video file")
+    url: str | None = Field(
+        None,
+        description="Direct download URL for the video (temporary, requires authentication)",
+    )
 
     @field_validator("caption")
     @classmethod
@@ -211,6 +215,23 @@ class WhatsAppVideoMessage(BaseVideoMessage):
         """Get the timestamp as an integer."""
         return self.timestamp
 
+    @property
+    def media_type(self):
+        """Get the media type from MediaType enum."""
+        from wappa.webhooks.core.types import MediaType
+
+        mime_str = self.video.mime_type
+        try:
+            return MediaType(mime_str)
+        except ValueError:
+            # Fallback for unknown video MIME types
+            return MediaType.VIDEO_MP4
+
+    @property
+    def file_size(self) -> int | None:
+        """Get the file size in bytes if available."""
+        return None  # WhatsApp doesn't provide file size in webhooks
+
     def get_ad_context(self) -> tuple[str | None, str | None]:
         """
         Get ad context information for Click-to-WhatsApp video messages.
@@ -302,14 +323,15 @@ class WhatsAppVideoMessage(BaseVideoMessage):
             "video_content": self.video.model_dump(),
         }
 
-    # Abstract methods already implemented above
-
     def get_download_info(self) -> dict[str, Any]:
+        """Get information needed to download the media file."""
         return {
             "media_id": self.media_id,
             "mime_type": self.media_type.value,
             "sha256": self.video.sha256,
             "platform": "whatsapp",
+            "requires_auth": True,
+            "download_method": "whatsapp_media_api",
         }
 
     # Implement abstract methods from BaseVideoMessage

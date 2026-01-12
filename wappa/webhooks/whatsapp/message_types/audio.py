@@ -32,6 +32,10 @@ class AudioContent(BaseModel):
     voice: bool = Field(
         ..., description="True if audio is a voice recording, False if audio file"
     )
+    url: str | None = Field(
+        None,
+        description="Direct download URL for the audio (temporary, requires authentication)",
+    )
 
     @field_validator("mime_type")
     @classmethod

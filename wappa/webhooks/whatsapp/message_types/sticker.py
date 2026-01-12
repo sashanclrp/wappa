@@ -33,6 +33,10 @@ class StickerContent(BaseModel):
     animated: bool = Field(
         ..., description="True if sticker is animated, False if static"
     )
+    url: str | None = Field(
+        None,
+        description="Direct download URL for the sticker (temporary, requires authentication)",
+    )
 
     @field_validator("mime_type")
     @classmethod
