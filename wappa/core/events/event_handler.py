@@ -5,8 +5,8 @@ This provides the interface that developers implement to handle WhatsApp webhook
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncContextManager, Callable
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, AsyncContextManager
 
 from .default_handlers import (
     DefaultErrorHandler,
