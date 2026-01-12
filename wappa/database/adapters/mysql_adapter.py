@@ -6,9 +6,10 @@ using aiomysql as the async driver.
 """
 
 from collections.abc import Callable
-from contextlib import asynccontextmanager
-from typing import Any, AsyncContextManager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import Any
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
@@ -73,7 +74,7 @@ class MySQLAdapter:
 
     async def create_session_factory(
         self, engine: AsyncEngine
-    ) -> Callable[[], AsyncContextManager[AsyncSession]]:
+    ) -> Callable[[], AbstractAsyncContextManager[AsyncSession]]:
         """
         Create session factory for MySQL async sessions.
 
@@ -138,7 +139,7 @@ class MySQLAdapter:
         """
         try:
             async with engine.begin() as conn:
-                result = await conn.execute("SELECT 1")
+                result = await conn.execute(text("SELECT 1"))
                 return result.scalar() == 1
         except Exception:
             return False
@@ -155,15 +156,15 @@ class MySQLAdapter:
         """
         try:
             async with engine.begin() as conn:
-                version_result = await conn.execute("SELECT VERSION()")
+                version_result = await conn.execute(text("SELECT VERSION()"))
                 version = version_result.scalar()
 
                 # Get character set info
-                charset_result = await conn.execute("SELECT @@character_set_database")
+                charset_result = await conn.execute(text("SELECT @@character_set_database"))
                 charset = charset_result.scalar()
 
                 # Get collation info
-                collation_result = await conn.execute("SELECT @@collation_database")
+                collation_result = await conn.execute(text("SELECT @@collation_database"))
                 collation = collation_result.scalar()
 
                 return {
@@ -175,7 +176,6 @@ class MySQLAdapter:
                     "pool_size": engine.pool.size(),
                     "pool_checked_in": engine.pool.checkedin(),
                     "pool_checked_out": engine.pool.checkedout(),
-                    "pool_invalid": engine.pool.invalidated(),
                     "healthy": True,
                 }
         except Exception as e:

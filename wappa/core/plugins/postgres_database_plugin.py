@@ -22,34 +22,51 @@ if TYPE_CHECKING:
 
 class PostgresDatabasePlugin:
     """
-    Simplified PostgreSQL database plugin inspired by 30x-community pattern.
+    Async PostgreSQL database plugin optimized for conversational applications.
+
+    **Optimized for Async Operations**: This plugin uses asyncpg and SQLAlchemy's
+    async engine, designed for high-concurrency conversational apps like WhatsApp
+    where multiple users send messages simultaneously. Async operations prevent
+    blocking and ensure responsive message handling.
 
     Provides:
-    - Simple API: Just pass the connection URL
+    - Async-first API with asyncpg driver for PostgreSQL
     - 30x-inspired session management with retry logic
     - Write/read replica support (future-ready)
     - Auto-table creation at startup
     - Clean injection into WappaEventHandler as self.db
+    - Connection pooling for concurrent message handling
 
     Simple Usage:
-        PostgresDatabasePlugin(url="postgresql://user:pass@localhost/db")
+        PostgresDatabasePlugin(
+            url="postgresql+asyncpg://user:pass@localhost/db"
+        )
 
     Advanced Usage:
         PostgresDatabasePlugin(
-            url="postgresql://primary:5432/db",
-            read_urls=["postgresql://replica1:5432/db"],
+            url="postgresql+asyncpg://primary:5432/db",
+            read_urls=["postgresql+asyncpg://replica1:5432/db"],
             models=[User, Order],
             auto_create_tables=True,
             auto_commit=True,
             pool_size=30,
+            statement_cache_size=0,  # For pgBouncer/Supabase
         )
 
-    In Event Handler:
+    In Event Handler (Async):
         class MyEventHandler(WappaEventHandler):
             async def process_message(self, webhook):
+                # Async context manager - non-blocking
                 async with self.db() as session:
-                    user = await session.exec(select(User).where(...))
+                    result = await session.execute(select(User).where(...))
+                    user = result.scalars().first()
                     # Auto-commits on context exit
+
+    Important Notes:
+        - Use postgresql+asyncpg:// URLs (not postgresql://)
+        - Use session.execute() not session.exec() (SQLAlchemy AsyncSession)
+        - All database operations must be awaited
+        - Set statement_cache_size=0 for pgBouncer transaction mode
     """
 
     def __init__(
@@ -69,6 +86,7 @@ class PostgresDatabasePlugin:
         base_delay: float = 1.0,
         max_delay: float = 30.0,
         echo: bool = False,
+        statement_cache_size: int | None = None,
     ):
         """
         Initialize PostgreSQL database plugin.
@@ -89,6 +107,9 @@ class PostgresDatabasePlugin:
             base_delay: Base delay for exponential backoff (default: 1.0)
             max_delay: Maximum delay between retries (default: 30.0)
             echo: Log SQL statements (default: False)
+            statement_cache_size: Asyncpg prepared statement cache size.
+                Set to 0 to disable (required for pgBouncer transaction mode).
+                None (default) uses asyncpg's default behavior.
         """
         self.url = url
         self.read_urls = read_urls or []
@@ -108,6 +129,7 @@ class PostgresDatabasePlugin:
             "max_delay": max_delay,
             "auto_commit": auto_commit,
             "echo": echo,
+            "statement_cache_size": statement_cache_size,
         }
 
         # Runtime state
@@ -115,23 +137,57 @@ class PostgresDatabasePlugin:
 
     def configure(self, builder: WappaBuilder) -> None:
         """
-        Configure the plugin with WappaBuilder.
+        Configure PostgreSQL plugin with WappaBuilder using hook-based architecture.
 
-        Database plugin doesn't need sync configuration - all setup
-        happens during async startup.
+        Registers database initialization and cleanup as hooks with the builder's
+        unified lifespan management system. This ensures database starts after
+        core Wappa functionality (logging) and shuts down before core cleanup.
 
         Args:
-            builder: WappaBuilder instance
+            builder: WappaBuilder instance to register hooks with
         """
-        # No sync configuration needed for database plugin
-        pass
+        # Register database lifecycle hooks with appropriate priorities
+        # Priority 25: After Redis (20) but before user hooks (50)
+        builder.add_startup_hook(self._db_startup, priority=25)
+        builder.add_shutdown_hook(self._db_shutdown, priority=25)
+
+        logger = get_app_logger()
+        logger.debug(
+            "🔧 PostgresDatabasePlugin configured - registered startup/shutdown hooks"
+        )
 
     async def startup(self, app: FastAPI) -> None:
         """
-        Initialize database during application startup.
+        Plugin startup method required by WappaPlugin protocol.
 
-        Creates the PostgresSessionManager, initializes connections,
-        and optionally creates tables from SQLModel definitions.
+        Delegates to _db_startup hook method for actual implementation.
+        This maintains compatibility with both the plugin protocol and
+        the hook-based architecture.
+
+        Args:
+            app: FastAPI application instance
+        """
+        await self._db_startup(app)
+
+    async def shutdown(self, app: FastAPI) -> None:
+        """
+        Plugin shutdown method required by WappaPlugin protocol.
+
+        Delegates to _db_shutdown hook method for actual implementation.
+        This maintains compatibility with both the plugin protocol and
+        the hook-based architecture.
+
+        Args:
+            app: FastAPI application instance
+        """
+        await self._db_shutdown(app)
+
+    async def _db_startup(self, app: FastAPI) -> None:
+        """
+        Database initialization hook - runs after core Wappa and Redis startup.
+
+        This hook is registered with priority 25, ensuring it runs after
+        Redis (priority 20) and core Wappa functionality (priority 10).
 
         Args:
             app: FastAPI application instance
@@ -139,9 +195,26 @@ class PostgresDatabasePlugin:
         logger = get_app_logger()
 
         try:
-            logger.info("Starting PostgresDatabasePlugin...")
+            # Section header
+            logger.info("=== POSTGRESQL DATABASE INITIALIZATION ===")
+
+            # Log database URL (masked) and configuration
+            masked_url = self._mask_url(self.url)
+            logger.debug(
+                f"🐘 Database URL: {masked_url} "
+                f"(pool_size: {self._pool_config['pool_size']}, "
+                f"max_overflow: {self._pool_config['max_overflow']}, "
+                f"timeout: {self._pool_config['pool_timeout']}s)"
+            )
+
+            # Log read replicas if configured
+            if self.read_urls:
+                logger.info(f"📖 Read replicas configured: {len(self.read_urls)}")
+                for idx, replica_url in enumerate(self.read_urls, 1):
+                    logger.debug(f"   • Replica {idx}: {self._mask_url(replica_url)}")
 
             # Create session manager
+            logger.debug("Creating PostgreSQL session manager...")
             self._session_manager = PostgresSessionManager(
                 write_url=self.url,
                 read_urls=self.read_urls or None,
@@ -149,38 +222,71 @@ class PostgresDatabasePlugin:
             )
 
             # Initialize connections
+            logger.info("🔌 Initializing database connections...")
             await self._session_manager.initialize()
+            logger.debug("✅ Database connection pool initialized")
+
+            # Perform health check
+            logger.info("🏥 Verifying database connection health...")
+            is_healthy = await self._session_manager.health_check()
+
+            if is_healthy:
+                logger.debug("✅ Database health check passed")
+            else:
+                logger.warning("⚠️ Database health check returned unhealthy status")
 
             # Create tables if requested and models provided
             if self.auto_create_tables and self.models:
-                await self._create_tables()
                 logger.info(
-                    f"Database tables created for models: {[m.__name__ for m in self.models]}"
+                    f"📊 Auto-creating tables for {len(self.models)} models: "
+                    f"{[m.__name__ for m in self.models]}"
                 )
+                await self._create_tables()
+                logger.debug("✅ Database tables created successfully")
+            elif self.models:
+                logger.info(
+                    f"📋 Models registered (auto_create_tables=False): "
+                    f"{[m.__name__ for m in self.models]}"
+                )
+            else:
+                logger.debug("No models registered - skipping table creation")
 
             # Store session manager in app state for access
             app.state.postgres_session_manager = self._session_manager
 
-            # Log success
+            # Get health status for final summary
             health = self._session_manager.get_health_status()
+
+            # Success confirmation
             logger.info(
-                f"PostgresDatabasePlugin initialized successfully - "
-                f"pool_size={health.get('pool_size', 'N/A')}, "
-                f"read_replicas={len(self.read_urls)}, "
-                f"auto_commit={self.auto_commit}"
+                f"✅ PostgreSQL database startup completed! "
+                f"Status: {'healthy' if is_healthy else 'degraded'}, "
+                f"Pool: {health.get('pool_size', 'N/A')}/{health.get('max_overflow', 'N/A')}, "
+                f"Read replicas: {len(self.read_urls)}, "
+                f"Auto-commit: {self.auto_commit}"
             )
+
+            # Section footer
+            logger.info("=" * 43)
+
+            # Debug: Full health status details
+            logger.debug(f"Database health details: {health}")
 
         except Exception as e:
             logger.error(
-                f"Failed to initialize PostgresDatabasePlugin: {e}", exc_info=True
+                f"❌ PostgreSQL database startup hook failed: {e}", exc_info=True
             )
-            raise RuntimeError(f"PostgresDatabasePlugin startup failed: {e}") from e
+            raise RuntimeError(
+                f"PostgresDatabasePlugin startup hook failed: {e}"
+            ) from e
 
-    async def shutdown(self, app: FastAPI) -> None:
+    async def _db_shutdown(self, app: FastAPI) -> None:
         """
-        Clean up database resources during application shutdown.
+        Database cleanup hook - runs before core Wappa shutdown.
 
-        Properly disposes of all engines and connections.
+        This hook is registered with priority 25, ensuring it runs before
+        core Wappa cleanup (priority 90) to properly close database connections
+        while logging is still available.
 
         Args:
             app: FastAPI application instance
@@ -188,18 +294,23 @@ class PostgresDatabasePlugin:
         logger = get_app_logger()
 
         try:
+            # Clean up database connections if initialized
             if self._session_manager:
-                logger.info("Shutting down PostgresDatabasePlugin...")
+                logger.info("=== POSTGRESQL DATABASE SHUTDOWN ===")
+                logger.debug("🐘 Cleaning up database connections...")
                 await self._session_manager.cleanup()
-                logger.info("PostgresDatabasePlugin shutdown complete")
+                logger.info("✅ PostgreSQL database shutdown completed")
+                logger.info("=" * 43)
 
             # Clean up app state
             if hasattr(app.state, "postgres_session_manager"):
                 del app.state.postgres_session_manager
+                logger.debug("🧹 Session manager removed from app state")
 
         except Exception as e:
+            # Don't re-raise in shutdown - log and continue
             logger.error(
-                f"Error during PostgresDatabasePlugin shutdown: {e}", exc_info=True
+                f"❌ Error during PostgreSQL shutdown hook: {e}", exc_info=True
             )
 
     async def _create_tables(self) -> None:

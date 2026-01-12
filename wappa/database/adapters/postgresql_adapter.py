@@ -6,9 +6,10 @@ using asyncpg as the async driver.
 """
 
 from collections.abc import Callable
-from contextlib import asynccontextmanager
-from typing import Any, AsyncContextManager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import Any
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
@@ -70,7 +71,7 @@ class PostgreSQLAdapter:
 
     async def create_session_factory(
         self, engine: AsyncEngine
-    ) -> Callable[[], AsyncContextManager[AsyncSession]]:
+    ) -> Callable[[], AbstractAsyncContextManager[AsyncSession]]:
         """
         Create session factory for PostgreSQL async sessions.
 
@@ -131,7 +132,7 @@ class PostgreSQLAdapter:
         """
         try:
             async with engine.begin() as conn:
-                result = await conn.execute("SELECT 1")
+                result = await conn.execute(text("SELECT 1"))
                 return result.scalar() == 1
         except Exception:
             return False
@@ -148,7 +149,7 @@ class PostgreSQLAdapter:
         """
         try:
             async with engine.begin() as conn:
-                version_result = await conn.execute("SELECT version()")
+                version_result = await conn.execute(text("SELECT version()"))
                 version = version_result.scalar()
 
                 return {
@@ -158,7 +159,6 @@ class PostgreSQLAdapter:
                     "pool_size": engine.pool.size(),
                     "pool_checked_in": engine.pool.checkedin(),
                     "pool_checked_out": engine.pool.checkedout(),
-                    "pool_invalid": engine.pool.invalidated(),
                 }
         except Exception as e:
             return {

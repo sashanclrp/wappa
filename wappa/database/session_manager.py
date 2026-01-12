@@ -97,6 +97,7 @@ class PostgresSessionManager:
         max_delay: float = 30.0,
         auto_commit: bool = True,
         echo: bool = False,
+        statement_cache_size: int | None = None,
     ):
         """
         Initialize PostgreSQL session manager.
@@ -114,6 +115,9 @@ class PostgresSessionManager:
             max_delay: Maximum delay between retries (default: 30.0)
             auto_commit: Auto-commit on successful context exit (default: True)
             echo: Log SQL statements (default: False)
+            statement_cache_size: Asyncpg prepared statement cache size.
+                Set to 0 to disable (required for pgBouncer transaction mode).
+                None (default) uses asyncpg's default behavior.
         """
         self.write_url = self._normalize_url(write_url)
         self.read_urls = [self._normalize_url(url) for url in (read_urls or [])]
@@ -125,6 +129,7 @@ class PostgresSessionManager:
         self.pool_recycle = pool_recycle
         self.pool_pre_ping = pool_pre_ping
         self.echo = echo
+        self.statement_cache_size = statement_cache_size
 
         # Retry configuration
         self.max_retries = max_retries
@@ -177,6 +182,11 @@ class PostgresSessionManager:
         Returns:
             Configured AsyncEngine instance
         """
+        # Build connect_args from configuration
+        connect_args = {}
+        if hasattr(self, "statement_cache_size") and self.statement_cache_size is not None:
+            connect_args["statement_cache_size"] = self.statement_cache_size
+
         return create_async_engine(
             url,
             pool_size=self.pool_size,
@@ -185,6 +195,7 @@ class PostgresSessionManager:
             pool_recycle=self.pool_recycle,
             pool_pre_ping=self.pool_pre_ping,
             echo=self.echo,
+            connect_args=connect_args if connect_args else None,
         )
 
     def _create_session_maker(
@@ -472,7 +483,6 @@ class PostgresSessionManager:
             "pool_checked_in": pool.checkedin(),
             "pool_checked_out": pool.checkedout(),
             "pool_overflow": pool.overflow(),
-            "pool_invalid": pool.invalidated(),
             "read_replicas": len(self._read_engines),
             "auto_commit": self.auto_commit,
             "max_retries": self.max_retries,

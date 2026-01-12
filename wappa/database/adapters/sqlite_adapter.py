@@ -6,9 +6,10 @@ using aiosqlite as the async driver.
 """
 
 from collections.abc import Callable
-from contextlib import asynccontextmanager
-from typing import Any, AsyncContextManager
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from typing import Any
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
@@ -70,7 +71,7 @@ class SQLiteAdapter:
 
     async def create_session_factory(
         self, engine: AsyncEngine
-    ) -> Callable[[], AsyncContextManager[AsyncSession]]:
+    ) -> Callable[[], AbstractAsyncContextManager[AsyncSession]]:
         """
         Create session factory for SQLite async sessions.
 
@@ -133,7 +134,7 @@ class SQLiteAdapter:
         """
         try:
             async with engine.begin() as conn:
-                result = await conn.execute("SELECT 1")
+                result = await conn.execute(text("SELECT 1"))
                 return result.scalar() == 1
         except Exception:
             return False
@@ -150,11 +151,11 @@ class SQLiteAdapter:
         """
         try:
             async with engine.begin() as conn:
-                version_result = await conn.execute("SELECT sqlite_version()")
+                version_result = await conn.execute(text("SELECT sqlite_version()"))
                 version = version_result.scalar()
 
                 # Get database file info
-                pragma_result = await conn.execute("PRAGMA database_list")
+                pragma_result = await conn.execute(text("PRAGMA database_list"))
                 database_info = pragma_result.fetchall()
 
                 return {
