@@ -11,12 +11,11 @@ This example shows the wpDemoHotels pattern of using expiry triggers
 for inactivity detection and batch processing.
 """
 
-from wappa import Wappa, ExpiryPlugin
-
-from .master_event import MasterEventHandler
+from wappa import ExpiryPlugin, Wappa
 
 # Import expiry handlers to register decorators
 from . import expiry_handlers  # noqa: F401
+from .master_event import MasterEventHandler
 
 # Create Wappa application with Redis cache
 app = Wappa(cache="redis")

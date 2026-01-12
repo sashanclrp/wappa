@@ -49,6 +49,7 @@ dependencies = [
     # Image processing
     "pillow>=11.1.0",
     "opencv-python-headless>=4.11.0",
+    "asyncpg>=0.31.0",
 ]
 
 [project.urls]

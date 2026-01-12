@@ -438,8 +438,9 @@ class CacheHelper:
         self, limit: int = 100, offset: int = 0
     ) -> list:
         """Get API message history from Redis."""
-        from ..models.api_tracking_models import APIMessageHistoryEntry
         import logging
+
+        from ..models.api_tracking_models import APIMessageHistoryEntry
 
         logger = logging.getLogger(__name__)
 
@@ -563,8 +564,9 @@ class CacheHelper:
 
     async def get_all_user_api_activities(self) -> list:
         """Get all user API activity logs (for /API-STATS command)."""
-        from ..models.api_tracking_models import UserAPIActivity
         import logging
+
+        from ..models.api_tracking_models import UserAPIActivity
 
         logger = logging.getLogger(__name__)
 

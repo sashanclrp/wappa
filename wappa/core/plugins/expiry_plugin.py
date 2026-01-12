@@ -9,11 +9,12 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
-from ..expiry.listener import run_expiry_listener
 from ...persistence.redis.redis_manager import RedisManager
+from ..expiry.listener import run_expiry_listener
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
+
     from ..factory.wappa_builder import WappaBuilder
 
 logger = logging.getLogger(__name__)
@@ -198,7 +199,7 @@ class ExpiryPlugin:
                         asyncio.shield(self._listener_task), timeout=5.0
                     )
                     logger.info("✅ Expiry listener cancelled successfully")
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.warning("⚠️ Expiry listener did not shut down gracefully")
                 except asyncio.CancelledError:
                     logger.info("✅ Expiry listener cancelled")

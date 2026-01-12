@@ -9,7 +9,8 @@ Handles incoming messages by:
 When expiry fires (15s inactivity), the expiry handler echoes all messages back.
 """
 
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+
 from wappa import WappaEventHandler
 from wappa.webhooks import IncomingMessageWebhook
 
