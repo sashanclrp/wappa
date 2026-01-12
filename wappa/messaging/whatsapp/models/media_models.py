@@ -10,6 +10,18 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator
 
+# Shared field for AI context description across media types
+# This is NOT sent to WhatsApp - used for internal AI agent context only
+AI_DESCRIPTION_FIELD = Field(
+    None,
+    max_length=2048,
+    description=(
+        "Optional description for AI context. "
+        "Describes the media content for AI agents. "
+        "NOT sent to WhatsApp - internal context only."
+    ),
+)
+
 
 class MediaType(Enum):
     """Supported media types for WhatsApp messages.
@@ -143,6 +155,7 @@ class ImageMessage(BaseModel):
     caption: str | None = Field(
         None, max_length=1024, description="Optional caption for the image"
     )
+    description: str | None = AI_DESCRIPTION_FIELD
     reply_to_message_id: str | None = Field(
         None, description="Optional message ID for replies"
     )
@@ -165,6 +178,7 @@ class VideoMessage(BaseModel):
     caption: str | None = Field(
         None, max_length=1024, description="Optional caption for the video"
     )
+    description: str | None = AI_DESCRIPTION_FIELD
     reply_to_message_id: str | None = Field(
         None, description="Optional message ID for replies"
     )
@@ -184,6 +198,7 @@ class AudioMessage(BaseModel):
     media_source: str | Path = Field(
         ..., description="Either a URL string or a Path object to the local media file"
     )
+    description: str | None = AI_DESCRIPTION_FIELD
     reply_to_message_id: str | None = Field(
         None, description="Optional message ID for replies"
     )
@@ -204,6 +219,7 @@ class DocumentMessage(BaseModel):
     caption: str | None = Field(
         None, max_length=1024, description="Optional caption for the document"
     )
+    description: str | None = AI_DESCRIPTION_FIELD
     filename: str | None = Field(None, description="Optional filename for the document")
     reply_to_message_id: str | None = Field(
         None, description="Optional message ID for replies"
@@ -224,6 +240,7 @@ class StickerMessage(BaseModel):
     media_source: str | Path = Field(
         ..., description="Either a URL string or a Path object to the local media file"
     )
+    description: str | None = AI_DESCRIPTION_FIELD
     reply_to_message_id: str | None = Field(
         None, description="Optional message ID for replies"
     )

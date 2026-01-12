@@ -8,6 +8,7 @@ to set user state when sending messages via the REST API.
 
 from fastapi import Request
 
+from wappa.api.services.handler_state_service import HandlerStateService
 from wappa.api.services.template_state_service import TemplateStateService
 from wappa.core.logging.context import get_current_tenant_context
 from wappa.core.logging.logger import get_logger
@@ -76,3 +77,25 @@ async def get_template_state_service(
     # The actual recipient is passed to the service methods
     cache_factory = await get_cache_factory(request, recipient="template-api")
     return TemplateStateService(cache_factory)
+
+
+async def get_handler_state_service(
+    request: Request,
+) -> HandlerStateService:
+    """
+    Get handler state service with cache factory.
+
+    Creates a HandlerStateService instance with a cache factory configured
+    for the current request context. The recipient will be set when the
+    service methods are called.
+
+    Args:
+        request: FastAPI request object
+
+    Returns:
+        HandlerStateService instance
+    """
+    # For handler state service, we use a placeholder user_id
+    # The actual recipient is passed to the service methods
+    cache_factory = await get_cache_factory(request, recipient="handler-api")
+    return HandlerStateService(cache_factory)
