@@ -79,6 +79,7 @@ class PostgresSessionManager:
         "network is unreachable",
         "no route to host",
         "name resolution failed",
+        "name or service not known",
         "dns",
     )
 
@@ -184,7 +185,10 @@ class PostgresSessionManager:
         """
         # Build connect_args from configuration
         connect_args = {}
-        if hasattr(self, "statement_cache_size") and self.statement_cache_size is not None:
+        if (
+            hasattr(self, "statement_cache_size")
+            and self.statement_cache_size is not None
+        ):
             connect_args["statement_cache_size"] = self.statement_cache_size
 
         return create_async_engine(
@@ -221,10 +225,11 @@ class PostgresSessionManager:
         Initialize database engines and session factories.
 
         Creates write engine and optionally read engines for replicas.
-        Performs initial health check to validate connections.
+        Performs initial health check with retry logic to handle transient failures
+        during container startup, DNS resolution, and network glitches.
 
         Raises:
-            ConnectionError: If unable to connect to primary database
+            ConnectionError: If unable to connect to primary database after retries
         """
         if self._initialized:
             logger.warning("PostgresSessionManager already initialized")
@@ -242,18 +247,50 @@ class PostgresSessionManager:
             self._read_engines.append(read_engine)
             self._read_session_makers.append(self._create_session_maker(read_engine))
 
-        # Validate primary connection
-        if not await self.health_check():
+        # Validate primary connection with retry logic (critical - must succeed)
+        if not await self._initialize_with_retry(
+            engine=self._write_engine, is_primary=True
+        ):
             await self.cleanup()
-            raise ConnectionError("Failed to connect to primary database")
+            raise ConnectionError(
+                f"Failed to connect to primary database after {self.max_retries} attempts"
+            )
+
+        # Validate read replicas with retry logic (non-critical - warn on failure)
+        # Build lists of healthy replicas only
+        healthy_engines: list[AsyncEngine] = []
+        healthy_session_makers: list[async_sessionmaker[AsyncSession]] = []
+
+        for idx, (read_engine, session_maker) in enumerate(
+            zip(self._read_engines, self._read_session_makers, strict=True)
+        ):
+            if await self._initialize_with_retry(
+                engine=read_engine, is_primary=False, replica_index=idx
+            ):
+                healthy_engines.append(read_engine)
+                healthy_session_makers.append(session_maker)
+            else:
+                # Dispose failed replica engine to free resources
+                try:
+                    await read_engine.dispose()
+                except Exception as e:
+                    logger.warning(f"Error disposing failed replica {idx + 1}: {e}")
+                logger.warning(
+                    f"Read replica {idx + 1} failed health check after retries - "
+                    f"removed from read pool"
+                )
+
+        # Replace with healthy replicas only
+        total_replicas = len(self._read_engines)
+        self._read_engines = healthy_engines
+        self._read_session_makers = healthy_session_makers
 
         self._initialized = True
 
-        replica_count = len(self._read_engines)
         logger.info(
             f"PostgresSessionManager initialized successfully "
             f"(pool_size={self.pool_size}, max_overflow={self.max_overflow}, "
-            f"read_replicas={replica_count})"
+            f"read_replicas={len(healthy_engines)}/{total_replicas})"
         )
 
     async def cleanup(self) -> None:
@@ -320,6 +357,86 @@ class PostgresSessionManager:
         jitter = 0.5 + random.random()
         delay *= jitter
         return min(delay, self.max_delay)
+
+    async def _initialize_with_retry(
+        self,
+        engine: AsyncEngine,
+        is_primary: bool = True,
+        replica_index: int | None = None,
+    ) -> bool:
+        """
+        Perform health check with retry logic during initialization.
+
+        Uses exponential backoff for transient failures like DNS resolution,
+        network timeouts, and temporary connection issues that commonly occur
+        during container orchestration (Docker Compose, Kubernetes).
+
+        Args:
+            engine: AsyncEngine to health check
+            is_primary: Whether this is the primary write database
+            replica_index: Index of read replica (if applicable)
+
+        Returns:
+            True if health check succeeds, False after max retries
+        """
+        db_type = (
+            "primary database" if is_primary else f"read replica {replica_index + 1}"
+        )
+        last_exception: Exception | None = None
+
+        for attempt in range(self.max_retries):
+            try:
+                # Perform health check on specific engine
+                async with engine.begin() as conn:
+                    result = await conn.execute(text("SELECT 1"))
+                    if result.scalar() == 1:
+                        if attempt > 0:
+                            logger.info(
+                                f"{db_type.capitalize()} connection established "
+                                f"on attempt {attempt + 1}/{self.max_retries}"
+                            )
+                        return True
+
+                # Health check returned unexpected result
+                error_msg = (
+                    f"{db_type.capitalize()} health check returned unexpected result"
+                )
+                logger.warning(
+                    f"{error_msg} (attempt {attempt + 1}/{self.max_retries})"
+                )
+
+                # Treat unexpected result as transient
+                if attempt < self.max_retries - 1:
+                    delay = self._calculate_backoff(attempt)
+                    logger.info(f"Retrying {db_type} in {delay:.2f}s...")
+                    await asyncio.sleep(delay)
+
+            except Exception as e:
+                last_exception = e
+
+                # Check if error is transient
+                if not self._is_transient_error(e):
+                    logger.error(f"Non-transient error connecting to {db_type}: {e}")
+                    return False
+
+                # Log and retry for transient errors
+                if attempt < self.max_retries - 1:
+                    delay = self._calculate_backoff(attempt)
+                    logger.warning(
+                        f"{db_type.capitalize()} connection failed "
+                        f"(attempt {attempt + 1}/{self.max_retries}): {e}. "
+                        f"Retrying in {delay:.2f}s..."
+                    )
+                    await asyncio.sleep(delay)
+
+        # All retries exhausted
+        if last_exception:
+            logger.error(
+                f"{db_type.capitalize()} connection failed after "
+                f"{self.max_retries} attempts: {last_exception}"
+            )
+
+        return False
 
     @asynccontextmanager
     async def _session_with_retry(
