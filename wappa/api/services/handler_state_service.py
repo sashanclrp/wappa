@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from wappa.core.logging.logger import get_logger
-from wappa.persistence.interfaces.cache_factory import ICacheFactory
+from wappa.domain.interfaces.cache_factory import ICacheFactory
 
 
 class HandlerStateService:
