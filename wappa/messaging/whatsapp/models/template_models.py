@@ -101,6 +101,79 @@ class TemplateStateConfig(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class TextTemplateMetadata(BaseModel):
+    """Metadata for text template messages (internal AI context only).
+
+    This metadata is NOT sent to WhatsApp API - used for internal AI agent
+    context only to provide additional information about template content.
+    """
+
+    text_content: str | None = Field(
+        None,
+        max_length=4096,
+        description=(
+            "Optional text content summary for AI context. "
+            "Describes the template content for AI agents. "
+            "NOT sent to WhatsApp - internal context only."
+        ),
+    )
+
+
+class MediaTemplateMetadata(BaseModel):
+    """Metadata for media template messages (internal AI context only).
+
+    This metadata is NOT sent to WhatsApp API - used for internal AI agent
+    context only to provide additional information about template content.
+    """
+
+    text_content: str | None = Field(
+        None,
+        max_length=4096,
+        description=(
+            "Optional text content summary for AI context. "
+            "Describes the template content for AI agents. "
+            "NOT sent to WhatsApp - internal context only."
+        ),
+    )
+    media_description: str | None = Field(
+        None,
+        max_length=2048,
+        description=(
+            "Optional media description for AI context. "
+            "Describes the media content for AI agents. "
+            "NOT sent to WhatsApp - internal context only."
+        ),
+    )
+    media_transcript: str | None = Field(
+        None,
+        max_length=10000,
+        description=(
+            "Optional transcript for video/audio media. "
+            "Provides text transcription of media audio for AI agents. "
+            "NOT sent to WhatsApp - internal context only. "
+            "Only valid for video and audio media types."
+        ),
+    )
+
+
+class LocationTemplateMetadata(BaseModel):
+    """Metadata for location template messages (internal AI context only).
+
+    This metadata is NOT sent to WhatsApp API - used for internal AI agent
+    context only to provide additional information about template content.
+    """
+
+    text_content: str | None = Field(
+        None,
+        max_length=4096,
+        description=(
+            "Optional text content summary for AI context. "
+            "Describes the template content for AI agents. "
+            "NOT sent to WhatsApp - internal context only."
+        ),
+    )
+
+
 class TemplateLanguage(BaseModel):
     """Template language configuration."""
 
@@ -164,6 +237,10 @@ class TextTemplateMessage(BaseTemplateMessage):
         default=None,
         description="Optional state configuration for response routing",
     )
+    template_metadata: TextTemplateMetadata | None = Field(
+        default=None,
+        description="Optional metadata for AI context (internal use only, not sent to WhatsApp)",
+    )
 
     @field_validator("body_parameters")
     @classmethod
@@ -190,6 +267,10 @@ class MediaTemplateMessage(BaseTemplateMessage):
     state_config: TemplateStateConfig | None = Field(
         default=None,
         description="Optional state configuration for response routing",
+    )
+    template_metadata: MediaTemplateMetadata | None = Field(
+        default=None,
+        description="Optional metadata for AI context (internal use only, not sent to WhatsApp)",
     )
 
     @field_validator("media_id", "media_url")
@@ -218,6 +299,19 @@ class MediaTemplateMessage(BaseTemplateMessage):
                     )
         return v
 
+    @field_validator("template_metadata")
+    @classmethod
+    def validate_transcript_for_media_type(cls, v, info):
+        """Validate that media_transcript is only provided for video/audio media types."""
+        if v and v.media_transcript:
+            media_type = info.data.get("media_type")
+            if media_type == MediaType.IMAGE:
+                raise ValueError(
+                    "media_transcript field is not supported for image media type. "
+                    "Transcript is only valid for video and audio media types."
+                )
+        return v
+
 
 class LocationTemplateMessage(BaseTemplateMessage):
     """Template message with location header."""
@@ -234,6 +328,10 @@ class LocationTemplateMessage(BaseTemplateMessage):
     state_config: TemplateStateConfig | None = Field(
         default=None,
         description="Optional state configuration for response routing",
+    )
+    template_metadata: LocationTemplateMetadata | None = Field(
+        default=None,
+        description="Optional metadata for AI context (internal use only, not sent to WhatsApp)",
     )
 
     @field_validator("latitude")
