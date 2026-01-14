@@ -22,6 +22,18 @@ AI_DESCRIPTION_FIELD = Field(
     ),
 )
 
+# Shared field for AI context transcript for audio/video media
+# This is NOT sent to WhatsApp - used for internal AI agent context only
+AI_TRANSCRIPT_FIELD = Field(
+    None,
+    max_length=10000,
+    description=(
+        "Optional transcript for audio/video content. "
+        "Provides text transcription of audio for AI agents. "
+        "NOT sent to WhatsApp - internal context only."
+    ),
+)
+
 
 class MediaType(Enum):
     """Supported media types for WhatsApp messages.
@@ -179,6 +191,7 @@ class VideoMessage(BaseModel):
         None, max_length=1024, description="Optional caption for the video"
     )
     description: str | None = AI_DESCRIPTION_FIELD
+    transcript: str | None = AI_TRANSCRIPT_FIELD
     reply_to_message_id: str | None = Field(
         None, description="Optional message ID for replies"
     )
@@ -199,6 +212,7 @@ class AudioMessage(BaseModel):
         ..., description="Either a URL string or a Path object to the local media file"
     )
     description: str | None = AI_DESCRIPTION_FIELD
+    transcript: str | None = AI_TRANSCRIPT_FIELD
     reply_to_message_id: str | None = Field(
         None, description="Optional message ID for replies"
     )

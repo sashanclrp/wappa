@@ -283,6 +283,7 @@ class WhatsAppMessenger(IMessenger):
         recipient: str,
         caption: str | None = None,
         reply_to_message_id: str | None = None,
+        transcript: str | None = None,
     ) -> MessageResult:
         """Send video message using WhatsApp API.
 
@@ -295,6 +296,7 @@ class WhatsAppMessenger(IMessenger):
             recipient: Recipient identifier
             caption: Optional caption for the video (max 1024 characters)
             reply_to_message_id: Optional message ID to reply to
+            transcript: Optional transcript text for video audio content
 
         Returns:
             MessageResult with operation status and metadata
@@ -306,6 +308,7 @@ class WhatsAppMessenger(IMessenger):
             caption=caption,
             filename=None,
             reply_to_message_id=reply_to_message_id,
+            transcript=transcript,
         )
 
     async def send_audio(
@@ -313,6 +316,7 @@ class WhatsAppMessenger(IMessenger):
         audio_source: str | Path,
         recipient: str,
         reply_to_message_id: str | None = None,
+        transcript: str | None = None,
     ) -> MessageResult:
         """Send audio message using WhatsApp API.
 
@@ -323,6 +327,7 @@ class WhatsAppMessenger(IMessenger):
             audio_source: Audio URL or file path
             recipient: Recipient identifier
             reply_to_message_id: Optional message ID to reply to
+            transcript: Optional transcript text for audio content
 
         Returns:
             MessageResult with operation status and metadata
@@ -337,6 +342,7 @@ class WhatsAppMessenger(IMessenger):
             caption=None,  # Audio doesn't support captions
             filename=None,
             reply_to_message_id=reply_to_message_id,
+            transcript=transcript,
         )
 
     async def send_document(
@@ -409,12 +415,16 @@ class WhatsAppMessenger(IMessenger):
         caption: str | None = None,
         filename: str | None = None,
         reply_to_message_id: str | None = None,
+        transcript: str | None = None,
     ) -> MessageResult:
         """
         Internal method to send media messages.
 
         Handles both URL and file path sources with upload workflow.
         Uses the injected media handler for upload operations.
+
+        Args:
+            transcript: Optional transcript for audio/video content (internal use, not sent to WhatsApp)
         """
         try:
             # Build initial payload

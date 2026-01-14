@@ -147,6 +147,7 @@ class IMessenger(ABC):
         recipient: str,
         caption: str | None = None,
         reply_to_message_id: str | None = None,
+        transcript: str | None = None,
     ) -> "MessageResult":
         """Send a video message.
 
@@ -159,6 +160,7 @@ class IMessenger(ABC):
             recipient: Recipient identifier
             caption: Optional caption for the video (max 1024 characters)
             reply_to_message_id: Optional message ID to reply to
+            transcript: Optional transcript text for video audio content
 
         Returns:
             MessageResult with operation status and metadata
@@ -174,6 +176,7 @@ class IMessenger(ABC):
         audio_source: str | Path,
         recipient: str,
         reply_to_message_id: str | None = None,
+        transcript: str | None = None,
     ) -> "MessageResult":
         """Send an audio message.
 
@@ -184,6 +187,7 @@ class IMessenger(ABC):
             audio_source: Audio URL or file path
             recipient: Recipient identifier
             reply_to_message_id: Optional message ID to reply to
+            transcript: Optional transcript text for audio content
 
         Returns:
             MessageResult with operation status and metadata

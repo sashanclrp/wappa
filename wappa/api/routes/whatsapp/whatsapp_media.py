@@ -177,6 +177,7 @@ async def send_video_message(
             recipient=request.recipient,
             caption=request.caption,
             reply_to_message_id=request.reply_to_message_id,
+            transcript=request.transcript,
         )
 
         if not result.success:
@@ -214,6 +215,7 @@ async def send_audio_message(
             audio_source=request.media_source,
             recipient=request.recipient,
             reply_to_message_id=request.reply_to_message_id,
+            transcript=request.transcript,
         )
 
         if not result.success:
