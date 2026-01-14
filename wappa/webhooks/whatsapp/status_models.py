@@ -204,7 +204,9 @@ class WhatsAppMessageStatus(BaseMessageStatus):
             "status": self.wa_status,
             "timestamp": self.timestamp,
             "recipient_id": self.recipient_id,
-            "recipient_phone": self.wa_recipient_id if self.has_recipient_phone else None,
+            "recipient_phone": self.wa_recipient_id
+            if self.has_recipient_phone
+            else None,
             "recipient_bsuid": self.recipient_bsuid,
             "message_id": self.id,
         }
@@ -237,7 +239,9 @@ class WhatsAppMessageStatus(BaseMessageStatus):
             "timestamp": self.timestamp,
             "recipient_id": self.recipient_id,
             "recipient_bsuid": self.recipient_bsuid,
-            "recipient_phone": self.wa_recipient_id if self.has_recipient_phone else None,
+            "recipient_phone": self.wa_recipient_id
+            if self.has_recipient_phone
+            else None,
             "is_successful": self.is_successful,
             "error_info": self.get_error_info(),
             "delivery_info": self.get_delivery_info(),
@@ -268,7 +272,9 @@ class WhatsAppMessageStatus(BaseMessageStatus):
             "status": self.wa_status,
             "recipient": self.recipient_id,
             "recipient_bsuid": self.recipient_bsuid,
-            "recipient_phone": self.wa_recipient_id if self.has_recipient_phone else None,
+            "recipient_phone": self.wa_recipient_id
+            if self.has_recipient_phone
+            else None,
             "timestamp": self.timestamp,
         }
 

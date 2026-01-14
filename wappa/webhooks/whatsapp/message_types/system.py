@@ -33,7 +33,8 @@ class SystemContent(BaseModel):
         description="Business Scoped User ID (BSUID) - for user_changed_user_id events",
     )
     type: Literal["user_changed_number", "user_changed_user_id"] = Field(
-        ..., description="Type of system event (user_changed_number or user_changed_user_id)"
+        ...,
+        description="Type of system event (user_changed_number or user_changed_user_id)",
     )
 
     @field_validator("body")

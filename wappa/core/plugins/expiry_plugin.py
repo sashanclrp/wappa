@@ -165,6 +165,7 @@ class ExpiryPlugin:
 
             # Store app reference globally for expiry handlers to access HTTP session
             from ..expiry.listener import set_fastapi_app
+
             set_fastapi_app(app)
 
             logger.info("✅ ExpiryPlugin startup completed")
@@ -214,7 +215,9 @@ class ExpiryPlugin:
 
         except Exception as e:
             # Don't re-raise in shutdown - log and continue
-            logger.error(f"❌ Error during ExpiryPlugin shutdown hook: {e}", exc_info=True)
+            logger.error(
+                f"❌ Error during ExpiryPlugin shutdown hook: {e}", exc_info=True
+            )
 
     @staticmethod
     def get_listener_task(app: "FastAPI") -> asyncio.Task | None:

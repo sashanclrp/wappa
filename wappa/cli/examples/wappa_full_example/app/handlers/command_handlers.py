@@ -430,7 +430,6 @@ class CommandHandlers:
             Result dictionary with operation status
         """
         try:
-
             start_time = time.time()
 
             user_id = webhook.user.user_id
@@ -455,7 +454,7 @@ class CommandHandlers:
                 '    "state_value": "example",\n'
                 '    "ttl_seconds": 1800,\n'
                 '    "initial_context": {}\n'
-                '  }\n'
+                "  }\n"
                 "}\n"
                 "```\n\n"
                 "*What Happens Next:*\n\n"
@@ -606,7 +605,9 @@ class CommandHandlers:
                 stats_message += "_No history yet_\n\n"
 
             stats_message += "━━━━━━━━━━━━━━━━━━━━\n"
-            stats_message += f"*Generated:* {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+            stats_message += (
+                f"*Generated:* {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+            )
 
             # Send stats message
             await self.messenger.send_text(

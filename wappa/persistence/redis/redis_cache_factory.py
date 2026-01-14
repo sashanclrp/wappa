@@ -22,7 +22,7 @@ from .redis_handler.user import RedisUser
 
 class RedisCacheFactory(ICacheFactory):
     """
-    Factory for creating Redis-backed cache instances.
+    Factory for creating Redis-backed cache instances with hybrid pattern support.
 
     Uses the existing Redis handler infrastructure with proper pool assignments:
     - State cache: Uses state_handler pool (db1)
@@ -33,83 +33,126 @@ class RedisCacheFactory(ICacheFactory):
 
     All instances implement the type-specific cache interfaces directly.
 
-    Context (tenant_id, user_id) is injected at construction time, eliminating
-    manual parameter passing.
+    HYBRID PATTERN: Context (tenant_id, user_id) can be:
+    1. Used from defaults set at construction (most common - webhook flow)
+    2. Overridden per-call (for API events with different user context)
+
+    Example:
+        # Webhook flow - uses default context
+        user_cache = factory.create_user_cache()
+
+        # API flow - override user_id with recipient
+        user_cache = factory.create_user_cache(user_id=event.recipient)
     """
 
-    def __init__(self, tenant_id: str, user_id: str):
-        """Initialize Redis cache factory with context injection."""
-        super().__init__(tenant_id, user_id)
-
-    def create_state_cache(self) -> IStateCache:
+    def create_state_cache(
+        self,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ) -> IStateCache:
         """
         Create Redis state cache instance.
 
-        Uses context (tenant_id, user_id) injected at construction time.
+        Args:
+            tenant_id: Optional override (uses default if None)
+            user_id: Optional override (uses default if None)
 
         Returns:
             RedisStateHandler implementing IStateCache configured for state_handler pool
         """
+        effective_tenant, effective_user = self._resolve_context(tenant_id, user_id)
         return RedisStateHandler(
-            tenant=self.tenant_id, user_id=self.user_id, redis_alias="state_handler"
+            tenant=effective_tenant, user_id=effective_user, redis_alias="state_handler"
         )
 
-    def create_user_cache(self) -> IUserCache:
+    def create_user_cache(
+        self,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ) -> IUserCache:
         """
         Create Redis user cache instance.
 
-        Uses context (tenant_id, user_id) injected at construction time.
+        Args:
+            tenant_id: Optional override (uses default if None)
+            user_id: Optional override (uses default if None)
 
         Returns:
             RedisUser implementing IUserCache configured for users pool
         """
+        effective_tenant, effective_user = self._resolve_context(tenant_id, user_id)
         return RedisUser(
-            tenant=self.tenant_id, user_id=self.user_id, redis_alias="users"
+            tenant=effective_tenant, user_id=effective_user, redis_alias="users"
         )
 
-    def create_table_cache(self) -> ITableCache:
+    def create_table_cache(
+        self,
+        tenant_id: str | None = None,
+    ) -> ITableCache:
         """
         Create Redis table cache instance.
 
-        Uses context (tenant_id) injected at construction time.
+        Args:
+            tenant_id: Optional override (uses default if None)
 
         Returns:
             RedisTable implementing ITableCache configured for table pool
         """
-        return RedisTable(tenant=self.tenant_id, redis_alias="table")
+        effective_tenant, _ = self._resolve_context(tenant_id, None)
+        return RedisTable(tenant=effective_tenant, redis_alias="table")
 
-    def create_expiry_cache(self) -> IExpiryCache:
+    def create_expiry_cache(
+        self,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ) -> IExpiryCache:
         """
         Create Redis expiry trigger cache instance.
 
-        Uses context (tenant_id, user_id) injected at construction time.
+        Args:
+            tenant_id: Optional override (uses default if None)
+            user_id: Optional override (uses default if None)
 
         Returns:
             RedisExpiry implementing IExpiryCache configured for expiry pool
 
         Example:
-            factory = RedisCacheFactory(tenant_id="wappa", user_id="user_123")
+            # Default context
             expiry_cache = factory.create_expiry_cache()
             await expiry_cache.set("payment_reminder", "TXN_123", 1800)
+
+            # Override for specific user
+            expiry_cache = factory.create_expiry_cache(user_id=recipient_id)
         """
+        effective_tenant, effective_user = self._resolve_context(tenant_id, user_id)
         return RedisExpiry(
-            tenant=self.tenant_id, user_id=self.user_id, redis_alias="expiry"
+            tenant=effective_tenant, user_id=effective_user, redis_alias="expiry"
         )
 
-    def create_ai_state_cache(self) -> IAIStateCache:
+    def create_ai_state_cache(
+        self,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ) -> IAIStateCache:
         """
         Create Redis AI state cache instance.
 
-        Uses context (tenant_id, user_id) injected at construction time.
+        Args:
+            tenant_id: Optional override (uses default if None)
+            user_id: Optional override (uses default if None)
 
         Returns:
             RedisAIState implementing IAIStateCache configured for ai_state pool
 
         Example:
-            factory = RedisCacheFactory(tenant_id="wappa", user_id="user_123")
+            # Default context
             ai_state = factory.create_ai_state_cache()
-            await ai_state.upsert("summarizer", {"context": "meeting notes", "tokens": 1500})
+            await ai_state.upsert("summarizer", {"context": "meeting notes"})
+
+            # Override for specific user
+            ai_state = factory.create_ai_state_cache(user_id=recipient_id)
         """
+        effective_tenant, effective_user = self._resolve_context(tenant_id, user_id)
         return RedisAIState(
-            tenant=self.tenant_id, user_id=self.user_id, redis_alias="ai_state"
+            tenant=effective_tenant, user_id=effective_user, redis_alias="ai_state"
         )

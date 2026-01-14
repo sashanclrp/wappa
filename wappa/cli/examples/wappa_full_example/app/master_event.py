@@ -243,7 +243,9 @@ class WappaFullExampleHandler(WappaEventHandler):
 
             # Ensure cache helper is available
             if not self.cache_factory:
-                self.logger.warning("Cache factory not available, skipping API tracking")
+                self.logger.warning(
+                    "Cache factory not available, skipping API tracking"
+                )
                 return
 
             cache_helper = CacheHelper(self.cache_factory)
@@ -295,7 +297,9 @@ class WappaFullExampleHandler(WappaEventHandler):
             )
 
             # 3. Update per-user activity
-            user_activity = await cache_helper.get_or_create_user_api_activity(recipient)
+            user_activity = await cache_helper.get_or_create_user_api_activity(
+                recipient
+            )
             user_activity.add_message_event(
                 message_type=message_type,
                 message_id=event.message_id,
@@ -571,7 +575,15 @@ class WappaFullExampleHandler(WappaEventHandler):
                     "commands_processed": self._commands_processed,
                     "interactive_responses": self._interactive_responses,
                 },
-                "supported_commands": ["/button", "/list", "/cta", "/location", "/template", "/api-stats", "/docs"],
+                "supported_commands": [
+                    "/button",
+                    "/list",
+                    "/cta",
+                    "/location",
+                    "/template",
+                    "/api-stats",
+                    "/docs",
+                ],
                 "supported_message_types": [
                     "text",
                     "image",

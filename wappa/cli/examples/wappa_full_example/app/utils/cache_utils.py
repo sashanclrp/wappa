@@ -434,9 +434,7 @@ class CacheHelper:
 
     # =========== API MESSAGE TRACKING METHODS ===========
 
-    async def get_api_message_history(
-        self, limit: int = 100, offset: int = 0
-    ) -> list:
+    async def get_api_message_history(self, limit: int = 100, offset: int = 0) -> list:
         """Get API message history from Redis."""
         import logging
 
@@ -457,7 +455,9 @@ class CacheHelper:
             # Debug: check first entry structure
             if entries_data:
                 logger.debug(f"First entry keys: {list(entries_data[0].keys())}")
-                logger.debug(f"First entry success type: {type(entries_data[0].get('success'))}")
+                logger.debug(
+                    f"First entry success type: {type(entries_data[0].get('success'))}"
+                )
 
             entries = [APIMessageHistoryEntry(**data) for data in entries_data]
             logger.debug(f"Successfully created {len(entries)} model instances")
@@ -472,7 +472,9 @@ class CacheHelper:
             return []
 
     async def save_api_message_history(
-        self, entry, ttl_seconds: int = 604800  # 7 days
+        self,
+        entry,
+        ttl_seconds: int = 604800,  # 7 days
     ) -> bool:
         """Save API message history entry."""
         try:
@@ -505,7 +507,9 @@ class CacheHelper:
             return APIMessageStatistics()
 
     async def save_api_message_statistics(
-        self, stats, ttl_seconds: int = 2592000  # 30 days
+        self,
+        stats,
+        ttl_seconds: int = 2592000,  # 30 days
     ) -> bool:
         """Save global API message statistics."""
         try:
@@ -548,7 +552,9 @@ class CacheHelper:
         return UserAPIActivity(user_id=user_id)
 
     async def save_user_api_activity(
-        self, activity, ttl_seconds: int = 2592000  # 30 days
+        self,
+        activity,
+        ttl_seconds: int = 2592000,  # 30 days
     ) -> bool:
         """Save per-user API activity log."""
         try:
@@ -572,9 +578,7 @@ class CacheHelper:
 
         try:
             # Use get_all method (available in RedisTable)
-            logs_data = await self.table_cache.get_all(
-                table_name="user_api_activity"
-            )
+            logs_data = await self.table_cache.get_all(table_name="user_api_activity")
 
             logger.debug(f"get_all returned {len(logs_data)} user activities")
             if not logs_data:
@@ -586,7 +590,9 @@ class CacheHelper:
                 logger.debug(f"First activity user_id: {logs_data[0].get('user_id')}")
 
             activities = [UserAPIActivity(**data) for data in logs_data]
-            logger.debug(f"Successfully created {len(activities)} UserAPIActivity instances")
+            logger.debug(
+                f"Successfully created {len(activities)} UserAPIActivity instances"
+            )
             return activities
         except Exception as e:
             logger.error(f"Error getting all user API activities: {e}", exc_info=True)

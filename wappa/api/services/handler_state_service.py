@@ -29,7 +29,18 @@ class HandlerStateService:
         self.logger = get_logger(__name__)
 
     def _make_state_key(self, handler_value: str) -> str:
-        """Create cache key from handler value."""
+        """
+        Create cache key from handler value with API handler prefix.
+
+        This prefix distinguishes API handler states from other state cache entries
+        and maintains backward compatibility with existing handler states.
+
+        Args:
+            handler_value: Unique handler identifier
+
+        Returns:
+            Prefixed cache key (e.g., "api-handler-reschedule_flow")
+        """
         return f"{self.STATE_KEY_PREFIX}{handler_value}"
 
     async def set_handler_state(
@@ -42,9 +53,8 @@ class HandlerStateService:
         """
         Set a state handler for a user using cache.
 
-        This creates a cache entry with the key pattern `api-handler-{handler_value}`
-        that is scoped to the user's phone number. The cache entry stores the handler
-        configuration along with any initial context data.
+        This creates a state cache entry scoped to the user's phone number.
+        The cache entry stores the handler configuration along with any initial context data.
 
         Args:
             recipient: User phone number
@@ -77,8 +87,8 @@ class HandlerStateService:
             **(initial_context or {}),
         }
 
-        user_cache = self.cache_factory.create_cache(user_id=recipient)
-        await user_cache.set(cache_key, state_data, ttl_seconds)
+        state_cache = self.cache_factory.create_state_cache(user_id=recipient)
+        await state_cache.upsert(cache_key, state_data, ttl_seconds)
 
         self.logger.info(
             f"Handler state set: {cache_key} for {recipient}, TTL: {ttl_seconds}s"
@@ -105,8 +115,9 @@ class HandlerStateService:
             ...     print(state["handler_value"])
             'reschedule_flow'
         """
-        user_cache = self.cache_factory.create_cache(user_id=recipient)
-        return await user_cache.get(self._make_state_key(handler_value))
+        cache_key = self._make_state_key(handler_value)
+        state_cache = self.cache_factory.create_state_cache(user_id=recipient)
+        return await state_cache.get(cache_key)
 
     async def delete_handler_state(self, recipient: str, handler_value: str) -> bool:
         """
@@ -124,8 +135,8 @@ class HandlerStateService:
             True
         """
         cache_key = self._make_state_key(handler_value)
-        user_cache = self.cache_factory.create_cache(user_id=recipient)
-        await user_cache.delete(cache_key)
+        state_cache = self.cache_factory.create_state_cache(user_id=recipient)
+        await state_cache.delete(cache_key)
 
         self.logger.info(f"Handler state deleted: {cache_key} for {recipient}")
 

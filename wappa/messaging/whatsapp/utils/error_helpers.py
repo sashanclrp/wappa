@@ -78,9 +78,7 @@ def handle_whatsapp_error(
         MessageResult with success=False and appropriate error details
     """
     if is_authentication_error(error):
-        logger.error(
-            f"CRITICAL: WhatsApp Authentication Failed - Cannot {operation}!"
-        )
+        logger.error(f"CRITICAL: WhatsApp Authentication Failed - Cannot {operation}!")
         logger.error(f"Check WhatsApp access token for tenant {tenant_id}")
 
     if is_bsuid_auth_error(error):

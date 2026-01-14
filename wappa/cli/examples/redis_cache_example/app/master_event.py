@@ -194,12 +194,12 @@ class RedisCacheExampleHandler(WappaEventHandler):
             # - Send analytics events
 
             if not event.response_success:
-                self.logger.warning(
-                    f"⚠️ API message failed: {event.response_error}"
-                )
+                self.logger.warning(f"⚠️ API message failed: {event.response_error}")
 
         except Exception as e:
-            self.logger.error(f"❌ Error processing API message event: {e}", exc_info=True)
+            self.logger.error(
+                f"❌ Error processing API message event: {e}", exc_info=True
+            )
 
     async def _initialize_solid_architecture(self) -> None:
         """

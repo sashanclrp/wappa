@@ -8,7 +8,7 @@ This controller handles webhook processing with proper separation of concerns:
 """
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException, Request
 from fastapi.responses import PlainTextResponse
@@ -27,6 +27,9 @@ from wappa.domain.factories import MessengerFactory
 from wappa.persistence.cache_factory import create_cache_factory
 from wappa.processors.factory import processor_factory
 from wappa.schemas.core.types import PlatformType
+
+if TYPE_CHECKING:
+    from wappa.core.events.event_handler import WappaEventHandler
 
 
 class WebhookController:
@@ -218,14 +221,12 @@ class WebhookController:
         payload: dict[str, Any],
     ) -> None:
         """
-        Asynchronous webhook processing with per-request dependency creation.
+        Asynchronous webhook processing with CLONE PATTERN for thread safety.
 
         This is where the CRITICAL architectural improvement happens:
-        1. Extract tenant_id from request (different per request)
-        2. Create MessengerFactory per request
-        3. Create tenant-specific messenger
-        4. Inject fresh dependencies into event handler
-        5. Process webhook with correct tenant context
+        1. Extract tenant_id and user_id from request (different per request)
+        2. Create a CLONED handler instance for THIS REQUEST
+        3. Process webhook with isolated context (no race conditions)
 
         Args:
             request: FastAPI request object
@@ -253,24 +254,37 @@ class WebhookController:
                     webhook_tenant_id if webhook_tenant_id else owner_id
                 )  # Fallback to URL owner_id
 
+                # Extract user_id from context (set by webhook processor)
+                user_id = get_current_user_context()
+                if not user_id:
+                    raise RuntimeError(
+                        "No user context available for request handler creation"
+                    )
+
                 self.logger.debug(
-                    f"🎯 Using tenant_id: {effective_tenant_id} (webhook: {webhook_tenant_id}, owner: {owner_id})"
+                    f"🎯 Using tenant_id: {effective_tenant_id}, user_id: {user_id} "
+                    f"(webhook_tenant: {webhook_tenant_id}, owner: {owner_id})"
                 )
 
-                # CRITICAL: Create dependencies per request with WEBHOOK tenant_id (not URL)
-                await self._inject_per_request_dependencies(
-                    request, platform_type, effective_tenant_id
+                # CLONE PATTERN: Create isolated handler for THIS REQUEST
+                request_handler = await self._create_request_handler(
+                    request=request,
+                    platform_type=platform_type,
+                    tenant_id=effective_tenant_id,
+                    user_id=user_id,
                 )
 
                 self.logger.info(
-                    f"✨ Created {type(universal_webhook).__name__} from {platform_type.value} (effective_tenant: {effective_tenant_id})"
+                    f"✨ Created {type(universal_webhook).__name__} from {platform_type.value} "
+                    f"(tenant: {effective_tenant_id}, user: {user_id})"
                 )
 
-                # Dispatch to event handler via WappaEventDispatcher
+                # Dispatch to event handler via WappaEventDispatcher with CLONED handler
                 dispatch_result = (
                     await self.event_dispatcher.dispatch_universal_webhook(
                         universal_webhook=universal_webhook,
-                        tenant_id=effective_tenant_id,  # Use webhook tenant_id
+                        tenant_id=effective_tenant_id,
+                        request_handler=request_handler,  # Pass cloned handler!
                     )
                 )
 
@@ -293,21 +307,32 @@ class WebhookController:
                 exc_info=True,
             )
 
-    async def _inject_per_request_dependencies(
-        self, request: Request, platform_type: PlatformType, tenant_id: str
-    ) -> None:
+    async def _create_request_handler(
+        self,
+        request: Request,
+        platform_type: PlatformType,
+        tenant_id: str,
+        user_id: str,
+    ) -> "WappaEventHandler":
         """
-        Inject fresh dependencies into event handler for this specific request.
+        Create a context-bound handler instance for this specific request.
 
-        This is the CORE of the architectural improvement:
-        - Creates MessengerFactory with request-specific HTTP session
-        - Creates messenger with request-specific tenant_id
-        - Injects into event handler for this request only
+        This implements the CLONE PATTERN for thread safety:
+        - Each request gets its own handler instance (not a singleton!)
+        - Context (tenant_id, user_id) is bound to the handler instance
+        - No race conditions when concurrent requests are processed
 
         Args:
             request: FastAPI request object
             platform_type: Platform type for messenger creation
             tenant_id: Request-specific tenant identifier
+            user_id: Request-specific user identifier
+
+        Returns:
+            Context-bound WappaEventHandler instance for this request
+
+        Raises:
+            RuntimeError: If handler creation fails
         """
         try:
             # Get HTTP session from app state (shared for connection pooling - correct scope)
@@ -324,14 +349,6 @@ class WebhookController:
                 tenant_id=tenant_id,  # This is different per request!
             )
 
-            # Extract user_id from context (set by webhook processor) with fallback
-            user_id = get_current_user_context()
-
-            if not user_id:
-                raise RuntimeError(
-                    "No user context available for cache factory creation"
-                )
-
             # Wrap messenger with PubSub if plugin is active
             if getattr(request.app.state, "pubsub_wrap_messenger", False):
                 messenger = PubSubMessengerWrapper(
@@ -343,38 +360,41 @@ class WebhookController:
             # Create cache factory per request with context injection
             cache_factory = self._create_cache_factory(request, tenant_id, user_id)
 
-            # Inject dependencies into event handler for THIS REQUEST
-            event_handler = self.event_dispatcher._event_handler
-            if event_handler:
-                event_handler.messenger = messenger
-                event_handler.cache_factory = cache_factory
+            # Get database session factories if PostgresDatabasePlugin is registered
+            session_manager = getattr(
+                request.app.state, "postgres_session_manager", None
+            )
+            db = session_manager.get_session if session_manager else None
+            db_read = session_manager.get_read_session if session_manager else None
 
-                # Inject database session factory if PostgresDatabasePlugin is registered
-                session_manager = getattr(
-                    request.app.state, "postgres_session_manager", None
-                )
-                if session_manager:
-                    event_handler.db = session_manager.get_session
-                    event_handler.db_read = session_manager.get_read_session
-                    self.logger.debug(
-                        f"✅ Injected database session factory for tenant {tenant_id}"
-                    )
+            # Get base handler (prototype) from dispatcher
+            base_handler = self.event_dispatcher._event_handler
+            if not base_handler:
+                raise RuntimeError("No event handler registered with dispatcher")
 
-                self.logger.debug(
-                    f"✅ Injected per-request dependencies for tenant {tenant_id}: "
-                    f"messenger={messenger.__class__.__name__}, platform={platform_type.value}"
-                )
-            else:
-                self.logger.error(
-                    "❌ No event handler available for dependency injection"
-                )
+            # CLONE PATTERN: Create context-bound handler for THIS REQUEST
+            request_handler = base_handler.with_context(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                messenger=messenger,
+                cache_factory=cache_factory,
+                db=db,
+                db_read=db_read,
+            )
+
+            self.logger.debug(
+                f"✅ Created request handler for tenant={tenant_id}, user={user_id}: "
+                f"messenger={messenger.__class__.__name__}, platform={platform_type.value}"
+            )
+
+            return request_handler
 
         except Exception as e:
             self.logger.error(
-                f"❌ Failed to inject per-request dependencies for tenant {tenant_id}: {e}",
+                f"❌ Failed to create request handler for tenant {tenant_id}: {e}",
                 exc_info=True,
             )
-            raise RuntimeError(f"Dependency injection failed: {e}") from e
+            raise RuntimeError(f"Handler creation failed: {e}") from e
 
     def _create_cache_factory(self, request: Request, tenant_id: str, user_id: str):
         """

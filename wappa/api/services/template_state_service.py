@@ -93,12 +93,13 @@ class TemplateStateService:
 
             # Create a new cache factory with the recipient as user_id
             # This ensures the state key includes the correct user_id
-            cache_type = self.cache_factory.__class__.__name__.replace("CacheFactory", "").lower()
+            cache_type = self.cache_factory.__class__.__name__.replace(
+                "CacheFactory", ""
+            ).lower()
             tenant_id = self.cache_factory.tenant_id
 
             recipient_cache_factory = create_cache_factory(cache_type)(
-                tenant_id=tenant_id,
-                user_id=recipient
+                tenant_id=tenant_id, user_id=recipient
             )
 
             state_cache = recipient_cache_factory.create_state_cache()

@@ -75,9 +75,7 @@ class APIMessageStatistics(BaseModel):
 
         # Update metrics
         if self.total_messages_sent > 0:
-            self.success_rate = (
-                self.successful_sends / self.total_messages_sent
-            ) * 100
+            self.success_rate = (self.successful_sends / self.total_messages_sent) * 100
 
         self.total_recipients = len(unique_recipients)
 

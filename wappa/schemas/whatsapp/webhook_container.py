@@ -185,7 +185,9 @@ class WhatsAppContactAdapter(BaseContact):
     @property
     def user_id(self) -> str:
         """Get the universal user identifier (BSUID if available, else WhatsApp ID)."""
-        return self._contact.user_id  # Uses WhatsAppContact.user_id property (BSUID-aware)
+        return (
+            self._contact.user_id
+        )  # Uses WhatsAppContact.user_id property (BSUID-aware)
 
     @property
     def display_name(self) -> str | None:

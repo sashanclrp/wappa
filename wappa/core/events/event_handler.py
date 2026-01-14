@@ -4,9 +4,10 @@ Base event handler class for Wappa applications.
 This provides the interface that developers implement to handle WhatsApp webhooks.
 """
 
+import copy
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, AsyncContextManager
+from typing import TYPE_CHECKING, Any, AsyncContextManager, Self
 
 from .default_handlers import (
     DefaultErrorHandler,
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from wappa.domain.events.api_message_event import APIMessageEvent
+    from wappa.domain.interfaces.cache_factory import ICacheFactory
     from wappa.domain.interfaces.messaging_interface import IMessenger
     from wappa.webhooks import (
         ErrorWebhook,
@@ -33,14 +35,19 @@ class WappaEventHandler(ABC):
     Developers inherit from this class and implement the handler methods
     to define their application's behavior for different webhook events.
 
-    Dependencies are injected PER-REQUEST by WebhookController:
+    Dependencies are injected PER-REQUEST via with_context() method:
+    - tenant_id: Tenant identifier for this request's context
+    - user_id: User identifier for this request's context
     - messenger: IMessenger created with correct tenant_id for each request
     - cache_factory: Cache factory for tenant-specific data persistence
     - db: Database session factory for write operations (PostgresDatabasePlugin)
     - db_read: Database session factory for read operations (uses replicas if configured)
 
+    IMPORTANT: Each request gets a FRESH handler instance via with_context() to ensure
+    thread safety. The base handler acts as a prototype that is cloned per-request.
+
     This ensures proper multi-tenant support where each webhook is processed
-    with the correct tenant-specific messenger instance.
+    with the correct tenant-specific context and dependencies.
 
     Database Usage:
         async with self.db() as session:
@@ -53,21 +60,19 @@ class WappaEventHandler(ABC):
     """
 
     def __init__(self):
-        """Initialize event handler with None dependencies (injected per-request)."""
-        self.messenger: IMessenger | None = (
-            None  # Injected per-request by WebhookController
-        )
-        self.cache_factory = (
-            None  # Injected per-request by WebhookController (placeholder)
-        )
-        # Database session factories (injected per-request by WebhookController)
+        """Initialize event handler as a prototype (dependencies injected via with_context)."""
+        # Per-request context (set via with_context() - NOT mutable on prototype)
+        self.tenant_id: str | None = None
+        self.user_id: str | None = None
+
+        # Per-request dependencies (set via with_context() - NOT mutable on prototype)
+        self.messenger: IMessenger | None = None
+        self.cache_factory: ICacheFactory | None = None
+
+        # Database session factories (set via with_context())
         # Usage: async with self.db() as session: ...
-        self.db: Callable[[], AsyncContextManager[AsyncSession]] | None = (
-            None  # Write session factory (PostgresDatabasePlugin)
-        )
-        self.db_read: Callable[[], AsyncContextManager[AsyncSession]] | None = (
-            None  # Read session factory (uses replicas if configured)
-        )
+        self.db: Callable[[], AsyncContextManager[AsyncSession]] | None = None
+        self.db_read: Callable[[], AsyncContextManager[AsyncSession]] | None = None
 
         # Set up logger with the actual class module name (not the base class)
         from wappa.core.logging.logger import get_logger
@@ -75,9 +80,62 @@ class WappaEventHandler(ABC):
         self.logger = get_logger(self.__class__.__module__)
 
         # Default handlers for all webhook types (core framework infrastructure)
+        # These are shared across clones (stateless)
         self._default_message_handler = DefaultMessageHandler()
         self._default_status_handler = DefaultStatusHandler()
         self._default_error_handler = DefaultErrorHandler()
+
+    def with_context(
+        self,
+        tenant_id: str,
+        user_id: str,
+        messenger: "IMessenger",
+        cache_factory: "ICacheFactory",
+        db: Callable[[], AsyncContextManager["AsyncSession"]] | None = None,
+        db_read: Callable[[], AsyncContextManager["AsyncSession"]] | None = None,
+    ) -> Self:
+        """
+        Create a context-bound copy of this handler for a specific request.
+
+        This method implements the Clone Pattern to ensure thread safety.
+        Each request gets its own handler instance with isolated context,
+        preventing race conditions when concurrent requests are processed.
+
+        Args:
+            tenant_id: Tenant identifier for this request
+            user_id: User identifier for this request (sender for webhooks, recipient for API)
+            messenger: IMessenger instance for this request's tenant
+            cache_factory: Cache factory for this request's context
+            db: Optional database write session factory
+            db_read: Optional database read session factory
+
+        Returns:
+            A new handler instance with the specified context bound
+
+        Example:
+            # WebhookController creates cloned handler per request:
+            request_handler = base_handler.with_context(
+                tenant_id="acme_corp",
+                user_id="5551234567",
+                messenger=messenger,
+                cache_factory=cache_factory,
+            )
+            await request_handler.handle_message(webhook)
+        """
+        # Shallow copy preserves configuration (default handlers, logger config)
+        handler = copy.copy(self)
+
+        # Bind per-request context
+        handler.tenant_id = tenant_id
+        handler.user_id = user_id
+
+        # Bind per-request dependencies
+        handler.messenger = messenger
+        handler.cache_factory = cache_factory
+        handler.db = db
+        handler.db_read = db_read
+
+        return handler
 
     async def handle_message(self, webhook: "IncomingMessageWebhook") -> None:
         """
@@ -298,11 +356,19 @@ class WappaEventHandler(ABC):
 
     def validate_dependencies(self) -> bool:
         """
-        Validate that required dependencies have been properly injected per-request.
+        Validate that required context and dependencies have been properly injected.
 
         Returns:
-            True if all required dependencies are available, False otherwise
+            True if all required context and dependencies are available, False otherwise
         """
+        # Validate context (required for proper multi-tenant operation)
+        if self.tenant_id is None or self.user_id is None:
+            self.logger.error(
+                f"Request context not set - tenant_id={self.tenant_id}, user_id={self.user_id}. "
+                "Ensure with_context() was called before processing."
+            )
+            return False
+
         if self.messenger is None:
             self.logger.error(
                 "Messenger dependency not injected - cannot send messages (check WebhookController)"
@@ -328,20 +394,26 @@ class WappaEventHandler(ABC):
             self.logger.debug("Database session factory injected")
 
         self.logger.debug(
-            f"Per-request dependencies validation passed - "
+            f"Per-request context validation passed - "
+            f"tenant: {self.tenant_id}, user: {self.user_id}, "
             f"messenger: {self.messenger.__class__.__name__} "
-            f"(platform: {self.messenger.platform.value}, tenant: {self.messenger.tenant_id})"
+            f"(platform: {self.messenger.platform.value})"
         )
         return True
 
     def get_dependency_status(self) -> dict[str, dict[str, Any]]:
         """
-        Get the status of injected dependencies for debugging.
+        Get the status of injected context and dependencies for debugging.
 
         Returns:
-            Dictionary containing dependency injection status
+            Dictionary containing context and dependency injection status
         """
         return {
+            "context": {
+                "tenant_id": self.tenant_id,
+                "user_id": self.user_id,
+                "bound": self.tenant_id is not None and self.user_id is not None,
+            },
             "messenger": {
                 "injected": self.messenger is not None,
                 "type": type(self.messenger).__name__ if self.messenger else None,

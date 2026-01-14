@@ -86,7 +86,9 @@ class MessageSchemaRegistry:
 
         except ImportError as e:
             self.logger.error(f"Failed to import WhatsApp schemas: {e}")
-            raise SchemaRegistryError(f"Failed to register WhatsApp schemas: {e}") from e
+            raise SchemaRegistryError(
+                f"Failed to register WhatsApp schemas: {e}"
+            ) from e
 
     def register_message_schema(
         self,

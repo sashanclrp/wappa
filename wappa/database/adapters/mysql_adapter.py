@@ -160,11 +160,15 @@ class MySQLAdapter:
                 version = version_result.scalar()
 
                 # Get character set info
-                charset_result = await conn.execute(text("SELECT @@character_set_database"))
+                charset_result = await conn.execute(
+                    text("SELECT @@character_set_database")
+                )
                 charset = charset_result.scalar()
 
                 # Get collation info
-                collation_result = await conn.execute(text("SELECT @@collation_database"))
+                collation_result = await conn.execute(
+                    text("SELECT @@collation_database")
+                )
                 collation = collation_result.scalar()
 
                 return {

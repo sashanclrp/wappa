@@ -48,6 +48,7 @@ class WappaEventDispatcher:
         self,
         universal_webhook: "UniversalWebhook",
         tenant_id: str | None = None,
+        request_handler: "WappaEventHandler | None" = None,
         **kwargs,
     ) -> dict[str, Any]:
         """
@@ -56,12 +57,18 @@ class WappaEventDispatcher:
         Args:
             universal_webhook: Universal webhook interface instance
             tenant_id: Optional tenant ID for context
+            request_handler: Optional cloned handler instance for this request.
+                           If provided, uses this handler instead of the prototype.
+                           This ensures thread safety with per-request context.
             **kwargs: Additional dispatch parameters
 
         Returns:
             Dictionary with dispatch results
         """
         dispatch_start = datetime.utcnow()
+
+        # Use cloned handler if provided, otherwise fall back to prototype (legacy)
+        handler = request_handler if request_handler else self._event_handler
 
         try:
             # Log webhook type and basic info
@@ -85,14 +92,14 @@ class WappaEventDispatcher:
                 f"{webhook_emoji} {webhook_type.replace('Webhook', '')} from {platform_or_provider}"
             )
 
-            # Route to appropriate handler method
+            # Route to appropriate handler method using the resolved handler
             result = None
             if universal_webhook.__class__.__name__ == "IncomingMessageWebhook":
-                result = await self._handle_message_webhook(universal_webhook)
+                result = await self._handle_message_webhook(universal_webhook, handler)
             elif universal_webhook.__class__.__name__ == "StatusWebhook":
-                result = await self._handle_status_webhook(universal_webhook)
+                result = await self._handle_status_webhook(universal_webhook, handler)
             elif universal_webhook.__class__.__name__ == "ErrorWebhook":
-                result = await self._handle_error_webhook(universal_webhook)
+                result = await self._handle_error_webhook(universal_webhook, handler)
             else:
                 return {
                     "success": False,
@@ -120,36 +127,40 @@ class WappaEventDispatcher:
             }
 
     async def _handle_message_webhook(
-        self, webhook: "IncomingMessageWebhook"
+        self,
+        webhook: "IncomingMessageWebhook",
+        handler: "WappaEventHandler",
     ) -> dict[str, Any]:
         """
         Handle incoming message webhook by routing to user's handler.
 
         Args:
             webhook: Incoming message webhook
+            handler: Context-bound handler instance for this request
 
         Returns:
             Dictionary with handling results
         """
         try:
             # Enhanced message routing log
-            handler_name = self._event_handler.__class__.__name__.replace(
-                "EventHandler", ""
-            )
+            handler_name = handler.__class__.__name__.replace("EventHandler", "")
             msg_type = webhook.get_message_type_name()
 
             self.logger.info(
-                f"💬 {msg_type} message → {handler_name} (from: {webhook.user.user_id})"
+                f"💬 {msg_type} message → {handler_name} "
+                f"(from: {webhook.user.user_id}, tenant: {handler.tenant_id})"
             )
 
-            # Call user's handle_message method
-            await self._event_handler.handle_message(webhook)
+            # Call user's handle_message method on the cloned handler
+            await handler.handle_message(webhook)
 
             return {
                 "success": True,
                 "action": "message_processed",
                 "dispatcher": "WappaEventDispatcher",
-                "handler": self._event_handler.__class__.__name__,
+                "handler": handler.__class__.__name__,
+                "tenant_id": handler.tenant_id,
+                "user_id": handler.user_id,
             }
 
         except Exception as e:
@@ -159,15 +170,20 @@ class WappaEventDispatcher:
                 "error": str(e),
                 "action": "handler_error",
                 "dispatcher": "WappaEventDispatcher",
-                "handler": self._event_handler.__class__.__name__,
+                "handler": handler.__class__.__name__,
             }
 
-    async def _handle_status_webhook(self, webhook: "StatusWebhook") -> dict[str, Any]:
+    async def _handle_status_webhook(
+        self,
+        webhook: "StatusWebhook",
+        handler: "WappaEventHandler",
+    ) -> dict[str, Any]:
         """
         Handle status webhook by routing to user's handler.
 
         Args:
             webhook: Status webhook
+            handler: Context-bound handler instance for this request
 
         Returns:
             Dictionary with handling results
@@ -183,11 +199,11 @@ class WappaEventDispatcher:
 
             self.logger.info(
                 f"{status_emoji} Status Update: {webhook.status.value.upper()} "
-                f"(recipient: {webhook.recipient_id})"
+                f"(recipient: {webhook.recipient_id}, tenant: {handler.tenant_id})"
             )
 
-            # Call user's handle_status method (optional)
-            await self._event_handler.handle_status(webhook)
+            # Call user's handle_status method on the cloned handler
+            await handler.handle_status(webhook)
 
             return {
                 "success": True,
@@ -195,6 +211,7 @@ class WappaEventDispatcher:
                 "message_id": webhook.message_id,
                 "status": webhook.status.value,
                 "recipient": webhook.recipient_id,
+                "tenant_id": handler.tenant_id,
             }
 
         except Exception as e:
@@ -205,12 +222,17 @@ class WappaEventDispatcher:
                 "action": "handler_error",
             }
 
-    async def _handle_error_webhook(self, webhook: "ErrorWebhook") -> dict[str, Any]:
+    async def _handle_error_webhook(
+        self,
+        webhook: "ErrorWebhook",
+        handler: "WappaEventHandler",
+    ) -> dict[str, Any]:
         """
         Handle error webhook by routing to user's handler.
 
         Args:
             webhook: Error webhook
+            handler: Context-bound handler instance for this request
 
         Returns:
             Dictionary with handling results
@@ -221,11 +243,12 @@ class WappaEventDispatcher:
 
             self.logger.error(
                 f"Platform error webhook: {error_count} errors, "
-                f"primary: {primary_error.error_code} - {primary_error.error_title}"
+                f"primary: {primary_error.error_code} - {primary_error.error_title} "
+                f"(tenant: {handler.tenant_id})"
             )
 
-            # Call user's handle_error method (optional)
-            await self._event_handler.handle_error(webhook)
+            # Call user's handle_error method on the cloned handler
+            await handler.handle_error(webhook)
 
             return {
                 "success": True,
@@ -233,6 +256,7 @@ class WappaEventDispatcher:
                 "error_count": error_count,
                 "primary_error_code": primary_error.error_code,
                 "primary_error_title": primary_error.error_title,
+                "tenant_id": handler.tenant_id,
             }
 
         except Exception as e:

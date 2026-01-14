@@ -297,7 +297,9 @@ class WhatsAppTemplateHandler:
                     raise ValueError("Longitude must be between -180 and 180 degrees")
             except ValueError as e:
                 if "could not convert" in str(e):
-                    raise ValueError("Latitude and longitude must be valid numbers") from e
+                    raise ValueError(
+                        "Latitude and longitude must be valid numbers"
+                    ) from e
                 raise
 
             # Build location parameter
