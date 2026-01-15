@@ -347,7 +347,9 @@ class WhatsAppSpecializedHandler:
         # Phones (required)
         api_contact["phones"] = []
         for phone in contact.phones:
-            phone_dict = {"phone": phone.phone, "type": phone.type.value}
+            phone_dict = {"phone": phone.phone}
+            if phone.type:
+                phone_dict["type"] = phone.type
             if phone.wa_id:
                 phone_dict["wa_id"] = phone.wa_id
             api_contact["phones"].append(phone_dict)
@@ -356,15 +358,18 @@ class WhatsAppSpecializedHandler:
         if contact.emails:
             api_contact["emails"] = []
             for email in contact.emails:
-                api_contact["emails"].append(
-                    {"email": email.email, "type": email.type.value}
-                )
+                email_dict = {"email": email.email}
+                if email.type:
+                    email_dict["type"] = email.type
+                api_contact["emails"].append(email_dict)
 
         # Addresses (optional)
         if contact.addresses:
             api_contact["addresses"] = []
             for address in contact.addresses:
-                address_dict = {"type": address.type.value}
+                address_dict = {}
+                if address.type:
+                    address_dict["type"] = address.type
                 if address.street:
                     address_dict["street"] = address.street
                 if address.city:
@@ -393,7 +398,10 @@ class WhatsAppSpecializedHandler:
         if contact.urls:
             api_contact["urls"] = []
             for url in contact.urls:
-                api_contact["urls"].append({"url": url.url, "type": url.type.value})
+                url_dict = {"url": url.url}
+                if url.type:
+                    url_dict["type"] = url.type
+                api_contact["urls"].append(url_dict)
 
         # Birthday (optional)
         if contact.birthday:
