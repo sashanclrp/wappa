@@ -9,41 +9,11 @@ Provides Pydantic v2 validation models for WhatsApp specialized operations:
 Based on WhatsApp Cloud API 2025 specialized message specifications.
 """
 
-from enum import Enum
-
 from pydantic import BaseModel, Field, field_validator
 
-
-class AddressType(str, Enum):
-    """Contact address types."""
-
-    HOME = "HOME"
-    WORK = "WORK"
-
-
-class EmailType(str, Enum):
-    """Contact email types."""
-
-    HOME = "HOME"
-    WORK = "WORK"
-
-
-class PhoneType(str, Enum):
-    """Contact phone number types."""
-
-    HOME = "HOME"
-    WORK = "WORK"
-    CELL = "CELL"
-    MAIN = "MAIN"
-    IPHONE = "IPHONE"
-    WHATSAPP = "WHATSAPP"
-
-
-class UrlType(str, Enum):
-    """Contact URL types."""
-
-    HOME = "HOME"
-    WORK = "WORK"
+# Note: All contact type enums removed - WhatsApp accepts any string values
+# Common type values across all fields: "HOME", "WORK", etc.
+# Phone-specific: "CELL", "MOBILE", "MAIN", "IPHONE", "WHATSAPP"
 
 
 class ContactAddress(BaseModel):
@@ -57,7 +27,7 @@ class ContactAddress(BaseModel):
     country_code: str | None = Field(
         None, pattern=r"^[A-Z]{2}$", description="ISO country code"
     )
-    type: AddressType = Field(..., description="Address type")
+    type: str | None = Field(None, description="Address type (e.g., HOME, WORK)")
 
 
 class ContactEmail(BaseModel):
@@ -66,7 +36,7 @@ class ContactEmail(BaseModel):
     email: str = Field(
         ..., pattern=r"^[^@]+@[^@]+\.[^@]+$", description="Email address"
     )
-    type: EmailType = Field(..., description="Email type")
+    type: str | None = Field(None, description="Email type (e.g., HOME, WORK)")
 
 
 class ContactName(BaseModel):
@@ -104,7 +74,10 @@ class ContactPhone(BaseModel):
     phone: str = Field(
         ..., pattern=r"^\+?[\d\s\-\(\)]{7,20}$", description="Phone number"
     )
-    type: PhoneType = Field(..., description="Phone type")
+    type: str | None = Field(
+        None,
+        description="Phone type (e.g., CELL, MOBILE, HOME, WORK, MAIN, IPHONE, WHATSAPP)",
+    )
     wa_id: str | None = Field(None, pattern=r"^\d{10,15}$", description="WhatsApp ID")
 
 
@@ -112,7 +85,7 @@ class ContactUrl(BaseModel):
     """Contact URL information."""
 
     url: str = Field(..., pattern=r"^https?://", description="Website URL")
-    type: UrlType = Field(..., description="URL type")
+    type: str | None = Field(None, description="URL type (e.g., HOME, WORK)")
 
 
 class ContactCard(BaseModel):
@@ -224,15 +197,9 @@ class BusinessContact(BaseModel):
 
     def to_contact_card(self) -> ContactCard:
         """Convert to full ContactCard format."""
-        phones = [ContactPhone(phone=self.phone, type=PhoneType.WORK)]
-        emails = (
-            [ContactEmail(email=self.email, type=EmailType.WORK)]
-            if self.email
-            else None
-        )
-        urls = (
-            [ContactUrl(url=self.website, type=UrlType.WORK)] if self.website else None
-        )
+        phones = [ContactPhone(phone=self.phone, type="WORK")]
+        emails = [ContactEmail(email=self.email, type="WORK")] if self.email else None
+        urls = [ContactUrl(url=self.website, type="WORK")] if self.website else None
 
         return ContactCard(
             name=ContactName(formatted_name=self.business_name),
@@ -262,12 +229,8 @@ class PersonalContact(BaseModel):
             if self.last_name
             else self.first_name
         )
-        phones = [ContactPhone(phone=self.phone, type=PhoneType.CELL)]
-        emails = (
-            [ContactEmail(email=self.email, type=EmailType.HOME)]
-            if self.email
-            else None
-        )
+        phones = [ContactPhone(phone=self.phone, type="CELL")]
+        emails = [ContactEmail(email=self.email, type="HOME")] if self.email else None
 
         return ContactCard(
             name=ContactName(
