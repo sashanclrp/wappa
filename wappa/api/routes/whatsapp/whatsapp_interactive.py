@@ -17,8 +17,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_messenger
 from wappa.api.utils import (
-    convert_buttons_to_dict,
-    convert_header_to_dict,
     convert_list_sections_to_dict,
     dispatch_message_event,
     raise_for_failed_result,
@@ -96,10 +94,10 @@ async def send_button_message(
     """
     try:
         result = await messenger.send_button_message(
-            buttons=convert_buttons_to_dict(request.buttons),
+            buttons=request.buttons,
             recipient=request.recipient,
             body=request.body,
-            header=convert_header_to_dict(request.header),
+            header=request.header,
             footer=request.footer,
             reply_to_message_id=request.reply_to_message_id,
         )
