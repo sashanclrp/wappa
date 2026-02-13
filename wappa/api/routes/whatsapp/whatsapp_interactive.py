@@ -12,12 +12,11 @@ Router configuration:
 - Full URL: /api/whatsapp/interactive/ (when included with /api prefix)
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_messenger
 from wappa.api.utils import (
-    convert_list_sections_to_dict,
     dispatch_message_event,
     raise_for_failed_result,
 )
@@ -28,6 +27,8 @@ from wappa.messaging.whatsapp.models.interactive_models import (
     ButtonMessage,
     CTAMessage,
     ListMessage,
+    ListRow,
+    ListSection,
 )
 
 # Error code groups for interactive operations
@@ -84,6 +85,7 @@ router = APIRouter(
 @dispatch_message_event("button")
 async def send_button_message(
     request: ButtonMessage,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
@@ -122,6 +124,7 @@ async def send_button_message(
 @dispatch_message_event("list")
 async def send_list_message(
     request: ListMessage,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
@@ -132,7 +135,7 @@ async def send_list_message(
     """
     try:
         result = await messenger.send_list_message(
-            sections=convert_list_sections_to_dict(request.sections),
+            sections=request.sections,
             recipient=request.recipient,
             body=request.body,
             button_text=request.button_text,
@@ -161,6 +164,7 @@ async def send_list_message(
 @dispatch_message_event("cta")
 async def send_cta_message(
     request: CTAMessage,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
@@ -297,51 +301,27 @@ async def send_menu_list_message(
     """
     try:
         sections = [
-            {
-                "title": "Main Dishes",
-                "rows": [
-                    {
-                        "id": "pizza_margherita",
-                        "title": "Pizza Margherita",
-                        "description": "Classic tomato and mozzarella - $12.99",
-                    },
-                    {
-                        "id": "pasta_carbonara",
-                        "title": "Pasta Carbonara",
-                        "description": "Creamy bacon pasta - $14.99",
-                    },
+            ListSection(
+                title="Main Dishes",
+                rows=[
+                    ListRow(id="pizza_margherita", title="Pizza Margherita", description="Classic tomato and mozzarella - $12.99"),
+                    ListRow(id="pasta_carbonara", title="Pasta Carbonara", description="Creamy bacon pasta - $14.99"),
                 ],
-            },
-            {
-                "title": "Salads",
-                "rows": [
-                    {
-                        "id": "caesar_salad",
-                        "title": "Caesar Salad",
-                        "description": "Crispy romaine with parmesan - $8.99",
-                    },
-                    {
-                        "id": "greek_salad",
-                        "title": "Greek Salad",
-                        "description": "Fresh vegetables with feta - $9.99",
-                    },
+            ),
+            ListSection(
+                title="Salads",
+                rows=[
+                    ListRow(id="caesar_salad", title="Caesar Salad", description="Crispy romaine with parmesan - $8.99"),
+                    ListRow(id="greek_salad", title="Greek Salad", description="Fresh vegetables with feta - $9.99"),
                 ],
-            },
-            {
-                "title": "Beverages",
-                "rows": [
-                    {
-                        "id": "coke",
-                        "title": "Coca Cola",
-                        "description": "Classic refreshing cola - $2.99",
-                    },
-                    {
-                        "id": "water",
-                        "title": "Sparkling Water",
-                        "description": "Refreshing mineral water - $1.99",
-                    },
+            ),
+            ListSection(
+                title="Beverages",
+                rows=[
+                    ListRow(id="coke", title="Coca Cola", description="Classic refreshing cola - $2.99"),
+                    ListRow(id="water", title="Sparkling Water", description="Refreshing mineral water - $1.99"),
                 ],
-            },
+            ),
         ]
 
         result = await messenger.send_list_message(

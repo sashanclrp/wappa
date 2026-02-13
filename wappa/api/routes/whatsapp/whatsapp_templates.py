@@ -16,9 +16,16 @@ State Management:
 All send endpoints support optional state_config for creating user cache state
 when the template is sent successfully. This enables routing subsequent user
 responses to specific handlers based on the template context.
+
+AI Agent Context (template_metadata):
+All send endpoints support optional template_metadata for providing AI agent
+context. This metadata is NOT sent to WhatsApp - it's for internal use only
+to provide additional context, instructions, and constraints for AI processing.
+The system_message field can be used to attach system-level instructions for
+AI agents to process within their context.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from wappa.api.dependencies.cache_dependencies import get_template_state_service
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
@@ -97,6 +104,7 @@ router = APIRouter(
 @dispatch_message_event("text_template")
 async def send_text_template(
     request: TextTemplateMessage,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     state_service: TemplateStateService = Depends(get_template_state_service),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
@@ -108,6 +116,9 @@ async def send_text_template(
 
     If state_config is provided, creates a user cache state for routing
     subsequent responses based on template-{state_value}.
+
+    If template_metadata is provided, includes AI context (text_content, system_message)
+    for internal AI agent processing. This metadata is NOT sent to WhatsApp.
     """
     result = await messenger.send_text_template(
         template_name=request.template_name,
@@ -130,6 +141,7 @@ async def send_text_template(
 @dispatch_message_event("media_template")
 async def send_media_template(
     request: MediaTemplateMessage,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     state_service: TemplateStateService = Depends(get_template_state_service),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
@@ -141,6 +153,10 @@ async def send_media_template(
 
     If state_config is provided, creates a user cache state for routing
     subsequent responses based on template-{state_value}.
+
+    If template_metadata is provided, includes AI context (text_content, media_description,
+    media_transcript, system_message) for internal AI agent processing.
+    This metadata is NOT sent to WhatsApp.
     """
     result = await messenger.send_media_template(
         template_name=request.template_name,
@@ -166,6 +182,7 @@ async def send_media_template(
 @dispatch_message_event("location_template")
 async def send_location_template(
     request: LocationTemplateMessage,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     state_service: TemplateStateService = Depends(get_template_state_service),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
@@ -177,6 +194,9 @@ async def send_location_template(
 
     If state_config is provided, creates a user cache state for routing
     subsequent responses based on template-{state_value}.
+
+    If template_metadata is provided, includes AI context (text_content, system_message)
+    for internal AI agent processing. This metadata is NOT sent to WhatsApp.
     """
     result = await messenger.send_location_template(
         template_name=request.template_name,

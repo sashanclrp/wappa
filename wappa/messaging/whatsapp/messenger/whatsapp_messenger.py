@@ -33,6 +33,7 @@ from wappa.messaging.whatsapp.handlers.whatsapp_template_handler import (
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.interactive_models import (
     InteractiveHeader,
+    ListSection,
     ReplyButton,
 )
 from wappa.messaging.whatsapp.models.media_models import MediaType
@@ -105,7 +106,8 @@ class WhatsAppMessenger(IMessenger):
         """Convert dict parameters to TemplateParameter objects.
 
         Args:
-            body_parameters: List of parameter dicts with 'type' and 'text' keys
+            body_parameters: List of parameter dicts with 'type', 'text',
+                and optional 'parameter_name' keys
 
         Returns:
             List of TemplateParameter objects or None if no parameters provided
@@ -118,11 +120,17 @@ class WhatsAppMessenger(IMessenger):
             TemplateParameterType,
         )
 
-        return [
-            TemplateParameter(type=TemplateParameterType.TEXT, text=p.get("text"))
-            for p in body_parameters
-            if isinstance(p, dict) and p.get("type") == "text"
-        ]
+        result = []
+        for p in body_parameters:
+            if isinstance(p, dict) and p.get("type") == "text":
+                result.append(
+                    TemplateParameter(
+                        type=TemplateParameterType.TEXT,
+                        text=p.get("text"),
+                        parameter_name=p.get("parameter_name"),
+                    )
+                )
+        return result
 
     # Basic Messaging Methods (from WhatsAppBasicMessenger)
 
@@ -317,6 +325,7 @@ class WhatsAppMessenger(IMessenger):
         recipient: str,
         reply_to_message_id: str | None = None,
         transcript: str | None = None,
+        is_voice: bool = False,
     ) -> MessageResult:
         """Send audio message using WhatsApp API.
 
@@ -327,13 +336,24 @@ class WhatsAppMessenger(IMessenger):
             audio_source: Audio URL or file path
             recipient: Recipient identifier
             reply_to_message_id: Optional message ID to reply to
-            transcript: Optional transcript text for audio content
+            transcript: Optional transcript text for audio content (internal use only)
+            is_voice: Set to True to send as voice message, False for regular audio.
+                     Default: False
+
+                     VOICE MESSAGE REQUIREMENTS:
+                     - File MUST be OGG format encoded with OPUS codec
+                     - File MUST be mono (single audio channel)
+                     - Maximum file size: 16MB
+                     - When True, WhatsApp displays the audio with voice message UI
+                     - When False or omitted, sends as regular audio file
 
         Returns:
             MessageResult with operation status and metadata
 
         Note:
             Audio messages do not support captions.
+            Regular audio supports: AAC, AMR, MP3, M4A, OGG (OPUS codec only).
+            Voice messages REQUIRE: OGG with OPUS codec, mono channel.
         """
         return await self._send_media(
             media_source=audio_source,
@@ -343,6 +363,7 @@ class WhatsAppMessenger(IMessenger):
             filename=None,
             reply_to_message_id=reply_to_message_id,
             transcript=transcript,
+            is_voice=is_voice,
         )
 
     async def send_document(
@@ -416,6 +437,7 @@ class WhatsAppMessenger(IMessenger):
         filename: str | None = None,
         reply_to_message_id: str | None = None,
         transcript: str | None = None,
+        is_voice: bool = False,
     ) -> MessageResult:
         """
         Internal method to send media messages.
@@ -425,6 +447,7 @@ class WhatsAppMessenger(IMessenger):
 
         Args:
             transcript: Optional transcript for audio/video content (internal use, not sent to WhatsApp)
+            is_voice: Set to True to send audio as voice message (OGG/OPUS only)
         """
         try:
             # Build initial payload
@@ -502,6 +525,10 @@ class WhatsAppMessenger(IMessenger):
             if media_type == MediaType.DOCUMENT and filename:
                 media_obj["filename"] = filename
 
+            # Add voice flag for audio messages (WhatsApp API voice parameter)
+            if media_type == MediaType.AUDIO and is_voice:
+                media_obj["voice"] = True
+
             # Set media object in payload
             payload[media_type.value] = media_obj
 
@@ -570,7 +597,7 @@ class WhatsAppMessenger(IMessenger):
 
     async def send_list_message(
         self,
-        sections: list[dict],
+        sections: list[ListSection],
         recipient: str,
         body: str,
         button_text: str,
@@ -584,7 +611,7 @@ class WhatsAppMessenger(IMessenger):
         Based on WhatsApp Cloud API 2025 interactive list specifications.
 
         Args:
-            sections: List of section objects with title and rows
+            sections: List of ListSection models with title and rows
             recipient: Recipient identifier
             body: Main message text (max 4096 characters)
             button_text: Text for the button that opens the list (max 20 characters)

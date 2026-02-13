@@ -6,7 +6,7 @@ that provide consistent interfaces regardless of the messaging platform.
 """
 
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -74,7 +74,7 @@ class BaseMessage(BaseModel, ABC):
 
     # Universal fields
     processed_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When the message was processed by our system",
     )
 

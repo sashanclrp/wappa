@@ -11,7 +11,7 @@ Router configuration:
 - Full URL: /api/whatsapp/messages/ (when included with /api prefix)
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.whatsapp_dependencies import (
@@ -51,6 +51,7 @@ router = APIRouter(
 @dispatch_message_event("text")
 async def send_text_message(
     request: BasicTextMessage,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:

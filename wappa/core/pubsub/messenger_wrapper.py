@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ...domain.interfaces.messaging_interface import IMessenger
+from ...messaging.whatsapp.models.interactive_models import ListSection
 from ...schemas.core.types import PlatformType
 from .handlers import publish_notification
 
@@ -186,7 +187,7 @@ class PubSubMessengerWrapper(IMessenger):
 
     async def send_list_message(
         self,
-        sections: list[dict],
+        sections: list[ListSection],
         recipient: str,
         body: str,
         button_text: str,

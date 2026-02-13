@@ -18,6 +18,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from wappa.messaging.whatsapp.models.interactive_models import ListSection
 from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
@@ -291,7 +292,7 @@ class IMessenger(ABC):
     @abstractmethod
     async def send_list_message(
         self,
-        sections: list[dict],
+        sections: list[ListSection],
         recipient: str,
         body: str,
         button_text: str,
@@ -305,7 +306,7 @@ class IMessenger(ABC):
         Based on WhatsApp Cloud API 2025 interactive list specifications.
 
         Args:
-            sections: List of section objects with title and rows
+            sections: List of ListSection models with title and rows
             recipient: Recipient identifier
             body: Main message text (max 4096 characters)
             button_text: Text for the button that opens the list (max 20 characters)

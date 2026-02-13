@@ -10,7 +10,7 @@ Follows SOLID principles with proper error handling and Pydantic v2 validation.
 Based on WhatsApp Cloud API 2025 specifications for specialized messaging.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, ValidationError
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
@@ -129,6 +129,7 @@ class CoordinateValidationRequest(BaseModel):
 @dispatch_message_event("contact")
 async def send_contact_card(
     request: ContactRequest,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
@@ -185,6 +186,7 @@ async def send_contact_card(
 @dispatch_message_event("location")
 async def send_location_message(
     request: LocationRequest,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
@@ -246,6 +248,7 @@ async def send_location_message(
 @dispatch_message_event("location_request")
 async def send_location_request_message(
     request: LocationRequestRequest,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:

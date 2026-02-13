@@ -4,7 +4,7 @@ Event dispatcher for routing webhooks to event handlers.
 Simplified version of the SimpleEventDispatcher focused on the core webhook routing pattern.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from wappa.core.logging.logger import get_logger
@@ -65,7 +65,7 @@ class WappaEventDispatcher:
         Returns:
             Dictionary with dispatch results
         """
-        dispatch_start = datetime.utcnow()
+        dispatch_start = datetime.now(UTC)
 
         # Use cloned handler if provided, otherwise fall back to prototype (legacy)
         handler = request_handler if request_handler else self._event_handler
@@ -104,12 +104,12 @@ class WappaEventDispatcher:
                 return {
                     "success": False,
                     "error": f"Unknown webhook type: {webhook_type}",
-                    "processed_at": datetime.utcnow().isoformat(),
+                    "processed_at": datetime.now(UTC).isoformat(),
                 }
 
             # Add timing information if result exists
             if result:
-                dispatch_end = datetime.utcnow()
+                dispatch_end = datetime.now(UTC)
                 result["dispatch_time"] = (
                     dispatch_end - dispatch_start
                 ).total_seconds()
@@ -123,7 +123,7 @@ class WappaEventDispatcher:
             return {
                 "success": False,
                 "error": str(e),
-                "processed_at": datetime.utcnow().isoformat(),
+                "processed_at": datetime.now(UTC).isoformat(),
             }
 
     async def _handle_message_webhook(

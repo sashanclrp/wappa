@@ -9,6 +9,8 @@ import time
 
 from wappa.messaging.whatsapp.models.interactive_models import (
     InteractiveHeader,
+    ListRow,
+    ListSection,
     ReplyButton,
 )
 from wappa.webhooks import IncomingMessageWebhook
@@ -169,31 +171,15 @@ class CommandHandlers:
 
             # Create list sections with media options
             sections = [
-                {
-                    "title": "📁 Media Files",
-                    "rows": [
-                        {
-                            "id": "image_file",
-                            "title": "🖼️ Image",
-                            "description": "Get a sample image file",
-                        },
-                        {
-                            "id": "video_file",
-                            "title": "🎬 Video",
-                            "description": "Get a sample video file",
-                        },
-                        {
-                            "id": "audio_file",
-                            "title": "🎵 Audio",
-                            "description": "Get a sample audio file",
-                        },
-                        {
-                            "id": "document_file",
-                            "title": "📄 Document",
-                            "description": "Get a sample document file",
-                        },
+                ListSection(
+                    title="📁 Media Files",
+                    rows=[
+                        ListRow(id="image_file", title="🖼️ Image", description="Get a sample image file"),
+                        ListRow(id="video_file", title="🎬 Video", description="Get a sample video file"),
+                        ListRow(id="audio_file", title="🎵 Audio", description="Get a sample audio file"),
+                        ListRow(id="document_file", title="📄 Document", description="Get a sample document file"),
                     ],
-                }
+                )
             ]
 
             # Create list state with 10 minute TTL

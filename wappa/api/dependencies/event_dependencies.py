@@ -3,6 +3,9 @@ Event dispatcher dependency injection for API routes.
 
 Provides access to the APIEventDispatcher for dispatching
 outgoing message events from API routes.
+
+Important: Pass the FastAPI Request object to dispatch functions to enable
+database session injection in process_api_message() handlers.
 """
 
 import asyncio
@@ -43,12 +46,16 @@ async def dispatch_api_message_event(
     result: "MessageResult",
     request_payload: dict,
     recipient: str,
+    request: Request | None = None,
 ) -> None:
     """
-    Fire-and-forget API event dispatch helper.
+    Fire-and-forget API event dispatch helper with database session support.
 
     Creates an APIMessageEvent from the message result and dispatches it
     asynchronously without blocking the API response.
+
+    Important: Pass the FastAPI `request` parameter to enable database session
+    injection in process_api_message() handlers. Without it, self.db will be None.
 
     Args:
         dispatcher: APIEventDispatcher or None (skips if None)
@@ -56,6 +63,7 @@ async def dispatch_api_message_event(
         result: MessageResult from the messenger
         request_payload: Original API request payload
         recipient: Recipient phone number
+        request: FastAPI Request for database session access (recommended)
     """
     if dispatcher is None:
         return
@@ -73,4 +81,5 @@ async def dispatch_api_message_event(
     )
 
     # Fire and forget - don't block the API response
-    asyncio.create_task(dispatcher.dispatch(event))
+    # Pass request to enable DB session injection in handler
+    asyncio.create_task(dispatcher.dispatch(event, request))

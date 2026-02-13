@@ -12,7 +12,7 @@ Based on WhatsApp Cloud API 2025 template message specifications.
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class MediaType(str, Enum):
@@ -41,6 +41,15 @@ class TemplateParameter(BaseModel):
     type: TemplateParameterType = Field(..., description="Parameter type")
     text: str | None = Field(
         None, max_length=1024, description="Text content for text parameters"
+    )
+    parameter_name: str | None = Field(
+        None,
+        max_length=128,
+        pattern=r"^[a-zA-Z][a-zA-Z0-9_]*$",
+        description=(
+            "Optional named parameter identifier for explicit binding to template "
+            "variables. Must start with a letter, alphanumeric and underscores only."
+        ),
     )
 
     @field_validator("text")
@@ -117,6 +126,17 @@ class TextTemplateMetadata(BaseModel):
             "NOT sent to WhatsApp - internal context only."
         ),
     )
+    system_message: str | None = Field(
+        None,
+        max_length=8192,
+        description=(
+            "Optional system message for AI agent context. "
+            "This message will be attached as a System Message for an AI Agent "
+            "to process within its context and instructions. "
+            "Provides additional context, instructions, or constraints for AI processing. "
+            "NOT sent to WhatsApp - internal AI context only."
+        ),
+    )
 
 
 class MediaTemplateMetadata(BaseModel):
@@ -154,6 +174,17 @@ class MediaTemplateMetadata(BaseModel):
             "Only valid for video and audio media types."
         ),
     )
+    system_message: str | None = Field(
+        None,
+        max_length=8192,
+        description=(
+            "Optional system message for AI agent context. "
+            "This message will be attached as a System Message for an AI Agent "
+            "to process within its context and instructions. "
+            "Provides additional context, instructions, or constraints for AI processing. "
+            "NOT sent to WhatsApp - internal AI context only."
+        ),
+    )
 
 
 class LocationTemplateMetadata(BaseModel):
@@ -170,6 +201,17 @@ class LocationTemplateMetadata(BaseModel):
             "Optional text content summary for AI context. "
             "Describes the template content for AI agents. "
             "NOT sent to WhatsApp - internal context only."
+        ),
+    )
+    system_message: str | None = Field(
+        None,
+        max_length=8192,
+        description=(
+            "Optional system message for AI agent context. "
+            "This message will be attached as a System Message for an AI Agent "
+            "to process within its context and instructions. "
+            "Provides additional context, instructions, or constraints for AI processing. "
+            "NOT sent to WhatsApp - internal AI context only."
         ),
     )
 
@@ -273,19 +315,17 @@ class MediaTemplateMessage(BaseTemplateMessage):
         description="Optional metadata for AI context (internal use only, not sent to WhatsApp)",
     )
 
-    @field_validator("media_id", "media_url")
-    @classmethod
-    def validate_media_source(cls, v, info):
+    @model_validator(mode="after")
+    def validate_media_source(self):
         """Validate that either media_id or media_url is provided, but not both."""
-        values = info.data
-        media_id = values.get("media_id")
-        media_url = values.get("media_url")
+        media_id = self.media_id
+        media_url = self.media_url
 
         if (media_id and media_url) or (not media_id and not media_url):
             raise ValueError(
                 "Either media_id or media_url must be provided, but not both"
             )
-        return v
+        return self
 
     @field_validator("body_parameters")
     @classmethod

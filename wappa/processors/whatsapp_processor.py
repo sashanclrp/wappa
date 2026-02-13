@@ -7,7 +7,7 @@ including message parsing, validation, and integration with the Symphony AI syst
 
 import hashlib
 import hmac
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import ValidationError
@@ -457,13 +457,13 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                     error_title="Unknown webhook type",
                     error_message="Webhook contains no recognizable content (messages, statuses, or errors)",
                     error_type="webhook_format",
-                    occurred_at=datetime.utcnow(),
+                    occurred_at=datetime.now(timezone.utc),
                 )
 
                 return ErrorWebhook(
                     tenant=tenant_base,
                     errors=[error_detail],
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(timezone.utc),
                     error_level="webhook",
                     platform=PlatformType.WHATSAPP,
                     webhook_id=webhook.get_webhook_id(),
@@ -650,14 +650,14 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 error_details=getattr(error, "details", None),
                 documentation_url=getattr(error, "href", None),
                 error_type="whatsapp_api",
-                occurred_at=datetime.utcnow(),
+                occurred_at=datetime.now(timezone.utc),
             )
             error_details.append(error_detail)
 
         return ErrorWebhook(
             tenant=tenant_base,
             errors=error_details,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             error_level="system",
             platform=PlatformType.WHATSAPP,
             webhook_id=webhook.get_webhook_id(),
@@ -825,7 +825,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 else None,
                 documentation_url=getattr(error, "href", None),
                 error_type="delivery_failure",
-                occurred_at=datetime.utcnow(),
+                occurred_at=datetime.now(timezone.utc),
             )
             error_details.append(error_detail)
 

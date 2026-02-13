@@ -6,7 +6,7 @@ They are designed based on WhatsApp's comprehensive webhook structure and
 represent the "standard" that all messaging platforms should adapt to.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -299,7 +299,7 @@ class ConversationBase(BaseModel):
         """Check if this conversation has expired."""
         if self.expiration_timestamp is None:
             return False
-        return datetime.utcnow() > self.expiration_timestamp
+        return datetime.now(timezone.utc) > self.expiration_timestamp
 
 
 class ErrorDetailBase(BaseModel):

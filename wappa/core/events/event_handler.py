@@ -49,6 +49,39 @@ class WappaEventHandler(ABC):
     This ensures proper multi-tenant support where each webhook is processed
     with the correct tenant-specific context and dependencies.
 
+    Database Availability Across Handler Methods:
+        All handler methods have access to self.db when PostgresDatabasePlugin is configured:
+        - process_message(): Webhook handler - self.db always available
+        - process_status(): Webhook handler - self.db always available
+        - process_error(): Webhook handler - self.db always available
+        - process_api_message(): API event handler - self.db available when FastAPI Request
+                                 is passed to the dispatcher (see note below)
+
+        Note for process_api_message():
+            For self.db to be available in process_api_message(), API routes must pass
+            the FastAPI Request object to the event dispatch functions. Example:
+
+            # Using dispatch_api_message_event:
+            await dispatch_api_message_event(
+                dispatcher, message_type, result, payload, recipient,
+                request=fastapi_request  # Pass Request for DB access
+            )
+
+            # Using fire_api_event:
+            fire_api_event(
+                dispatcher, message_type, result, payload, recipient,
+                fastapi_request=request  # Pass Request for DB access
+            )
+
+            # Using @dispatch_message_event decorator:
+            @dispatch_message_event("text")
+            async def send_text(
+                request: TextMessage,
+                fastapi_request: Request,  # Include Request parameter
+                api_dispatcher: APIEventDispatcher = Depends(get_api_event_dispatcher),
+            ):
+                ...
+
     Database Usage:
         async with self.db() as session:
             user = await session.exec(select(User).where(User.phone == phone))
@@ -270,18 +303,36 @@ class WappaEventHandler(ABC):
 
         Default: no-op (does nothing unless overridden).
 
+        Database Access:
+            self.db is available when PostgresDatabasePlugin is configured AND the
+            API route passes the FastAPI Request to the event dispatcher. Without
+            Request, self.db will be None - check before using:
+
+            if self.db:
+                async with self.db() as session:
+                    # Your database operations
+                    pass
+
         Args:
             event: APIMessageEvent with full context (request, response, tenant)
 
         Example:
             async def process_api_message(self, event: APIMessageEvent) -> None:
+                # Check if database is available
+                if not self.db:
+                    self.logger.debug("Database not available for API event")
+                    return
+
                 # Log outgoing message to database
-                await self.db.insert_message(
-                    recipient=event.recipient,
-                    message_type=event.message_type,
-                    message_id=event.message_id,
-                    success=event.response_success,
-                )
+                async with self.db() as session:
+                    message = Message(
+                        recipient=event.recipient,
+                        message_type=event.message_type,
+                        message_id=event.message_id,
+                        success=event.response_success,
+                    )
+                    session.add(message)
+                    # Auto-commits on context exit
 
                 # Trigger analytics
                 if event.response_success:

@@ -8,7 +8,7 @@ across route handlers.
 
 def convert_body_parameters(
     body_parameters: list | None,
-) -> list[dict[str, str]] | None:
+) -> list[dict[str, str | None]] | None:
     """Convert Pydantic body parameters to dict format for messenger.
 
     Extracts the common pattern of converting template body parameters
@@ -18,12 +18,19 @@ def convert_body_parameters(
         body_parameters: List of TemplateParameter Pydantic models or None
 
     Returns:
-        List of dicts with 'type' and 'text' keys, or None if input is None
+        List of dicts with 'type', 'text', and optional 'parameter_name' keys,
+        or None if input is None
     """
     if not body_parameters:
         return None
 
-    return [{"type": param.type.value, "text": param.text} for param in body_parameters]
+    result = []
+    for param in body_parameters:
+        param_dict = {"type": param.type.value, "text": param.text}
+        if param.parameter_name:
+            param_dict["parameter_name"] = param.parameter_name
+        result.append(param_dict)
+    return result
 
 
 def convert_buttons_to_dict(buttons: list) -> list[dict[str, str]]:

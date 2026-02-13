@@ -6,7 +6,7 @@ used out-of-the-box or extended by users for custom behavior.
 """
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
@@ -296,7 +296,7 @@ class DefaultStatusHandler:
             Dictionary with handling results and statistics
         """
         self._stats["total_processed"] += 1
-        self._stats["last_processed"] = datetime.utcnow()
+        self._stats["last_processed"] = datetime.now(timezone.utc)
 
         # Update status-specific counters
         status_value = webhook.status.value.lower()
@@ -439,7 +439,7 @@ class DefaultErrorHandler:
 
         # Update statistics
         self._stats["total_errors"] += error_count
-        self._stats["last_error"] = datetime.utcnow()
+        self._stats["last_error"] = datetime.now(timezone.utc)
 
         # Track error types
         error_code = primary_error.error_code
@@ -453,7 +453,7 @@ class DefaultErrorHandler:
             self._stats["critical_errors"] += 1
 
         # Add to recent errors for escalation tracking
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         self._stats["recent_errors"].append(
             {
                 "timestamp": current_time,

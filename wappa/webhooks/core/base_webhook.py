@@ -6,7 +6,7 @@ webhook implementations must inherit from to ensure consistent interfaces.
 """
 
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -99,7 +99,7 @@ class BaseWebhook(BaseModel, ABC):
 
     # Universal fields that all webhooks should have
     received_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When the webhook was received by our system",
     )
 

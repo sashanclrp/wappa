@@ -18,7 +18,7 @@ Router configuration:
 - Full URL: /api/whatsapp/media/ (when included with /api prefix)
 """
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
@@ -127,6 +127,7 @@ async def upload_media(
 @dispatch_message_event("image")
 async def send_image_message(
     request: ImageMessage,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
@@ -164,6 +165,7 @@ async def send_image_message(
 @dispatch_message_event("video")
 async def send_video_message(
     request: VideoMessage,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
@@ -202,6 +204,7 @@ async def send_video_message(
 @dispatch_message_event("audio")
 async def send_audio_message(
     request: AudioMessage,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
@@ -240,6 +243,7 @@ async def send_audio_message(
 @dispatch_message_event("document")
 async def send_document_message(
     request: DocumentMessage,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
@@ -278,6 +282,7 @@ async def send_document_message(
 @dispatch_message_event("sticker")
 async def send_sticker_message(
     request: StickerMessage,
+    fastapi_request: Request,
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:

@@ -19,6 +19,7 @@ from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.interactive_models import (
     HeaderType,
     InteractiveHeader,
+    ListSection,
     ReplyButton,
     validate_buttons_menu_limits,
     validate_header_constraints,
@@ -311,7 +312,7 @@ class WhatsAppInteractiveHandler:
         to: str,
         body: str,
         button_text: str,
-        sections: list[dict],
+        sections: list[ListSection],
         header: str | None = None,
         footer_text: str | None = None,
         reply_to_message_id: str | None = None,
@@ -326,18 +327,7 @@ class WhatsAppInteractiveHandler:
             to: Recipient's phone number
             body: Main message text (max 4096 chars)
             button_text: Text for the button that opens the list (max 20 chars)
-            sections: List of section objects with format:
-                {
-                    "title": "Section Title", # max 24 chars
-                    "rows": [
-                        {
-                            "id": "unique_id", # max 200 chars
-                            "title": "Row Title", # max 24 chars
-                            "description": "Optional description" # max 72 chars
-                        },
-                        ...
-                    ]
-                }
+            sections: List of ListSection models with title and rows
             header: Header text (max 60 chars)
             footer_text: Footer text (max 60 chars)
             reply_to_message_id: Optional message ID to reply to
@@ -392,13 +382,13 @@ class WhatsAppInteractiveHandler:
             for section in sections:
                 section_validations: list[tuple[bool, str, str]] = [
                     (
-                        len(section["title"]) > 24,
-                        f"Section title '{section['title']}' exceeds 24 characters",
+                        len(section.title) > 24,
+                        f"Section title '{section.title}' exceeds 24 characters",
                         "SECTION_TITLE_TOO_LONG",
                     ),
                     (
-                        len(section["rows"]) > 10,
-                        f"Section '{section['title']}' has more than 10 rows",
+                        len(section.rows) > 10,
+                        f"Section '{section.title}' has more than 10 rows",
                         "TOO_MANY_ROWS",
                     ),
                 ]
@@ -406,41 +396,41 @@ class WhatsAppInteractiveHandler:
                     return error
 
                 formatted_rows = []
-                for row in section["rows"]:
+                for row in section.rows:
                     row_validations: list[tuple[bool, str, str]] = [
                         (
-                            len(row["id"]) > 200,
-                            f"Row ID '{row['id']}' exceeds 200 characters",
+                            len(row.id) > 200,
+                            f"Row ID '{row.id}' exceeds 200 characters",
                             "ROW_ID_TOO_LONG",
                         ),
                         (
-                            len(row["title"]) > 24,
-                            f"Row title '{row['title']}' exceeds 24 characters",
+                            len(row.title) > 24,
+                            f"Row title '{row.title}' exceeds 24 characters",
                             "ROW_TITLE_TOO_LONG",
                         ),
                         (
-                            "description" in row and len(row["description"]) > 72,
-                            f"Row description for '{row['title']}' exceeds 72 characters",
+                            row.description is not None and len(row.description) > 72,
+                            f"Row description for '{row.title}' exceeds 72 characters",
                             "ROW_DESCRIPTION_TOO_LONG",
                         ),
                         (
-                            row["id"] in all_row_ids,
-                            f"Row ID '{row['id']}' is not unique",
+                            row.id in all_row_ids,
+                            f"Row ID '{row.id}' is not unique",
                             "DUPLICATE_ROW_ID",
                         ),
                     ]
                     if error := self._check_validations(row_validations, to):
                         return error
 
-                    all_row_ids.append(row["id"])
+                    all_row_ids.append(row.id)
 
-                    formatted_row = {"id": row["id"], "title": row["title"]}
-                    if "description" in row:
-                        formatted_row["description"] = row["description"]
+                    formatted_row = {"id": row.id, "title": row.title}
+                    if row.description:
+                        formatted_row["description"] = row.description
                     formatted_rows.append(formatted_row)
 
                 formatted_sections.append(
-                    {"title": section["title"], "rows": formatted_rows}
+                    {"title": section.title, "rows": formatted_rows}
                 )
 
             # Construct payload

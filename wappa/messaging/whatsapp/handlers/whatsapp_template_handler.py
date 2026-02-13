@@ -42,6 +42,20 @@ class WhatsAppTemplateHandler:
         self._tenant_id = tenant_id
         self.logger = get_logger(__name__)
 
+    def _build_text_parameter(self, param: TemplateParameter) -> dict:
+        """Convert TemplateParameter to WhatsApp API format.
+
+        Args:
+            param: TemplateParameter object with type, text, and optional parameter_name
+
+        Returns:
+            Dict formatted for WhatsApp API with type, text, and optional parameter_name
+        """
+        param_dict = {"type": "text", "text": param.text}
+        if param.parameter_name:
+            param_dict["parameter_name"] = param.parameter_name
+        return param_dict
+
     async def send_text_template(
         self,
         phone_number: str,
@@ -72,11 +86,12 @@ class WhatsAppTemplateHandler:
             # Add body parameters if provided
             if body_parameters:
                 # Convert TemplateParameter objects to API format
-                api_parameters = []
-                for param in body_parameters:
-                    if param.type == TemplateParameterType.TEXT:
-                        api_parameters.append({"type": "text", "text": param.text})
-                    # Future: Add support for currency, date_time, etc.
+                api_parameters = [
+                    self._build_text_parameter(param)
+                    for param in body_parameters
+                    if param.type == TemplateParameterType.TEXT
+                ]
+                # Future: Add support for currency, date_time, etc.
 
                 template_data["components"] = [
                     {"type": "body", "parameters": api_parameters}
@@ -187,11 +202,11 @@ class WhatsAppTemplateHandler:
 
             # Add body parameters if provided
             if body_parameters:
-                api_parameters = []
-                for param in body_parameters:
-                    if param.type == TemplateParameterType.TEXT:
-                        api_parameters.append({"type": "text", "text": param.text})
-
+                api_parameters = [
+                    self._build_text_parameter(param)
+                    for param in body_parameters
+                    if param.type == TemplateParameterType.TEXT
+                ]
                 components.append({"type": "body", "parameters": api_parameters})
 
             # Build template data
@@ -321,11 +336,11 @@ class WhatsAppTemplateHandler:
 
             # Add body parameters if provided
             if body_parameters:
-                api_parameters = []
-                for param in body_parameters:
-                    if param.type == TemplateParameterType.TEXT:
-                        api_parameters.append({"type": "text", "text": param.text})
-
+                api_parameters = [
+                    self._build_text_parameter(param)
+                    for param in body_parameters
+                    if param.type == TemplateParameterType.TEXT
+                ]
                 components.append({"type": "body", "parameters": api_parameters})
 
             # Build template data
