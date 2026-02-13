@@ -14,15 +14,17 @@ Implements specialized messaging:
 - Specialized messaging (send_contact, send_location, send_location_request)
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from wappa.messaging.whatsapp.models.interactive_models import ListSection
 from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
     from wappa.messaging.whatsapp.models.basic_models import MessageResult
+    from wappa.messaging.whatsapp.models.interactive_models import ListSection
 
 
 class IMessenger(ABC):

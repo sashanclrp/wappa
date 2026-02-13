@@ -12,12 +12,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ...domain.interfaces.messaging_interface import IMessenger
-from ...messaging.whatsapp.models.interactive_models import ListSection
 from ...schemas.core.types import PlatformType
 from .handlers import publish_notification
 
 if TYPE_CHECKING:
     from ...messaging.whatsapp.models.basic_models import MessageResult
+    from ...messaging.whatsapp.models.interactive_models import ListSection
 
 logger = logging.getLogger(__name__)
 
