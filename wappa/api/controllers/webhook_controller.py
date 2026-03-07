@@ -23,6 +23,7 @@ from wappa.core.logging.context import (
 )
 from wappa.core.logging.logger import get_logger
 from wappa.core.pubsub import PubSubMessengerWrapper
+from wappa.core.sse import SSEEventHub, SSEMessengerWrapper
 from wappa.domain.factories import MessengerFactory
 from wappa.persistence.cache_factory import create_cache_factory
 from wappa.processors.factory import processor_factory
@@ -356,6 +357,17 @@ class WebhookController:
                     tenant=tenant_id,
                     user_id=user_id,
                 )
+
+            # Wrap messenger with SSE if plugin is active
+            if getattr(request.app.state, "sse_wrap_messenger", False):
+                sse_event_hub = getattr(request.app.state, "sse_event_hub", None)
+                if isinstance(sse_event_hub, SSEEventHub):
+                    messenger = SSEMessengerWrapper(
+                        inner=messenger,
+                        event_hub=sse_event_hub,
+                        tenant=tenant_id,
+                        user_id=user_id,
+                    )
 
             # Create cache factory per request with context injection
             cache_factory = self._create_cache_factory(request, tenant_id, user_id)
