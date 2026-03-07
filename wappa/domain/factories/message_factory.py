@@ -436,12 +436,11 @@ class WhatsAppMessageFactory(MessageFactory):
                     return False
 
             # Validate read status messages
-            if "status" in message_payload:
-                if message_payload["status"] == "read":
-                    if "message_id" not in message_payload:
-                        return False
-
-            return True
+            return not (
+                "status" in message_payload
+                and message_payload["status"] == "read"
+                and "message_id" not in message_payload
+            )
 
         except (KeyError, TypeError):
             return False

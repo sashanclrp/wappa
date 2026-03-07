@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import Field
 
@@ -68,7 +68,7 @@ class RedisExpiry(TenantCache, IExpiryCache):
             success = await expiry.set("payment_reminder", "TXN_123", 1500)
         """
         key = self._key(action, identifier)
-        value = f"trigger:{datetime.now(timezone.utc).isoformat()}"
+        value = f"trigger:{datetime.now(UTC).isoformat()}"
         serialized_value = dumps(value)
 
         logger.debug(

@@ -5,6 +5,12 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.18] - 2026-03-06
+
+### Changed
+- Bumped package version from `0.2.17` to `0.2.18` for release publishing.
+- Refreshed lock/build artifacts for the new release version.
+
 ## [0.2.0] - 2025-01-11
 
 ### Added
@@ -72,5 +78,6 @@ Initial stable release with core WhatsApp webhook handling, messaging, and cachi
 
 ---
 
+[0.2.18]: https://github.com/sashanclrp/wappa/compare/v0.2.0...v0.2.18
 [0.2.0]: https://github.com/sashanclrp/wappa/compare/v0.1.10...v0.2.0
 [0.1.10]: https://github.com/sashanclrp/wappa/releases/tag/v0.1.10

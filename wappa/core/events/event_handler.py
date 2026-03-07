@@ -7,7 +7,8 @@ This provides the interface that developers implement to handle WhatsApp webhook
 import copy
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, AsyncContextManager, Self
+from contextlib import AbstractAsyncContextManager
+from typing import TYPE_CHECKING, Any, Self
 
 from .default_handlers import (
     DefaultErrorHandler,
@@ -104,8 +105,10 @@ class WappaEventHandler(ABC):
 
         # Database session factories (set via with_context())
         # Usage: async with self.db() as session: ...
-        self.db: Callable[[], AsyncContextManager[AsyncSession]] | None = None
-        self.db_read: Callable[[], AsyncContextManager[AsyncSession]] | None = None
+        self.db: Callable[[], AbstractAsyncContextManager[AsyncSession]] | None = None
+        self.db_read: Callable[[], AbstractAsyncContextManager[AsyncSession]] | None = (
+            None
+        )
 
         # Set up logger with the actual class module name (not the base class)
         from wappa.core.logging.logger import get_logger
@@ -124,8 +127,8 @@ class WappaEventHandler(ABC):
         user_id: str,
         messenger: "IMessenger",
         cache_factory: "ICacheFactory",
-        db: Callable[[], AsyncContextManager["AsyncSession"]] | None = None,
-        db_read: Callable[[], AsyncContextManager["AsyncSession"]] | None = None,
+        db: Callable[[], AbstractAsyncContextManager["AsyncSession"]] | None = None,
+        db_read: Callable[[], AbstractAsyncContextManager["AsyncSession"]] | None = None,
     ) -> Self:
         """
         Create a context-bound copy of this handler for a specific request.
@@ -232,8 +235,8 @@ class WappaEventHandler(ABC):
         Args:
             webhook: StatusWebhook containing the status update
         """
-        # Default implementation: no additional processing
-        pass
+        _ = webhook
+        return None
 
     async def handle_error(self, webhook: "ErrorWebhook") -> None:
         """
@@ -263,8 +266,8 @@ class WappaEventHandler(ABC):
         Args:
             webhook: ErrorWebhook containing error information
         """
-        # Default implementation: no additional processing
-        pass
+        _ = webhook
+        return None
 
     # =========== OUTGOING API MESSAGE HANDLING ===========
 
@@ -338,8 +341,8 @@ class WappaEventHandler(ABC):
                 if event.response_success:
                     await self.analytics.track_message_sent(event)
         """
-        # Default implementation: no additional processing
-        pass
+        _ = event
+        return None
 
     async def _pre_process_api_message(self, event: "APIMessageEvent") -> None:
         """
@@ -360,7 +363,8 @@ class WappaEventHandler(ABC):
         Override to customize post-processing behavior.
         Default: no additional processing.
         """
-        pass
+        _ = event
+        return None
 
     def configure_default_handlers(
         self,

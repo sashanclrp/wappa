@@ -7,8 +7,8 @@ including message parsing, validation, and integration with the Symphony AI syst
 
 import hashlib
 import hmac
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 
@@ -24,6 +24,21 @@ from wappa.schemas.core.types import ErrorCode, MessageType, PlatformType
 from wappa.webhooks.core.base_message import BaseMessage
 from wappa.webhooks.core.base_status import BaseMessageStatus
 from wappa.webhooks.core.base_webhook import BaseWebhook
+
+if TYPE_CHECKING:
+    from wappa.webhooks.core.webhook_interfaces import (
+        AdReferralBase,
+        BusinessContextBase,
+        ConversationBase,
+        ErrorDetailBase,
+        ErrorWebhook,
+        ForwardContextBase,
+        IncomingMessageWebhook,
+        StatusWebhook,
+        TenantBase,
+        UniversalWebhook,
+        UserBase,
+    )
 
 
 class WhatsAppWebhookProcessor(BaseWebhookProcessor):
@@ -457,13 +472,13 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                     error_title="Unknown webhook type",
                     error_message="Webhook contains no recognizable content (messages, statuses, or errors)",
                     error_type="webhook_format",
-                    occurred_at=datetime.now(timezone.utc),
+                    occurred_at=datetime.now(UTC),
                 )
 
                 return ErrorWebhook(
                     tenant=tenant_base,
                     errors=[error_detail],
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=datetime.now(UTC),
                     error_level="webhook",
                     platform=PlatformType.WHATSAPP,
                     webhook_id=webhook.get_webhook_id(),
@@ -650,14 +665,14 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 error_details=getattr(error, "details", None),
                 documentation_url=getattr(error, "href", None),
                 error_type="whatsapp_api",
-                occurred_at=datetime.now(timezone.utc),
+                occurred_at=datetime.now(UTC),
             )
             error_details.append(error_detail)
 
         return ErrorWebhook(
             tenant=tenant_base,
             errors=error_details,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             error_level="system",
             platform=PlatformType.WHATSAPP,
             webhook_id=webhook.get_webhook_id(),
@@ -825,7 +840,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 else None,
                 documentation_url=getattr(error, "href", None),
                 error_type="delivery_failure",
-                occurred_at=datetime.now(timezone.utc),
+                occurred_at=datetime.now(UTC),
             )
             error_details.append(error_detail)
 

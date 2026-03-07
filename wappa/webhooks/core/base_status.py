@@ -6,7 +6,7 @@ that provide consistent interfaces regardless of the messaging platform.
 """
 
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -27,7 +27,7 @@ class BaseMessageStatus(BaseModel, ABC):
 
     # Universal fields
     processed_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description="When the status update was processed by our system",
     )
 
@@ -247,7 +247,7 @@ class BaseStatusWebhook(BaseModel, ABC):
 
     # Universal fields
     received_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description="When the status webhook was received",
     )
 

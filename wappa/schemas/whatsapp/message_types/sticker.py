@@ -291,10 +291,6 @@ class WhatsAppStickerMessage(BaseMediaMessage):
     # Implement abstract methods from BaseMediaMessage
 
     @property
-    def media_id(self) -> str:
-        return self.sticker.id
-
-    @property
     def media_type(self) -> MediaType:
         mime_str = self.sticker.mime_type
         try:

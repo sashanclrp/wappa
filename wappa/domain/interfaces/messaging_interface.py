@@ -77,7 +77,7 @@ class IMessenger(ABC):
         recipient: str,
         reply_to_message_id: str | None = None,
         disable_preview: bool = False,
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send a text message.
 
         Args:
@@ -97,7 +97,7 @@ class IMessenger(ABC):
     @abstractmethod
     async def mark_as_read(
         self, message_id: str, typing: bool = False
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Mark a message as read, optionally with typing indicator.
 
         Key requirement: Support for typing indicator boolean parameter.
@@ -123,7 +123,7 @@ class IMessenger(ABC):
         recipient: str,
         caption: str | None = None,
         reply_to_message_id: str | None = None,
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send an image message.
 
         Supports JPEG and PNG images up to 5MB.
@@ -151,7 +151,7 @@ class IMessenger(ABC):
         caption: str | None = None,
         reply_to_message_id: str | None = None,
         transcript: str | None = None,
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send a video message.
 
         Supports MP4 and 3GP videos up to 16MB.
@@ -180,7 +180,7 @@ class IMessenger(ABC):
         recipient: str,
         reply_to_message_id: str | None = None,
         transcript: str | None = None,
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send an audio message.
 
         Supports AAC, AMR, MP3, M4A, and OGG audio up to 16MB.
@@ -211,7 +211,7 @@ class IMessenger(ABC):
         filename: str | None = None,
         caption: str | None = None,
         reply_to_message_id: str | None = None,
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send a document message.
 
         Supports TXT, PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX up to 100MB.
@@ -237,7 +237,7 @@ class IMessenger(ABC):
         sticker_source: str | Path,
         recipient: str,
         reply_to_message_id: str | None = None,
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send a sticker message.
 
         Supports WebP images only.
@@ -269,7 +269,7 @@ class IMessenger(ABC):
         header: dict | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send an interactive button message.
 
         Supports up to 3 quick reply buttons with optional header and footer.
@@ -301,7 +301,7 @@ class IMessenger(ABC):
         header: str | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send an interactive list message.
 
         Supports sectioned lists with rows (max 10 sections, 10 rows per section).
@@ -334,7 +334,7 @@ class IMessenger(ABC):
         header: str | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send an interactive call-to-action URL button message.
 
         Supports external URL buttons for call-to-action scenarios.
@@ -365,7 +365,7 @@ class IMessenger(ABC):
         recipient: str,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send a text-only template message.
 
         Supports WhatsApp Business templates with parameter substitution.
@@ -395,7 +395,7 @@ class IMessenger(ABC):
         media_url: str | None = None,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send a template message with media header.
 
         Supports templates with image, video, or document headers.
@@ -429,7 +429,7 @@ class IMessenger(ABC):
         address: str,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send a template message with location header.
 
         Supports templates with geographic location headers showing a map preview.
@@ -457,7 +457,7 @@ class IMessenger(ABC):
     @abstractmethod
     async def send_contact(
         self, contact: dict, recipient: str, reply_to_message_id: str | None = None
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send a contact card message.
 
         Shares contact information including name, phone numbers, emails, and addresses.
@@ -485,7 +485,7 @@ class IMessenger(ABC):
         name: str | None = None,
         address: str | None = None,
         reply_to_message_id: str | None = None,
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send a location message.
 
         Shares geographic coordinates with optional location name and address.
@@ -510,7 +510,7 @@ class IMessenger(ABC):
     @abstractmethod
     async def send_location_request(
         self, body: str, recipient: str, reply_to_message_id: str | None = None
-    ) -> "MessageResult":
+    ) -> MessageResult:
         """Send a location request message.
 
         Sends an interactive message that prompts the recipient to share their location.

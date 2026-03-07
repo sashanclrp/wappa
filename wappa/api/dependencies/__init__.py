@@ -7,8 +7,6 @@ following clean architecture patterns.
 
 # Import existing dependencies
 from .event_dependencies import dispatch_api_message_event, get_api_event_dispatcher
-from .whatsapp_dependencies import *
-from .whatsapp_media_dependencies import *
 
 __all__ = [
     # Event dependencies

@@ -8,7 +8,7 @@ This module handles all cache statistics operations including:
 - Cache health monitoring
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from wappa.webhooks import IncomingMessageWebhook
 
@@ -117,7 +117,7 @@ class CacheStatisticsScore(ScoreBase):
         """
         stats = CacheStats()
         stats.cache_type = "JSON"
-        stats.last_updated = datetime.now(timezone.utc)
+        stats.last_updated = datetime.now(UTC)
 
         try:
             # ---- Query User Cache ----

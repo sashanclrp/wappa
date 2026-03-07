@@ -153,12 +153,14 @@ class WhatsAppImageMessage(BaseImageMessage):
     def validate_message_consistency(self):
         """Validate message field consistency."""
         # If we have a referral, this should be from an ad (no forwarding context)
-        if self.referral and self.context:
-            # Check if context has forwarding info
-            if self.context.forwarded or self.context.frequently_forwarded:
-                raise ValueError(
-                    "Ad images cannot be forwarded (cannot have both referral and forwarding context)"
-                )
+        if (
+            self.referral
+            and self.context
+            and (self.context.forwarded or self.context.frequently_forwarded)
+        ):
+            raise ValueError(
+                "Ad images cannot be forwarded (cannot have both referral and forwarding context)"
+            )
 
         # Images don't support reply context or product context
         if self.context:

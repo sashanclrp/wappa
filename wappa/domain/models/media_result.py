@@ -6,7 +6,7 @@ messaging platforms, providing consistent response structures while
 maintaining compatibility with platform-specific response formats.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -29,7 +29,7 @@ class MediaUploadResult(BaseModel):
     mime_type: str | None = None
     error: str | None = None
     error_code: str | None = None
-    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tenant_id: str | None = None  # phone_number_id in WhatsApp context
 
     class Config:
@@ -60,7 +60,7 @@ class MediaInfoResult(BaseModel):
     sha256: str | None = None
     error: str | None = None
     error_code: str | None = None
-    retrieved_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    retrieved_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tenant_id: str | None = None
 
     class Config:
@@ -84,7 +84,7 @@ class MediaDownloadResult(BaseModel):
     sha256: str | None = None
     error: str | None = None
     error_code: str | None = None
-    downloaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    downloaded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tenant_id: str | None = None
     _is_temp_file: bool = False
     _cleanup_on_exit: bool = False
@@ -144,7 +144,7 @@ class MediaDeleteResult(BaseModel):
     media_id: str | None = None
     error: str | None = None
     error_code: str | None = None
-    deleted_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    deleted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tenant_id: str | None = None
 
     class Config:

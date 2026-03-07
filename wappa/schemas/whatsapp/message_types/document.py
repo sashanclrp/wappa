@@ -375,10 +375,6 @@ class WhatsAppDocumentMessage(BaseDocumentMessage):
     # Implement abstract methods from BaseMediaMessage
 
     @property
-    def media_id(self) -> str:
-        return self.document.id
-
-    @property
     def media_type(self) -> MediaType:
         mime_str = self.document.mime_type
         try:
@@ -395,10 +391,6 @@ class WhatsAppDocumentMessage(BaseDocumentMessage):
     @property
     def file_size(self) -> int | None:
         return None  # WhatsApp doesn't provide file size in webhooks
-
-    @property
-    def caption(self) -> str | None:
-        return self.document.caption
 
     def get_download_info(self) -> dict[str, Any]:
         return {

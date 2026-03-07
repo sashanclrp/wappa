@@ -5,12 +5,15 @@ This module provides factory classes for dynamically selecting and creating
 the appropriate schema classes based on platform and message type combinations.
 """
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from wappa.core.logging.logger import get_logger
 from wappa.schemas.core.base_message import BaseMessage
 from wappa.schemas.core.base_webhook import BaseWebhook
 from wappa.schemas.core.types import MessageType, PlatformType
+
+if TYPE_CHECKING:
+    from wappa.webhooks.core.webhook_interfaces import UniversalWebhook
 
 
 class SchemaRegistryError(Exception):

@@ -98,9 +98,10 @@ class MediaHandler:
                 media_info["height"] = message.height
 
         # For audio and video, get duration
-        if message_type in ["audio", "video", "voice"]:
-            if hasattr(message, "duration"):
-                media_info["duration"] = message.duration
+        if message_type in ["audio", "video", "voice"] and hasattr(
+            message, "duration"
+        ):
+            media_info["duration"] = message.duration
 
         return media_info
 

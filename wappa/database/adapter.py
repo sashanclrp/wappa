@@ -7,7 +7,8 @@ patterns, configuration, and schema management.
 """
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, AsyncContextManager, Protocol
+from contextlib import AbstractAsyncContextManager
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -42,7 +43,7 @@ class DatabaseAdapter(Protocol):
 
     async def create_session_factory(
         self, engine: "AsyncEngine"
-    ) -> Callable[[], AsyncContextManager["AsyncSession"]]:
+    ) -> Callable[[], AbstractAsyncContextManager["AsyncSession"]]:
         """
         Create a session factory for the database engine.
 

@@ -322,7 +322,7 @@ class WhatsAppMessageStatus(BaseMessageStatus):
             )
         return (None, None, None)
 
-    def get_error_info(self) -> list[dict[str, str | int]]:
+    def get_all_error_info(self) -> list[dict[str, str | int]]:
         """
         Get error information for failed messages.
 
@@ -351,7 +351,7 @@ class WhatsAppMessageStatus(BaseMessageStatus):
         Returns:
             Error dictionary or None if no errors.
         """
-        errors = self.get_error_info()
+        errors = self.get_all_error_info()
         return errors[0] if errors else None
 
     def to_summary_dict(self) -> dict[str, str | bool | int | None]:

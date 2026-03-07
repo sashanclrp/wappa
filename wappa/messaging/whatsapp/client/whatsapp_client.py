@@ -8,7 +8,7 @@ Key Design Decisions:
 - Proper error handling and logging
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import aiohttp
@@ -186,7 +186,7 @@ class WhatsAppClient:
 
     def _update_activity(self) -> None:
         """Update last activity timestamp."""
-        self.__class__.last_activity = datetime.now(timezone.utc)
+        self.__class__.last_activity = datetime.now(UTC)
 
     async def post_request(
         self,

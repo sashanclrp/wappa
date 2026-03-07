@@ -10,9 +10,9 @@ import os
 import tempfile
 import time
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager, suppress
+from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppress
 from pathlib import Path
-from typing import Any, AsyncContextManager, BinaryIO
+from typing import Any, BinaryIO
 
 from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.media_interface import IMediaHandler
@@ -495,7 +495,7 @@ class WhatsAppMediaHandler(IMediaHandler):
         media_id: str,
         temp_suffix: str | None = None,
         sender_id: str | None = None,
-    ) -> AsyncContextManager[MediaDownloadResult]:
+    ) -> AbstractAsyncContextManager[MediaDownloadResult]:
         """
         Download media to a temporary file with automatic cleanup.
 

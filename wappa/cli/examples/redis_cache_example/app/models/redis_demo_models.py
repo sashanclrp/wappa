@@ -5,7 +5,7 @@ These models demonstrate how to structure data for different cache types
 in the Wappa Redis caching system.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -22,7 +22,7 @@ class MessageHistory(BaseModel):
     )
 
     timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc), description="When the message was sent"
+        default_factory=lambda: datetime.now(UTC), description="When the message was sent"
     )
 
     message_type: str = Field(
@@ -51,11 +51,11 @@ class User(BaseModel):
     )
 
     first_seen: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc), description="When the user was first seen"
+        default_factory=lambda: datetime.now(UTC), description="When the user was first seen"
     )
 
     last_seen: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc), description="When the user was last seen"
+        default_factory=lambda: datetime.now(UTC), description="When the user was last seen"
     )
 
     message_count: int = Field(
@@ -77,7 +77,7 @@ class User(BaseModel):
     def increment_message_count(self) -> None:
         """Increment the message count and update last_seen timestamp."""
         self.message_count += 1
-        self.last_seen = datetime.now(timezone.utc)
+        self.last_seen = datetime.now(UTC)
 
 
 class MessageLog(BaseModel):
@@ -112,7 +112,7 @@ class MessageLog(BaseModel):
     def add_message(self, message: str, message_type: str = "text") -> None:
         """Add a new message to the user's history."""
         new_message = MessageHistory(
-            message=message, message_type=message_type, timestamp=datetime.now(timezone.utc)
+            message=message, message_type=message_type, timestamp=datetime.now(UTC)
         )
         self.text_message.append(new_message)
 
@@ -159,7 +159,7 @@ class StateHandler(BaseModel):
     def activate_wappa(self) -> None:
         """Activate WAPPA state."""
         self.is_wappa = True
-        self.activated_at = datetime.now(timezone.utc)
+        self.activated_at = datetime.now(UTC)
         self.command_count = 0
         self.last_command = "/WAPPA"
 
@@ -177,7 +177,7 @@ class StateHandler(BaseModel):
         """Get how long the WAPPA state has been active in seconds."""
         if not self.is_wappa or not self.activated_at:
             return None
-        return int((datetime.now(timezone.utc) - self.activated_at).total_seconds())
+        return int((datetime.now(UTC) - self.activated_at).total_seconds())
 
 
 class CacheStats(BaseModel):
@@ -203,44 +203,44 @@ class CacheStats(BaseModel):
     is_healthy: bool = Field(default=True)
 
     # Timing
-    last_updated: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_updated: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     def record_user_hit(self) -> None:
         """Record a user cache hit."""
         self.user_cache_hits += 1
         self.total_operations += 1
-        self.last_updated = datetime.now(timezone.utc)
+        self.last_updated = datetime.now(UTC)
 
     def record_user_miss(self) -> None:
         """Record a user cache miss."""
         self.user_cache_misses += 1
         self.total_operations += 1
-        self.last_updated = datetime.now(timezone.utc)
+        self.last_updated = datetime.now(UTC)
 
     def record_table_entry(self) -> None:
         """Record a new table cache entry."""
         self.table_cache_entries += 1
         self.total_operations += 1
-        self.last_updated = datetime.now(timezone.utc)
+        self.last_updated = datetime.now(UTC)
 
     def record_state_activation(self) -> None:
         """Record a state cache activation."""
         self.state_cache_active += 1
         self.total_operations += 1
-        self.last_updated = datetime.now(timezone.utc)
+        self.last_updated = datetime.now(UTC)
 
     def record_state_deactivation(self) -> None:
         """Record a state cache deactivation."""
         if self.state_cache_active > 0:
             self.state_cache_active -= 1
         self.total_operations += 1
-        self.last_updated = datetime.now(timezone.utc)
+        self.last_updated = datetime.now(UTC)
 
     def record_error(self) -> None:
         """Record an error."""
         self.errors += 1
         self.total_operations += 1
-        self.last_updated = datetime.now(timezone.utc)
+        self.last_updated = datetime.now(UTC)
 
     def get_user_hit_rate(self) -> float:
         """Calculate user cache hit rate."""

@@ -1,3 +1,3 @@
-from .audio_processing import AudioProcessingService
+from .audio_processing import AudioProcessingService as AudioProcessingService
 
-all = ["AudioProcessingService"]
+__all__ = ["AudioProcessingService"]

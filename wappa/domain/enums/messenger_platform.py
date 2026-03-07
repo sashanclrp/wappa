@@ -40,7 +40,7 @@ def create_messenger_platform_enum() -> type[Enum]:
     }
 
     # Create the enum class
-    MessengerPlatformEnum = Enum("MessengerPlatformEnum", enum_members, type=str)
+    messenger_platform_enum = Enum("MessengerPlatformEnum", enum_members, type=str)
 
     # Add custom methods to the enum class
     def get_platform_names():
@@ -61,11 +61,11 @@ def create_messenger_platform_enum() -> type[Enum]:
             ) from e
 
     # Add methods to the enum class
-    MessengerPlatformEnum.get_platform_names = staticmethod(get_platform_names)
-    MessengerPlatformEnum.is_valid_platform = staticmethod(is_valid_platform)
-    MessengerPlatformEnum.to_platform_type = staticmethod(to_platform_type)
+    messenger_platform_enum.get_platform_names = staticmethod(get_platform_names)
+    messenger_platform_enum.is_valid_platform = staticmethod(is_valid_platform)
+    messenger_platform_enum.to_platform_type = staticmethod(to_platform_type)
 
-    return MessengerPlatformEnum
+    return messenger_platform_enum
 
 
 # Create the enum instance that will be used throughout the application

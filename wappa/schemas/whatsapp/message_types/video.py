@@ -302,10 +302,6 @@ class WhatsAppVideoMessage(BaseVideoMessage):
 
     # Implement abstract methods from BaseMediaMessage
     @property
-    def media_id(self) -> str:
-        return self.video.id
-
-    @property
     def media_type(self) -> MediaType:
         try:
             return MediaType(self.video.mime_type)
@@ -315,10 +311,6 @@ class WhatsAppVideoMessage(BaseVideoMessage):
     @property
     def file_size(self) -> int | None:
         return None
-
-    @property
-    def caption(self) -> str | None:
-        return self.video.caption
 
     def get_download_info(self) -> dict[str, Any]:
         return {
