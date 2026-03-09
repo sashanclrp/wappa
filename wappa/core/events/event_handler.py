@@ -128,7 +128,8 @@ class WappaEventHandler(ABC):
         messenger: "IMessenger",
         cache_factory: "ICacheFactory",
         db: Callable[[], AbstractAsyncContextManager["AsyncSession"]] | None = None,
-        db_read: Callable[[], AbstractAsyncContextManager["AsyncSession"]] | None = None,
+        db_read: Callable[[], AbstractAsyncContextManager["AsyncSession"]]
+        | None = None,
     ) -> Self:
         """
         Create a context-bound copy of this handler for a specific request.

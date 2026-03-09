@@ -174,10 +174,26 @@ class CommandHandlers:
                 ListSection(
                     title="📁 Media Files",
                     rows=[
-                        ListRow(id="image_file", title="🖼️ Image", description="Get a sample image file"),
-                        ListRow(id="video_file", title="🎬 Video", description="Get a sample video file"),
-                        ListRow(id="audio_file", title="🎵 Audio", description="Get a sample audio file"),
-                        ListRow(id="document_file", title="📄 Document", description="Get a sample document file"),
+                        ListRow(
+                            id="image_file",
+                            title="🖼️ Image",
+                            description="Get a sample image file",
+                        ),
+                        ListRow(
+                            id="video_file",
+                            title="🎬 Video",
+                            description="Get a sample video file",
+                        ),
+                        ListRow(
+                            id="audio_file",
+                            title="🎵 Audio",
+                            description="Get a sample audio file",
+                        ),
+                        ListRow(
+                            id="document_file",
+                            title="📄 Document",
+                            description="Get a sample document file",
+                        ),
                     ],
                 )
             ]
