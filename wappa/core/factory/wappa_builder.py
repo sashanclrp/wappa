@@ -31,8 +31,8 @@ class WappaBuilder:
 
     Example:
         builder = WappaBuilder()
-        app = await (builder
-            .add_plugin(DatabasePlugin("postgresql://...", PostgreSQLAdapter()))
+        app = (builder
+            .add_plugin(PostgresDatabasePlugin("postgresql://..."))
             .add_plugin(RedisPlugin())
             .add_middleware(CORSMiddleware, allow_origins=["*"])
             .configure(title="My Wappa App")

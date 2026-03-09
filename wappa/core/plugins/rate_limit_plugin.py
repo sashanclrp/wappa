@@ -57,7 +57,7 @@ class RateLimitPlugin:
         self.priority = priority
         self.middleware_kwargs = middleware_kwargs
 
-    async def configure(self, builder: "WappaBuilder") -> None:
+    def configure(self, builder: "WappaBuilder") -> None:
         """
         Configure rate limit plugin with WappaBuilder.
 
@@ -84,8 +84,6 @@ class RateLimitPlugin:
         """
         Rate limit plugin startup.
 
-        Can be used for rate limiter backend initialization.
-
         Args:
             app: FastAPI application instance
         """
@@ -98,8 +96,6 @@ class RateLimitPlugin:
         """
         Rate limit plugin shutdown.
 
-        Can be used for cleaning up rate limiter resources.
-
         Args:
             app: FastAPI application instance
         """
@@ -107,77 +103,3 @@ class RateLimitPlugin:
         logger.debug(
             f"RateLimitPlugin shutdown - {self.rate_limit_middleware_class.__name__}"
         )
-
-
-# Convenience functions for common rate limiting patterns
-
-
-def create_memory_rate_limit_plugin(
-    max_requests: int = 100, window_seconds: int = 60, **kwargs: Any
-) -> RateLimitPlugin:
-    """
-    Create an in-memory rate limiting plugin.
-
-    Note: This is a convenience function. You'll need to provide
-    an actual rate limiting middleware implementation.
-
-    Args:
-        max_requests: Maximum requests per window
-        window_seconds: Time window in seconds
-        **kwargs: Additional rate limiter arguments
-
-    Returns:
-        Configured RateLimitPlugin for in-memory rate limiting
-    """
-    try:
-        # This is a placeholder - you'd import your actual rate limiting middleware
-        from your_rate_limit_library import MemoryRateLimiterMiddleware
-
-        return RateLimitPlugin(
-            MemoryRateLimiterMiddleware,
-            max_requests=max_requests,
-            window_seconds=window_seconds,
-            **kwargs,
-        )
-    except ImportError as e:
-        raise ImportError(
-            "Rate limiting middleware not found. Please implement or install a rate limiting middleware library."
-        ) from e
-
-
-def create_redis_rate_limit_plugin(
-    max_requests: int = 1000,
-    window_seconds: int = 3600,
-    redis_url: str = "redis://localhost:6379",
-    **kwargs: Any,
-) -> RateLimitPlugin:
-    """
-    Create a Redis-backed rate limiting plugin.
-
-    Note: This is a convenience function. You'll need to provide
-    an actual Redis rate limiting middleware implementation.
-
-    Args:
-        max_requests: Maximum requests per window
-        window_seconds: Time window in seconds
-        redis_url: Redis connection URL
-        **kwargs: Additional rate limiter arguments
-
-    Returns:
-        Configured RateLimitPlugin for Redis-backed rate limiting
-    """
-    try:
-        # This is a placeholder - you'd import your actual Redis rate limiting middleware
-        from your_rate_limit_library import RedisRateLimiterMiddleware
-
-        return RateLimitPlugin(
-            RedisRateLimiterMiddleware,
-            max_requests=max_requests,
-            window_seconds=window_seconds,
-            redis_url=redis_url,
-            **kwargs,
-        )
-    except ImportError as e:
-        raise ImportError(
-            "Redis rate limiting middleware not found. Please implement or install a Redis rate limiting middleware library."
-        ) from e

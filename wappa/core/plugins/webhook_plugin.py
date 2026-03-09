@@ -26,8 +26,6 @@ class WebhookPlugin:
     third-party services, or any custom webhook handlers. It provides a clean
     interface for handling webhook requests with proper routing and error handling.
 
-    Perfect for your Wompi payment provider use case and other webhook integrations.
-
     Example:
         # Wompi webhook
         wompi_plugin = WebhookPlugin(
@@ -81,7 +79,7 @@ class WebhookPlugin:
 
         self.router = APIRouter()
 
-    async def configure(self, builder: "WappaBuilder") -> None:
+    def configure(self, builder: "WappaBuilder") -> None:
         """
         Configure the webhook plugin with WappaBuilder.
 
@@ -133,11 +131,15 @@ class WebhookPlugin:
         )
         async def webhook_status(request: Request, tenant_id: str = None):
             """Get webhook status and configuration."""
+            base_url = str(request.base_url).rstrip("/")
+            webhook_url = f"{base_url}{self.prefix}"
+            if tenant_id:
+                webhook_url = f"{webhook_url}/{tenant_id}"
             return {
                 "status": "active",
                 "provider": self.provider,
                 "tenant_id": tenant_id,
-                "webhook_url": str(request.url).replace("/status", ""),
+                "webhook_url": webhook_url,
                 "methods": self.methods,
                 "plugin": "WebhookPlugin",
             }
@@ -155,21 +157,15 @@ class WebhookPlugin:
         """
         Execute webhook plugin startup logic.
 
-        Currently no startup tasks needed for webhook endpoints,
-        but this provides a hook for future functionality like
-        webhook registration with external services.
-
         Args:
             app: FastAPI application instance
         """
         logger = get_app_logger()
 
-        # Log webhook registration for visibility
-        base_url = "https://your-domain.com"  # This would be configurable
         if self.include_tenant_id:
-            webhook_url = f"{base_url}{self.prefix}/{{tenant_id}}"
+            webhook_url = f"{self.prefix}/{{tenant_id}}"
         else:
-            webhook_url = f"{base_url}{self.prefix}/"
+            webhook_url = f"{self.prefix}/"
 
         logger.info(
             f"WebhookPlugin for {self.provider} ready - "
@@ -180,74 +176,8 @@ class WebhookPlugin:
         """
         Execute webhook plugin cleanup logic.
 
-        Currently no cleanup needed for webhook endpoints,
-        but this provides a hook for future functionality like
-        webhook deregistration with external services.
-
         Args:
             app: FastAPI application instance
         """
         logger = get_app_logger()
         logger.debug(f"WebhookPlugin for {self.provider} shutting down")
-
-
-# Convenience functions for common webhook patterns
-
-
-def create_payment_webhook_plugin(
-    provider: str, handler: Callable, **kwargs: Any
-) -> WebhookPlugin:
-    """
-    Create a webhook plugin optimized for payment providers.
-
-    Uses the pattern /webhook/payment/{tenant_id}/{provider} which matches
-    your existing payment webhook structure.
-
-    Args:
-        provider: Payment provider name (wompi, stripe, paypal, etc.)
-        handler: Webhook handler function
-        **kwargs: Additional WebhookPlugin arguments
-
-    Returns:
-        Configured WebhookPlugin for payment webhooks
-
-    Example:
-        wompi_plugin = create_payment_webhook_plugin("wompi", wompi_handler)
-    """
-    return WebhookPlugin(
-        provider=provider,
-        handler=handler,
-        prefix=f"/webhook/payment/{provider}",
-        include_tenant_id=True,
-        **kwargs,
-    )
-
-
-def create_service_webhook_plugin(
-    service: str, handler: Callable, include_tenant: bool = False, **kwargs: Any
-) -> WebhookPlugin:
-    """
-    Create a webhook plugin for general service integrations.
-
-    Args:
-        service: Service name
-        handler: Webhook handler function
-        include_tenant: Whether to include tenant ID in URL
-        **kwargs: Additional WebhookPlugin arguments
-
-    Returns:
-        Configured WebhookPlugin for service webhooks
-
-    Example:
-        notification_plugin = create_service_webhook_plugin(
-            "notifications",
-            notification_handler
-        )
-    """
-    return WebhookPlugin(
-        provider=service,
-        handler=handler,
-        prefix=f"/webhook/{service}",
-        include_tenant_id=include_tenant,
-        **kwargs,
-    )

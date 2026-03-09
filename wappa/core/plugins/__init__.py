@@ -3,7 +3,7 @@ Wappa Core Plugins Module
 
 This module contains all the core plugins that extend Wappa functionality:
 - WappaCorePlugin: Essential Wappa framework functionality (logging, middleware, routes)
-- Database plugins for SQLModel/SQLAlchemy integration
+- PostgresDatabasePlugin for SQLModel/SQLAlchemy integration
 - Redis plugin for caching and session management
 - SSEEventsPlugin for native FastAPI SSE event streaming
 - ExpiryPlugin: Redis expiry action listener for time-based automation
@@ -21,7 +21,6 @@ from ..auth import (
 from .auth_plugin import AuthPlugin
 from .cors_plugin import CORSPlugin
 from .custom_middleware_plugin import CustomMiddlewarePlugin
-from .database_plugin import DatabasePlugin
 from .expiry_plugin import ExpiryPlugin
 from .postgres_database_plugin import PostgresDatabasePlugin
 from .rate_limit_plugin import RateLimitPlugin
@@ -35,8 +34,7 @@ __all__ = [
     # Core Framework
     "WappaCorePlugin",
     # Core Infrastructure - Database
-    "DatabasePlugin",  # Legacy adapter-based plugin
-    "PostgresDatabasePlugin",  # 30x-inspired PostgreSQL plugin (recommended)
+    "PostgresDatabasePlugin",
     # Core Infrastructure - Redis
     "RedisPlugin",
     "RedisPubSubPlugin",

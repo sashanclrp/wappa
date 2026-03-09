@@ -37,13 +37,6 @@ class CustomMiddlewarePlugin:
             include_hsts=True,
             include_csp=True
         )
-
-        # Performance monitoring middleware
-        monitoring_plugin = CustomMiddlewarePlugin(
-            PerformanceMonitoringMiddleware,
-            priority=10,  # Low priority - runs last (inner)
-            track_response_time=True
-        )
     """
 
     def __init__(
@@ -67,7 +60,7 @@ class CustomMiddlewarePlugin:
         self.name = name or middleware_class.__name__
         self.middleware_kwargs = middleware_kwargs
 
-    async def configure(self, builder: "WappaBuilder") -> None:
+    def configure(self, builder: "WappaBuilder") -> None:
         """
         Configure custom middleware plugin with WappaBuilder.
 
@@ -92,8 +85,6 @@ class CustomMiddlewarePlugin:
         """
         Custom middleware plugin startup.
 
-        Can be used for middleware-specific initialization tasks.
-
         Args:
             app: FastAPI application instance
         """
@@ -104,79 +95,8 @@ class CustomMiddlewarePlugin:
         """
         Custom middleware plugin shutdown.
 
-        Can be used for middleware-specific cleanup tasks.
-
         Args:
             app: FastAPI application instance
         """
         logger = get_app_logger()
         logger.debug(f"CustomMiddlewarePlugin shutdown - {self.name}")
-
-
-# Convenience functions for common custom middleware patterns
-
-
-def create_logging_middleware_plugin(
-    middleware_class: type, log_level: str = "INFO", priority: int = 60, **kwargs: Any
-) -> CustomMiddlewarePlugin:
-    """
-    Create a logging middleware plugin.
-
-    Args:
-        middleware_class: Logging middleware class
-        log_level: Logging level
-        priority: Middleware priority
-        **kwargs: Additional middleware arguments
-
-    Returns:
-        Configured CustomMiddlewarePlugin for logging
-    """
-    return CustomMiddlewarePlugin(
-        middleware_class,
-        priority=priority,
-        name="LoggingMiddleware",
-        log_level=log_level,
-        **kwargs,
-    )
-
-
-def create_security_middleware_plugin(
-    middleware_class: type,
-    priority: int = 85,  # High priority - runs early
-    **kwargs: Any,
-) -> CustomMiddlewarePlugin:
-    """
-    Create a security middleware plugin.
-
-    Args:
-        middleware_class: Security middleware class
-        priority: Middleware priority
-        **kwargs: Additional middleware arguments
-
-    Returns:
-        Configured CustomMiddlewarePlugin for security
-    """
-    return CustomMiddlewarePlugin(
-        middleware_class, priority=priority, name="SecurityMiddleware", **kwargs
-    )
-
-
-def create_monitoring_middleware_plugin(
-    middleware_class: type,
-    priority: int = 10,  # Low priority - runs last (inner)
-    **kwargs: Any,
-) -> CustomMiddlewarePlugin:
-    """
-    Create a monitoring/metrics middleware plugin.
-
-    Args:
-        middleware_class: Monitoring middleware class
-        priority: Middleware priority
-        **kwargs: Additional middleware arguments
-
-    Returns:
-        Configured CustomMiddlewarePlugin for monitoring
-    """
-    return CustomMiddlewarePlugin(
-        middleware_class, priority=priority, name="MonitoringMiddleware", **kwargs
-    )

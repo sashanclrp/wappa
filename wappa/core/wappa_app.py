@@ -46,7 +46,7 @@ class Wappa:
 
     Advanced Usage:
         app = Wappa(cache="redis")
-        app.add_plugin(DatabasePlugin(...))
+        app.add_plugin(PostgresDatabasePlugin(...))
         app.add_startup_hook(my_startup_func)
         app.set_event_handler(MyEventHandler())
         app.run()
@@ -142,8 +142,8 @@ class Wappa:
         Example:
             # Create advanced app with WappaBuilder
             builder = WappaBuilder()
-            app = await (builder
-                .add_plugin(DatabasePlugin(...))
+            app = (builder
+                .add_plugin(PostgresDatabasePlugin(...))
                 .add_plugin(RedisPlugin())
                 .build())
 
@@ -258,10 +258,10 @@ class Wappa:
             Self for method chaining
 
         Example:
-            from wappa.plugins import DatabasePlugin
+            from wappa.core.plugins import PostgresDatabasePlugin
 
             app = Wappa(cache="redis")
-            app.add_plugin(DatabasePlugin("postgresql://...", PostgreSQLAdapter()))
+            app.add_plugin(PostgresDatabasePlugin("postgresql://..."))
             app.set_event_handler(MyEventHandler())
             app.run()
         """
