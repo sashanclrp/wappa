@@ -2,7 +2,12 @@
 Auth Middleware
 
 Starlette BaseHTTPMiddleware that delegates authentication to a pluggable strategy.
-Supports SSE query-param token promotion, path exclusions, and scope protection.
+Operates in one of two mutually exclusive modes (enforced by AuthPlugin):
+
+- **Exclude mode**: All paths require auth except those in the exclude list.
+- **Protect mode**: Only paths in the protect list require auth.
+
+Also supports SSE query-param token promotion and user info exposure.
 """
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -17,17 +22,24 @@ class AuthMiddleware(BaseHTTPMiddleware):
     """
     Authentication middleware that delegates to an AuthStrategy.
 
-    Features:
-        - Path exclusion (prefix match) for public endpoints
-        - Optional path protection scope (only protect matching paths)
+    Operates in one of two mutually exclusive modes:
+
+    - **Exclude mode** (``exclude`` set, ``protect`` is None):
+      Every path requires auth unless it matches an exclude prefix.
+    - **Protect mode** (``protect`` set, ``exclude`` is None):
+      Only paths matching a protect prefix require auth.
+
+    The two modes cannot be combined — AuthPlugin validates this at init.
+
+    Additional features:
         - SSE query-param token promotion (?token=... → Bearer header)
         - User info exposed on request.state when enabled
 
     Args:
         app: ASGI application
         strategy: AuthStrategy implementation
-        protect: If set, only protect paths matching these prefixes
-        exclude: Path prefixes to skip authentication
+        protect: Protect-mode prefix list (mutually exclusive with exclude)
+        exclude: Exclude-mode prefix list (mutually exclusive with protect)
         sse_token_param: Query parameter name for SSE token promotion
         expose_user: Whether to set request.state.auth_user/auth_metadata
     """
@@ -44,21 +56,27 @@ class AuthMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.strategy = strategy
         self.protect = protect
-        self.exclude = exclude or []
+        self.exclude = exclude
         self.sse_token_param = sse_token_param
         self.expose_user = expose_user
+
+    def _requires_auth(self, path: str) -> bool:
+        """Determine whether the given path requires authentication."""
+        if self.protect is not None:
+            # Protect mode: auth required only if path matches a protect prefix
+            return any(path.startswith(prefix) for prefix in self.protect)
+
+        # Exclude mode: auth required unless path matches an exclude prefix
+        return not (
+            self.exclude and any(path.startswith(prefix) for prefix in self.exclude)
+        )
 
     async def dispatch(self, request: Request, call_next) -> Response:  # noqa: ANN001
         """Authenticate the request or pass through based on path rules."""
         logger = get_app_logger()
         path = request.url.path
 
-        # Check exclusions (prefix match) → pass through
-        if any(path.startswith(prefix) for prefix in self.exclude):
-            return await call_next(request)
-
-        # Check protection scope → if set and path doesn't match, pass through
-        if self.protect and not any(path.startswith(prefix) for prefix in self.protect):
+        if not self._requires_auth(path):
             return await call_next(request)
 
         # SSE token promotion: read ?token= param and inject as Bearer header

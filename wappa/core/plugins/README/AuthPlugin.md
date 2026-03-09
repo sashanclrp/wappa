@@ -78,15 +78,21 @@ AuthPlugin(
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `strategy` | `AuthStrategy` | (required) | Authentication strategy to use |
-| `protect` | `list[str] \| None` | `None` | If set, only protect paths matching these prefixes. If `None`, all non-excluded paths require auth |
-| `exclude` | `list[str] \| None` | `None` | Additional path prefixes to skip auth (merged with defaults) |
+| `protect` | `list[str] \| None` | `None` | Protect mode: only these path prefixes require auth. Mutually exclusive with `exclude` |
+| `exclude` | `list[str] \| None` | `None` | Exclude mode: additional path prefixes to skip auth (merged with defaults). Mutually exclusive with `protect` |
 | `sse_token_param` | `str` | `"token"` | Query param name for SSE token promotion |
 | `expose_user` | `bool` | `True` | Set `request.state.auth_user` and `request.state.auth_metadata` on success |
 | `middleware_priority` | `int` | `60` | Middleware execution priority |
 
-## Default excluded paths
+## Exclude vs Protect mode
 
-These paths are excluded from authentication by default:
+The plugin operates in one of two **mutually exclusive** modes. Passing both `protect` and `exclude` raises a `ValueError`.
+
+### Exclude mode (default)
+
+**All paths require auth** except those matching an exclude prefix. This is the default when you pass neither parameter or only `exclude`.
+
+Default excluded paths are always included:
 
 - `/health`
 - `/api/sse/status`
@@ -95,20 +101,42 @@ These paths are excluded from authentication by default:
 - `/openapi.json`
 - `/redoc`
 
-Path matching is prefix-based (`startswith`), so `/healthcheck` also matches `/health`.
-
-## Protecting specific endpoints only
-
-By default, **all** non-excluded paths require authentication. To limit auth to specific endpoints, use the `protect` parameter:
+Add your own exclusions on top of the defaults:
 
 ```python
 AuthPlugin(
     strategy=BearerTokenStrategy(token="my-token"),
-    protect=["/api/whatsapp", "/api/sse"],
+    exclude=["/public", "/landing"],
 )
+# Protected: everything
+# Excluded: defaults + /public + /landing
 ```
 
-This way only `/api/whatsapp/*` and `/api/sse/*` paths require auth -- everything else passes through.
+Path matching is prefix-based (`startswith`), so `/healthcheck` also matches the `/health` exclusion.
+
+### Protect mode
+
+**Only paths matching a protect prefix require auth**; everything else passes through freely. Default excludes do not apply in this mode (they're unnecessary since unmatched paths are already open).
+
+```python
+AuthPlugin(
+    strategy=BearerTokenStrategy(token="my-token"),
+    protect=["/api/admin", "/api/users"],
+)
+# Protected: /api/admin/* and /api/users/*
+# Open: everything else (including /docs, /health, etc.)
+```
+
+### Invalid: both at once
+
+```python
+# This raises ValueError
+AuthPlugin(
+    strategy=BearerTokenStrategy(token="my-token"),
+    protect=["/api/admin"],
+    exclude=["/public"],
+)
+```
 
 ## SSE token promotion
 
