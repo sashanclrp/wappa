@@ -2,12 +2,14 @@
 Auth Plugin
 
 Plugin for adding authentication middleware to Wappa applications.
-Provides a flexible wrapper for various authentication backends.
+Uses the core auth module's strategy-based system with sensible defaults.
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from ...core.logging.logger import get_app_logger
+from ..auth.middleware import AuthMiddleware
+from ..auth.strategy import AuthStrategy
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -19,151 +21,68 @@ class AuthPlugin:
     """
     Authentication middleware plugin for Wappa applications.
 
-    Provides a flexible wrapper for authentication middleware, supporting
-    various authentication backends like JWT, OAuth, API keys, etc.
+    Wraps AuthMiddleware with WappaPlugin lifecycle. Supports any
+    AuthStrategy (Bearer, Basic, JWT, or custom).
 
     Example:
-        # JWT authentication
-        auth_plugin = AuthPlugin(
-            JWTMiddleware,
-            secret_key="your-secret-key",
-            algorithm="HS256"
-        )
+        from wappa.core.auth import BearerTokenStrategy
 
-        # OAuth authentication
-        auth_plugin = AuthPlugin(
-            OAuthMiddleware,
-            client_id="your-client-id",
-            client_secret="your-client-secret"
+        auth = AuthPlugin(
+            strategy=BearerTokenStrategy(token="my-secret"),
         )
-
-        # Custom authentication
-        auth_plugin = AuthPlugin(
-            CustomAuthMiddleware,
-            api_key_header="X-API-Key"
-        )
+        builder.add_plugin(auth)
     """
+
+    DEFAULT_EXCLUDES = [
+        "/health",
+        "/api/sse/status",
+        "/webhook/messenger",
+        "/docs",
+        "/openapi.json",
+        "/redoc",
+    ]
 
     def __init__(
         self,
-        auth_middleware_class: type,
-        priority: int = 80,  # High priority - runs early but after CORS
-        **middleware_kwargs: Any,
-    ):
-        """
-        Initialize authentication plugin.
+        strategy: AuthStrategy,
+        protect: list[str] | None = None,
+        exclude: list[str] | None = None,
+        sse_token_param: str = "token",
+        expose_user: bool = True,
+        middleware_priority: int = 60,
+    ) -> None:
+        self.strategy = strategy
+        self.protect = protect
+        self.sse_token_param = sse_token_param
+        self.expose_user = expose_user
+        self.priority = middleware_priority
 
-        Args:
-            auth_middleware_class: Authentication middleware class
-            priority: Middleware priority (lower runs first/outer)
-            **middleware_kwargs: Arguments for the middleware class
-        """
-        self.auth_middleware_class = auth_middleware_class
-        self.priority = priority
-        self.middleware_kwargs = middleware_kwargs
+        # Merge user excludes with defaults
+        self.exclude = list(self.DEFAULT_EXCLUDES)
+        if exclude:
+            self.exclude.extend(exclude)
 
-    async def configure(self, builder: "WappaBuilder") -> None:
-        """
-        Configure authentication plugin with WappaBuilder.
-
-        Adds the authentication middleware to the application.
-
-        Args:
-            builder: WappaBuilder instance
-        """
+    def configure(self, builder: "WappaBuilder") -> None:
+        """Add AuthMiddleware to the application with the configured strategy."""
         logger = get_app_logger()
 
-        # Add authentication middleware to builder
         builder.add_middleware(
-            self.auth_middleware_class, priority=self.priority, **self.middleware_kwargs
+            AuthMiddleware,
+            priority=self.priority,
+            strategy=self.strategy,
+            protect=self.protect,
+            exclude=self.exclude,
+            sse_token_param=self.sse_token_param,
+            expose_user=self.expose_user,
         )
 
         logger.debug(
-            f"AuthPlugin configured with {self.auth_middleware_class.__name__} "
-            f"(priority: {self.priority})"
+            f"AuthPlugin configured - strategy: {type(self.strategy).__name__}, "
+            f"priority: {self.priority}, excludes: {len(self.exclude)} paths"
         )
 
     async def startup(self, app: "FastAPI") -> None:
-        """
-        Authentication plugin startup.
-
-        Can be used for authentication backend initialization,
-        key validation, etc.
-
-        Args:
-            app: FastAPI application instance
-        """
-        logger = get_app_logger()
-        logger.debug(f"AuthPlugin startup - {self.auth_middleware_class.__name__}")
+        """No-op startup. Auth is configured entirely via middleware."""
 
     async def shutdown(self, app: "FastAPI") -> None:
-        """
-        Authentication plugin shutdown.
-
-        Can be used for cleaning up authentication resources.
-
-        Args:
-            app: FastAPI application instance
-        """
-        logger = get_app_logger()
-        logger.debug(f"AuthPlugin shutdown - {self.auth_middleware_class.__name__}")
-
-
-# Convenience functions for common authentication patterns
-
-
-def create_jwt_auth_plugin(
-    secret_key: str, algorithm: str = "HS256", **kwargs: Any
-) -> AuthPlugin:
-    """
-    Create a JWT authentication plugin.
-
-    Note: This is a convenience function. You'll need to provide
-    an actual JWT middleware implementation.
-
-    Args:
-        secret_key: JWT secret key
-        algorithm: JWT algorithm
-        **kwargs: Additional JWT middleware arguments
-
-    Returns:
-        Configured AuthPlugin for JWT authentication
-    """
-    try:
-        # This is a placeholder - you'd import your actual JWT middleware
-        from your_auth_library import JWTMiddleware
-
-        return AuthPlugin(
-            JWTMiddleware, secret_key=secret_key, algorithm=algorithm, **kwargs
-        )
-    except ImportError as e:
-        raise ImportError(
-            "JWT middleware not found. Please implement or install a JWT middleware library."
-        ) from e
-
-
-def create_api_key_auth_plugin(
-    api_key_header: str = "X-API-Key", **kwargs: Any
-) -> AuthPlugin:
-    """
-    Create an API key authentication plugin.
-
-    Note: This is a convenience function. You'll need to provide
-    an actual API key middleware implementation.
-
-    Args:
-        api_key_header: Header name for API key
-        **kwargs: Additional API key middleware arguments
-
-    Returns:
-        Configured AuthPlugin for API key authentication
-    """
-    try:
-        # This is a placeholder - you'd import your actual API key middleware
-        from your_auth_library import APIKeyMiddleware
-
-        return AuthPlugin(APIKeyMiddleware, api_key_header=api_key_header, **kwargs)
-    except ImportError as e:
-        raise ImportError(
-            "API key middleware not found. Please implement or install an API key middleware library."
-        ) from e
+        """No-op shutdown. No resources to clean up."""

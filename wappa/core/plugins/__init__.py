@@ -11,6 +11,13 @@ This module contains all the core plugins that extend Wappa functionality:
 - Webhook plugins for payment providers and custom endpoints
 """
 
+from ..auth import (
+    AuthResult,
+    AuthStrategy,
+    BasicAuthStrategy,
+    BearerTokenStrategy,
+    JWTStrategy,
+)
 from .auth_plugin import AuthPlugin
 from .cors_plugin import CORSPlugin
 from .custom_middleware_plugin import CustomMiddlewarePlugin
@@ -40,6 +47,12 @@ __all__ = [
     "AuthPlugin",
     "RateLimitPlugin",
     "CustomMiddlewarePlugin",
+    # Auth strategies and contracts
+    "AuthStrategy",
+    "AuthResult",
+    "BearerTokenStrategy",
+    "BasicAuthStrategy",
+    "JWTStrategy",
     # Integrations
     "WebhookPlugin",
 ]
