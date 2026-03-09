@@ -304,22 +304,46 @@ async def send_menu_list_message(
             ListSection(
                 title="Main Dishes",
                 rows=[
-                    ListRow(id="pizza_margherita", title="Pizza Margherita", description="Classic tomato and mozzarella - $12.99"),
-                    ListRow(id="pasta_carbonara", title="Pasta Carbonara", description="Creamy bacon pasta - $14.99"),
+                    ListRow(
+                        id="pizza_margherita",
+                        title="Pizza Margherita",
+                        description="Classic tomato and mozzarella - $12.99",
+                    ),
+                    ListRow(
+                        id="pasta_carbonara",
+                        title="Pasta Carbonara",
+                        description="Creamy bacon pasta - $14.99",
+                    ),
                 ],
             ),
             ListSection(
                 title="Salads",
                 rows=[
-                    ListRow(id="caesar_salad", title="Caesar Salad", description="Crispy romaine with parmesan - $8.99"),
-                    ListRow(id="greek_salad", title="Greek Salad", description="Fresh vegetables with feta - $9.99"),
+                    ListRow(
+                        id="caesar_salad",
+                        title="Caesar Salad",
+                        description="Crispy romaine with parmesan - $8.99",
+                    ),
+                    ListRow(
+                        id="greek_salad",
+                        title="Greek Salad",
+                        description="Fresh vegetables with feta - $9.99",
+                    ),
                 ],
             ),
             ListSection(
                 title="Beverages",
                 rows=[
-                    ListRow(id="coke", title="Coca Cola", description="Classic refreshing cola - $2.99"),
-                    ListRow(id="water", title="Sparkling Water", description="Refreshing mineral water - $1.99"),
+                    ListRow(
+                        id="coke",
+                        title="Coca Cola",
+                        description="Classic refreshing cola - $2.99",
+                    ),
+                    ListRow(
+                        id="water",
+                        title="Sparkling Water",
+                        description="Refreshing mineral water - $1.99",
+                    ),
                 ],
             ),
         ]

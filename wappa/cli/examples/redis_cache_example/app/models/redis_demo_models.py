@@ -22,7 +22,8 @@ class MessageHistory(BaseModel):
     )
 
     timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(UTC), description="When the message was sent"
+        default_factory=lambda: datetime.now(UTC),
+        description="When the message was sent",
     )
 
     message_type: str = Field(
@@ -51,11 +52,13 @@ class User(BaseModel):
     )
 
     first_seen: datetime = Field(
-        default_factory=lambda: datetime.now(UTC), description="When the user was first seen"
+        default_factory=lambda: datetime.now(UTC),
+        description="When the user was first seen",
     )
 
     last_seen: datetime = Field(
-        default_factory=lambda: datetime.now(UTC), description="When the user was last seen"
+        default_factory=lambda: datetime.now(UTC),
+        description="When the user was last seen",
     )
 
     message_count: int = Field(
