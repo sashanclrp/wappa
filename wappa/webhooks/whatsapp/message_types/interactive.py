@@ -374,8 +374,8 @@ class WhatsAppInteractiveMessage(BaseInteractiveMessage):
             "selected_option_id": self.selected_option_id,
             "selected_option_title": self.selected_option_title,
             "original_message_id": self.original_message_id,
-            "is_button_reply": self.is_button_reply(),
-            "is_list_reply": self.is_list_reply(),
+            "is_button_reply": self.is_button_reply,
+            "is_list_reply": self.is_list_reply,
             "context": self.get_context().to_universal_dict()
             if self.has_context()
             else None,

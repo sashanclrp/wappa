@@ -366,7 +366,7 @@ class WhatsAppImageMessage(BaseImageMessage):
             "media_type": self.media_type.value,
             "file_size": self.file_size,
             "caption": self.caption,
-            "has_caption": self.has_caption(),
+            "has_caption": self.has_caption,
             "is_forwarded": self.is_forwarded,
             "context": (
                 self.get_context().to_universal_dict() if self.has_context() else None

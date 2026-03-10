@@ -221,7 +221,7 @@ class WhatsAppAudioMessage(BaseAudioMessage):
             "type": self.type,
             "media_id": self.media_id,
             "mime_type": self.mime_type,
-            "is_voice_recording": self.is_voice_recording(),
+            "is_voice_recording": self.is_voice_recording,
             "is_forwarded": self.is_forwarded,
             "is_frequently_forwarded": self.is_frequently_forwarded,
             "is_ad_message": self.is_ad_message,
@@ -276,7 +276,7 @@ class WhatsAppAudioMessage(BaseAudioMessage):
             "media_type": self.media_type.value,
             "file_size": self.file_size,
             "caption": self.caption,
-            "is_voice_message": self.is_voice_message(),
+            "is_voice_message": self.is_voice_message,
             "duration": self.duration,
             "whatsapp_data": {
                 "whatsapp_id": self.id,
@@ -298,7 +298,7 @@ class WhatsAppAudioMessage(BaseAudioMessage):
             "audio_content": self.audio.model_dump(),
             "context": self.context.model_dump() if self.context else None,
             "referral": self.referral.model_dump() if self.referral else None,
-            "is_voice_recording": self.is_voice_recording(),
+            "is_voice_recording": self.is_voice_recording,
         }
 
     # Implement abstract methods from BaseMediaMessage
