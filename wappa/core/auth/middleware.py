@@ -95,7 +95,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         try:
             result = await self.strategy.authenticate(request)
         except Exception as e:
-            logger.error(f"Auth strategy error: {e}", exc_info=True)
+            logger.error("Auth strategy error: %s", e, exc_info=True)
             return JSONResponse(
                 status_code=500,
                 content={"detail": "Internal authentication error"},

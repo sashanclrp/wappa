@@ -124,7 +124,7 @@ async def upload_media(
     summary="Send Image Message",
     description="Send an image message with optional caption and reply context",
 )
-@dispatch_message_event("image")
+@dispatch_message_event("image", platform="whatsapp")
 async def send_image_message(
     request: ImageMessage,
     fastapi_request: Request,
@@ -162,7 +162,7 @@ async def send_image_message(
     summary="Send Video Message",
     description="Send a video message with optional caption and reply context",
 )
-@dispatch_message_event("video")
+@dispatch_message_event("video", platform="whatsapp")
 async def send_video_message(
     request: VideoMessage,
     fastapi_request: Request,
@@ -201,7 +201,7 @@ async def send_video_message(
     summary="Send Audio Message",
     description="Send an audio message with optional reply context",
 )
-@dispatch_message_event("audio")
+@dispatch_message_event("audio", platform="whatsapp")
 async def send_audio_message(
     request: AudioMessage,
     fastapi_request: Request,
@@ -240,7 +240,7 @@ async def send_audio_message(
     summary="Send Document Message",
     description="Send a document message with optional filename and reply context",
 )
-@dispatch_message_event("document")
+@dispatch_message_event("document", platform="whatsapp")
 async def send_document_message(
     request: DocumentMessage,
     fastapi_request: Request,
@@ -279,7 +279,7 @@ async def send_document_message(
     summary="Send Sticker Message",
     description="Send a sticker message with optional reply context",
 )
-@dispatch_message_event("sticker")
+@dispatch_message_event("sticker", platform="whatsapp")
 async def send_sticker_message(
     request: StickerMessage,
     fastapi_request: Request,

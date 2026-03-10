@@ -77,4 +77,10 @@ class APIMessageEvent(BaseModel):
         description="Owner identifier (if available)",
     )
 
+    # Platform context (future-proof for Instagram, Telegram, etc.)
+    platform: str = Field(
+        default="whatsapp",
+        description="Messaging platform this event originated from",
+    )
+
     model_config = {"extra": "forbid"}

@@ -101,7 +101,7 @@ router = APIRouter(
     summary="Send Text Template Message",
     description="Send a text-only template message with optional state configuration",
 )
-@dispatch_message_event("text_template")
+@dispatch_message_event("text_template", platform="whatsapp")
 async def send_text_template(
     request: TextTemplateMessage,
     fastapi_request: Request,
@@ -138,7 +138,7 @@ async def send_text_template(
     summary="Send Media Template Message",
     description="Send a template message with media header and optional state configuration",
 )
-@dispatch_message_event("media_template")
+@dispatch_message_event("media_template", platform="whatsapp")
 async def send_media_template(
     request: MediaTemplateMessage,
     fastapi_request: Request,
@@ -179,7 +179,7 @@ async def send_media_template(
     summary="Send Location Template Message",
     description="Send a template message with location header and optional state configuration",
 )
-@dispatch_message_event("location_template")
+@dispatch_message_event("location_template", platform="whatsapp")
 async def send_location_template(
     request: LocationTemplateMessage,
     fastapi_request: Request,

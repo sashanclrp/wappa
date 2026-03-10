@@ -48,7 +48,7 @@ router = APIRouter(
     summary="Send Text Message",
     description="Send a text message via WhatsApp with optional reply and preview control",
 )
-@dispatch_message_event("text")
+@dispatch_message_event("text", platform="whatsapp")
 async def send_text_message(
     request: BasicTextMessage,
     fastapi_request: Request,

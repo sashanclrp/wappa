@@ -47,6 +47,7 @@ async def dispatch_api_message_event(
     request_payload: dict,
     recipient: str,
     request: Request | None = None,
+    platform: str = "whatsapp",
 ) -> None:
     """
     Fire-and-forget API event dispatch helper with database session support.
@@ -78,6 +79,7 @@ async def dispatch_api_message_event(
         meta_response=getattr(result, "raw_response", None),
         tenant_id=get_current_tenant_context() or "unknown",
         owner_id=get_current_owner_context(),
+        platform=platform,
     )
 
     # Fire and forget - don't block the API response

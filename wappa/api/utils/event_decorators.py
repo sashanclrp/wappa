@@ -36,6 +36,7 @@ T = TypeVar("T")
 def dispatch_message_event(
     message_type: str,
     *,
+    platform: str = "whatsapp",
     dispatcher_param: str = "api_dispatcher",
     request_param: str = "request",
     fastapi_request_param: str = "fastapi_request",
@@ -55,6 +56,7 @@ def dispatch_message_event(
 
     Args:
         message_type: Type of message for the event (e.g., "text", "image", "button")
+        platform: Messaging platform identifier (e.g., "whatsapp", "instagram", "telegram")
         dispatcher_param: Name of the dispatcher parameter in the route function
         request_param: Name of the Pydantic request model containing recipient and payload
         fastapi_request_param: Name of the FastAPI Request parameter for DB access
@@ -130,6 +132,7 @@ def dispatch_message_event(
                 meta_response=getattr(message_result, "raw_response", None),
                 tenant_id=get_current_tenant_context() or "unknown",
                 owner_id=get_current_owner_context(),
+                platform=platform,
             )
             asyncio.create_task(dispatcher.dispatch(event, fastapi_request))
 
@@ -147,6 +150,7 @@ def fire_api_event(
     request_payload: dict,
     recipient: str,
     fastapi_request: "Request | None" = None,
+    platform: str = "whatsapp",
 ) -> None:
     """
     Fire API event in background without awaiting.
@@ -179,5 +183,6 @@ def fire_api_event(
         meta_response=getattr(result, "raw_response", None),
         tenant_id=get_current_tenant_context() or "unknown",
         owner_id=get_current_owner_context(),
+        platform=platform,
     )
     asyncio.create_task(dispatcher.dispatch(event, fastapi_request))

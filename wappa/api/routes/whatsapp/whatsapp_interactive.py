@@ -82,7 +82,7 @@ router = APIRouter(
     summary="Send Button Message",
     description="Send an interactive button message with up to 3 quick reply buttons",
 )
-@dispatch_message_event("button")
+@dispatch_message_event("button", platform="whatsapp")
 async def send_button_message(
     request: ButtonMessage,
     fastapi_request: Request,
@@ -121,7 +121,7 @@ async def send_button_message(
     summary="Send List Message",
     description="Send an interactive list message with sectioned rows",
 )
-@dispatch_message_event("list")
+@dispatch_message_event("list", platform="whatsapp")
 async def send_list_message(
     request: ListMessage,
     fastapi_request: Request,
@@ -161,7 +161,7 @@ async def send_list_message(
     summary="Send Call-to-Action Message",
     description="Send an interactive call-to-action message with URL button",
 )
-@dispatch_message_event("cta")
+@dispatch_message_event("cta", platform="whatsapp")
 async def send_cta_message(
     request: CTAMessage,
     fastapi_request: Request,

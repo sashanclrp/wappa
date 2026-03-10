@@ -42,8 +42,20 @@ SUPPORTED_SSE_EVENT_TYPES: Final[set[str]] = {
 def _normalized_webhook_payload(
     webhook: IncomingMessageWebhook | StatusWebhook | ErrorWebhook,
 ) -> dict[str, Any]:
-    """Build normalized webhook payload for SSE messages."""
-    return webhook.model_dump(mode="json", exclude_none=False)
+    """Build normalized webhook payload for SSE messages.
+
+    For IncomingMessageWebhook the message field is enriched via
+    ``to_universal_dict()`` so that abstract-property content
+    (text_content, media_id, selected_option_id, …) is included.
+    Plain ``model_dump()`` only captures Pydantic fields (e.g.
+    ``processed_at``) and silently drops all property-based data.
+    """
+    data = webhook.model_dump(mode="json", exclude_none=False)
+
+    if isinstance(webhook, IncomingMessageWebhook):
+        data["message"] = webhook.message.to_universal_dict()
+
+    return data
 
 
 async def publish_sse_event(
@@ -89,7 +101,7 @@ async def publish_api_sse_event(
         event_type="outgoing_api_message",
         tenant_id=event.tenant_id or "unknown",
         user_id=event.recipient,
-        platform="whatsapp",
+        platform=event.platform,
         source="api",
         payload=event.model_dump(mode="json", exclude_none=False),
     )

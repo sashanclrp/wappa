@@ -126,7 +126,7 @@ class CoordinateValidationRequest(BaseModel):
 
 
 @router.post("/send-contact", response_model=MessageResult)
-@dispatch_message_event("contact")
+@dispatch_message_event("contact", platform="whatsapp")
 async def send_contact_card(
     request: ContactRequest,
     fastapi_request: Request,
@@ -183,7 +183,7 @@ async def send_contact_card(
 
 
 @router.post("/send-location", response_model=MessageResult)
-@dispatch_message_event("location")
+@dispatch_message_event("location", platform="whatsapp")
 async def send_location_message(
     request: LocationRequest,
     fastapi_request: Request,
@@ -245,7 +245,7 @@ async def send_location_message(
 
 
 @router.post("/send-location-request", response_model=MessageResult)
-@dispatch_message_event("location_request")
+@dispatch_message_event("location_request", platform="whatsapp")
 async def send_location_request_message(
     request: LocationRequestRequest,
     fastapi_request: Request,
