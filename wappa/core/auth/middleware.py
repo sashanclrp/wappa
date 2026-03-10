@@ -87,6 +87,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 new_headers = list(request.scope["headers"])
                 new_headers.append((b"authorization", f"Bearer {token_value}".encode()))
                 request.scope["headers"] = new_headers
+                # Invalidate cached Headers so strategy sees the promoted token
+                if hasattr(request, "_headers"):
+                    del request._headers
 
         # Authenticate
         try:
