@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from wappa.domain.events.api_message_event import APIMessageEvent
+    from wappa.domain.events.external_event import ExternalEvent
     from wappa.domain.interfaces.cache_factory import ICacheFactory
     from wappa.domain.interfaces.messaging_interface import IMessenger
     from wappa.webhooks import (
@@ -364,6 +365,69 @@ class WappaEventHandler(ABC):
         Override to customize post-processing behavior.
         Default: no additional processing.
         """
+        _ = event
+        return None
+
+    # =========== EXTERNAL WEBHOOK EVENT HANDLING ===========
+
+    async def handle_external_event(self, event: "ExternalEvent") -> None:
+        """
+        Handle external webhook events using Template Method pattern.
+
+        This method provides a structured flow for events from external
+        providers (MercadoPago, Stripe, CRM systems, etc.):
+        1. Pre-processing: Framework logging
+        2. User processing: Custom business logic (implemented in process_external_event)
+        3. Post-processing: Framework cleanup
+
+        DO NOT OVERRIDE - implement process_external_event() instead.
+
+        Args:
+            event: ExternalEvent from the external webhook processor
+        """
+        await self._pre_process_external_event(event)
+        await self.process_external_event(event)
+        await self._post_process_external_event(event)
+
+    async def process_external_event(self, event: "ExternalEvent") -> None:
+        """
+        Process external webhook event with custom business logic.
+
+        Optional method - override to handle payment notifications, CRM updates,
+        subscription events, or any external provider webhook.
+
+        When this method is called, self.messenger, self.cache_factory, and self.db
+        are available (when the processor resolved a user_id and plugins are configured).
+
+        Default: no-op (does nothing unless overridden).
+
+        Args:
+            event: ExternalEvent with source, event_type, payload, and full context
+
+        Example:
+            async def process_external_event(self, event: ExternalEvent) -> None:
+                if event.source == "mercadopago" and event.event_type == "payment.approved":
+                    if self.cache_factory:
+                        cache = self.cache_factory.create_user_cache()
+                        await cache.update({"subscription_status": "active"})
+                    if self.messenger:
+                        await self.messenger.send_text(
+                            text="Payment confirmed!",
+                            recipient=event.user_id,
+                        )
+        """
+        _ = event
+        return None
+
+    async def _pre_process_external_event(self, event: "ExternalEvent") -> None:
+        """Pre-processing hook for external events. Override to customize."""
+        self.logger.debug(
+            f"External event received: {event.source}/{event.event_type} "
+            f"(tenant={event.tenant_id}, user={event.user_id})"
+        )
+
+    async def _post_process_external_event(self, event: "ExternalEvent") -> None:
+        """Post-processing hook for external events. Override to customize."""
         _ = event
         return None
 

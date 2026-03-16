@@ -13,11 +13,14 @@ Clean Import Interface (SRP Compliance):
 # Framework Essentials Only (SRP: Framework Foundation)
 # Dynamic version from pyproject.toml
 from .core.config.settings import settings
+from .core.context import WappaContext
 from .core.events.event_handler import WappaEventHandler
 from .core.expiry import expiry_registry
 from .core.factory import WappaBuilder, WappaPlugin
 from .core.plugins import ExpiryPlugin
 from .core.wappa_app import Wappa
+from .domain.events.external_event import ExternalEvent
+from .domain.interfaces.webhook_processor import IWebhookProcessor
 
 __version__ = settings.version
 
@@ -27,6 +30,10 @@ __all__ = [
     "WappaEventHandler",
     "WappaBuilder",
     "WappaPlugin",
+    # External Webhook Gateway
+    "ExternalEvent",
+    "IWebhookProcessor",
+    "WappaContext",
     # Expiry Actions System
     "expiry_registry",
     "ExpiryPlugin",

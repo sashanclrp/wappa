@@ -17,6 +17,7 @@ from .repository_factory import IRepositoryFactory
 from .shared_state_repository import ISharedStateRepository
 from .state_repository import IStateRepository
 from .user_repository import IUserRepository
+from .webhook_processor import IWebhookProcessor
 
 __all__ = [
     "IBaseRepository",
@@ -38,4 +39,6 @@ __all__ = [
     # PubSub interface
     "IPubSubPublisher",
     "PubSubEventType",
+    # External webhook processor
+    "IWebhookProcessor",
 ]

@@ -20,6 +20,7 @@ from .default_handlers import (
 )
 from .event_dispatcher import WappaEventDispatcher
 from .event_handler import WappaEventHandler
+from .external_event_dispatcher import ExternalEventDispatcher
 from .webhook_factory import WebhookEndpointType, WebhookURLFactory, webhook_url_factory
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "WappaEventHandler",
     "WappaEventDispatcher",
     "APIEventDispatcher",
+    "ExternalEventDispatcher",
     # Default Handlers
     "DefaultMessageHandler",
     "DefaultStatusHandler",

@@ -7,5 +7,6 @@ Provides event models for different contexts:
 """
 
 from .api_message_event import APIMessageEvent
+from .external_event import ExternalEvent
 
-__all__ = ["APIMessageEvent"]
+__all__ = ["APIMessageEvent", "ExternalEvent"]
