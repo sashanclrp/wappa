@@ -20,6 +20,7 @@ from ..auth import (
 )
 from .auth_plugin import AuthPlugin
 from .cors_plugin import CORSPlugin
+from .cron_plugin import CronPlugin
 from .custom_middleware_plugin import CustomMiddlewarePlugin
 from .expiry_plugin import ExpiryPlugin
 from .postgres_database_plugin import PostgresDatabasePlugin
@@ -53,4 +54,5 @@ __all__ = [
     "JWTStrategy",
     # Integrations
     "WebhookPlugin",
+    "CronPlugin",
 ]

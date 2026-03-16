@@ -9,6 +9,7 @@ This module contains all event-related functionality including:
 """
 
 from .api_event_dispatcher import APIEventDispatcher
+from .cron_event_dispatcher import CronEventDispatcher
 from .default_handlers import (
     DefaultErrorHandler,
     DefaultHandlerFactory,
@@ -29,6 +30,7 @@ __all__ = [
     "WappaEventDispatcher",
     "APIEventDispatcher",
     "ExternalEventDispatcher",
+    "CronEventDispatcher",
     # Default Handlers
     "DefaultMessageHandler",
     "DefaultStatusHandler",

@@ -52,6 +52,8 @@ dependencies = [
     "asyncpg>=0.31.0",
     # Authentication
     "PyJWT>=2.8.0",
+    # Cron scheduling
+    "fastapi-crons>=2.0.0",
 ]
 
 [project.urls]

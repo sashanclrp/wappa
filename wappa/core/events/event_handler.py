@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from wappa.domain.events.api_message_event import APIMessageEvent
+    from wappa.domain.events.cron_event import CronEvent
     from wappa.domain.events.external_event import ExternalEvent
     from wappa.domain.interfaces.cache_factory import ICacheFactory
     from wappa.domain.interfaces.messaging_interface import IMessenger
@@ -428,6 +429,70 @@ class WappaEventHandler(ABC):
 
     async def _post_process_external_event(self, event: "ExternalEvent") -> None:
         """Post-processing hook for external events. Override to customize."""
+        _ = event
+        return None
+
+    # =========== CRON EVENT HANDLING ===========
+
+    async def handle_cron_event(self, event: "CronEvent") -> None:
+        """
+        Handle cron events using Template Method pattern.
+
+        This method provides a structured flow for scheduled background
+        tasks fired by CronPlugin:
+        1. Pre-processing: Framework logging
+        2. User processing: Custom business logic (implemented in process_cron_event)
+        3. Post-processing: Framework cleanup
+
+        DO NOT OVERRIDE - implement process_cron_event() instead.
+
+        Args:
+            event: CronEvent from the CronPlugin scheduler
+        """
+        await self._pre_process_cron_event(event)
+        await self.process_cron_event(event)
+        await self._post_process_cron_event(event)
+
+    async def process_cron_event(self, event: "CronEvent") -> None:
+        """
+        Process cron event with custom business logic.
+
+        Optional method - override to handle scheduled tasks. Dispatch
+        by event.cron_id to handle different crons.
+
+        When this method is called, self.db is always available (if DB plugin
+        configured). self.messenger and self.cache_factory are available when
+        the cron was registered with tenant_id and user_id.
+
+        Default: no-op (does nothing unless overridden).
+
+        Args:
+            event: CronEvent with cron_id, cron_expr, payload, and full context
+
+        Example:
+            async def process_cron_event(self, event: CronEvent) -> None:
+                match event.cron_id:
+                    case "send_daily_report":
+                        await self.messenger.send_text(
+                            text="Here's your daily report!",
+                            recipient=event.user_id,
+                        )
+                    case "cleanup_sessions":
+                        async with self.db() as session:
+                            await cleanup_expired(session)
+        """
+        _ = event
+        return None
+
+    async def _pre_process_cron_event(self, event: "CronEvent") -> None:
+        """Pre-processing hook for cron events. Override to customize."""
+        self.logger.debug(
+            f"Cron event fired: {event.cron_id} "
+            f"(tenant={event.tenant_id}, expr={event.cron_expr})"
+        )
+
+    async def _post_process_cron_event(self, event: "CronEvent") -> None:
+        """Post-processing hook for cron events. Override to customize."""
         _ = event
         return None
 

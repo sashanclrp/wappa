@@ -19,6 +19,7 @@ from .core.expiry import expiry_registry
 from .core.factory import WappaBuilder, WappaPlugin
 from .core.plugins import ExpiryPlugin
 from .core.wappa_app import Wappa
+from .domain.events.cron_event import CronEvent
 from .domain.events.external_event import ExternalEvent
 from .domain.interfaces.webhook_processor import IWebhookProcessor
 
@@ -34,6 +35,8 @@ __all__ = [
     "ExternalEvent",
     "IWebhookProcessor",
     "WappaContext",
+    # Cron Scheduling
+    "CronEvent",
     # Expiry Actions System
     "expiry_registry",
     "ExpiryPlugin",

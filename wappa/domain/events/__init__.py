@@ -7,6 +7,7 @@ Provides event models for different contexts:
 """
 
 from .api_message_event import APIMessageEvent
+from .cron_event import CronEvent
 from .external_event import ExternalEvent
 
-__all__ = ["APIMessageEvent", "ExternalEvent"]
+__all__ = ["APIMessageEvent", "CronEvent", "ExternalEvent"]
