@@ -12,8 +12,10 @@ from pydantic import BaseModel, Field, field_validator
 class UserProfile(BaseModel):
     """User profile model for tracking user information and statistics."""
 
-    # Basic user information
-    phone_number: str
+    # User identification (BSUID-aware: user_id is the primary identifier)
+    user_id: str
+    phone_number: str | None = None
+    bsuid: str | None = None
     user_name: str | None = None
     profile_name: str | None = None
 
@@ -50,7 +52,7 @@ class UserProfile(BaseModel):
     @field_validator("phone_number", mode="before")
     @classmethod
     def validate_phone_number(cls, v):
-        """Convert phone number to string if it's an integer."""
+        """Convert phone number to string if provided."""
         return str(v) if v is not None else v
 
     def increment_message_count(self, message_type: str = "text") -> None:
@@ -121,13 +123,15 @@ class UserProfile(BaseModel):
             return self.user_name
         elif self.profile_name:
             return self.profile_name
-        else:
+        elif self.phone_number:
             return self.phone_number
+        else:
+            return self.user_id
 
     def get_activity_summary(self) -> dict[str, any]:
         """Get a summary of user activity."""
         return {
-            "user_id": self.phone_number,
+            "user_id": self.user_id,
             "display_name": self.get_display_name(),
             "total_messages": self.total_messages,
             "message_types": {

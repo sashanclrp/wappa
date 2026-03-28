@@ -32,6 +32,10 @@ class SSEMessengerWrapper(IMessenger):
         self._tenant = tenant
         self._user_id = user_id
 
+    def __getattr__(self, name: str) -> Any:
+        """Delegate attribute access to the inner messenger for full transparency."""
+        return getattr(self._inner, name)
+
     @property
     def platform(self) -> PlatformType:
         return self._inner.platform

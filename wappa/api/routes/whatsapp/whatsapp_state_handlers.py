@@ -44,7 +44,8 @@ async def set_handler_state(
     any message has been sent (template, media, text, interactive, etc.).
 
     The handler state is stored in cache with the key pattern:
-    `api-handler-{handler_value}` and is scoped to the user's phone number.
+    `api-handler-{handler_value}` and is scoped to the user's identifier
+    (phone number or BSUID).
 
     **Example automation workflow:**
     1. Send a template/media message to user
@@ -54,7 +55,7 @@ async def set_handler_state(
     **Request Body:**
     ```json
     {
-      "recipient": "+1234567890",
+      "recipient": "+1234567890 or BSUID",
       "handler_config": {
         "handler_value": "reschedule_flow",
         "ttl_seconds": 3600,
@@ -71,7 +72,7 @@ async def set_handler_state(
     {
       "success": true,
       "message": "State handler assigned successfully",
-      "recipient": "+1234567890",
+      "recipient": "+1234567890 or BSUID",
       "handler_value": "reschedule_flow",
       "cache_key": "api-handler-reschedule_flow",
       "expires_at": "2024-01-15T11:00:00Z"
@@ -119,7 +120,7 @@ async def get_handler_state(
     Returns 404 if no handler is found.
 
     **Path Parameters:**
-    - `recipient`: User phone number (e.g., "+1234567890")
+    - `recipient`: User identifier — phone number (e.g., "+1234567890") or BSUID
     - `handler_value`: Handler identifier (e.g., "reschedule_flow")
 
     **Response:**
@@ -172,7 +173,7 @@ async def delete_handler_state(
     when a workflow is completed or cancelled.
 
     **Path Parameters:**
-    - `recipient`: User phone number (e.g., "+1234567890")
+    - `recipient`: User identifier — phone number (e.g., "+1234567890") or BSUID
     - `handler_value`: Handler identifier (e.g., "reschedule_flow")
 
     **Response:**

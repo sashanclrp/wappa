@@ -85,7 +85,7 @@ class Settings:
         self.port: int = int(os.getenv("PORT", "8000"))
         self.time_zone: str = os.getenv("TIME_ZONE", "UTC")
         self.log_level: str = os.getenv("LOG_LEVEL", "INFO")
-        self.api_version: str = os.getenv("API_VERSION", "v21.0")
+        self.api_version: str = os.getenv("API_VERSION", "v25.0")
         self.base_url: str = os.getenv("BASE_URL", "https://graph.facebook.com/")
 
         # ================================================================

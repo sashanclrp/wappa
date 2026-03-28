@@ -104,7 +104,7 @@ class CacheHelper:
             await self.user_cache.upsert(user_profile.model_dump(), ttl=ttl_seconds)
             return True
         except Exception as e:
-            print(f"Error saving user profile {user_profile.phone_number}: {e}")
+            print(f"Error saving user profile {user_profile.user_id}: {e}")
             return False
 
     async def get_or_create_user_profile(
@@ -132,9 +132,9 @@ class CacheHelper:
             profile.update_profile_info(user_name, profile_name)
             return profile
 
-        # Create new profile
+        # Create new profile (user_id may be BSUID or phone number)
         profile = UserProfile(
-            phone_number=user_id,
+            user_id=user_id,
             user_name=user_name,
             profile_name=profile_name,
             is_first_time_user=True,

@@ -70,7 +70,7 @@ services:
       
       # Framework configuration
       BASE_URL: https://graph.facebook.com/
-      API_VERSION: v23.0
+      API_VERSION: v25.0
       TIME_ZONE: America/Bogota
     volumes:
       # Persistent logs

@@ -89,7 +89,11 @@ class WappaFullExampleHandler(WappaEventHandler):
                 self.logger.warning(
                     "Failed to handle user profile, continuing without caching"
                 )
-                user_profile = UserProfile(phone_number=webhook.user.user_id)
+                user_profile = UserProfile(
+                    user_id=webhook.user.user_id,
+                    phone_number=webhook.user.phone_number if webhook.user.has_phone_number else None,
+                    bsuid=webhook.user.bsuid if webhook.user.has_bsuid else None,
+                )
 
             # 3. Mark message as read (as specified in requirements)
             await self._mark_message_as_read(webhook)
