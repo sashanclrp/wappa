@@ -8,7 +8,7 @@ Clean Architecture: Domain models and platform-agnostic interfaces.
 
 Usage:
     # Universal webhook interfaces (user requested: quick access to webhook schemas)
-    from wappa.webhooks import IncomingMessageWebhook, StatusWebhook, ErrorWebhook
+    from wappa.webhooks import IncomingMessageWebhook, StatusWebhook, ErrorWebhook, SystemWebhook
 
     # WhatsApp webhook schemas
     from wappa.webhooks.whatsapp import WhatsAppWebhook, WhatsAppMetadata
@@ -24,6 +24,8 @@ from .core.webhook_interfaces.universal_webhooks import (
     ErrorWebhook,
     IncomingMessageWebhook,
     StatusWebhook,
+    SystemEventType,
+    SystemWebhook,
     UniversalWebhook,
 )
 from .whatsapp.base_models import (
@@ -46,6 +48,8 @@ __all__ = [
     "IncomingMessageWebhook",
     "StatusWebhook",
     "ErrorWebhook",
+    "SystemWebhook",
+    "SystemEventType",
     "UniversalMessageData",
     "PlatformType",
     "WebhookType",

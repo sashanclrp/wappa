@@ -47,17 +47,35 @@ class WebhookValue(BaseModel):
     errors: list[dict[str, Any]] | None = Field(
         None, description="System, app, or account level errors"
     )
+    user_preferences: list[dict[str, Any]] | None = Field(
+        None, description="User marketing preference changes"
+    )
+    user_id_update: list[dict[str, Any]] | None = Field(
+        None, description="User BSUID change notifications"
+    )
 
     @model_validator(mode="after")
     def validate_webhook_content(self):
-        """Ensure webhook has either messages, statuses, or errors."""
+        """Ensure webhook has at least one content array."""
         has_messages = self.messages is not None and len(self.messages) > 0
         has_statuses = self.statuses is not None and len(self.statuses) > 0
         has_errors = self.errors is not None and len(self.errors) > 0
+        has_user_prefs = (
+            self.user_preferences is not None and len(self.user_preferences) > 0
+        )
+        has_user_id_update = (
+            self.user_id_update is not None and len(self.user_id_update) > 0
+        )
 
-        if not (has_messages or has_statuses or has_errors):
+        if not (
+            has_messages
+            or has_statuses
+            or has_errors
+            or has_user_prefs
+            or has_user_id_update
+        ):
             raise ValueError(
-                "Webhook must contain either messages, statuses, or errors"
+                "Webhook must contain either messages, statuses, errors, user_preferences, or user_id_update"
             )
 
         # Messages and statuses should not be present together
@@ -70,7 +88,9 @@ class WebhookValue(BaseModel):
 
         return self
 
-    @field_validator("messages", "statuses", "errors")
+    @field_validator(
+        "messages", "statuses", "errors", "user_preferences", "user_id_update"
+    )
     @classmethod
     def validate_arrays_not_empty(cls, v: list[dict] | None) -> list[dict] | None:
         """Validate that arrays are not empty if present."""
@@ -83,13 +103,16 @@ class WebhookChange(BaseModel):
     """
     Change object describing what changed in the webhook.
 
-    For WhatsApp Business webhooks, the field is always 'messages'.
+    WhatsApp Business webhooks use different field values:
+    - 'messages': incoming messages, status updates, and errors
+    - 'user_preferences': marketing preference changes
+    - 'user_id_update': BSUID change notifications
     """
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    field: Literal["messages"] = Field(
-        ..., description="Always 'messages' for WhatsApp Business webhooks"
+    field: Literal["messages", "user_preferences", "user_id_update"] = Field(
+        ..., description="Webhook field type"
     )
     value: WebhookValue = Field(..., description="The webhook payload data")
 
@@ -265,6 +288,35 @@ class WhatsAppWebhook(BaseWebhook):
         return v
 
     @property
+    def is_system_event(self) -> bool:
+        """
+        Check if this webhook is a platform-level system event.
+
+        Returns True for:
+        - field: "user_preferences" webhooks
+        - field: "user_id_update" webhooks
+        - field: "messages" where ALL messages have type: "system"
+        """
+        if not self.entry:
+            return False
+
+        for entry in self.entry:
+            for change in entry.changes:
+                # Direct system event fields
+                if change.field in ("user_preferences", "user_id_update"):
+                    return True
+                # System messages within the messages field
+                if (
+                    change.field == "messages"
+                    and change.value.messages
+                    and all(
+                        msg.get("type") == "system" for msg in change.value.messages
+                    )
+                ):
+                    return True
+        return False
+
+    @property
     def is_incoming_message(self) -> bool:
         """Check if this webhook contains incoming messages."""
         if not self.entry:
@@ -317,6 +369,32 @@ class WhatsAppWebhook(BaseWebhook):
         if not self.entry:
             raise ValueError("No entry data available")
         return self.entry[0].changes[0].value.metadata.display_phone_number
+
+    def get_raw_user_preferences(self) -> list[dict[str, Any]]:
+        """
+        Get raw user_preferences data for parsing.
+
+        Returns empty list if no user_preferences present.
+        """
+        items = []
+        for entry in self.entry:
+            for change in entry.changes:
+                if change.value.user_preferences:
+                    items.extend(change.value.user_preferences)
+        return items
+
+    def get_raw_user_id_updates(self) -> list[dict[str, Any]]:
+        """
+        Get raw user_id_update data for parsing.
+
+        Returns empty list if no user_id_update present.
+        """
+        items = []
+        for entry in self.entry:
+            for change in entry.changes:
+                if change.value.user_id_update:
+                    items.extend(change.value.user_id_update)
+        return items
 
     def get_raw_messages(self) -> list[dict[str, Any]]:
         """
@@ -385,7 +463,11 @@ class WhatsAppWebhook(BaseWebhook):
     @property
     def webhook_type(self) -> WebhookType:
         """Get the type of webhook (messages, status updates, errors, etc.)."""
-        if self.is_incoming_message:
+        # System events must be checked BEFORE is_incoming_message to intercept
+        # system messages (type=="system") from the messages field
+        if self.is_system_event:
+            return WebhookType.SYSTEM_EVENTS
+        elif self.is_incoming_message:
             return WebhookType.INCOMING_MESSAGES
         elif self.is_status_update:
             return WebhookType.STATUS_UPDATES
@@ -420,9 +502,9 @@ class WhatsAppWebhook(BaseWebhook):
             "business_id": self.business_id,
             "source_id": self.source_id,
             "received_at": self.received_at.isoformat(),
-            "has_messages": self.is_incoming_message(),
-            "has_statuses": self.is_status_update(),
-            "has_errors": self.has_errors(),
+            "has_messages": self.is_incoming_message,
+            "has_statuses": self.is_status_update,
+            "has_errors": self.has_errors,
             "message_count": len(self.get_raw_messages()),
             "status_count": len(self.get_raw_statuses()),
             "contact_count": len(self.get_contacts()),

@@ -8,14 +8,15 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from wappa.core.logging.logger import get_logger
+from wappa.webhooks import (
+    ErrorWebhook,
+    IncomingMessageWebhook,
+    StatusWebhook,
+    SystemWebhook,
+)
 
 if TYPE_CHECKING:
-    from wappa.webhooks import (
-        ErrorWebhook,
-        IncomingMessageWebhook,
-        StatusWebhook,
-        UniversalWebhook,
-    )
+    from wappa.webhooks import UniversalWebhook
 
     from .event_handler import WappaEventHandler
 
@@ -86,6 +87,7 @@ class WappaEventDispatcher:
                 "IncomingMessageWebhook": "💬",
                 "StatusWebhook": "📊",
                 "ErrorWebhook": "🚨",
+                "SystemWebhook": "⚙️",
             }.get(webhook_type, "📨")
 
             self.logger.info(
@@ -94,12 +96,14 @@ class WappaEventDispatcher:
 
             # Route to appropriate handler method using the resolved handler
             result = None
-            if universal_webhook.__class__.__name__ == "IncomingMessageWebhook":
+            if isinstance(universal_webhook, IncomingMessageWebhook):
                 result = await self._handle_message_webhook(universal_webhook, handler)
-            elif universal_webhook.__class__.__name__ == "StatusWebhook":
+            elif isinstance(universal_webhook, StatusWebhook):
                 result = await self._handle_status_webhook(universal_webhook, handler)
-            elif universal_webhook.__class__.__name__ == "ErrorWebhook":
+            elif isinstance(universal_webhook, ErrorWebhook):
                 result = await self._handle_error_webhook(universal_webhook, handler)
+            elif isinstance(universal_webhook, SystemWebhook):
+                result = await self._handle_system_webhook(universal_webhook, handler)
             else:
                 return {
                     "success": False,
@@ -261,6 +265,45 @@ class WappaEventDispatcher:
 
         except Exception as e:
             self.logger.error(f"Error in error handler: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "action": "handler_error",
+            }
+
+    async def _handle_system_webhook(
+        self,
+        webhook: "SystemWebhook",
+        handler: "WappaEventHandler",
+    ) -> dict[str, Any]:
+        """
+        Handle system webhook by routing to user's handler.
+
+        Args:
+            webhook: System webhook (phone changes, BSUID updates, preferences)
+            handler: Context-bound handler instance for this request
+
+        Returns:
+            Dictionary with handling results
+        """
+        try:
+            self.logger.info(
+                f"⚙️ System event: {webhook.system_event_type.value} "
+                f"(tenant: {handler.tenant_id})"
+            )
+
+            # Call user's handle_system method on the cloned handler
+            await handler.handle_system(webhook)
+
+            return {
+                "success": True,
+                "action": "system_event_processed",
+                "system_event_type": webhook.system_event_type.value,
+                "tenant_id": handler.tenant_id,
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error in system handler: {e}", exc_info=True)
             return {
                 "success": False,
                 "error": str(e),

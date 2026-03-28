@@ -348,3 +348,62 @@ class ErrorDetailBase(BaseModel):
     def get_error_summary(self) -> str:
         """Get a concise error summary for logging."""
         return f"Error {self.error_code}: {self.error_title}"
+
+
+class SystemEventDetail(BaseModel):
+    """
+    Universal system event detail component.
+
+    Platform-agnostic representation of system-level account/identity events.
+    Covers phone number changes, BSUID updates, and marketing preferences.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+    )
+
+    # User identification (present in most system events)
+    wa_id: str | None = Field(
+        default=None,
+        description="User's phone number (may be omitted for username-only users)",
+    )
+    user_id: str | None = Field(default=None, description="User's BSUID")
+    parent_user_id: str | None = Field(
+        default=None, description="User's parent BSUID (if parent BSUIDs enabled)"
+    )
+
+    # BSUID change fields (for user_id_update and system message user_changed_user_id)
+    previous_user_id: str | None = Field(
+        default=None, description="Previous BSUID before change"
+    )
+    current_user_id: str | None = Field(
+        default=None, description="Current BSUID after change"
+    )
+    previous_parent_user_id: str | None = Field(
+        default=None, description="Previous parent BSUID before change"
+    )
+    current_parent_user_id: str | None = Field(
+        default=None, description="Current parent BSUID after change"
+    )
+
+    # Phone number change fields
+    old_phone_number: str | None = Field(
+        default=None, description="Old phone number before change"
+    )
+    new_phone_number: str | None = Field(
+        default=None, description="New phone number after change"
+    )
+
+    # Human-readable description
+    body: str | None = Field(default=None, description="System message body text")
+    detail: str | None = Field(
+        default=None, description="Human-readable event description"
+    )
+
+    # Marketing preference fields
+    category: str | None = Field(
+        default=None, description="Preference category (e.g., 'marketing_messages')"
+    )
+    preference_value: str | None = Field(
+        default=None, description="Preference value (e.g., opt-in/opt-out)"
+    )

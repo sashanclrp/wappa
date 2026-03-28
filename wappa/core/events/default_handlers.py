@@ -11,7 +11,12 @@ from enum import Enum
 from typing import Any
 
 from wappa.core.logging.logger import get_logger
-from wappa.webhooks import ErrorWebhook, IncomingMessageWebhook, StatusWebhook
+from wappa.webhooks import (
+    ErrorWebhook,
+    IncomingMessageWebhook,
+    StatusWebhook,
+    SystemWebhook,
+)
 
 
 class LogLevel(Enum):
@@ -496,11 +501,11 @@ class DefaultErrorHandler:
     def _is_critical_error(self, error) -> bool:
         """Determine if an error is critical based on error code."""
         critical_codes = {
-            "100",  # Invalid parameter
-            "102",  # Message undeliverable
-            "131",  # Access token issue
-            "132",  # Application not authorized
-            "133",  # Phone number not authorized
+            100,  # Invalid parameter
+            102,  # Message undeliverable
+            131,  # Access token issue
+            132,  # Application not authorized
+            133,  # Phone number not authorized
         }
         return error.error_code in critical_codes
 
@@ -584,6 +589,82 @@ class DefaultErrorHandler:
         }
 
 
+class DefaultSystemHandler:
+    """
+    Default handler for platform-level system event webhooks.
+
+    Provides logging for system events such as phone number changes,
+    BSUID updates, and marketing preference changes.
+    """
+
+    def __init__(self, log_level: LogLevel = LogLevel.INFO):
+        """
+        Initialize the default system handler.
+
+        Args:
+            log_level: Log level for system event logging (default: INFO)
+        """
+        self.log_level = log_level
+        self.logger = get_logger(__name__)
+
+        self._stats: dict[str, Any] = {
+            "total_events": 0,
+            "by_type": {},
+            "last_processed": None,
+        }
+
+    async def handle_system(self, webhook: SystemWebhook) -> dict[str, Any]:
+        """
+        Handle a system webhook with logging.
+
+        Args:
+            webhook: SystemWebhook instance containing system event information
+
+        Returns:
+            Dictionary with handling results
+        """
+        self._stats["total_events"] += 1
+        event_type = webhook.system_event_type.value
+        self._stats["by_type"][event_type] = (
+            self._stats["by_type"].get(event_type, 0) + 1
+        )
+        self._stats["last_processed"] = datetime.now(UTC)
+
+        log_method = self._get_log_method(self.log_level)
+        log_method(
+            f"⚙️ System event: {event_type} "
+            f"(wa_id: {webhook.event_detail.wa_id}, user_id: {webhook.event_detail.user_id})"
+        )
+
+        return {
+            "success": True,
+            "handler": "DefaultSystemHandler",
+            "event_type": event_type,
+        }
+
+    def _get_log_method(self, log_level: LogLevel):
+        """Get the appropriate logger method for log level."""
+        methods = {
+            LogLevel.DEBUG: self.logger.debug,
+            LogLevel.INFO: self.logger.info,
+            LogLevel.WARNING: self.logger.warning,
+            LogLevel.ERROR: self.logger.error,
+        }
+        return methods.get(log_level, self.logger.info)
+
+    def get_stats(self) -> dict[str, Any]:
+        """Get current system event processing statistics."""
+        return self._stats.copy()
+
+    def reset_stats(self) -> None:
+        """Reset system event processing statistics."""
+        self._stats = {
+            "total_events": 0,
+            "by_type": {},
+            "last_processed": None,
+        }
+
+
 class DefaultHandlerFactory:
     """
     Factory for creating default event handlers with common configurations.
@@ -640,3 +721,13 @@ class DefaultHandlerFactory:
             escalation_threshold=10,  # Higher threshold for dev
             escalation_window_minutes=15,
         )
+
+    @staticmethod
+    def create_production_system_handler() -> DefaultSystemHandler:
+        """Create system handler optimized for production logging."""
+        return DefaultSystemHandler(log_level=LogLevel.INFO)
+
+    @staticmethod
+    def create_development_system_handler() -> DefaultSystemHandler:
+        """Create system handler optimized for development logging."""
+        return DefaultSystemHandler(log_level=LogLevel.DEBUG)

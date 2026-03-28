@@ -1,19 +1,20 @@
 """
 Universal Webhook Interface definitions for platform-agnostic webhook handling.
 
-This module defines the 4 universal webhook types that all messaging platforms
+This module defines the universal webhook types that all messaging platforms
 must transform their webhooks into:
 
 1. IncomingMessageWebhook - All user-sent messages (text, media, interactive, etc.)
 2. StatusWebhook - Message delivery status updates (sent, delivered, read, failed)
 3. ErrorWebhook - System, app, and account-level errors
-4. OutgoingMessageWebhook - Business-sent message tracking (future feature)
+4. SystemWebhook - Platform-level account/identity events (phone changes, BSUID updates, preferences)
 
 These interfaces represent the "universal standard" based on WhatsApp's comprehensive
 webhook structure. All platforms (Teams, Telegram, Instagram) must adapt to these.
 """
 
 from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -25,9 +26,18 @@ from wappa.webhooks.core.webhook_interfaces.base_components import (
     ConversationBase,
     ErrorDetailBase,
     ForwardContextBase,
+    SystemEventDetail,
     TenantBase,
     UserBase,
 )
+
+
+class SystemEventType(str, Enum):
+    """Types of platform-level system events."""
+
+    NUMBER_CHANGE = "number_change"
+    USER_ID_CHANGE = "user_id_change"
+    MARKETING_PREFERENCE = "marketing_preference"
 
 
 class IncomingMessageWebhook(BaseModel):
@@ -467,6 +477,84 @@ class ErrorWebhook(BaseModel):
         self.raw_webhook_data = raw_data
 
 
+class SystemWebhook(BaseModel):
+    """
+    Universal interface for platform-level account and identity events.
+
+    This interface represents system events that are NOT user messages:
+    - Phone number changes (user_changed_number)
+    - BSUID changes (user_changed_user_id, user_id_update)
+    - Marketing preference changes (user_preferences)
+
+    All platforms must transform their system webhooks to this format.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+    )
+
+    # Core identification
+    tenant: TenantBase = Field(description="Business/tenant identification")
+
+    # System event information
+    system_event_type: SystemEventType = Field(description="Type of system event")
+    event_detail: SystemEventDetail = Field(
+        description="Platform-agnostic event details"
+    )
+
+    # User context (when available from contacts array)
+    user: UserBase | None = Field(
+        default=None,
+        description="User identification (from contacts if available)",
+    )
+
+    # Universal metadata
+    timestamp: datetime = Field(description="When the system event occurred")
+    platform: PlatformType = Field(description="Source messaging platform")
+    webhook_id: str = Field(description="Unique identifier for this webhook event")
+
+    # Raw webhook data (for debugging and inspection)
+    raw_webhook_data: dict | None = Field(
+        default=None,
+        description="Original raw webhook JSON payload",
+        exclude=True,
+    )
+
+    @property
+    def is_number_change(self) -> bool:
+        """Check if this is a phone number change event."""
+        return self.system_event_type == SystemEventType.NUMBER_CHANGE
+
+    @property
+    def is_user_id_change(self) -> bool:
+        """Check if this is a BSUID change event."""
+        return self.system_event_type == SystemEventType.USER_ID_CHANGE
+
+    @property
+    def is_marketing_preference(self) -> bool:
+        """Check if this is a marketing preference change event."""
+        return self.system_event_type == SystemEventType.MARKETING_PREFERENCE
+
+    def get_summary(self) -> dict[str, any]:
+        """Get a summary of this webhook for logging and monitoring."""
+        return {
+            "webhook_type": "system",
+            "platform": self.platform.value,
+            "system_event_type": self.system_event_type.value,
+            "wa_id": self.event_detail.wa_id,
+            "user_id": self.event_detail.user_id,
+            "tenant": self.tenant.get_tenant_key(),
+            "timestamp": self.timestamp.isoformat(),
+        }
+
+    def get_raw_webhook_data(self) -> dict | None:
+        """Get the original raw webhook JSON payload."""
+        return self.raw_webhook_data
+
+    def set_raw_webhook_data(self, raw_data: dict) -> None:
+        """Set the original raw webhook JSON payload."""
+        self.raw_webhook_data = raw_data
+
+
 # Type union for all universal webhook interfaces
-# Note: "Outgoing message" webhooks are actually status updates and use StatusWebhook
-UniversalWebhook = IncomingMessageWebhook | StatusWebhook | ErrorWebhook
+UniversalWebhook = IncomingMessageWebhook | StatusWebhook | ErrorWebhook | SystemWebhook

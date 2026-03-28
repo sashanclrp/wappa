@@ -14,6 +14,7 @@ from .default_handlers import (
     DefaultErrorHandler,
     DefaultMessageHandler,
     DefaultStatusHandler,
+    DefaultSystemHandler,
 )
 
 if TYPE_CHECKING:
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
         ErrorWebhook,
         IncomingMessageWebhook,
         StatusWebhook,
+        SystemWebhook,
     )
 
 
@@ -122,6 +124,7 @@ class WappaEventHandler(ABC):
         self._default_message_handler = DefaultMessageHandler()
         self._default_status_handler = DefaultStatusHandler()
         self._default_error_handler = DefaultErrorHandler()
+        self._default_system_handler = DefaultSystemHandler()
 
     def with_context(
         self,
@@ -268,6 +271,53 @@ class WappaEventHandler(ABC):
 
         Args:
             webhook: ErrorWebhook containing error information
+        """
+        _ = webhook
+        return None
+
+    # =========== SYSTEM WEBHOOK HANDLING ===========
+
+    async def handle_system(self, webhook: "SystemWebhook") -> None:
+        """
+        Handle platform-level system events using Template Method pattern.
+
+        This method provides a structured flow:
+        1. Pre-processing: Default logging (non-optional framework infrastructure)
+        2. User processing: Custom system event logic (implemented in process_system_webhook)
+
+        Args:
+            webhook: SystemWebhook containing system event data
+        """
+        # 1. Pre-processing: Framework logging (always happens)
+        await self._default_system_handler.handle_system(webhook)
+
+        # 2. User processing: Custom business logic (optional)
+        await self.process_system_webhook(webhook)
+
+    async def process_system_webhook(self, webhook: "SystemWebhook") -> None:
+        """
+        Process system webhook with custom business logic.
+
+        Optional method - override to handle phone number changes,
+        BSUID updates, or marketing preference changes.
+
+        The framework handles logging automatically before calling this method.
+
+        Args:
+            webhook: SystemWebhook containing system event data
+
+        Example:
+            async def process_system_webhook(self, webhook: SystemWebhook) -> None:
+                match webhook.system_event_type:
+                    case SystemEventType.NUMBER_CHANGE:
+                        # Update user records with new phone number
+                        ...
+                    case SystemEventType.USER_ID_CHANGE:
+                        # Update user records with new BSUID
+                        ...
+                    case SystemEventType.MARKETING_PREFERENCE:
+                        # Update marketing opt-in/out status
+                        ...
         """
         _ = webhook
         return None
@@ -501,9 +551,10 @@ class WappaEventHandler(ABC):
         message_handler: DefaultMessageHandler = None,
         status_handler: DefaultStatusHandler = None,
         error_handler: DefaultErrorHandler = None,
+        system_handler: DefaultSystemHandler = None,
     ):
         """
-        Configure the default handlers used for message, status and error webhooks.
+        Configure the default handlers used for message, status, error and system webhooks.
 
         This allows users to customize the default behavior without overriding methods.
 
@@ -511,6 +562,7 @@ class WappaEventHandler(ABC):
             message_handler: Custom DefaultMessageHandler instance
             status_handler: Custom DefaultStatusHandler instance
             error_handler: Custom DefaultErrorHandler instance
+            system_handler: Custom DefaultSystemHandler instance
         """
         if message_handler:
             self._default_message_handler = message_handler
@@ -518,6 +570,8 @@ class WappaEventHandler(ABC):
             self._default_status_handler = status_handler
         if error_handler:
             self._default_error_handler = error_handler
+        if system_handler:
+            self._default_system_handler = system_handler
 
     def get_message_stats(self):
         """Get message processing statistics from default handler."""
@@ -531,12 +585,17 @@ class WappaEventHandler(ABC):
         """Get error processing statistics from default handler."""
         return self._default_error_handler.get_stats()
 
+    def get_system_stats(self):
+        """Get system event processing statistics from default handler."""
+        return self._default_system_handler.get_stats()
+
     def get_all_stats(self):
         """Get all webhook processing statistics."""
         return {
             "messages": self.get_message_stats(),
             "status": self.get_status_stats(),
             "errors": self.get_error_stats(),
+            "system": self.get_system_stats(),
         }
 
     def validate_dependencies(self) -> bool:

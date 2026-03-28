@@ -35,6 +35,7 @@ if TYPE_CHECKING:
         ForwardContextBase,
         IncomingMessageWebhook,
         StatusWebhook,
+        SystemWebhook,
         TenantBase,
         UniversalWebhook,
         UserBase,
@@ -413,7 +414,13 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             tenant_base = self._create_tenant_base(webhook, tenant_id)
 
             # Determine webhook type and create appropriate universal interface
-            if webhook.is_incoming_message:
+            # System events must be checked BEFORE incoming messages to intercept
+            # system messages (type=="system") from the messages field
+            if webhook.is_system_event:
+                universal_webhook = await self._create_system_webhook(
+                    webhook, tenant_base, **kwargs
+                )
+            elif webhook.is_incoming_message:
                 universal_webhook = await self._create_incoming_message_webhook(
                     webhook, tenant_base, **kwargs
                 )
@@ -458,31 +465,28 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
                 return universal_webhook
 
-            # Handle unknown webhook type
-            if universal_webhook is None:
-                # This could be an outgoing message webhook in the future
-                # For now, treat as error
-                from wappa.webhooks.core.webhook_interfaces import (
-                    ErrorDetailBase,
-                    ErrorWebhook,
-                )
+            # Unknown webhook type -- wrap as an ErrorWebhook
+            from wappa.webhooks.core.webhook_interfaces import (
+                ErrorDetailBase,
+                ErrorWebhook,
+            )
 
-                error_detail = ErrorDetailBase(
-                    error_code=400,
-                    error_title="Unknown webhook type",
-                    error_message="Webhook contains no recognizable content (messages, statuses, or errors)",
-                    error_type="webhook_format",
-                    occurred_at=datetime.now(UTC),
-                )
+            error_detail = ErrorDetailBase(
+                error_code=400,
+                error_title="Unknown webhook type",
+                error_message="Webhook contains no recognizable content (messages, statuses, errors, or system events)",
+                error_type="webhook_format",
+                occurred_at=datetime.now(UTC),
+            )
 
-                return ErrorWebhook(
-                    tenant=tenant_base,
-                    errors=[error_detail],
-                    timestamp=datetime.now(UTC),
-                    error_level="webhook",
-                    platform=PlatformType.WHATSAPP,
-                    webhook_id=webhook.get_webhook_id(),
-                )
+            return ErrorWebhook(
+                tenant=tenant_base,
+                errors=[error_detail],
+                timestamp=datetime.now(UTC),
+                error_level="webhook",
+                platform=PlatformType.WHATSAPP,
+                webhook_id=webhook.get_webhook_id(),
+            )
 
         except Exception as e:
             self.logger.error(f"Failed to create universal webhook: {e}", exc_info=True)
@@ -674,6 +678,147 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             errors=error_details,
             timestamp=datetime.now(UTC),
             error_level="system",
+            platform=PlatformType.WHATSAPP,
+            webhook_id=webhook.get_webhook_id(),
+        )
+
+    async def _create_system_webhook(
+        self, webhook: BaseWebhook, tenant_base: "TenantBase", **kwargs
+    ) -> "SystemWebhook":
+        """
+        Create SystemWebhook from WhatsApp system event webhooks.
+
+        Handles three source types:
+        - field: "user_preferences" → MARKETING_PREFERENCE
+        - field: "user_id_update" → USER_ID_CHANGE
+        - field: "messages" with type: "system" → NUMBER_CHANGE or USER_ID_CHANGE
+
+        Args:
+            webhook: Parsed WhatsApp webhook container
+            tenant_base: Tenant identification information
+            **kwargs: Additional processing parameters
+
+        Returns:
+            SystemWebhook with system event information
+        """
+        from wappa.webhooks.core.webhook_interfaces import (
+            SystemEventDetail,
+            SystemEventType,
+            SystemWebhook,
+        )
+
+        # Determine the source field type
+        first_change = webhook.entry[0].changes[0]
+        field = first_change.field
+
+        user_base = None
+        system_event_type = None
+        event_detail = None
+        event_timestamp = datetime.now(UTC)
+
+        if field == "user_preferences":
+            from wappa.webhooks.whatsapp.system_events import UserPreferenceEntry
+
+            raw_prefs = webhook.get_raw_user_preferences()
+            if not raw_prefs:
+                raise ProcessorError(
+                    "No user_preferences found in system webhook",
+                    ErrorCode.PROCESSING_ERROR,
+                    PlatformType.WHATSAPP,
+                )
+
+            pref = UserPreferenceEntry.model_validate(raw_prefs[0])
+
+            system_event_type = SystemEventType.MARKETING_PREFERENCE
+            event_detail = SystemEventDetail(
+                wa_id=pref.wa_id,
+                user_id=pref.user_id,
+                parent_user_id=pref.parent_user_id,
+                detail=pref.detail,
+                category=pref.category,
+                preference_value=pref.value,
+            )
+            event_timestamp = datetime.fromtimestamp(pref.timestamp, tz=UTC)
+
+            # Build user from preference data
+            if pref.wa_id or pref.user_id:
+                sender_id = pref.user_id or pref.wa_id or ""
+                user_base = self._create_user_base_from_contacts(webhook, sender_id)
+
+        elif field == "user_id_update":
+            from wappa.webhooks.whatsapp.system_events import UserIdUpdateEntry
+
+            raw_updates = webhook.get_raw_user_id_updates()
+            if not raw_updates:
+                raise ProcessorError(
+                    "No user_id_update found in system webhook",
+                    ErrorCode.PROCESSING_ERROR,
+                    PlatformType.WHATSAPP,
+                )
+
+            update = UserIdUpdateEntry.model_validate(raw_updates[0])
+
+            system_event_type = SystemEventType.USER_ID_CHANGE
+            event_detail = SystemEventDetail(
+                wa_id=update.wa_id,
+                detail=update.detail,
+                previous_user_id=update.user_id.previous,
+                current_user_id=update.user_id.current,
+                previous_parent_user_id=update.parent_user_id.previous
+                if update.parent_user_id
+                else None,
+                current_parent_user_id=update.parent_user_id.current
+                if update.parent_user_id
+                else None,
+            )
+            event_timestamp = datetime.fromtimestamp(int(update.timestamp), tz=UTC)
+
+            # Build user from update data
+            if update.wa_id:
+                user_base = self._create_user_base_from_contacts(webhook, update.wa_id)
+
+        elif field == "messages":
+            # System messages from the messages field (type=="system")
+            raw_messages = webhook.get_raw_messages()
+            if not raw_messages:
+                raise ProcessorError(
+                    "No system messages found in webhook",
+                    ErrorCode.PROCESSING_ERROR,
+                    PlatformType.WHATSAPP,
+                )
+
+            raw_message = raw_messages[0]
+            message = self._create_system_message(raw_message)
+
+            if message.is_number_change:
+                system_event_type = SystemEventType.NUMBER_CHANGE
+                old_phone, new_phone = message.extract_phone_numbers()
+                event_detail = SystemEventDetail(
+                    wa_id=message.new_wa_id,
+                    body=message.system_message,
+                    old_phone_number=old_phone,
+                    new_phone_number=new_phone,
+                )
+            else:
+                # user_changed_user_id
+                system_event_type = SystemEventType.USER_ID_CHANGE
+                event_detail = SystemEventDetail(
+                    wa_id=message.from_ if message.from_ else None,
+                    user_id=message.new_user_id,
+                    body=message.system_message,
+                )
+
+            event_timestamp = datetime.fromtimestamp(message.timestamp, tz=UTC)
+
+            # Build user from contacts
+            user_base = self._create_user_base_from_contacts(webhook, message.sender_id)
+
+        return SystemWebhook(
+            tenant=tenant_base,
+            system_event_type=system_event_type,
+            event_detail=event_detail,
+            user=user_base,
+            timestamp=event_timestamp,
             platform=PlatformType.WHATSAPP,
             webhook_id=webhook.get_webhook_id(),
         )
