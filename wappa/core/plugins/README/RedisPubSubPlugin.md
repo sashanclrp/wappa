@@ -103,13 +103,14 @@ The plugin uses a decorator/wrapper pattern to intercept events at each stage wi
 3. Stores references to the original handlers for clean shutdown
 4. Wraps the default message handler with `PubSubMessageHandler` (publishes `incoming_message` after the original handler runs)
 5. Wraps the default status handler with `PubSubStatusHandler` (publishes `status_change` after the original handler runs)
-6. Wraps `_post_process_api_message` to call `publish_api_notification` after API sends (publishes `outgoing_message`)
+6. Registers a post-process hook on `WappaEventHandler` via `add_api_post_process_hook` to call `publish_api_notification` after API sends (publishes `outgoing_message`)
 7. Sets `app.state.pubsub_wrap_messenger = True` so the webhook controller wraps `self.messenger` with `PubSubMessengerWrapper` at request time (publishes `bot_reply` for every successful `send_*()` call)
 
 **During shutdown** it:
 
-1. Removes `app.state.redis_pubsub_plugin` and `app.state.pubsub_wrap_messenger`
-2. Logs shutdown completion
+1. Removes the API post-process hook (via `remove_api_post_process_hook`)
+2. Removes `app.state.redis_pubsub_plugin` and `app.state.pubsub_wrap_messenger`
+3. Logs shutdown completion
 
 The `PubSubMessengerWrapper` implements the full `IMessenger` interface, delegating every method to the inner messenger and publishing a `bot_reply` notification after each successful send. `mark_as_read()` is intentionally not wrapped since it is not a message.
 

@@ -177,11 +177,16 @@ class WappaContextFactory:
 
                 sse_event_hub = getattr(self._app.state, "sse_event_hub", None)
                 if isinstance(sse_event_hub, SSEEventHub):
+                    sse_plugin = getattr(self._app.state, "sse_events_plugin", None)
+                    sse_metadata = (
+                        getattr(sse_plugin, "metadata", None) if sse_plugin else None
+                    )
                     messenger = SSEMessengerWrapper(
                         inner=messenger,
                         event_hub=sse_event_hub,
                         tenant=tenant_id,
                         user_id=user_id or "",
+                        metadata=sse_metadata,
                     )
 
             return messenger

@@ -74,6 +74,7 @@ async def publish_sse_event(
     platform: str,
     source: str,
     payload: dict[str, Any],
+    metadata: dict[str, Any] | None = None,
 ) -> int:
     """Publish one event to SSE subscribers without impacting main flow."""
     if event_hub is None:
@@ -87,6 +88,7 @@ async def publish_sse_event(
             platform=platform,
             source=source,
             payload=payload,
+            metadata=metadata,
         )
         if subscribers > 0:
             logger.debug(
@@ -101,6 +103,7 @@ async def publish_sse_event(
 async def publish_api_sse_event(
     event_hub: SSEEventHub | None,
     event: APIMessageEvent,
+    metadata: dict[str, Any] | None = None,
 ) -> int:
     """Publish full API outgoing message context through SSE."""
     return await publish_sse_event(
@@ -111,6 +114,7 @@ async def publish_api_sse_event(
         platform=event.platform,
         source="api",
         payload=event.model_dump(mode="json", exclude_none=False),
+        metadata=metadata,
     )
 
 
@@ -125,6 +129,7 @@ class SSEMessageHandler(DefaultMessageHandler):
         log_level: LogLevel = LogLevel.INFO,
         content_preview_length: int = 100,
         mask_sensitive_data: bool = True,
+        metadata: dict[str, Any] | None = None,
     ):
         if inner_handler:
             super().__init__(
@@ -143,6 +148,13 @@ class SSEMessageHandler(DefaultMessageHandler):
             )
 
         self._event_hub = event_hub
+        self._metadata = metadata
+
+    def update_metadata(self, **kwargs: Any) -> None:
+        """Merge key-value pairs into the handler's metadata dict."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata.update(kwargs)
 
     async def log_incoming_message(self, webhook: IncomingMessageWebhook) -> None:
         """Log incoming message then publish full webhook payload via SSE."""
@@ -160,6 +172,7 @@ class SSEMessageHandler(DefaultMessageHandler):
             platform=platform,
             source="webhook",
             payload=_normalized_webhook_payload(webhook),
+            metadata=self._metadata,
         )
 
 
@@ -172,6 +185,7 @@ class SSEStatusHandler(DefaultStatusHandler):
         inner_handler: DefaultStatusHandler | None = None,
         log_strategy: StatusLogStrategy = StatusLogStrategy.IMPORTANT_ONLY,
         log_level: LogLevel = LogLevel.INFO,
+        metadata: dict[str, Any] | None = None,
     ):
         if inner_handler:
             super().__init__(
@@ -186,6 +200,13 @@ class SSEStatusHandler(DefaultStatusHandler):
             )
 
         self._event_hub = event_hub
+        self._metadata = metadata
+
+    def update_metadata(self, **kwargs: Any) -> None:
+        """Merge key-value pairs into the handler's metadata dict."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata.update(kwargs)
 
     async def handle_status(self, webhook: StatusWebhook) -> dict[str, Any]:
         """Handle status, then publish full status webhook data."""
@@ -203,6 +224,7 @@ class SSEStatusHandler(DefaultStatusHandler):
             platform=platform,
             source="webhook",
             payload=_normalized_webhook_payload(webhook),
+            metadata=self._metadata,
         )
 
         return result
@@ -218,6 +240,7 @@ class SSEErrorHandler(DefaultErrorHandler):
         log_strategy: ErrorLogStrategy = ErrorLogStrategy.ALL,
         escalation_threshold: int = 5,
         escalation_window_minutes: int = 10,
+        metadata: dict[str, Any] | None = None,
     ):
         if inner_handler:
             super().__init__(
@@ -234,6 +257,13 @@ class SSEErrorHandler(DefaultErrorHandler):
             )
 
         self._event_hub = event_hub
+        self._metadata = metadata
+
+    def update_metadata(self, **kwargs: Any) -> None:
+        """Merge key-value pairs into the handler's metadata dict."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata.update(kwargs)
 
     async def handle_error(self, webhook: ErrorWebhook) -> dict[str, Any]:
         """Handle error and publish full webhook payload through SSE."""
@@ -250,6 +280,7 @@ class SSEErrorHandler(DefaultErrorHandler):
             platform=platform,
             source="webhook",
             payload=_normalized_webhook_payload(webhook),
+            metadata=self._metadata,
         )
 
         return result

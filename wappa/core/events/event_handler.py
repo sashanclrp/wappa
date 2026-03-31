@@ -4,6 +4,7 @@ Base event handler class for Wappa applications.
 This provides the interface that developers implement to handle WhatsApp webhooks.
 """
 
+import contextlib
 import copy
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -125,6 +126,9 @@ class WappaEventHandler(ABC):
         self._default_status_handler = DefaultStatusHandler()
         self._default_error_handler = DefaultErrorHandler()
         self._default_system_handler = DefaultSystemHandler()
+
+        # Hook list for API post-process extensibility (replaces monkey-patching)
+        self._api_post_process_hooks: list[Callable] = []
 
     def with_context(
         self,
@@ -410,14 +414,18 @@ class WappaEventHandler(ABC):
         )
 
     async def _post_process_api_message(self, event: "APIMessageEvent") -> None:
-        """
-        Post-processing hook for API messages.
+        """Post-processing hook for API messages. Runs registered hooks."""
+        for hook in self._api_post_process_hooks:
+            await hook(event)
 
-        Override to customize post-processing behavior.
-        Default: no additional processing.
-        """
-        _ = event
-        return None
+    def add_api_post_process_hook(self, hook: Callable) -> None:
+        """Register a callback to run after API message post-processing."""
+        self._api_post_process_hooks.append(hook)
+
+    def remove_api_post_process_hook(self, hook: Callable) -> None:
+        """Remove a previously registered post-process hook."""
+        with contextlib.suppress(ValueError):
+            self._api_post_process_hooks.remove(hook)
 
     # =========== EXTERNAL WEBHOOK EVENT HANDLING ===========
 

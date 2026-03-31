@@ -72,6 +72,7 @@ class SSEEventHub:
         platform: str,
         source: str,
         payload: dict[str, Any],
+        metadata: dict[str, Any] | None = None,
     ) -> int:
         """Fan out one event to all matching subscribers."""
         event = self._build_event(
@@ -81,6 +82,7 @@ class SSEEventHub:
             platform=platform,
             source=source,
             payload=payload,
+            metadata=metadata,
         )
 
         async with self._lock:
@@ -142,6 +144,7 @@ class SSEEventHub:
         platform: str,
         source: str,
         payload: dict[str, Any],
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Build the SSE envelope sent to clients."""
         return {
@@ -153,6 +156,7 @@ class SSEEventHub:
             "platform": platform,
             "source": source,
             "payload": payload,
+            "metadata": metadata,
         }
 
     def _matches(

@@ -35,6 +35,7 @@ app.add_plugin(
         publish_status=True,
         publish_webhook_errors=True,
         queue_size=200,
+        metadata={"app_name": "my-bot"},  # optional, enriches all SSE events
     )
 )
 ```
@@ -82,15 +83,16 @@ Supported `event_types` values:
 
 1. Creates an in-memory `SSEEventHub`
 2. Registers SSE routes
-3. Wraps default webhook handlers to publish SSE events
-4. Hooks API outgoing event post-processing
+3. Wraps default webhook handlers to publish SSE events (passing `metadata` to each wrapper)
+4. Registers a post-process hook on `WappaEventHandler` for API outgoing events (via `add_api_post_process_hook`)
 5. Marks messenger wrapping in `app.state` so webhook request handlers wrap `self.messenger`
 
 **During shutdown** it:
 
-1. Restores original handlers
-2. Closes SSE subscriptions cleanly
-3. Clears plugin state from `app.state`
+1. Restores original webhook handlers
+2. Removes the API post-process hook (via `remove_api_post_process_hook`)
+3. Closes SSE subscriptions cleanly
+4. Clears plugin state from `app.state`
 
 ## Event envelope format
 
@@ -105,9 +107,12 @@ Every SSE message uses this envelope:
   "user_id": "573001112233",
   "platform": "whatsapp",
   "source": "webhook",
-  "payload": {}
+  "payload": {},
+  "metadata": null
 }
 ```
+
+The `metadata` field is always present. It is `null` when no metadata was configured, or a `dict` with app-level context when provided (see [Metadata](#metadata) below).
 
 ## Payload details
 
@@ -124,6 +129,68 @@ Every SSE message uses this envelope:
 - `message_type`: Wappa message type (`text`, `image`, `template`, etc.)
 - `request`: serialized send method input
 - `result`: serialized `MessageResult`
+
+## Metadata
+
+All SSE events support an optional `metadata` field in the envelope. This allows applications to enrich events with domain context (conversation IDs, run IDs, etc.) without modifying Wappa internals.
+
+Wappa treats metadata as **opaque** -- it never validates or transforms the contents. The application owns the schema.
+
+### Setting metadata at construction time
+
+Pass `metadata` when creating the plugin. It flows to all handler wrappers and the messenger wrapper automatically:
+
+```python
+SSEEventsPlugin(
+    metadata={
+        "conversation_id": str(conversation_id),
+        "chat_id": str(chat_id),
+        "run_id": None,
+    }
+)
+```
+
+### Updating metadata at runtime
+
+Use `update_metadata()` to merge new values into the existing metadata dict. This updates all active SSE handlers (incoming, status, error) at once:
+
+```python
+# On the plugin instance
+sse_plugin.update_metadata(run_id=str(run_id))
+```
+
+Individual SSE wrappers also expose `update_metadata()`:
+
+```python
+# On the messenger wrapper directly
+messenger.update_metadata(run_id=str(run_id))
+```
+
+### Resulting envelope
+
+```json
+{
+  "event_id": "...",
+  "event_type": "outgoing_bot_message",
+  "timestamp": "...",
+  "tenant_id": "mimeia",
+  "user_id": "573001112233",
+  "platform": "whatsapp",
+  "source": "bot_messenger",
+  "payload": {
+    "message_type": "text",
+    "request": {},
+    "result": {}
+  },
+  "metadata": {
+    "conversation_id": "uuid",
+    "chat_id": "uuid",
+    "run_id": "uuid"
+  }
+}
+```
+
+Without metadata configured, `"metadata": null` is always present in the envelope (backward compatible).
 
 ## Frontend EventSource receiver
 

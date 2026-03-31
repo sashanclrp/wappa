@@ -39,6 +39,7 @@ class SSEEventsPlugin:
         publish_webhook_errors: bool = True,
         queue_size: int = 200,
         custom_event_types: set[str] | None = None,
+        metadata: dict[str, Any] | None = None,
     ):
         self.publish_incoming = publish_incoming
         self.publish_outgoing_api = publish_outgoing_api
@@ -47,11 +48,29 @@ class SSEEventsPlugin:
         self.publish_webhook_errors = publish_webhook_errors
         self.queue_size = queue_size
         self.custom_event_types = custom_event_types or set()
+        self.metadata = metadata
 
         self._original_message_handler = None
         self._original_status_handler = None
         self._original_error_handler = None
-        self._original_post_process_api = None
+        self._api_post_process_hook = None
+
+        # SSE handler references for runtime metadata updates
+        self._sse_message_handler: SSEMessageHandler | None = None
+        self._sse_status_handler: SSEStatusHandler | None = None
+        self._sse_error_handler: SSEErrorHandler | None = None
+
+    def update_metadata(self, **kwargs: Any) -> None:
+        """Update metadata on all active SSE handlers."""
+        if self.metadata is None:
+            self.metadata = {}
+        self.metadata.update(kwargs)
+        if self._sse_message_handler:
+            self._sse_message_handler.update_metadata(**kwargs)
+        if self._sse_status_handler:
+            self._sse_status_handler.update_metadata(**kwargs)
+        if self._sse_error_handler:
+            self._sse_error_handler.update_metadata(**kwargs)
 
     def configure(self, builder: WappaBuilder) -> None:
         """Register SSE routes and lifecycle hooks."""
@@ -99,39 +118,44 @@ class SSEEventsPlugin:
         self._original_message_handler = event_handler._default_message_handler
         self._original_status_handler = event_handler._default_status_handler
         self._original_error_handler = event_handler._default_error_handler
-        self._original_post_process_api = event_handler._post_process_api_message
 
         handlers_wrapped: list[str] = []
 
         if self.publish_incoming:
-            event_handler._default_message_handler = SSEMessageHandler(
+            self._sse_message_handler = SSEMessageHandler(
                 event_hub=event_hub,
                 inner_handler=self._original_message_handler,
+                metadata=self.metadata,
             )
+            event_handler._default_message_handler = self._sse_message_handler
             handlers_wrapped.append("incoming_message")
 
         if self.publish_status:
-            event_handler._default_status_handler = SSEStatusHandler(
+            self._sse_status_handler = SSEStatusHandler(
                 event_hub=event_hub,
                 inner_handler=self._original_status_handler,
+                metadata=self.metadata,
             )
+            event_handler._default_status_handler = self._sse_status_handler
             handlers_wrapped.append("status_change")
 
         if self.publish_webhook_errors:
-            event_handler._default_error_handler = SSEErrorHandler(
+            self._sse_error_handler = SSEErrorHandler(
                 event_hub=event_hub,
                 inner_handler=self._original_error_handler,
+                metadata=self.metadata,
             )
+            event_handler._default_error_handler = self._sse_error_handler
             handlers_wrapped.append("webhook_error")
 
-        if self.publish_outgoing_api and self._original_post_process_api is not None:
-            original = self._original_post_process_api
+        if self.publish_outgoing_api:
+            meta = self.metadata
 
-            async def wrapped_post_process(event: APIMessageEvent) -> None:
-                await original(event)
-                await publish_api_sse_event(event_hub, event)
+            async def _sse_api_hook(event: APIMessageEvent) -> None:
+                await publish_api_sse_event(event_hub, event, metadata=meta)
 
-            event_handler._post_process_api_message = wrapped_post_process
+            self._api_post_process_hook = _sse_api_hook
+            event_handler.add_api_post_process_hook(_sse_api_hook)
             handlers_wrapped.append("outgoing_api_message")
 
         if self.publish_bot_replies:
@@ -159,10 +183,9 @@ class SSEEventsPlugin:
                 event_handler._default_status_handler = self._original_status_handler
             if self._original_error_handler is not None:
                 event_handler._default_error_handler = self._original_error_handler
-            if self._original_post_process_api is not None:
-                event_handler._post_process_api_message = (
-                    self._original_post_process_api
-                )
+            if self._api_post_process_hook is not None:
+                event_handler.remove_api_post_process_hook(self._api_post_process_hook)
+                self._api_post_process_hook = None
 
         event_hub = getattr(app.state, "sse_event_hub", None)
         if isinstance(event_hub, SSEEventHub):
@@ -199,7 +222,7 @@ class SSEEventsPlugin:
                 "message_handler": self._original_message_handler is not None,
                 "status_handler": self._original_status_handler is not None,
                 "error_handler": self._original_error_handler is not None,
-                "api_post_process": self._original_post_process_api is not None,
+                "api_post_process": self._api_post_process_hook is not None,
                 "messenger_wrapper": getattr(app.state, "sse_wrap_messenger", False),
             },
             "hub": hub_stats,

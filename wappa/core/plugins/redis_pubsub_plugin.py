@@ -41,7 +41,7 @@ class RedisPubSubPlugin:
 
     Event Types:
         incoming_message: Webhook-received messages (PubSubMessageHandler)
-        outgoing_message: API-sent messages (_post_process_api_message hook)
+        outgoing_message: API-sent messages (api post-process hook)
         bot_reply: Bot-sent messages (PubSubMessengerWrapper)
         status_change: Status updates (PubSubStatusHandler)
 
@@ -86,7 +86,7 @@ class RedisPubSubPlugin:
         # Track original handlers for restoration
         self._original_message_handler = None
         self._original_status_handler = None
-        self._original_post_process_api = None
+        self._api_post_process_hook = None
 
     def configure(self, builder: WappaBuilder) -> None:
         """Register startup and shutdown hooks with the builder."""
@@ -126,7 +126,6 @@ class RedisPubSubPlugin:
         # Store original handlers
         self._original_message_handler = event_handler._default_message_handler
         self._original_status_handler = event_handler._default_status_handler
-        self._original_post_process_api = event_handler._post_process_api_message
 
         handlers_wrapped = []
 
@@ -144,15 +143,14 @@ class RedisPubSubPlugin:
             )
             handlers_wrapped.append("status_change")
 
-        # Hook API events via _post_process_api_message
+        # Hook API events via post-process hook list
         if self.publish_outgoing:
-            original = self._original_post_process_api
 
-            async def wrapped_post_process(event: APIMessageEvent) -> None:
-                await original(event)
+            async def _pubsub_api_hook(event: APIMessageEvent) -> None:
                 await publish_api_notification(event)
 
-            event_handler._post_process_api_message = wrapped_post_process
+            self._api_post_process_hook = _pubsub_api_hook
+            event_handler.add_api_post_process_hook(_pubsub_api_hook)
             handlers_wrapped.append("outgoing_message")
 
         # Set flag for messenger wrapping (handled in webhook_controller)
@@ -166,6 +164,13 @@ class RedisPubSubPlugin:
 
     async def _shutdown_hook(self, app: FastAPI) -> None:
         """Clean up references."""
+        if self._api_post_process_hook is not None:
+            api_dispatcher = getattr(app.state, "api_event_dispatcher", None)
+            event_handler = getattr(api_dispatcher, "_event_handler", None)
+            if event_handler:
+                event_handler.remove_api_post_process_hook(self._api_post_process_hook)
+            self._api_post_process_hook = None
+
         if hasattr(app.state, "redis_pubsub_plugin"):
             del app.state.redis_pubsub_plugin
         if hasattr(app.state, "pubsub_wrap_messenger"):
@@ -186,7 +191,7 @@ class RedisPubSubPlugin:
             "handlers_wrapped": {
                 "message_handler": self._original_message_handler is not None,
                 "status_handler": self._original_status_handler is not None,
-                "api_post_process": self._original_post_process_api is not None,
+                "api_post_process": self._api_post_process_hook is not None,
                 "messenger_wrapper": getattr(app.state, "pubsub_wrap_messenger", False),
             },
         }

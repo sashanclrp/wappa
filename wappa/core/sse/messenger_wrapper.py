@@ -26,11 +26,19 @@ class SSEMessengerWrapper(IMessenger):
         event_hub: SSEEventHub,
         tenant: str,
         user_id: str,
+        metadata: dict[str, Any] | None = None,
     ):
         self._inner = inner
         self._event_hub = event_hub
         self._tenant = tenant
         self._user_id = user_id
+        self._metadata = metadata
+
+    def update_metadata(self, **kwargs: Any) -> None:
+        """Merge key-value pairs into the wrapper's metadata dict."""
+        if self._metadata is None:
+            self._metadata = {}
+        self._metadata.update(kwargs)
 
     def __getattr__(self, name: str) -> Any:
         """Delegate attribute access to the inner messenger for full transparency."""
@@ -65,6 +73,7 @@ class SSEMessengerWrapper(IMessenger):
                 "request": self._to_serializable(request_payload),
                 "result": self._to_serializable(result),
             },
+            metadata=self._metadata,
         )
 
         return result
