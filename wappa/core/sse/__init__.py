@@ -2,6 +2,7 @@
 
 from .event_hub import SSEEventHub, SSESubscription
 from .handlers import (
+    _BUILTIN_SSE_EVENT_TYPES,
     SUPPORTED_SSE_EVENT_TYPES,
     SSEErrorHandler,
     SSEEventType,
@@ -9,6 +10,7 @@ from .handlers import (
     SSEStatusHandler,
     publish_api_sse_event,
     publish_sse_event,
+    register_sse_event_type,
 )
 from .messenger_wrapper import SSEMessengerWrapper
 
@@ -17,6 +19,8 @@ __all__ = [
     "SSESubscription",
     "SSEEventType",
     "SUPPORTED_SSE_EVENT_TYPES",
+    "_BUILTIN_SSE_EVENT_TYPES",
+    "register_sse_event_type",
     "SSEMessageHandler",
     "SSEStatusHandler",
     "SSEErrorHandler",

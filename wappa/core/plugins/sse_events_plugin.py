@@ -8,11 +8,13 @@ from typing import TYPE_CHECKING, Any
 from ...api.routes.sse import router as sse_router
 from ...core.logging.logger import get_app_logger
 from ...core.sse import (
+    SUPPORTED_SSE_EVENT_TYPES,
     SSEErrorHandler,
     SSEEventHub,
     SSEMessageHandler,
     SSEStatusHandler,
     publish_api_sse_event,
+    register_sse_event_type,
 )
 
 if TYPE_CHECKING:
@@ -36,6 +38,7 @@ class SSEEventsPlugin:
         publish_status: bool = True,
         publish_webhook_errors: bool = True,
         queue_size: int = 200,
+        custom_event_types: set[str] | None = None,
     ):
         self.publish_incoming = publish_incoming
         self.publish_outgoing_api = publish_outgoing_api
@@ -43,6 +46,7 @@ class SSEEventsPlugin:
         self.publish_status = publish_status
         self.publish_webhook_errors = publish_webhook_errors
         self.queue_size = queue_size
+        self.custom_event_types = custom_event_types or set()
 
         self._original_message_handler = None
         self._original_status_handler = None
@@ -71,6 +75,14 @@ class SSEEventsPlugin:
 
         event_hub = SSEEventHub(queue_size=self.queue_size)
         app.state.sse_event_hub = event_hub
+
+        for event_type in self.custom_event_types:
+            register_sse_event_type(event_type)
+        if self.custom_event_types:
+            app_logger.info(
+                "SSE custom event types registered: %s",
+                ", ".join(sorted(self.custom_event_types)),
+            )
 
         api_dispatcher = getattr(app.state, "api_event_dispatcher", None)
         if not api_dispatcher or not hasattr(api_dispatcher, "_event_handler"):
@@ -135,6 +147,8 @@ class SSEEventsPlugin:
 
     async def _shutdown_hook(self, app: FastAPI) -> None:
         """Restore handler state and close event hub."""
+        SUPPORTED_SSE_EVENT_TYPES.difference_update(self.custom_event_types)
+
         api_dispatcher = getattr(app.state, "api_event_dispatcher", None)
         event_handler = getattr(api_dispatcher, "_event_handler", None)
 

@@ -30,13 +30,20 @@ SSEEventType = Literal[
     "webhook_error",
 ]
 
-SUPPORTED_SSE_EVENT_TYPES: Final[set[str]] = {
+_BUILTIN_SSE_EVENT_TYPES: Final[set[str]] = {
     "incoming_message",
     "outgoing_api_message",
     "outgoing_bot_message",
     "status_change",
     "webhook_error",
 }
+
+SUPPORTED_SSE_EVENT_TYPES: set[str] = set(_BUILTIN_SSE_EVENT_TYPES)
+
+
+def register_sse_event_type(event_type: str) -> None:
+    """Register a custom SSE event type for app-level events."""
+    SUPPORTED_SSE_EVENT_TYPES.add(event_type)
 
 
 def _normalized_webhook_payload(
@@ -61,7 +68,7 @@ def _normalized_webhook_payload(
 async def publish_sse_event(
     event_hub: SSEEventHub | None,
     *,
-    event_type: SSEEventType,
+    event_type: str,
     tenant_id: str,
     user_id: str,
     platform: str,
