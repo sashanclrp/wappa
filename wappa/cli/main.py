@@ -223,34 +223,13 @@ def _resolve_module_name(file_path: str) -> tuple[str, Path]:
     return module_name, working_dir
 
 
-def _run_server(
-    file_path: str,
-    app_var: str,
+def _build_uvicorn_cmd(
+    import_string: str,
     host: str,
     port: int,
-    workers: int = 1,
-    reload: bool = False,
-) -> None:
-    """
-    Run uvicorn server with the specified configuration.
-
-    Shared logic for both development and production server commands.
-
-    Args:
-        file_path: Path to the Python file containing the Wappa app
-        app_var: Name of the Wappa instance variable
-        host: Host address to bind to
-        port: Port number to bind to
-        workers: Number of worker processes (production only)
-        reload: Enable auto-reload (development only)
-    """
-    if not Path(file_path).exists():
-        typer.echo(f"❌ File not found: {file_path}", err=True)
-        raise typer.Exit(1)
-
-    module_name, working_dir = _resolve_module_name(file_path)
-    import_string = f"{module_name}:{app_var}.asgi"
-
+    workers: int,
+    reload: bool,
+) -> list[str]:
     cmd = [
         sys.executable,
         "-m",
@@ -261,15 +240,84 @@ def _run_server(
         "--port",
         str(port),
     ]
-
     if reload:
         cmd.append("--reload")
-        mode = "development"
     else:
         cmd.extend(["--workers", str(workers)])
-        mode = "production"
+    return cmd
 
-    typer.echo(f"🚀 Starting Wappa {mode} server...")
+
+def _build_hypercorn_cmd(
+    import_string: str,
+    host: str,
+    port: int,
+    workers: int,
+    reload: bool,
+) -> list[str]:
+    bind = f"[::]:{port}" if host in ("0.0.0.0", "::") else f"{host}:{port}"
+    cmd = [
+        sys.executable,
+        "-m",
+        "hypercorn",
+        import_string,
+        "--bind",
+        bind,
+        "--workers",
+        str(workers),
+    ]
+    if reload:
+        cmd.append("--reload")
+    return cmd
+
+
+def _run_server(
+    file_path: str,
+    app_var: str,
+    host: str,
+    port: int,
+    workers: int = 1,
+    reload: bool = False,
+    server: str = "uvicorn",
+) -> None:
+    """
+    Run ASGI server with the specified configuration.
+
+    Shared logic for both development and production server commands.
+    Supports uvicorn and hypercorn as server backends via the ``server``
+    parameter or the ``WAPPA_SERVER`` environment variable.
+
+    Args:
+        file_path: Path to the Python file containing the Wappa app
+        app_var: Name of the Wappa instance variable
+        host: Host address to bind to
+        port: Port number to bind to
+        workers: Number of worker processes (production only)
+        reload: Enable auto-reload (development only)
+        server: ASGI server backend ("uvicorn" or "hypercorn")
+    """
+    if not Path(file_path).exists():
+        typer.echo(f"❌ File not found: {file_path}", err=True)
+        raise typer.Exit(1)
+
+    server = server.lower()
+    if server not in ("uvicorn", "hypercorn"):
+        typer.echo(
+            f"❌ Unsupported server: {server}. Use 'uvicorn' or 'hypercorn'.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    module_name, working_dir = _resolve_module_name(file_path)
+    import_string = f"{module_name}:{app_var}.asgi"
+
+    if server == "hypercorn":
+        cmd = _build_hypercorn_cmd(import_string, host, port, workers, reload)
+    else:
+        cmd = _build_uvicorn_cmd(import_string, host, port, workers, reload)
+
+    mode = "development" if reload else "production"
+
+    typer.echo(f"🚀 Starting Wappa {mode} server ({server})...")
     typer.echo(f"📡 Import: {working_dir / module_name}:{app_var}.asgi")
     typer.echo(f"🌐 Server: http://{host}:{port}")
 
@@ -312,6 +360,13 @@ def dev(
     ),
     host: str = typer.Option("0.0.0.0", "--host", "-h", help="Host to bind to"),
     port: int = typer.Option(8000, "--port", "-p", help="Port to bind to"),
+    server: str = typer.Option(
+        "uvicorn",
+        "--server",
+        "-s",
+        help="ASGI server backend (uvicorn or hypercorn)",
+        envvar="WAPPA_SERVER",
+    ),
 ) -> None:
     """
     Run development server with auto-reload.
@@ -320,8 +375,9 @@ def dev(
         wappa dev main.py
         wappa dev examples/redis_demo/main.py --port 8080
         wappa dev src/app.py --app my_wappa_app
+        wappa dev main.py --server hypercorn
     """
-    _run_server(file_path, app_var, host, port, reload=True)
+    _run_server(file_path, app_var, host, port, reload=True, server=server)
 
 
 @app.command()
@@ -337,6 +393,13 @@ def prod(
     workers: int = typer.Option(
         1, "--workers", "-w", help="Number of worker processes"
     ),
+    server: str = typer.Option(
+        "uvicorn",
+        "--server",
+        "-s",
+        help="ASGI server backend (uvicorn or hypercorn)",
+        envvar="WAPPA_SERVER",
+    ),
 ) -> None:
     """
     Run production server (no auto-reload).
@@ -344,8 +407,11 @@ def prod(
     Examples:
         wappa prod main.py
         wappa prod main.py --workers 4 --port 8080
+        wappa prod main.py --server hypercorn --workers 2
     """
-    _run_server(file_path, app_var, host, port, workers=workers, reload=False)
+    _run_server(
+        file_path, app_var, host, port, workers=workers, reload=False, server=server
+    )
 
 
 @app.command()
