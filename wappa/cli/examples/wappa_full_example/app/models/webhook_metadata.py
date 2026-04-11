@@ -9,7 +9,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MessageType(str, Enum):
@@ -44,8 +44,7 @@ class BaseMessageMetadata(BaseModel):
     processing_time_ms: int | None = None
     cache_hit: bool = False
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class TextMessageMetadata(BaseMessageMetadata):

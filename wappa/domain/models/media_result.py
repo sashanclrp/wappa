@@ -9,7 +9,7 @@ maintaining compatibility with platform-specific response formats.
 from datetime import UTC, datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from wappa.schemas.core.types import PlatformType
 
@@ -32,8 +32,7 @@ class MediaUploadResult(BaseModel):
     uploaded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tenant_id: str | None = None  # phone_number_id in WhatsApp context
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class MediaInfoResult(BaseModel):
@@ -63,8 +62,7 @@ class MediaInfoResult(BaseModel):
     retrieved_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tenant_id: str | None = None
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)
 
 
 class MediaDownloadResult(BaseModel):
@@ -89,10 +87,7 @@ class MediaDownloadResult(BaseModel):
     _is_temp_file: bool = False
     _cleanup_on_exit: bool = False
 
-    class Config:
-        use_enum_values = True
-        # Allow bytes in file_data field
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True)
 
     def __enter__(self):
         """Synchronous context manager entry."""
@@ -147,5 +142,4 @@ class MediaDeleteResult(BaseModel):
     deleted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     tenant_id: str | None = None
 
-    class Config:
-        use_enum_values = True
+    model_config = ConfigDict(use_enum_values=True)

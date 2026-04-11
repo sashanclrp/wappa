@@ -2,7 +2,7 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ...persistence.redis.redis_handler.utils.key_factory import KeyFactory
 
@@ -30,8 +30,7 @@ class ExpirationHandlerRegistry(BaseModel):
     keys: KeyFactory = Field(default_factory=KeyFactory)
     handlers: dict[str, AsyncHandler] = Field(default_factory=dict)
 
-    class Config:
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def on_expire_action(
         self, action_name: str
