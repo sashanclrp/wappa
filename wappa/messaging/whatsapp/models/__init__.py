@@ -22,11 +22,14 @@ from .specialized_models import (
 )
 from .template_models import (
     LocationTemplateMessage,
+    LocationTemplateMetadata,
     MediaTemplateMessage,
+    MediaTemplateMetadata,
     TemplateMessageStatus,
     TemplateParameter,
     TemplateValidationResult,
     TextTemplateMessage,
+    TextTemplateMetadata,
 )
 
 __all__ = [
@@ -51,8 +54,11 @@ __all__ = [
     "BusinessContact",
     "PersonalContact",
     "TemplateParameter",
+    "TextTemplateMetadata",
     "TextTemplateMessage",
+    "MediaTemplateMetadata",
     "MediaTemplateMessage",
+    "LocationTemplateMetadata",
     "LocationTemplateMessage",
     "TemplateMessageStatus",
     "TemplateValidationResult",

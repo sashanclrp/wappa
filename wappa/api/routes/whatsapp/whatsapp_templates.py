@@ -1,15 +1,13 @@
 """
 WhatsApp template messaging API endpoints.
 
-Provides REST API endpoints for WhatsApp Business template operations:
+Provides REST API endpoints for WhatsApp Business template send operations:
 - POST /api/whatsapp/templates/send-text: Send text-only templates
 - POST /api/whatsapp/templates/send-media: Send templates with media headers
 - POST /api/whatsapp/templates/send-location: Send templates with location headers
-- GET /api/whatsapp/templates/health: Service health check
-
 Router configuration:
 - Prefix: /whatsapp/templates
-- Tags: ["WhatsApp - Templates"]
+- Tags: ["WhatsApp - Send Templates"]
 - Full URL: /api/whatsapp/templates/ (when included with /api prefix)
 
 State Management:
@@ -42,7 +40,6 @@ from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.template_models import (
     LocationTemplateMessage,
     MediaTemplateMessage,
-    TemplateMessageStatus,
     TextTemplateMessage,
 )
 
@@ -79,10 +76,10 @@ async def _maybe_set_template_state(
         )
 
 
-# Create router with WhatsApp Templates configuration
+# Create router with WhatsApp Send Templates configuration
 router = APIRouter(
     prefix="/whatsapp/templates",
-    tags=["WhatsApp - Templates"],
+    tags=["WhatsApp - Send Templates"],
     responses={
         400: {"description": "Bad Request - Invalid template format or parameters"},
         401: {"description": "Unauthorized - Invalid tenant credentials"},
@@ -212,102 +209,6 @@ async def send_location_template(
     raise_for_failed_result(result, "send location template", TEMPLATE_ERROR_GROUPS)
     await _maybe_set_template_state(result, request, state_service)
     return result
-
-
-@router.get(
-    "/limits",
-    summary="Get Template Message Limits",
-    description="Get platform-specific template message limits and constraints",
-)
-async def get_template_limits() -> dict:
-    """Get WhatsApp template message limits and constraints.
-
-    Returns supported template types, parameter limits, and platform constraints.
-    """
-    return {
-        "text_templates": {
-            "max_body_parameters": 10,
-            "max_parameter_length": 1024,
-            "supported_parameter_types": ["text", "currency", "date_time"],
-            "supported_languages": [
-                "es",
-                "en",
-                "en_US",
-                "pt_BR",
-                "fr",
-                "de",
-                "it",
-                "ja",
-                "ko",
-                "zh",
-            ],
-        },
-        "media_templates": {
-            "supported_media_types": ["image", "video", "document"],
-            "max_body_parameters": 10,
-            "media_requirements": {
-                "image": {"formats": ["JPEG", "PNG"], "max_size": "5MB"},
-                "video": {"formats": ["MP4", "3GP"], "max_size": "16MB"},
-                "document": {
-                    "formats": ["PDF", "DOC", "DOCX", "XLS", "XLSX"],
-                    "max_size": "100MB",
-                },
-            },
-        },
-        "location_templates": {
-            "coordinate_ranges": {
-                "latitude": {"min": -90, "max": 90},
-                "longitude": {"min": -180, "max": 180},
-            },
-            "max_name_length": 100,
-            "max_address_length": 1000,
-            "max_body_parameters": 10,
-        },
-        "general": {
-            "requires_approval": True,
-            "approval_process": "WhatsApp Business Account Manager",
-            "rate_limits": "Per WhatsApp Business API terms",
-            "supported_platforms": ["whatsapp"],
-            "requires_authentication": True,
-        },
-    }
-
-
-@router.get(
-    "/status/{template_name}",
-    response_model=TemplateMessageStatus,
-    summary="Get Template Status",
-    description="Get the approval status and configuration of a specific template",
-)
-async def get_template_status(
-    template_name: str,
-    language: str = "es",
-    messenger: IMessenger = Depends(get_whatsapp_messenger),
-) -> TemplateMessageStatus:
-    """Get template status and configuration.
-
-    Returns the approval status, category, and components of a WhatsApp template.
-    """
-    try:
-        # This would typically call the template handler's get_template_info method
-        # For now, return a mock status structure
-        return TemplateMessageStatus(
-            template_name=template_name,
-            status="APPROVED",  # This should come from actual API
-            language=language,
-            category="MARKETING",  # This should come from actual API
-            components=[
-                {"type": "HEADER", "format": "TEXT"},
-                {"type": "BODY", "text": "Template body with parameters"},
-                {"type": "FOOTER", "text": "Optional footer text"},
-            ],
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get template status: {str(e)}"
-        ) from e
-
 
 # Example endpoint demonstrating complex template usage
 @router.post(

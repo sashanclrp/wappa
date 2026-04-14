@@ -14,6 +14,7 @@ from .whatsapp import (
     whatsapp_messages_router,
     whatsapp_specialized_router,
     whatsapp_state_handlers_router,
+    whatsapp_template_info_router,
     whatsapp_templates_router,
 )
 
@@ -35,5 +36,6 @@ whatsapp_router.include_router(whatsapp_messages_router)
 whatsapp_router.include_router(whatsapp_media_router)
 whatsapp_router.include_router(whatsapp_interactive_router)
 whatsapp_router.include_router(whatsapp_templates_router)
+whatsapp_router.include_router(whatsapp_template_info_router)
 whatsapp_router.include_router(whatsapp_specialized_router)
 whatsapp_router.include_router(whatsapp_state_handlers_router)

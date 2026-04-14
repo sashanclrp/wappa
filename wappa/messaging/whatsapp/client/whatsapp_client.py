@@ -61,6 +61,31 @@ class WhatsAppUrlBuilder:
         return f"{self.base_url}/{self.api_version}/{endpoint}"
 
 
+class WhatsAppManagementUrlBuilder:
+    """Builds WABA-level URLs for WhatsApp management operations."""
+
+    def __init__(self, base_url: str, api_version: str, business_account_id: str):
+        """Initialize URL builder for WABA management endpoints."""
+        self.base_url = base_url.rstrip("/")
+        self.api_version = api_version
+        self.business_account_id = business_account_id
+
+    def get_template_by_id_url(self, template_id: str) -> str:
+        """Build URL for fetching a template directly by template ID."""
+        return f"{self.base_url}/{self.api_version}/{template_id}"
+
+    def get_templates_url(self) -> str:
+        """Build URL for listing or filtering templates by WABA."""
+        return (
+            f"{self.base_url}/{self.api_version}/"
+            f"{self.business_account_id}/message_templates"
+        )
+
+    def get_business_account_url(self) -> str:
+        """Build URL for fetching WABA-level metadata."""
+        return f"{self.base_url}/{self.api_version}/{self.business_account_id}"
+
+
 class WhatsAppFormDataBuilder:
     """Builds form data for WhatsApp multipart requests."""
 
@@ -288,13 +313,17 @@ class WhatsAppClient:
             raise
 
     async def get_request(
-        self, endpoint: str, params: dict[str, Any] | None = None
+        self,
+        endpoint: str | None = None,
+        params: dict[str, Any] | None = None,
+        custom_url: str | None = None,
     ) -> dict[str, Any]:
         """Send GET request to WhatsApp API.
 
         Args:
             endpoint: API endpoint (without base URL)
             params: Optional query parameters
+            custom_url: Optional full URL override
 
         Returns:
             JSON response from WhatsApp API
@@ -304,7 +333,7 @@ class WhatsAppClient:
             Exception: For other request failures
         """
         self._update_activity()
-        url = self.url_builder.get_endpoint_url(endpoint)
+        url = custom_url or self.url_builder.get_endpoint_url(endpoint or "")
 
         try:
             async with self.session.get(
@@ -335,13 +364,17 @@ class WhatsAppClient:
             raise
 
     async def delete_request(
-        self, endpoint: str, params: dict[str, Any] | None = None
+        self,
+        endpoint: str | None = None,
+        params: dict[str, Any] | None = None,
+        custom_url: str | None = None,
     ) -> dict[str, Any]:
         """Send DELETE request to WhatsApp API.
 
         Args:
             endpoint: API endpoint (without base URL)
             params: Optional query parameters
+            custom_url: Optional full URL override
 
         Returns:
             JSON response from WhatsApp API
@@ -351,7 +384,7 @@ class WhatsAppClient:
             Exception: For other request failures
         """
         self._update_activity()
-        url = self.url_builder.get_endpoint_url(endpoint)
+        url = custom_url or self.url_builder.get_endpoint_url(endpoint or "")
 
         try:
             async with self.session.delete(

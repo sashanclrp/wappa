@@ -5,6 +5,22 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.32] - 2026-04-14
+
+### Added
+- Added optional `metadata` dict support to `TextTemplateMetadata`, `MediaTemplateMetadata`, and `LocationTemplateMetadata`.
+- Exposed template metadata models from `wappa.messaging.whatsapp.models` for downstream schema imports.
+- Added an active `backlog/` workflow with documentation and a tracked template management/webhook backlog.
+- Added typed `Templates Info` request and response schemas for template-by-id, template-by-name, template list, and namespace reads.
+- Added a dedicated WABA-level template info service for Graph API management reads.
+
+### Changed
+- Split template API documentation into `WhatsApp - Send Templates` and `WhatsApp - Templates Info`.
+- Backed template info reads with a dedicated WABA management URL builder instead of the phone-number send path.
+- Normalized the Specialized tag to `WhatsApp - Specialized` for OpenAPI consistency.
+- Removed the public placeholder registration for template management routes until the feature is ready.
+- Bumped package version from `0.2.31` to `0.2.32` for the template schema and management-info release.
+
 ## [0.2.18] - 2026-03-06
 
 ### Changed

@@ -137,6 +137,14 @@ class TextTemplateMetadata(BaseModel):
             "NOT sent to WhatsApp - internal AI context only."
         ),
     )
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Optional free-form metadata dict for analytics/tracing. "
+            "Persisted to messages.meta JSONB on the downstream CachedMessage. "
+            "NOT sent to WhatsApp - internal context only."
+        ),
+    )
 
 
 class MediaTemplateMetadata(BaseModel):
@@ -185,6 +193,14 @@ class MediaTemplateMetadata(BaseModel):
             "NOT sent to WhatsApp - internal AI context only."
         ),
     )
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Optional free-form metadata dict for analytics/tracing. "
+            "Persisted to messages.meta JSONB on the downstream CachedMessage. "
+            "NOT sent to WhatsApp - internal context only."
+        ),
+    )
 
 
 class LocationTemplateMetadata(BaseModel):
@@ -212,6 +228,14 @@ class LocationTemplateMetadata(BaseModel):
             "to process within its context and instructions. "
             "Provides additional context, instructions, or constraints for AI processing. "
             "NOT sent to WhatsApp - internal AI context only."
+        ),
+    )
+    metadata: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Optional free-form metadata dict for analytics/tracing. "
+            "Persisted to messages.meta JSONB on the downstream CachedMessage. "
+            "NOT sent to WhatsApp - internal context only."
         ),
     )
 

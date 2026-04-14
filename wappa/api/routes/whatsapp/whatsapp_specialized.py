@@ -53,7 +53,7 @@ def _raise_for_whatsapp_error(result, operation_name: str) -> None:
 
 router = APIRouter(
     prefix="/specialized",
-    tags=["whatsapp - Specialized"],
+    tags=["WhatsApp - Specialized"],
     responses={
         400: {"description": "Invalid request parameters"},
         401: {"description": "Authentication failed"},

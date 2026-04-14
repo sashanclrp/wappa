@@ -30,6 +30,7 @@ from wappa.messaging.whatsapp.handlers.whatsapp_template_handler import (
     WhatsAppTemplateHandler,
 )
 from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
+from wappa.messaging.whatsapp.services import WhatsAppTemplateInfoService
 
 
 async def get_whatsapp_message_factory() -> MessageFactory:
@@ -136,6 +137,20 @@ async def get_whatsapp_specialized_handler(
     """
     tenant_id = require_tenant_context()
     return WhatsAppSpecializedHandler(client=client, tenant_id=tenant_id)
+
+
+async def get_whatsapp_template_info_service(
+    client: WhatsAppClient = Depends(get_whatsapp_client),
+) -> WhatsAppTemplateInfoService:
+    """Get configured WhatsApp template info service with WABA context."""
+    tenant_id = require_tenant_context()
+    business_account_id = TenantCredentialsService.get_whatsapp_business_account_id(
+        tenant_id
+    )
+    return WhatsAppTemplateInfoService(
+        client=client,
+        business_account_id=business_account_id,
+    )
 
 
 async def get_whatsapp_messenger(

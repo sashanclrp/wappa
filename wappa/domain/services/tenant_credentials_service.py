@@ -35,6 +35,22 @@ class TenantCredentialsService:
         return settings.wp_access_token
 
     @staticmethod
+    def get_whatsapp_business_account_id(phone_number_id: str) -> str:
+        """Get WhatsApp Business Account ID for tenant.
+
+        Args:
+            phone_number_id: WhatsApp Business phone number ID
+
+        Returns:
+            WhatsApp Business Account ID (WABA ID) for this tenant
+        """
+        if not TenantCredentialsService.validate_tenant(phone_number_id):
+            raise ValueError(f"Invalid or inactive tenant: {phone_number_id}")
+        if not settings.wp_bid:
+            raise ValueError("WP_BID is required for WhatsApp management operations")
+        return settings.wp_bid
+
+    @staticmethod
     def validate_tenant(phone_number_id: str) -> bool:
         """Validate that the tenant exists and is active.
 
