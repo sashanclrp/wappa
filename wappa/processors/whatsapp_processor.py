@@ -452,16 +452,21 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         conversation = self._extract_conversation_context(status)
         errors = self._extract_status_errors(status)
 
+        recipient_phone_id = getattr(status, "wa_recipient_id", "")
+        recipient_bsuid = getattr(status, "recipient_bsuid", None)
+        # Default canonical user_id to BSUID when available, else phone. The
+        # webhook controller performs a best-effort phone → BSUID lookup when
+        # BSUID is absent and persistence is configured.
+        bsuid_clean = recipient_bsuid.strip() if recipient_bsuid else ""
+        canonical_user_id = bsuid_clean or recipient_phone_id or None
+
         return StatusWebhook(
             tenant=tenant_base,
             message_id=getattr(status, "message_id", ""),
             status=getattr(status, "status", "unknown"),
-            recipient_phone_id=getattr(
-                status, "wa_recipient_id", ""
-            ),  # Phone number field
-            recipient_bsuid=getattr(
-                status, "recipient_bsuid", None
-            ),  # BSUID field (v24.0+)
+            recipient_phone_id=recipient_phone_id,
+            recipient_bsuid=recipient_bsuid,
+            user_id=canonical_user_id,
             timestamp=datetime.fromtimestamp(getattr(status, "timestamp", 0)),
             conversation=conversation,
             errors=errors,
@@ -792,7 +797,9 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                     error_code=getattr(error, "code", 0),
                     error_title=getattr(error, "title", "Unknown error"),
                     error_message=getattr(error, "message", ""),
-                    error_details=getattr(error_data, "details", None) if error_data else None,
+                    error_details=getattr(error_data, "details", None)
+                    if error_data
+                    else None,
                     documentation_url=getattr(error, "href", None),
                     error_type="delivery_failure",
                     occurred_at=datetime.now(UTC),

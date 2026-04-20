@@ -135,12 +135,14 @@ class APIEventDispatcher:
             f"API handler context: tenant={event.tenant_id}, db_available={db is not None}"
         )
 
-        # Clone handler with context for this API event
-        # Note: messenger and cache_factory are None for API events since
-        # the API routes inject their own messenger via FastAPI dependencies
+        # Clone handler with context for this API event.
+        # Prefer the caller-supplied canonical user_id over recipient so
+        # self.user_id inside process_api_message() is the domain identifier
+        # for state/cache lookups, not the Meta transport value. Defaults to
+        # recipient when the caller did not provide a distinct user_id.
         return self._event_handler.with_context(
             tenant_id=event.tenant_id,
-            user_id=event.recipient,  # For API events, user is the recipient
+            user_id=event.user_id or event.recipient,
             messenger=None,  # API routes use their own messenger dependency
             cache_factory=None,  # API routes can inject cache if needed
             db=db,

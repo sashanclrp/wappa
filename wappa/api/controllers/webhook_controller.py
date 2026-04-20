@@ -11,6 +11,7 @@ from wappa.core.logging.context import (
     get_current_owner_context,
     get_current_tenant_context,
     get_current_user_context,
+    set_request_context,
 )
 from wappa.core.logging.logger import get_logger
 from wappa.core.pubsub import PubSubMessengerWrapper
@@ -22,6 +23,7 @@ from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
     from wappa.core.events.event_handler import WappaEventHandler
+    from wappa.webhooks.core.webhook_interfaces import StatusWebhook
 
 
 class WebhookController:
@@ -158,6 +160,22 @@ class WebhookController:
             # webhook_tenant_id comes from JSON metadata; fall back to URL owner_id.
             webhook_tenant_id = get_current_tenant_context()
             effective_tenant_id = webhook_tenant_id or owner_id
+
+            # For status webhooks, attempt a best-effort phone → BSUID enrichment
+            # when Meta only provides a wa_id (BSUID absent). Uses Redis scan when
+            # available; silently skips for other backends or misses.
+            from wappa.webhooks.core.webhook_interfaces import StatusWebhook
+
+            if (
+                isinstance(universal_webhook, StatusWebhook)
+                and not universal_webhook.has_recipient_bsuid
+            ):
+                enriched = await self._enrich_status_user_id(
+                    universal_webhook, effective_tenant_id, request
+                )
+                if enriched:
+                    universal_webhook.user_id = enriched
+                    set_request_context(tenant_id=effective_tenant_id, user_id=enriched)
 
             # System-level webhooks may not carry user identity; use internal fallback.
             user_id = self._resolve_handler_user_id(get_current_user_context())
@@ -314,6 +332,44 @@ class WebhookController:
                 exc_info=True,
             )
             raise RuntimeError(f"Cache factory creation failed: {e}") from e
+
+    async def _enrich_status_user_id(
+        self,
+        status: "StatusWebhook",
+        tenant_id: str,
+        request: Request,
+    ) -> str | None:
+        """
+        Best-effort phone → canonical user_id lookup for status webhooks.
+
+        Only runs when BSUID is absent from the Meta payload and Redis is
+        configured. Returns the canonical user_id from the store when found,
+        or None to preserve existing behaviour.
+        """
+        phone = status.recipient_phone_id
+        if not phone:
+            return None
+
+        cache_type = getattr(request.app.state, "wappa_cache_type", "memory")
+        if cache_type != "redis":
+            return None
+
+        try:
+            redis_manager = getattr(request.app.state, "redis_manager", None)
+            if not redis_manager or not redis_manager.is_initialized():
+                return None
+
+            factory_class = create_cache_factory("redis")
+            # user_id placeholder is irrelevant — find_by_field scans all users
+            cache_factory = factory_class(tenant_id=tenant_id, user_id="__scan__")
+            user_cache = cache_factory.create_user_cache()
+            result = await user_cache.find_by_field("phone_number", phone)
+            if result:
+                return result.get("user_id") or result.get("bsuid")
+        except Exception as e:
+            self.logger.debug(f"Status user_id enrichment skipped: {e}")
+
+        return None
 
     def _is_supported_platform(self, platform: str) -> bool:
         return platform.lower() in self.supported_platforms

@@ -44,7 +44,15 @@ class APIMessageEvent(BaseModel):
     )
     recipient: str = Field(
         ...,
-        description="Recipient phone number",
+        description="Recipient phone number or BSUID (Meta transport identifier)",
+    )
+    user_id: str = Field(
+        ...,
+        description=(
+            "Canonical domain identifier for the user. Used as the key for "
+            "state/cache lookups in event handlers. Falls back to `recipient` "
+            "when the API caller does not provide a distinct value."
+        ),
     )
 
     # Request context

@@ -5,6 +5,25 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] - 2026-04-20
+
+Patch release adding an optional `user_id` parameter to every outbound send endpoint and `StatusWebhook`, and flipping `UserBase.user_id` to prefer BSUID over wa_id across all webhook types.
+
+### Added
+- **`user_id` on all outbound endpoints** (`send-text`, `send-image`, `send-audio`, `send-document`, `send-video`, `send-sticker`, `send-buttons`, `send-list`, `send-cta`, `send-template`, etc.). Optional field — defaults to `recipient` when omitted, fully backwards-compatible. Added to `RecipientRequest` base schema so all 12+ send endpoints inherit it with zero per-endpoint changes.
+- **`APIMessageEvent.user_id`** — required field (always populated by the decorator, defaulting to `recipient`). `APIEventDispatcher` now binds this value into `self.user_id` inside `process_api_message()` handlers, so state/cache lookups see the canonical domain id instead of the Meta transport value.
+- **`StatusWebhook.user_id`** — new field on the inbound status model. Processor populates it with BSUID when present, phone (wa_id) as fallback. `WebhookController` adds a best-effort Redis scan (`find_by_field("phone_number", ...)`) to enrich `user_id` to BSUID when Meta sends only a wa_id and a matching user exists in the store.
+- `fire_api_event()` helper gains an optional `user_id` parameter for callers that use the helper directly instead of the decorator.
+
+### Changed
+- **`UserBase.user_id` now prefers BSUID over wa_id** (reverting the preference flip from v0.3.2). BSUID is the stable, Meta-assigned long-term identifier; wa_id is the transport value. This aligns `IncomingMessageWebhook.user.user_id` and `SystemWebhook.user.user_id` with the BSUID-first contract established by `StatusWebhook.recipient_id`. Applications that want the raw wa_id should read `webhook.user.phone_number` or `webhook.whatsapp.wa_id` explicitly.
+- `APIEventDispatcher._create_api_request_handler` uses `event.user_id` (not `event.recipient`) as the context `user_id` binding.
+- Status webhook log now shows `webhook.user_id` instead of `webhook.recipient_id`.
+
+### Tests
+- Added `tests/test_user_id_flow.py` with 12 tests covering: `RecipientRequest.user_id` inheritance, `APIMessageEvent` field contract, `APIEventDispatcher` context binding (canonical vs. fallback), and `StatusWebhook.user_id` lifecycle (BSUID present, phone-only, enrichment override, no identifiers).
+- Updated 3 tests in `test_whatsapp_processor_user_base.py` to reflect BSUID-first resolution.
+
 ## [0.3.2] - 2026-04-20
 
 Patch release that flips the preferred identifier resolved by `IncomingMessageWebhook.user.user_id`.

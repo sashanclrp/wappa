@@ -415,6 +415,14 @@ class RecipientRequest(BaseModel):
     recipient: RecipientIdentifier = Field(
         ..., min_length=1, description="Recipient phone number or BSUID"
     )
+    user_id: str | None = Field(
+        default=None,
+        description=(
+            "Canonical domain identifier for the user. Opaque to Wappa — used "
+            "as the key for state/cache lookups inside event handlers. Defaults "
+            "to `recipient` when omitted."
+        ),
+    )
 
 
 __all__ = [

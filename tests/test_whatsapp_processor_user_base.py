@@ -46,13 +46,11 @@ def test_create_user_base_from_contacts_preserves_wa_id_when_bsuid_exists() -> N
         }
     )
 
-    user = processor._create_user_base_from_contacts(
-        webhook, "CO.2186878922080769"
-    )
+    user = processor._create_user_base_from_contacts(webhook, "CO.2186878922080769")
 
     assert user.bsuid == "CO.2186878922080769"
     assert user.phone_number == "573168227670"
-    assert user.user_id == "573168227670"
+    assert user.user_id == "CO.2186878922080769"  # BSUID preferred over phone (v0.3.3)
 
 
 @pytest.mark.asyncio
@@ -97,7 +95,7 @@ async def test_create_universal_webhook_accepts_contact_without_profile() -> Non
     processor = WhatsAppWebhookProcessor()
     webhook = await processor.create_universal_webhook(payload)
 
-    assert webhook.user.user_id == "573168227670"
+    assert webhook.user.user_id == "CO.2186878922080769"  # BSUID preferred (v0.3.3)
     assert webhook.user.phone_number == "573168227670"
     assert webhook.user.bsuid == "CO.2186878922080769"
     assert webhook.whatsapp is not None
@@ -105,11 +103,16 @@ async def test_create_universal_webhook_accepts_contact_without_profile() -> Non
     assert webhook.whatsapp.bsuid == "CO.2186878922080769"
 
 
-def test_user_id_falls_back_to_bsuid_when_phone_number_missing() -> None:
+def test_user_id_prefers_bsuid_over_phone() -> None:
     from wappa.webhooks.core.webhook_interfaces import UserBase
 
+    # BSUID present → always preferred
     user = UserBase(phone_number="", bsuid="CO.2186878922080769")
     assert user.user_id == "CO.2186878922080769"
 
-    user_with_phone = UserBase(phone_number="573168227670", bsuid="CO.2186878922080769")
-    assert user_with_phone.user_id == "573168227670"
+    user_with_both = UserBase(phone_number="573168227670", bsuid="CO.2186878922080769")
+    assert user_with_both.user_id == "CO.2186878922080769"  # BSUID wins (v0.3.3)
+
+    # No BSUID → falls back to phone
+    user_phone_only = UserBase(phone_number="573168227670", bsuid=None)
+    assert user_phone_only.user_id == "573168227670"

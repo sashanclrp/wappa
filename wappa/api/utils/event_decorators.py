@@ -18,6 +18,8 @@ from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 
+from fastapi import Request as FastAPIRequest
+
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.context import (
     get_current_owner_context,
@@ -94,16 +96,14 @@ def dispatch_message_event(
             if request_obj is None:
                 return result
 
-            # Extract FastAPI Request for DB session injection
-            from fastapi import Request as FastAPIRequest
-
-            fastapi_request: FastAPIRequest | None = kwargs.get(fastapi_request_param)
-            if fastapi_request is None:
-                # Try to find Request by type in kwargs
-                for value in kwargs.values():
-                    if isinstance(value, FastAPIRequest):
-                        fastapi_request = value
-                        break
+            # Extract FastAPI Request for DB session injection (fall back to
+            # any Request-typed kwarg when the named parameter is absent).
+            fastapi_request: FastAPIRequest | None = kwargs.get(
+                fastapi_request_param
+            ) or next(
+                (v for v in kwargs.values() if isinstance(v, FastAPIRequest)),
+                None,
+            )
 
             # Extract MessageResult (either directly or via extractor)
             message_result: MessageResult
@@ -119,6 +119,7 @@ def dispatch_message_event(
                 request_obj.model_dump() if hasattr(request_obj, "model_dump") else {}
             )
             recipient: str = getattr(request_obj, "recipient", "")
+            user_id: str = getattr(request_obj, "user_id", None) or recipient
 
             # Create and dispatch event asynchronously (fire-and-forget)
             # Pass FastAPI Request to enable DB session injection in handler
@@ -126,6 +127,7 @@ def dispatch_message_event(
                 message_type=message_type,
                 message_id=message_result.message_id,
                 recipient=recipient,
+                user_id=user_id,
                 request_payload=request_payload,
                 response_success=message_result.success,
                 response_error=message_result.error,
@@ -151,6 +153,7 @@ def fire_api_event(
     recipient: str,
     fastapi_request: "Request | None" = None,
     platform: str = "whatsapp",
+    user_id: str | None = None,
 ) -> None:
     """
     Fire API event in background without awaiting.
@@ -177,6 +180,7 @@ def fire_api_event(
         message_type=message_type,
         message_id=result.message_id,
         recipient=recipient,
+        user_id=user_id or recipient,
         request_payload=request_payload,
         response_success=result.success,
         response_error=result.error,

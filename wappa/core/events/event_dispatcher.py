@@ -72,13 +72,21 @@ class WappaEventDispatcher:
 
             match universal_webhook:
                 case IncomingMessageWebhook():
-                    result = await self._handle_message_webhook(universal_webhook, handler)
+                    result = await self._handle_message_webhook(
+                        universal_webhook, handler
+                    )
                 case StatusWebhook():
-                    result = await self._handle_status_webhook(universal_webhook, handler)
+                    result = await self._handle_status_webhook(
+                        universal_webhook, handler
+                    )
                 case ErrorWebhook():
-                    result = await self._handle_error_webhook(universal_webhook, handler)
+                    result = await self._handle_error_webhook(
+                        universal_webhook, handler
+                    )
                 case SystemWebhook():
-                    result = await self._handle_system_webhook(universal_webhook, handler)
+                    result = await self._handle_system_webhook(
+                        universal_webhook, handler
+                    )
                 case _:
                     return {
                         "success": False,
@@ -88,7 +96,9 @@ class WappaEventDispatcher:
 
             if result:
                 dispatch_end = datetime.now(UTC)
-                result["dispatch_time"] = (dispatch_end - dispatch_start).total_seconds()
+                result["dispatch_time"] = (
+                    dispatch_end - dispatch_start
+                ).total_seconds()
                 result["processed_at"] = dispatch_end.isoformat()
                 self.logger.info(f"⚡ Processed in {result['dispatch_time']:.3f}s")
 
@@ -146,7 +156,7 @@ class WappaEventDispatcher:
 
             self.logger.info(
                 f"{emoji} Status Update: {status_value.upper()} "
-                f"(recipient: {webhook.recipient_id}, tenant: {handler.tenant_id})"
+                f"(user: {webhook.user_id or webhook.recipient_id}, tenant: {handler.tenant_id})"
             )
 
             await handler.handle_status(webhook)

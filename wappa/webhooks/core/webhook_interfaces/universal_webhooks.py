@@ -279,6 +279,16 @@ class StatusWebhook(BaseModel):
         default=None,
         description="Business Scoped User ID of the recipient - stable identifier",
     )
+    user_id: str | None = Field(
+        default=None,
+        description=(
+            "Canonical domain identifier for the recipient. Populated by the "
+            "webhook pipeline: defaults to `recipient_id` (BSUID > phone), and "
+            "may be enriched via persistence lookup when Meta sends only a "
+            "wa_id but a canonical user exists in the store. Use this as the "
+            "state/cache key in status handlers."
+        ),
+    )
     timestamp: datetime = Field(description="When this status update occurred")
 
     # Optional context

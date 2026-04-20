@@ -90,12 +90,12 @@ class UserBase(BaseModel):
         Get the recommended user identifier.
 
         Returns:
-            phone_number (WhatsApp wa_id) if available, otherwise falls back to BSUID.
+            BSUID if available (stable, Meta v24.0+), otherwise wa_id (phone number).
         """
-        if self.phone_number and self.phone_number.strip():
-            return self.phone_number.strip()
         if self.bsuid and self.bsuid.strip():
             return self.bsuid.strip()
+        if self.phone_number and self.phone_number.strip():
+            return self.phone_number.strip()
         return ""
 
     @property
