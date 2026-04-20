@@ -5,6 +5,13 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2026-04-20
+
+Hotfix for `SSEMessageHandler` using the wrong attribute name on `UserBase`.
+
+### Fixed
+- `SSEMessageHandler.log_incoming_message()` was reading `user.wa_id` to populate `phone_number` in the SSE envelope. `UserBase` exposes `phone_number`, not `wa_id` (`wa_id` lives on the WhatsApp-specific `WhatsAppContact` subclass and `WhatsAppIncomingWebhookData`). The field is now read as `user.phone_number`, matching the universal interface contract.
+
 ## [0.3.4] - 2026-04-20
 
 Patch release enriching SSE event envelopes with explicit `bsuid` and `phone_number` identity fields alongside the existing canonical `user_id`.

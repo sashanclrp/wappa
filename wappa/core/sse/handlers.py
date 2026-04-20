@@ -168,7 +168,7 @@ class SSEMessageHandler(DefaultMessageHandler):
         user = webhook.user
         user_id = user.user_id if user else "unknown"
         bsuid = (user.bsuid or None) if user else None
-        phone_number = (user.wa_id or None) if user else None
+        phone_number = (user.phone_number or None) if user else None
         platform = webhook.platform.value if webhook.platform else "whatsapp"
 
         await publish_sse_event(
