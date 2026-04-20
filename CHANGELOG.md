@@ -5,6 +5,21 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-04-20
+
+Patch release that flips the preferred identifier resolved by `IncomingMessageWebhook.user.user_id`.
+
+### Changed
+- **Breaking-ish preference flip**: `UserBase.user_id` now prefers the WhatsApp `wa_id` (exposed as `user.phone_number`) and only falls back to `bsuid` when `wa_id` is not present in the webhook. Previously BSUID was preferred whenever it was available. Meta tenants that don't yet have BSUID outbound messaging enabled can now use `webhook.user.user_id` directly for replies without workarounds. Applications that were relying on BSUID being the canonical `user_id` should switch to `webhook.user.bsuid` (raw field) or `webhook.whatsapp.bsuid`.
+- Simplified the `init` example's `master_event.py` — the `wa_id or phone_number or user_id` fallback chain is no longer needed; `webhook.user.user_id` now resolves to the wa_id by default.
+
+### Fixed
+- `UserBase.user_id` no longer returns an empty string when both `phone_number` and `bsuid` are unset in constructed/edge-case payloads; the property now explicitly returns `""` as the final fallback (unchanged observable behavior, documented guarantee).
+
+### Tests
+- Updated `test_create_user_base_from_contacts_preserves_wa_id_when_bsuid_exists` and `test_create_universal_webhook_accepts_contact_without_profile` to assert the new resolution order (`user_id == wa_id` when both are present).
+- Added `test_user_id_falls_back_to_bsuid_when_phone_number_missing` to lock in the BSUID fallback path.
+
 ## [0.3.1] - 2026-04-20
 
 Patch release focused on stabilizing the BSUID rollout handling introduced in `0.3.0`.

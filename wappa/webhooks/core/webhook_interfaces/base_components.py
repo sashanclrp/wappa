@@ -46,9 +46,9 @@ class UserBase(BaseModel):
     Based on WhatsApp's contact structure but platform-agnostic.
 
     Field vs Property Pattern:
-    - phone_number: Raw phone number field from webhook
+    - phone_number: Raw phone number field from webhook (WhatsApp wa_id)
     - bsuid: Raw BSUID field from webhook (v24.0+)
-    - user_id: @property returning BSUID if available, else phone_number
+    - user_id: @property returning phone_number if available, else BSUID
     """
 
     model_config = ConfigDict(
@@ -90,11 +90,13 @@ class UserBase(BaseModel):
         Get the recommended user identifier.
 
         Returns:
-            BSUID if available, otherwise falls back to phone_number.
+            phone_number (WhatsApp wa_id) if available, otherwise falls back to BSUID.
         """
+        if self.phone_number and self.phone_number.strip():
+            return self.phone_number.strip()
         if self.bsuid and self.bsuid.strip():
             return self.bsuid.strip()
-        return self.phone_number
+        return ""
 
     @property
     def has_bsuid(self) -> bool:
@@ -120,7 +122,7 @@ class UserBase(BaseModel):
         return self.phone_number or self.user_id
 
     def get_user_key(self) -> str:
-        """Get unique user key for this contact (uses BSUID if available)."""
+        """Get unique user key for this contact (prefers phone_number, falls back to BSUID)."""
         return self.user_id
 
 

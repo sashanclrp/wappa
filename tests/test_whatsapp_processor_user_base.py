@@ -52,7 +52,7 @@ def test_create_user_base_from_contacts_preserves_wa_id_when_bsuid_exists() -> N
 
     assert user.bsuid == "CO.2186878922080769"
     assert user.phone_number == "573168227670"
-    assert user.user_id == "CO.2186878922080769"
+    assert user.user_id == "573168227670"
 
 
 @pytest.mark.asyncio
@@ -97,8 +97,19 @@ async def test_create_universal_webhook_accepts_contact_without_profile() -> Non
     processor = WhatsAppWebhookProcessor()
     webhook = await processor.create_universal_webhook(payload)
 
-    assert webhook.user.user_id == "CO.2186878922080769"
+    assert webhook.user.user_id == "573168227670"
     assert webhook.user.phone_number == "573168227670"
+    assert webhook.user.bsuid == "CO.2186878922080769"
     assert webhook.whatsapp is not None
     assert webhook.whatsapp.wa_id == "573168227670"
     assert webhook.whatsapp.bsuid == "CO.2186878922080769"
+
+
+def test_user_id_falls_back_to_bsuid_when_phone_number_missing() -> None:
+    from wappa.webhooks.core.webhook_interfaces import UserBase
+
+    user = UserBase(phone_number="", bsuid="CO.2186878922080769")
+    assert user.user_id == "CO.2186878922080769"
+
+    user_with_phone = UserBase(phone_number="573168227670", bsuid="CO.2186878922080769")
+    assert user_with_phone.user_id == "573168227670"
