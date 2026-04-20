@@ -1,86 +1,58 @@
-"""
-Main cache factory selector for Wappa framework.
-
-Provides factory selector based on cache type configuration.
-"""
+from collections.abc import Callable
 
 from ..domain.interfaces.cache_factory import ICacheFactory
 
 
+def _load_redis_factory() -> type[ICacheFactory]:
+    from .redis.redis_cache_factory import RedisCacheFactory
+
+    return RedisCacheFactory
+
+
+def _load_json_factory() -> type[ICacheFactory]:
+    from .json.json_cache_factory import JSONCacheFactory
+
+    return JSONCacheFactory
+
+
+def _load_memory_factory() -> type[ICacheFactory]:
+    from .memory.memory_cache_factory import MemoryCacheFactory
+
+    return MemoryCacheFactory
+
+
+_FACTORY_LOADERS: dict[str, tuple[Callable[[], type[ICacheFactory]], str]] = {
+    "redis": (_load_redis_factory, "Redis"),
+    "json": (_load_json_factory, "JSON"),
+    "memory": (_load_memory_factory, "Memory"),
+}
+
+
 def create_cache_factory(cache_type: str) -> type[ICacheFactory]:
-    """
-    Create cache factory class based on cache type.
-
-    Returns factory classes that can be instantiated with context parameters.
-    This supports the new context-aware cache factory pattern where context
-    (tenant_id, user_id) is injected at construction time.
-
-    Args:
-        cache_type: Type of cache to create ("redis", "json", "memory")
-
-    Returns:
-        Cache factory class for the specified type
-
-    Raises:
-        ValueError: If cache_type is not supported
-        ImportError: If required dependencies are not available
-    """
-    if cache_type == "redis":
-        try:
-            from .redis.redis_cache_factory import RedisCacheFactory
-
-            return RedisCacheFactory
-        except ImportError as e:
-            raise ImportError(
-                f"Redis dependencies not available for cache_type='redis': {e}"
-            ) from e
-
-    elif cache_type == "json":
-        try:
-            from .json.json_cache_factory import JSONCacheFactory
-
-            return JSONCacheFactory
-        except ImportError as e:
-            raise ImportError(
-                f"JSON cache dependencies not available for cache_type='json': {e}"
-            ) from e
-
-    elif cache_type == "memory":
-        try:
-            from .memory.memory_cache_factory import MemoryCacheFactory
-
-            return MemoryCacheFactory
-        except ImportError as e:
-            raise ImportError(
-                f"Memory cache dependencies not available for cache_type='memory': {e}"
-            ) from e
-
-    else:
+    normalized = cache_type.strip().lower()
+    loader_info = _FACTORY_LOADERS.get(normalized)
+    if loader_info is None:
         raise ValueError(
             f"Unsupported cache_type: {cache_type}. "
             f"Supported types: 'redis', 'json', 'memory'"
         )
 
+    loader, backend_label = loader_info
+    try:
+        return loader()
+    except ImportError as e:
+        raise ImportError(
+            f"{backend_label} dependencies not available for "
+            f"cache_type='{normalized}': {e}"
+        ) from e
 
-# Convenience function for getting cache factory with validation
+
 def get_cache_factory(
     cache_type: str, *, validate_redis_url: bool = True
 ) -> type[ICacheFactory]:
-    """
-    Get cache factory class with validation.
+    normalized = cache_type.strip().lower()
 
-    Args:
-        cache_type: Type of cache to create
-        validate_redis_url: Whether to validate Redis URL for redis cache type
-
-    Returns:
-        Configured cache factory class
-
-    Raises:
-        ValueError: If configuration is invalid
-        ImportError: If required dependencies are not available
-    """
-    if cache_type == "redis" and validate_redis_url:
+    if normalized == "redis" and validate_redis_url:
         from ..core.config.settings import settings
 
         if not settings.has_redis:
@@ -89,4 +61,4 @@ def get_cache_factory(
                 "or use a different cache_type"
             )
 
-    return create_cache_factory(cache_type)
+    return create_cache_factory(normalized)

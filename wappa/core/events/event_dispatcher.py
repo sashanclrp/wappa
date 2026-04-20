@@ -1,9 +1,3 @@
-"""
-Event dispatcher for routing webhooks to event handlers.
-
-Simplified version of the SimpleEventDispatcher focused on the core webhook routing pattern.
-"""
-
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -21,29 +15,35 @@ if TYPE_CHECKING:
     from .event_handler import WappaEventHandler
 
 
-class WappaEventDispatcher:
-    """
-    Event dispatcher service for Wappa applications.
+_WEBHOOK_EMOJI = {
+    "IncomingMessageWebhook": "💬",
+    "StatusWebhook": "📊",
+    "ErrorWebhook": "🚨",
+    "SystemWebhook": "⚙️",
+}
 
-    Routes universal webhooks to the user's event handler with clean dispatch logic.
-    This is the core abstraction that developers interact with - they implement
-    WappaEventHandler methods and this dispatcher routes webhooks to them.
-    """
+_STATUS_EMOJI = {
+    "sent": "📤",
+    "delivered": "✅",
+    "read": "👁️",
+    "failed": "❌",
+}
+
+
+class WappaEventDispatcher:
+    # Routes universal webhooks to the user's event handler.
 
     def __init__(self, event_handler: "WappaEventHandler"):
-        """
-        Initialize the event dispatcher with the user's event handler.
-
-        Args:
-            event_handler: WappaEventHandler instance with injected dependencies
-        """
-        # Use context-aware logger that automatically gets tenant/user context
         self.logger = get_logger(__name__)
         self._event_handler = event_handler
 
         self.logger.info(
             f"WappaEventDispatcher initialized with {event_handler.__class__.__name__}"
         )
+
+    @property
+    def event_handler(self) -> "WappaEventHandler":
+        return self._event_handler
 
     async def dispatch_universal_webhook(
         self,
@@ -52,27 +52,10 @@ class WappaEventDispatcher:
         request_handler: "WappaEventHandler | None" = None,
         **kwargs,
     ) -> dict[str, Any]:
-        """
-        Dispatch Universal Webhook to the appropriate handler method.
-
-        Args:
-            universal_webhook: Universal webhook interface instance
-            tenant_id: Optional tenant ID for context
-            request_handler: Optional cloned handler instance for this request.
-                           If provided, uses this handler instead of the prototype.
-                           This ensures thread safety with per-request context.
-            **kwargs: Additional dispatch parameters
-
-        Returns:
-            Dictionary with dispatch results
-        """
         dispatch_start = datetime.now(UTC)
-
-        # Use cloned handler if provided, otherwise fall back to prototype (legacy)
-        handler = request_handler if request_handler else self._event_handler
+        handler = request_handler or self._event_handler
 
         try:
-            # Log webhook type and basic info
             webhook_type = type(universal_webhook).__name__
             platform_or_provider = getattr(
                 universal_webhook,
@@ -82,41 +65,30 @@ class WappaEventDispatcher:
             if hasattr(platform_or_provider, "value"):
                 platform_or_provider = platform_or_provider.value
 
-            # Use emoji and shorter format for webhook processing
-            webhook_emoji = {
-                "IncomingMessageWebhook": "💬",
-                "StatusWebhook": "📊",
-                "ErrorWebhook": "🚨",
-                "SystemWebhook": "⚙️",
-            }.get(webhook_type, "📨")
-
+            emoji = _WEBHOOK_EMOJI.get(webhook_type, "📨")
             self.logger.info(
-                f"{webhook_emoji} {webhook_type.replace('Webhook', '')} from {platform_or_provider}"
+                f"{emoji} {webhook_type.replace('Webhook', '')} from {platform_or_provider}"
             )
 
-            # Route to appropriate handler method using the resolved handler
-            result = None
-            if isinstance(universal_webhook, IncomingMessageWebhook):
-                result = await self._handle_message_webhook(universal_webhook, handler)
-            elif isinstance(universal_webhook, StatusWebhook):
-                result = await self._handle_status_webhook(universal_webhook, handler)
-            elif isinstance(universal_webhook, ErrorWebhook):
-                result = await self._handle_error_webhook(universal_webhook, handler)
-            elif isinstance(universal_webhook, SystemWebhook):
-                result = await self._handle_system_webhook(universal_webhook, handler)
-            else:
-                return {
-                    "success": False,
-                    "error": f"Unknown webhook type: {webhook_type}",
-                    "processed_at": datetime.now(UTC).isoformat(),
-                }
+            match universal_webhook:
+                case IncomingMessageWebhook():
+                    result = await self._handle_message_webhook(universal_webhook, handler)
+                case StatusWebhook():
+                    result = await self._handle_status_webhook(universal_webhook, handler)
+                case ErrorWebhook():
+                    result = await self._handle_error_webhook(universal_webhook, handler)
+                case SystemWebhook():
+                    result = await self._handle_system_webhook(universal_webhook, handler)
+                case _:
+                    return {
+                        "success": False,
+                        "error": f"Unknown webhook type: {webhook_type}",
+                        "processed_at": datetime.now(UTC).isoformat(),
+                    }
 
-            # Add timing information if result exists
             if result:
                 dispatch_end = datetime.now(UTC)
-                result["dispatch_time"] = (
-                    dispatch_end - dispatch_start
-                ).total_seconds()
+                result["dispatch_time"] = (dispatch_end - dispatch_start).total_seconds()
                 result["processed_at"] = dispatch_end.isoformat()
                 self.logger.info(f"⚡ Processed in {result['dispatch_time']:.3f}s")
 
@@ -135,27 +107,13 @@ class WappaEventDispatcher:
         webhook: "IncomingMessageWebhook",
         handler: "WappaEventHandler",
     ) -> dict[str, Any]:
-        """
-        Handle incoming message webhook by routing to user's handler.
-
-        Args:
-            webhook: Incoming message webhook
-            handler: Context-bound handler instance for this request
-
-        Returns:
-            Dictionary with handling results
-        """
         try:
-            # Enhanced message routing log
             handler_name = handler.__class__.__name__.replace("EventHandler", "")
-            msg_type = webhook.get_message_type_name()
-
             self.logger.info(
-                f"💬 {msg_type} message → {handler_name} "
+                f"💬 {webhook.get_message_type_name()} message → {handler_name} "
                 f"(from: {webhook.user.user_id}, tenant: {handler.tenant_id})"
             )
 
-            # Call user's handle_message method on the cloned handler
             await handler.handle_message(webhook)
 
             return {
@@ -182,38 +140,22 @@ class WappaEventDispatcher:
         webhook: "StatusWebhook",
         handler: "WappaEventHandler",
     ) -> dict[str, Any]:
-        """
-        Handle status webhook by routing to user's handler.
-
-        Args:
-            webhook: Status webhook
-            handler: Context-bound handler instance for this request
-
-        Returns:
-            Dictionary with handling results
-        """
         try:
-            # Enhanced status logging without message ID
-            status_emoji = {
-                "sent": "📤",
-                "delivered": "✅",
-                "read": "👁️",
-                "failed": "❌",
-            }.get(webhook.status.value, "📋")
+            status_value = webhook.status.value
+            emoji = _STATUS_EMOJI.get(status_value, "📋")
 
             self.logger.info(
-                f"{status_emoji} Status Update: {webhook.status.value.upper()} "
+                f"{emoji} Status Update: {status_value.upper()} "
                 f"(recipient: {webhook.recipient_id}, tenant: {handler.tenant_id})"
             )
 
-            # Call user's handle_status method on the cloned handler
             await handler.handle_status(webhook)
 
             return {
                 "success": True,
                 "action": "status_processed",
                 "message_id": webhook.message_id,
-                "status": webhook.status.value,
+                "status": status_value,
                 "recipient": webhook.recipient_id,
                 "tenant_id": handler.tenant_id,
             }
@@ -231,16 +173,6 @@ class WappaEventDispatcher:
         webhook: "ErrorWebhook",
         handler: "WappaEventHandler",
     ) -> dict[str, Any]:
-        """
-        Handle error webhook by routing to user's handler.
-
-        Args:
-            webhook: Error webhook
-            handler: Context-bound handler instance for this request
-
-        Returns:
-            Dictionary with handling results
-        """
         try:
             error_count = webhook.get_error_count()
             primary_error = webhook.get_primary_error()
@@ -251,7 +183,6 @@ class WappaEventDispatcher:
                 f"(tenant: {handler.tenant_id})"
             )
 
-            # Call user's handle_error method on the cloned handler
             await handler.handle_error(webhook)
 
             return {
@@ -276,23 +207,12 @@ class WappaEventDispatcher:
         webhook: "SystemWebhook",
         handler: "WappaEventHandler",
     ) -> dict[str, Any]:
-        """
-        Handle system webhook by routing to user's handler.
-
-        Args:
-            webhook: System webhook (phone changes, BSUID updates, preferences)
-            handler: Context-bound handler instance for this request
-
-        Returns:
-            Dictionary with handling results
-        """
         try:
             self.logger.info(
                 f"⚙️ System event: {webhook.system_event_type.value} "
                 f"(tenant: {handler.tenant_id})"
             )
 
-            # Call user's handle_system method on the cloned handler
             await handler.handle_system(webhook)
 
             return {

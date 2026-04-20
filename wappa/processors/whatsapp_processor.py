@@ -1,10 +1,3 @@
-"""
-WhatsApp webhook processor for the Mimeia AI Agent Platform.
-
-This module provides comprehensive WhatsApp Business Platform webhook processing,
-including message parsing, validation, and integration with the Symphony AI system.
-"""
-
 import hashlib
 import hmac
 from datetime import UTC, datetime
@@ -43,16 +36,9 @@ if TYPE_CHECKING:
 
 
 class WhatsAppWebhookProcessor(BaseWebhookProcessor):
-    """
-    WhatsApp Business Platform webhook processor.
-
-    Handles parsing, validation, and processing of WhatsApp webhooks
-    including incoming messages and outgoing message status updates.
-    Inherits from BaseWebhookProcessor for platform-agnostic interface.
-    """
+    # WhatsApp Business Platform webhook processor.
 
     def __init__(self):
-        """Initialize the WhatsApp processor with capabilities and handlers."""
         super().__init__()
 
         # Define WhatsApp-specific capabilities
@@ -87,16 +73,13 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
     @property
     def platform(self) -> PlatformType:
-        """Get the platform this processor handles."""
         return PlatformType.WHATSAPP
 
     @property
     def capabilities(self) -> ProcessorCapabilities:
-        """Get the capabilities of this processor."""
         return self._capabilities
 
     def _register_message_handlers(self) -> None:
-        """Register handlers for all supported WhatsApp message types."""
         self.register_message_handler("text", self._create_text_message)
         self.register_message_handler("interactive", self._create_interactive_message)
         self.register_message_handler("image", self._create_image_message)
@@ -118,17 +101,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def validate_webhook_signature(
         self, payload: bytes, signature: str, **kwargs
     ) -> bool:
-        """
-        Validate WhatsApp webhook signature for security.
-
-        Args:
-            payload: Raw webhook payload bytes
-            signature: X-Hub-Signature-256 header from WhatsApp
-            **kwargs: Additional validation parameters
-
-        Returns:
-            True if signature is valid, False otherwise
-        """
         if not settings.whatsapp_webhook_verify_token:
             self.logger.warning(
                 "WhatsApp webhook verification token not configured - skipping signature validation"
@@ -136,29 +108,22 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             return True
 
         try:
-            # WhatsApp sends signature as 'sha256=<hash>'
             if not signature.startswith("sha256="):
                 self.logger.error(
                     "Invalid signature format - must start with 'sha256='"
                 )
                 return False
 
-            # Extract the hash part
-            provided_hash = signature[7:]  # Remove 'sha256=' prefix
-
-            # Calculate expected hash
+            provided_hash = signature.removeprefix("sha256=")
             expected_hash = hmac.new(
                 settings.whatsapp_webhook_verify_token.encode("utf-8"),
                 payload,
                 hashlib.sha256,
             ).hexdigest()
 
-            # Compare hashes securely
             is_valid = hmac.compare_digest(expected_hash, provided_hash)
-
             if not is_valid:
                 self.logger.error("Webhook signature validation failed")
-
             return is_valid
 
         except Exception as e:
@@ -166,24 +131,10 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             return False
 
     def parse_webhook_container(self, payload: dict[str, Any], **kwargs) -> BaseWebhook:
-        """
-        Parse the top-level WhatsApp webhook structure.
-
-        Args:
-            payload: Raw webhook payload
-            **kwargs: Additional parsing parameters
-
-        Returns:
-            Parsed webhook container with universal interface
-
-        Raises:
-            ValidationError: If webhook structure is invalid
-        """
         try:
             from wappa.webhooks.whatsapp.webhook_container import WhatsAppWebhook
 
             webhook = WhatsAppWebhook.model_validate(payload)
-
             self.logger.debug(
                 f"Successfully parsed WhatsApp webhook from {webhook.business_id}"
             )
@@ -195,56 +146,23 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             raise ValueError(error_msg) from e
 
     def get_supported_message_types(self) -> set[MessageType]:
-        """Get the set of message types this processor supports."""
         return self._capabilities.supported_message_types
 
     def create_message_from_data(
         self, message_data: dict[str, Any], message_type: MessageType, **kwargs
     ) -> BaseMessage:
-        """
-        Create a message instance from raw data.
-
-        Args:
-            message_data: Raw message data from webhook
-            message_type: The type of message to create
-            **kwargs: Additional creation parameters
-
-        Returns:
-            Parsed message with universal interface
-
-        Raises:
-            ValidationError: If message data is invalid
-            UnsupportedMessageType: If message type is not supported
-        """
-        # Use the mapped universal message type for handler lookup instead of raw type
         message_type_str = message_type.value
-
-        # Get appropriate handler
         handler = self.get_message_handler(message_type_str)
         if handler is None:
             from .base_processor import UnsupportedMessageTypeError
 
             raise UnsupportedMessageTypeError(message_type_str, self.platform)
 
-        # Create message instance
         return handler(message_data, **kwargs)
 
     def create_status_from_data(
         self, status_data: dict[str, Any], **kwargs
     ) -> BaseMessageStatus:
-        """
-        Create a status instance from raw data.
-
-        Args:
-            status_data: Raw status data from webhook
-            **kwargs: Additional creation parameters
-
-        Returns:
-            Parsed status with universal interface
-
-        Raises:
-            ValidationError: If status data is invalid
-        """
         try:
             from wappa.webhooks.whatsapp.status_models import WhatsAppMessageStatus
 
@@ -254,14 +172,11 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             self.logger.error(f"Failed to parse WhatsApp message status: {e}")
             raise
 
-    # Legacy _process_webhook_errors method removed - Universal Webhook Interface handles errors via ErrorWebhook
-
-    # Message creation handlers for all WhatsApp message types
+    # Message creation handlers
 
     def _create_text_message(
         self, message_data: dict[str, Any], **kwargs
     ) -> BaseMessage:
-        """Create a text message instance."""
         from wappa.webhooks.whatsapp.message_types.text import WhatsAppTextMessage
 
         return WhatsAppTextMessage.model_validate(message_data)
@@ -269,7 +184,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_interactive_message(
         self, message_data: dict[str, Any], **kwargs
     ) -> BaseMessage:
-        """Create an interactive message instance."""
         from wappa.webhooks.whatsapp.message_types.interactive import (
             WhatsAppInteractiveMessage,
         )
@@ -279,7 +193,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_image_message(
         self, message_data: dict[str, Any], **kwargs
     ) -> BaseMessage:
-        """Create an image message instance."""
         from wappa.webhooks.whatsapp.message_types.image import WhatsAppImageMessage
 
         return WhatsAppImageMessage.model_validate(message_data)
@@ -287,7 +200,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_audio_message(
         self, message_data: dict[str, Any], **kwargs
     ) -> BaseMessage:
-        """Create an audio message instance."""
         from wappa.webhooks.whatsapp.message_types.audio import WhatsAppAudioMessage
 
         return WhatsAppAudioMessage.model_validate(message_data)
@@ -295,7 +207,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_video_message(
         self, message_data: dict[str, Any], **kwargs
     ) -> BaseMessage:
-        """Create a video message instance."""
         from wappa.webhooks.whatsapp.message_types.video import WhatsAppVideoMessage
 
         return WhatsAppVideoMessage.model_validate(message_data)
@@ -303,7 +214,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_document_message(
         self, message_data: dict[str, Any], **kwargs
     ) -> BaseMessage:
-        """Create a document message instance."""
         from wappa.webhooks.whatsapp.message_types.document import (
             WhatsAppDocumentMessage,
         )
@@ -313,7 +223,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_contact_message(
         self, message_data: dict[str, Any], **kwargs
     ) -> BaseMessage:
-        """Create a contact message instance."""
         from wappa.webhooks.whatsapp.message_types.contact import WhatsAppContactMessage
 
         return WhatsAppContactMessage.model_validate(message_data)
@@ -321,7 +230,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_location_message(
         self, message_data: dict[str, Any], **kwargs
     ) -> BaseMessage:
-        """Create a location message instance."""
         from wappa.webhooks.whatsapp.message_types.location import (
             WhatsAppLocationMessage,
         )
@@ -331,7 +239,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_sticker_message(
         self, message_data: dict[str, Any], **kwargs
     ) -> BaseMessage:
-        """Create a sticker message instance."""
         from wappa.webhooks.whatsapp.message_types.sticker import WhatsAppStickerMessage
 
         return WhatsAppStickerMessage.model_validate(message_data)
@@ -339,7 +246,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_system_message(
         self, message_data: dict[str, Any], **kwargs
     ) -> BaseMessage:
-        """Create a system message instance."""
         from wappa.webhooks.whatsapp.message_types.system import WhatsAppSystemMessage
 
         return WhatsAppSystemMessage.model_validate(message_data)
@@ -347,7 +253,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_unsupported_message(
         self, message_data: dict[str, Any], **kwargs
     ) -> BaseMessage:
-        """Create an unsupported message instance."""
         from wappa.webhooks.whatsapp.message_types.unsupported import (
             WhatsAppUnsupportedMessage,
         )
@@ -357,7 +262,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_reaction_message(
         self, message_data: dict[str, Any], **kwargs
     ) -> BaseMessage:
-        """Create a reaction message instance."""
         from wappa.webhooks.whatsapp.message_types.reaction import (
             WhatsAppReactionMessage,
         )
@@ -367,7 +271,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_button_message(
         self, message_data: dict[str, Any], **kwargs
     ) -> BaseMessage:
-        """Create a button message instance."""
         from wappa.webhooks.whatsapp.message_types.button import WhatsAppButtonMessage
 
         return WhatsAppButtonMessage.model_validate(message_data)
@@ -375,7 +278,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_order_message(
         self, message_data: dict[str, Any], **kwargs
     ) -> BaseMessage:
-        """Create an order message instance."""
         from wappa.webhooks.whatsapp.message_types.order import WhatsAppOrderMessage
 
         return WhatsAppOrderMessage.model_validate(message_data)
@@ -385,37 +287,14 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     async def create_universal_webhook(
         self, payload: dict[str, Any], tenant_id: str | None = None, **kwargs
     ) -> "UniversalWebhook":
-        """
-        Transform WhatsApp webhook into Universal Webhook Interface.
-
-        This is the main adapter method that converts WhatsApp-specific webhook
-        payload into one of the 4 universal webhook types.
-
-        Args:
-            payload: Raw WhatsApp webhook payload
-            tenant_id: Tenant identifier for context
-            **kwargs: Additional processing parameters
-
-        Returns:
-            Universal webhook interface (IncomingMessageWebhook, StatusWebhook, or ErrorWebhook)
-
-        Raises:
-            ProcessorError: If webhook type cannot be determined or conversion fails
-        """
-
         try:
-            # Parse webhook container first
             webhook = self.parse_webhook_container(payload)
-
-            # Log raw webhook payload for debugging
             self.logger.debug(f"📨 Raw WhatsApp webhook received: {payload}")
 
-            # Create tenant base from webhook metadata
             tenant_base = self._create_tenant_base(webhook, tenant_id)
 
-            # Determine webhook type and create appropriate universal interface
-            # System events must be checked BEFORE incoming messages to intercept
-            # system messages (type=="system") from the messages field
+            # System events are checked BEFORE incoming messages because system
+            # messages (type=="system") arrive in the messages field.
             if webhook.is_system_event:
                 universal_webhook = await self._create_system_webhook(
                     webhook, tenant_base, **kwargs
@@ -435,58 +314,51 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             else:
                 universal_webhook = None
 
-            # Set raw webhook data for debugging and inspection
-            if universal_webhook is not None:
-                universal_webhook.set_raw_webhook_data(payload)
-
-                # Set 3-context system: owner_id (URL), tenant_id (JSON), user_id (JSON)
-                webhook_tenant_id = tenant_base.platform_tenant_id  # From JSON metadata
-
-                # Extract user_id based on webhook type
-                webhook_user_id = None
-                if hasattr(universal_webhook, "user") and universal_webhook.user:
-                    # IncomingMessageWebhook has user object
-                    webhook_user_id = universal_webhook.user.user_id
-                elif hasattr(universal_webhook, "recipient_id"):
-                    # StatusWebhook has recipient_id field
-                    webhook_user_id = universal_webhook.recipient_id
-                # ErrorWebhook has no user context (system-level errors)
-
-                # Set the context with webhook-extracted values
-                set_request_context(
-                    tenant_id=webhook_tenant_id,  # JSON tenant (authoritative)
-                    user_id=webhook_user_id,  # JSON user
-                    # Note: owner_id is set by middleware from URL/settings
+            if universal_webhook is None:
+                # Unknown webhook type -- wrap as an ErrorWebhook
+                from wappa.webhooks.core.webhook_interfaces import (
+                    ErrorDetailBase,
+                    ErrorWebhook,
                 )
 
-                self.logger.debug(
-                    f"✅ Set webhook context - tenant_id: {webhook_tenant_id}, user_id: {webhook_user_id}"
+                error_detail = ErrorDetailBase(
+                    error_code=400,
+                    error_title="Unknown webhook type",
+                    error_message="Webhook contains no recognizable content (messages, statuses, errors, or system events)",
+                    error_type="webhook_format",
+                    occurred_at=datetime.now(UTC),
                 )
 
-                return universal_webhook
+                return ErrorWebhook(
+                    tenant=tenant_base,
+                    errors=[error_detail],
+                    timestamp=datetime.now(UTC),
+                    error_level="webhook",
+                    platform=PlatformType.WHATSAPP,
+                    webhook_id=webhook.get_webhook_id(),
+                )
 
-            # Unknown webhook type -- wrap as an ErrorWebhook
-            from wappa.webhooks.core.webhook_interfaces import (
-                ErrorDetailBase,
-                ErrorWebhook,
+            universal_webhook.set_raw_webhook_data(payload)
+
+            # 3-context system: owner_id (URL), tenant_id (JSON), user_id (JSON)
+            webhook_tenant_id = tenant_base.platform_tenant_id
+            webhook_user_id = None
+            if getattr(universal_webhook, "user", None):
+                webhook_user_id = universal_webhook.user.user_id
+            elif hasattr(universal_webhook, "recipient_id"):
+                webhook_user_id = universal_webhook.recipient_id
+            # ErrorWebhook has no user context (system-level errors)
+
+            set_request_context(
+                tenant_id=webhook_tenant_id,
+                user_id=webhook_user_id,
             )
 
-            error_detail = ErrorDetailBase(
-                error_code=400,
-                error_title="Unknown webhook type",
-                error_message="Webhook contains no recognizable content (messages, statuses, errors, or system events)",
-                error_type="webhook_format",
-                occurred_at=datetime.now(UTC),
+            self.logger.debug(
+                f"✅ Set webhook context - tenant_id: {webhook_tenant_id}, user_id: {webhook_user_id}"
             )
 
-            return ErrorWebhook(
-                tenant=tenant_base,
-                errors=[error_detail],
-                timestamp=datetime.now(UTC),
-                error_level="webhook",
-                platform=PlatformType.WHATSAPP,
-                webhook_id=webhook.get_webhook_id(),
-            )
+            return universal_webhook
 
         except Exception as e:
             self.logger.error(f"Failed to create universal webhook: {e}", exc_info=True)
@@ -499,48 +371,22 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_tenant_base(
         self, webhook: BaseWebhook, tenant_id: str | None = None
     ) -> "TenantBase":
-        """
-        Create TenantBase from WhatsApp webhook metadata.
-
-        Args:
-            webhook: Parsed WhatsApp webhook container
-            tenant_id: Optional tenant identifier override
-
-        Returns:
-            TenantBase with business identification information
-        """
         from wappa.webhooks.core.webhook_interfaces import TenantBase
 
-        # Extract metadata from WhatsApp webhook (metadata is wrapped, access underlying data)
-        metadata = webhook.get_metadata()
-
-        # Access the wrapped WhatsApp metadata
-        whatsapp_metadata = metadata._metadata
+        whatsapp_metadata = webhook.get_metadata()._metadata
 
         return TenantBase(
             business_phone_number_id=whatsapp_metadata.phone_number_id,
             display_phone_number=whatsapp_metadata.display_phone_number,
-            # For WhatsApp, the phone_number_id IS the tenant identifier
+            # For WhatsApp, phone_number_id IS the tenant identifier
             platform_tenant_id=whatsapp_metadata.phone_number_id,
         )
 
     async def _create_incoming_message_webhook(
         self, webhook: BaseWebhook, tenant_base: "TenantBase", **kwargs
     ) -> "IncomingMessageWebhook":
-        """
-        Create IncomingMessageWebhook from WhatsApp messages webhook.
-
-        Args:
-            webhook: Parsed WhatsApp webhook container
-            tenant_base: Tenant identification information
-            **kwargs: Additional processing parameters
-
-        Returns:
-            IncomingMessageWebhook with message and context information
-        """
         from wappa.webhooks.core.webhook_interfaces import IncomingMessageWebhook
 
-        # Get the first message (WhatsApp typically sends one message per webhook)
         raw_messages = webhook.get_raw_messages()
         if not raw_messages:
             raise ProcessorError(
@@ -549,15 +395,11 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 PlatformType.WHATSAPP,
             )
 
-        # Parse the first message using the message type
         raw_message = raw_messages[0]
         raw_message_type = raw_message.get("type", "text")
 
-        # Map WhatsApp message types to universal message types
-        whatsapp_to_universal_type = {
-            "contacts": "contact",  # WhatsApp uses 'contacts' but our enum uses 'contact'
-            # Add other mappings as needed
-        }
+        # WhatsApp uses 'contacts' but the enum uses 'contact'.
+        whatsapp_to_universal_type = {"contacts": "contact"}
         universal_message_type = whatsapp_to_universal_type.get(
             raw_message_type, raw_message_type
         )
@@ -588,22 +430,8 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     async def _create_status_webhook(
         self, webhook: BaseWebhook, tenant_base: "TenantBase", **kwargs
     ) -> "StatusWebhook":
-        """
-        Create StatusWebhook from WhatsApp status webhook.
+        from wappa.webhooks.core.webhook_interfaces import StatusWebhook
 
-        Args:
-            webhook: Parsed WhatsApp webhook container
-            tenant_base: Tenant identification information
-            **kwargs: Additional processing parameters
-
-        Returns:
-            StatusWebhook with message status information
-        """
-        from wappa.webhooks.core.webhook_interfaces import (
-            StatusWebhook,
-        )
-
-        # Get the first status (WhatsApp typically sends one status per webhook)
         raw_statuses = webhook.get_raw_statuses()
         if not raw_statuses:
             raise ProcessorError(
@@ -642,32 +470,36 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     async def _create_error_webhook(
         self, webhook: BaseWebhook, tenant_base: "TenantBase", **kwargs
     ) -> "ErrorWebhook":
-        """
-        Create ErrorWebhook from WhatsApp error webhook.
-
-        Args:
-            webhook: Parsed WhatsApp webhook container
-            tenant_base: Tenant identification information
-            **kwargs: Additional processing parameters
-
-        Returns:
-            ErrorWebhook with error information
-        """
         from wappa.webhooks.core.webhook_interfaces import ErrorDetailBase, ErrorWebhook
 
-        # Get errors from webhook (assuming the webhook has error data)
-        # For now, we'll extract from raw webhook data since there's no get_errors method
-        webhook_errors = []
+        webhook_errors: list[dict[str, Any]] = []
+        for entry in webhook.entry:
+            for change in entry.changes:
+                if change.value.errors:
+                    webhook_errors.extend(change.value.errors)
+
+        if not webhook_errors:
+            raise ProcessorError(
+                "Error webhook received without error entries",
+                ErrorCode.PROCESSING_ERROR,
+                PlatformType.WHATSAPP,
+            )
 
         # Convert to ErrorDetailBase list
         error_details = []
         for error in webhook_errors:
+            error_data = error.get("error_data")
+            error_details_text = (
+                error_data.get("details")
+                if isinstance(error_data, dict)
+                else error.get("details")
+            )
             error_detail = ErrorDetailBase(
-                error_code=getattr(error, "code", 0),
-                error_title=getattr(error, "title", "Unknown error"),
-                error_message=getattr(error, "message", ""),
-                error_details=getattr(error, "details", None),
-                documentation_url=getattr(error, "href", None),
+                error_code=int(error.get("code", 0)),
+                error_title=str(error.get("title", "Unknown error")),
+                error_message=str(error.get("message", "")),
+                error_details=error_details_text,
+                documentation_url=error.get("href"),
                 error_type="whatsapp_api",
                 occurred_at=datetime.now(UTC),
             )
@@ -685,133 +517,116 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     async def _create_system_webhook(
         self, webhook: BaseWebhook, tenant_base: "TenantBase", **kwargs
     ) -> "SystemWebhook":
-        """
-        Create SystemWebhook from WhatsApp system event webhooks.
-
-        Handles three source types:
-        - field: "user_preferences" → MARKETING_PREFERENCE
-        - field: "user_id_update" → USER_ID_CHANGE
-        - field: "messages" with type: "system" → NUMBER_CHANGE or USER_ID_CHANGE
-
-        Args:
-            webhook: Parsed WhatsApp webhook container
-            tenant_base: Tenant identification information
-            **kwargs: Additional processing parameters
-
-        Returns:
-            SystemWebhook with system event information
-        """
+        # Handles three source types:
+        # - field: "user_preferences"           → MARKETING_PREFERENCE
+        # - field: "user_id_update"             → USER_ID_CHANGE
+        # - field: "messages" (type=="system")  → NUMBER_CHANGE or USER_ID_CHANGE
         from wappa.webhooks.core.webhook_interfaces import (
             SystemEventDetail,
             SystemEventType,
             SystemWebhook,
         )
 
-        # Determine the source field type
-        first_change = webhook.entry[0].changes[0]
-        field = first_change.field
+        field = webhook.entry[0].changes[0].field
 
         user_base = None
         system_event_type = None
         event_detail = None
         event_timestamp = datetime.now(UTC)
 
-        if field == "user_preferences":
-            from wappa.webhooks.whatsapp.system_events import UserPreferenceEntry
+        match field:
+            case "user_preferences":
+                from wappa.webhooks.whatsapp.system_events import UserPreferenceEntry
 
-            raw_prefs = webhook.get_raw_user_preferences()
-            if not raw_prefs:
-                raise ProcessorError(
-                    "No user_preferences found in system webhook",
-                    ErrorCode.PROCESSING_ERROR,
-                    PlatformType.WHATSAPP,
-                )
+                raw_prefs = webhook.get_raw_user_preferences()
+                if not raw_prefs:
+                    raise ProcessorError(
+                        "No user_preferences found in system webhook",
+                        ErrorCode.PROCESSING_ERROR,
+                        PlatformType.WHATSAPP,
+                    )
 
-            pref = UserPreferenceEntry.model_validate(raw_prefs[0])
+                pref = UserPreferenceEntry.model_validate(raw_prefs[0])
 
-            system_event_type = SystemEventType.MARKETING_PREFERENCE
-            event_detail = SystemEventDetail(
-                wa_id=pref.wa_id,
-                user_id=pref.user_id,
-                parent_user_id=pref.parent_user_id,
-                detail=pref.detail,
-                category=pref.category,
-                preference_value=pref.value,
-            )
-            event_timestamp = datetime.fromtimestamp(pref.timestamp, tz=UTC)
-
-            # Build user from preference data
-            if pref.wa_id or pref.user_id:
-                sender_id = pref.user_id or pref.wa_id or ""
-                user_base = self._create_user_base_from_contacts(webhook, sender_id)
-
-        elif field == "user_id_update":
-            from wappa.webhooks.whatsapp.system_events import UserIdUpdateEntry
-
-            raw_updates = webhook.get_raw_user_id_updates()
-            if not raw_updates:
-                raise ProcessorError(
-                    "No user_id_update found in system webhook",
-                    ErrorCode.PROCESSING_ERROR,
-                    PlatformType.WHATSAPP,
-                )
-
-            update = UserIdUpdateEntry.model_validate(raw_updates[0])
-
-            system_event_type = SystemEventType.USER_ID_CHANGE
-            event_detail = SystemEventDetail(
-                wa_id=update.wa_id,
-                detail=update.detail,
-                previous_user_id=update.user_id.previous,
-                current_user_id=update.user_id.current,
-                previous_parent_user_id=update.parent_user_id.previous
-                if update.parent_user_id
-                else None,
-                current_parent_user_id=update.parent_user_id.current
-                if update.parent_user_id
-                else None,
-            )
-            event_timestamp = datetime.fromtimestamp(int(update.timestamp), tz=UTC)
-
-            # Build user from update data
-            if update.wa_id:
-                user_base = self._create_user_base_from_contacts(webhook, update.wa_id)
-
-        elif field == "messages":
-            # System messages from the messages field (type=="system")
-            raw_messages = webhook.get_raw_messages()
-            if not raw_messages:
-                raise ProcessorError(
-                    "No system messages found in webhook",
-                    ErrorCode.PROCESSING_ERROR,
-                    PlatformType.WHATSAPP,
-                )
-
-            raw_message = raw_messages[0]
-            message = self._create_system_message(raw_message)
-
-            if message.is_number_change:
-                system_event_type = SystemEventType.NUMBER_CHANGE
-                old_phone, new_phone = message.extract_phone_numbers()
+                system_event_type = SystemEventType.MARKETING_PREFERENCE
                 event_detail = SystemEventDetail(
-                    wa_id=message.new_wa_id,
-                    body=message.system_message,
-                    old_phone_number=old_phone,
-                    new_phone_number=new_phone,
+                    wa_id=pref.wa_id,
+                    user_id=pref.user_id,
+                    parent_user_id=pref.parent_user_id,
+                    detail=pref.detail,
+                    category=pref.category,
+                    preference_value=pref.value,
                 )
-            else:
-                # user_changed_user_id
+                event_timestamp = datetime.fromtimestamp(pref.timestamp, tz=UTC)
+
+                if pref.wa_id or pref.user_id:
+                    sender_id = pref.user_id or pref.wa_id or ""
+                    user_base = self._create_user_base_from_contacts(webhook, sender_id)
+
+            case "user_id_update":
+                from wappa.webhooks.whatsapp.system_events import UserIdUpdateEntry
+
+                raw_updates = webhook.get_raw_user_id_updates()
+                if not raw_updates:
+                    raise ProcessorError(
+                        "No user_id_update found in system webhook",
+                        ErrorCode.PROCESSING_ERROR,
+                        PlatformType.WHATSAPP,
+                    )
+
+                update = UserIdUpdateEntry.model_validate(raw_updates[0])
+                parent = update.parent_user_id
+
                 system_event_type = SystemEventType.USER_ID_CHANGE
                 event_detail = SystemEventDetail(
-                    wa_id=message.from_ if message.from_ else None,
-                    user_id=message.new_user_id,
-                    body=message.system_message,
+                    wa_id=update.wa_id,
+                    detail=update.detail,
+                    previous_user_id=update.user_id.previous,
+                    current_user_id=update.user_id.current,
+                    previous_parent_user_id=parent.previous if parent else None,
+                    current_parent_user_id=parent.current if parent else None,
                 )
+                event_timestamp = datetime.fromtimestamp(int(update.timestamp), tz=UTC)
 
-            event_timestamp = datetime.fromtimestamp(message.timestamp, tz=UTC)
+                if update.wa_id:
+                    user_base = self._create_user_base_from_contacts(
+                        webhook, update.wa_id
+                    )
 
-            # Build user from contacts
-            user_base = self._create_user_base_from_contacts(webhook, message.sender_id)
+            case "messages":
+                # System messages from the messages field (type=="system")
+                raw_messages = webhook.get_raw_messages()
+                if not raw_messages:
+                    raise ProcessorError(
+                        "No system messages found in webhook",
+                        ErrorCode.PROCESSING_ERROR,
+                        PlatformType.WHATSAPP,
+                    )
+
+                message = self._create_system_message(raw_messages[0])
+
+                if message.is_number_change:
+                    system_event_type = SystemEventType.NUMBER_CHANGE
+                    old_phone, new_phone = message.extract_phone_numbers()
+                    event_detail = SystemEventDetail(
+                        wa_id=message.new_wa_id,
+                        body=message.system_message,
+                        old_phone_number=old_phone,
+                        new_phone_number=new_phone,
+                    )
+                else:
+                    # user_changed_user_id
+                    system_event_type = SystemEventType.USER_ID_CHANGE
+                    event_detail = SystemEventDetail(
+                        wa_id=message.from_ or None,
+                        user_id=message.new_user_id,
+                        body=message.system_message,
+                    )
+
+                event_timestamp = datetime.fromtimestamp(message.timestamp, tz=UTC)
+                user_base = self._create_user_base_from_contacts(
+                    webhook, message.sender_id
+                )
 
         return SystemWebhook(
             tenant=tenant_base,
@@ -826,47 +641,24 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _create_user_base_from_contacts(
         self, webhook: BaseWebhook, sender_id: str
     ) -> "UserBase":
-        """
-        Create UserBase from WhatsApp contacts information.
-
-        Args:
-            webhook: Parsed WhatsApp webhook container
-            sender_id: Sender's user ID to match
-
-        Returns:
-            UserBase with user identification information
-        """
         from wappa.webhooks.core.webhook_interfaces import UserBase
 
-        # Get contacts from webhook
-        contacts = webhook.get_contacts()
-
-        # Find matching contact
-        for contact in contacts:
+        for contact in webhook.get_contacts():
             if contact.user_id == sender_id:
                 return UserBase(
-                    platform_user_id=contact.user_id,  # BSUID-aware identifier (BSUID if available, else phone)
-                    phone_number=contact.user_id,  # For backwards compatibility
-                    bsuid=contact.bsuid
-                    if hasattr(contact, "bsuid")
-                    else None,  # BSUID if present (v24.0+)
-                    username=contact.username
-                    if hasattr(contact, "username")
-                    else None,  # Username if present (v24.0+)
-                    country_code=contact.country_code
-                    if hasattr(contact, "country_code")
-                    else None,  # Country code if present (v24.0+)
+                    platform_user_id=contact.user_id,
+                    phone_number=contact.user_id,
+                    bsuid=getattr(contact, "bsuid", None),
+                    username=getattr(contact, "username", None),
+                    country_code=getattr(contact, "country_code", None),
                     profile_name=contact.display_name,
-                    identity_key_hash=contact.identity_key_hash
-                    if hasattr(contact, "identity_key_hash")
-                    else None,
+                    identity_key_hash=getattr(contact, "identity_key_hash", None),
                 )
 
-        # Fallback if no matching contact found
         return UserBase(
             platform_user_id=sender_id,
             phone_number=sender_id,
-            bsuid=None,  # No BSUID available
+            bsuid=None,
             username=None,
             country_code=None,
             profile_name=None,
@@ -876,7 +668,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _extract_business_context(
         self, message_data: dict[str, Any]
     ) -> "BusinessContextBase | None":
-        """Extract business context from WhatsApp message data."""
         from wappa.webhooks.core.webhook_interfaces import BusinessContextBase
 
         context = message_data.get("context")
@@ -893,7 +684,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _extract_forward_context(
         self, message_data: dict[str, Any]
     ) -> "ForwardContextBase | None":
-        """Extract forward context from WhatsApp message data."""
         from wappa.webhooks.core.webhook_interfaces import ForwardContextBase
 
         context = message_data.get("context")
@@ -909,14 +699,13 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         return ForwardContextBase(
             is_forwarded=is_forwarded,
             is_frequently_forwarded=is_frequently_forwarded,
-            forward_count=None,  # WhatsApp doesn't provide exact count
-            original_sender=None,  # WhatsApp doesn't provide original sender for privacy
+            forward_count=None,
+            original_sender=None,
         )
 
     def _extract_ad_referral(
         self, message_data: dict[str, Any]
     ) -> "AdReferralBase | None":
-        """Extract ad referral context from WhatsApp message data."""
         from wappa.webhooks.core.webhook_interfaces import AdReferralBase
 
         referral = message_data.get("referral")
@@ -940,25 +729,21 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _extract_conversation_context(
         self, status_data: Any
     ) -> "ConversationBase | None":
-        """Extract conversation context from WhatsApp status data."""
         from wappa.webhooks.core.webhook_interfaces import ConversationBase
 
-        # Check if status has conversation data
-        if not hasattr(status_data, "conversation") or not status_data.conversation:
+        conversation = getattr(status_data, "conversation", None)
+        if not conversation:
             return None
 
-        conversation = status_data.conversation
         pricing = getattr(status_data, "pricing", None)
+        origin = getattr(conversation, "origin", None)
+        origin_type = getattr(origin, "type", None) if origin else None
 
         return ConversationBase(
             conversation_id=getattr(conversation, "id", ""),
             expiration_timestamp=getattr(conversation, "expiration_timestamp", None),
-            category=getattr(conversation.origin, "type", None)
-            if hasattr(conversation, "origin")
-            else None,
-            origin_type=getattr(conversation.origin, "type", None)
-            if hasattr(conversation, "origin")
-            else None,
+            category=origin_type,
+            origin_type=origin_type,
             is_billable=getattr(pricing, "billable", None) if pricing else None,
             pricing_model=getattr(pricing, "pricing_model", None) if pricing else None,
             pricing_category=getattr(pricing, "category", None) if pricing else None,
@@ -968,25 +753,25 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def _extract_status_errors(
         self, status_data: Any
     ) -> "list[ErrorDetailBase] | None":
-        """Extract error details from WhatsApp status data."""
         from wappa.webhooks.core.webhook_interfaces import ErrorDetailBase
 
-        if not hasattr(status_data, "errors") or not status_data.errors:
+        errors = getattr(status_data, "errors", None)
+        if not errors:
             return None
 
         error_details = []
-        for error in status_data.errors:
-            error_detail = ErrorDetailBase(
-                error_code=getattr(error, "code", 0),
-                error_title=getattr(error, "title", "Unknown error"),
-                error_message=getattr(error, "message", ""),
-                error_details=getattr(error.error_data, "details", None)
-                if hasattr(error, "error_data") and error.error_data
-                else None,
-                documentation_url=getattr(error, "href", None),
-                error_type="delivery_failure",
-                occurred_at=datetime.now(UTC),
+        for error in errors:
+            error_data = getattr(error, "error_data", None)
+            error_details.append(
+                ErrorDetailBase(
+                    error_code=getattr(error, "code", 0),
+                    error_title=getattr(error, "title", "Unknown error"),
+                    error_message=getattr(error, "message", ""),
+                    error_details=getattr(error_data, "details", None) if error_data else None,
+                    documentation_url=getattr(error, "href", None),
+                    error_type="delivery_failure",
+                    occurred_at=datetime.now(UTC),
+                )
             )
-            error_details.append(error_detail)
 
         return error_details

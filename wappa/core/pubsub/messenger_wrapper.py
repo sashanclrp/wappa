@@ -1,10 +1,3 @@
-"""
-Messenger wrapper that publishes PubSub notifications for bot-sent messages.
-
-Wraps IMessenger to intercept all send_*() calls and publish bot_reply events.
-This enables real-time notifications when bots send messages via process_message().
-"""
-
 from __future__ import annotations
 
 import logging
@@ -17,25 +10,18 @@ from .handlers import publish_notification
 
 if TYPE_CHECKING:
     from ...messaging.whatsapp.models.basic_models import MessageResult
-    from ...messaging.whatsapp.models.interactive_models import ListSection
+    from ...messaging.whatsapp.models.interactive_models import (
+        InteractiveHeader,
+        ListSection,
+        ReplyButton,
+    )
 
 logger = logging.getLogger(__name__)
 
 
 class PubSubMessengerWrapper(IMessenger):
-    """
-    Wrapper that publishes bot_reply notifications for all messenger sends.
-
-    Delegates all IMessenger methods to inner messenger while publishing
-    PubSub notifications for successful sends. This enables frontends to
-    receive real-time updates when bots send messages.
-
-    Usage:
-        # Automatically applied by RedisPubSubPlugin when publish_bot_replies=True
-        # The wrapper is injected in webhook_controller.py
-
-    Channel: wappa:notify:{tenant}:{user_id}:bot_reply
-    """
+    # Wraps IMessenger and publishes bot_reply notifications on send.
+    # Channel: wappa:notify:{tenant}:{user_id}:bot_reply
 
     def __init__(
         self,
@@ -43,14 +29,6 @@ class PubSubMessengerWrapper(IMessenger):
         tenant: str,
         user_id: str,
     ):
-        """
-        Initialize wrapper.
-
-        Args:
-            inner: The actual messenger to delegate calls to
-            tenant: Tenant identifier for notifications
-            user_id: User ID for notifications (recipient of bot messages)
-        """
         self._inner = inner
         self._tenant = tenant
         self._user_id = user_id
@@ -60,7 +38,6 @@ class PubSubMessengerWrapper(IMessenger):
         message_type: str,
         result: MessageResult,
     ) -> None:
-        """Publish bot_reply notification after successful send."""
         if not result.success:
             return
 
@@ -124,9 +101,10 @@ class PubSubMessengerWrapper(IMessenger):
         recipient: str,
         caption: str | None = None,
         reply_to_message_id: str | None = None,
+        transcript: str | None = None,
     ) -> MessageResult:
         result = await self._inner.send_video(
-            video_source, recipient, caption, reply_to_message_id
+            video_source, recipient, caption, reply_to_message_id, transcript
         )
         await self._publish_bot_reply("video", result)
         return result
@@ -136,9 +114,10 @@ class PubSubMessengerWrapper(IMessenger):
         audio_source: str | Path,
         recipient: str,
         reply_to_message_id: str | None = None,
+        transcript: str | None = None,
     ) -> MessageResult:
         result = await self._inner.send_audio(
-            audio_source, recipient, reply_to_message_id
+            audio_source, recipient, reply_to_message_id, transcript
         )
         await self._publish_bot_reply("audio", result)
         return result
@@ -172,10 +151,10 @@ class PubSubMessengerWrapper(IMessenger):
     # Interactive messaging
     async def send_button_message(
         self,
-        buttons: list[dict[str, str]],
+        buttons: list[ReplyButton],
         recipient: str,
         body: str,
-        header: dict | None = None,
+        header: InteractiveHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:

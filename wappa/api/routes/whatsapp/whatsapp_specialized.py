@@ -1,14 +1,4 @@
-"""
-WhatsApp Specialized Messaging API Routes.
-
-Provides REST API endpoints for specialized WhatsApp messaging operations:
-- Contact card sharing with comprehensive contact information
-- Location sharing with coordinates, names, and addresses
-- Location request messages with interactive prompts
-
-Follows SOLID principles with proper error handling and Pydantic v2 validation.
-Based on WhatsApp Cloud API 2025 specifications for specialized messaging.
-"""
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, ValidationError
@@ -25,22 +15,14 @@ from wappa.messaging.whatsapp.models.specialized_models import (
     ContactValidationResult,
     LocationValidationResult,
 )
+from wappa.schemas.core.recipient import RecipientRequest
 
 logger = get_logger(__name__)
 
+_EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+
 
 def _raise_for_whatsapp_error(result, operation_name: str) -> None:
-    """Raise HTTPException based on WhatsApp API error message patterns.
-
-    Centralizes the repeated error mapping logic for specialized routes.
-
-    Args:
-        result: Messaging operation result
-        operation_name: Human-readable operation name for error messages
-
-    Raises:
-        HTTPException: With appropriate status code based on error pattern
-    """
     if result.success:
         return
 
@@ -64,10 +46,7 @@ router = APIRouter(
 
 
 # Request Models
-class ContactRequest(BaseModel):
-    """Request model for sending contact card messages."""
-
-    recipient: str = Field(..., description="Recipient phone number")
+class ContactRequest(RecipientRequest):
     contact: ContactCard = Field(..., description="Contact information to share")
     reply_to_message_id: str | None = Field(
         None, description="Optional message ID to reply to"
@@ -76,10 +55,7 @@ class ContactRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
 
-class LocationRequest(BaseModel):
-    """Request model for sending location messages."""
-
-    recipient: str = Field(..., description="Recipient phone number")
+class LocationRequest(RecipientRequest):
     latitude: float = Field(
         ..., ge=-90, le=90, description="Location latitude in decimal degrees"
     )
@@ -99,10 +75,7 @@ class LocationRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
 
-class LocationRequestRequest(BaseModel):
-    """Request model for sending location request messages."""
-
-    recipient: str = Field(..., description="Recipient phone number")
+class LocationRequestRequest(RecipientRequest):
     body: str = Field(
         ..., min_length=1, max_length=1024, description="Request message text"
     )
@@ -114,8 +87,6 @@ class LocationRequestRequest(BaseModel):
 
 
 class CoordinateValidationRequest(BaseModel):
-    """Request model for coordinate validation."""
-
     latitude: float = Field(..., description="Latitude to validate")
     longitude: float = Field(..., description="Longitude to validate")
 
@@ -133,23 +104,6 @@ async def send_contact_card(
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    """
-    Send contact card message using WhatsApp API.
-
-    Shares contact information including name, phone numbers, emails, and addresses.
-    Contact cards are automatically added to the recipient's address book.
-
-    Args:
-        request: Contact card request with recipient and contact information
-        messenger: Injected WhatsApp messenger implementation
-        api_dispatcher: API event dispatcher for tracking (injected)
-
-    Returns:
-        MessageResult with operation status and metadata
-
-    Raises:
-        HTTPException: For validation errors, authentication failures, or API errors
-    """
     try:
         logger.info(f"Sending contact card to {request.recipient}")
 
@@ -190,23 +144,6 @@ async def send_location_message(
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    """
-    Send location message using WhatsApp API.
-
-    Shares geographic coordinates with optional location name and address.
-    Recipients see a map preview with the shared location.
-
-    Args:
-        request: Location request with coordinates and optional details
-        messenger: Injected WhatsApp messenger implementation
-        api_dispatcher: API event dispatcher for tracking (injected)
-
-    Returns:
-        MessageResult with operation status and metadata
-
-    Raises:
-        HTTPException: For validation errors, authentication failures, or API errors
-    """
     try:
         logger.info(
             f"Sending location to {request.recipient}: ({request.latitude}, {request.longitude})"
@@ -252,23 +189,6 @@ async def send_location_request_message(
     messenger: IMessenger = Depends(get_whatsapp_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    """
-    Send location request message using WhatsApp API.
-
-    Sends an interactive message that prompts the recipient to share their location.
-    Recipients see a "Send Location" button that allows easy location sharing.
-
-    Args:
-        request: Location request with message text
-        messenger: Injected WhatsApp messenger implementation
-        api_dispatcher: API event dispatcher for tracking (injected)
-
-    Returns:
-        MessageResult with operation status and metadata
-
-    Raises:
-        HTTPException: For validation errors, authentication failures, or API errors
-    """
     try:
         logger.info(f"Sending location request to {request.recipient}")
 
@@ -303,46 +223,23 @@ async def send_location_request_message(
 
 @router.post("/validate-contact", response_model=ContactValidationResult)
 async def validate_contact_data(contact: ContactCard) -> ContactValidationResult:
-    """
-    Validate contact card data without sending a message.
-
-    Provides validation utilities for contact information to ensure compatibility
-    with WhatsApp Business API requirements before sending.
-
-    Args:
-        contact: Contact card data to validate
-
-    Returns:
-        ContactValidationResult with validation status and details
-
-    Raises:
-        HTTPException: For validation errors or processing failures
-    """
     try:
         logger.info("Validating contact card data")
 
-        # Pydantic v2 validation happens automatically on model instantiation
-        # Additional business logic validation can be added here
+        validation_issues: list[str] = []
 
-        validation_issues = []
-
-        # Validate phone numbers format (basic validation)
         for phone in contact.phones:
             if not phone.phone.startswith("+"):
                 validation_issues.append(
                     f"Phone number should start with country code: {phone.phone}"
                 )
 
-        # Validate email format if provided
         if contact.emails:
-            import re
-
-            email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
             for email in contact.emails:
-                if not re.match(email_pattern, email.email):
+                if not _EMAIL_PATTERN.match(email.email):
                     validation_issues.append(f"Invalid email format: {email.email}")
 
-        is_valid = len(validation_issues) == 0
+        is_valid = not validation_issues
 
         result = ContactValidationResult(
             is_valid=is_valid,
@@ -373,55 +270,35 @@ async def validate_contact_data(contact: ContactCard) -> ContactValidationResult
 async def validate_coordinates(
     request: CoordinateValidationRequest,
 ) -> LocationValidationResult:
-    """
-    Validate geographic coordinates without sending a message.
-
-    Provides validation utilities for latitude and longitude coordinates to ensure
-    they fall within valid ranges for location sharing.
-
-    Args:
-        request: Coordinates to validate
-
-    Returns:
-        LocationValidationResult with validation status and details
-
-    Raises:
-        HTTPException: For validation errors or processing failures
-    """
     try:
         logger.info(
             f"Validating coordinates: ({request.latitude}, {request.longitude})"
         )
 
-        validation_issues = []
+        validation_issues: list[str] = []
 
-        # Validate latitude range
         if not (-90 <= request.latitude <= 90):
             validation_issues.append(
                 f"Latitude must be between -90 and 90 degrees: {request.latitude}"
             )
 
-        # Validate longitude range
         if not (-180 <= request.longitude <= 180):
             validation_issues.append(
                 f"Longitude must be between -180 and 180 degrees: {request.longitude}"
             )
 
-        # Check for null island (0,0) which might be unintentional
         if request.latitude == 0 and request.longitude == 0:
             validation_issues.append(
                 "Coordinates (0,0) point to Null Island - verify if intentional"
             )
 
-        is_valid = len(validation_issues) == 0
+        is_valid = not validation_issues
 
-        # Determine location region for additional context
         region = "Unknown"
         if -90 <= request.latitude <= 90 and -180 <= request.longitude <= 180:
-            if request.latitude >= 0:
-                region = "Northern Hemisphere"
-            else:
-                region = "Southern Hemisphere"
+            region = (
+                "Northern Hemisphere" if request.latitude >= 0 else "Southern Hemisphere"
+            )
 
         result = LocationValidationResult(
             is_valid=is_valid,

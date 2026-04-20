@@ -1,10 +1,3 @@
-"""
-Memory storage manager for coordinating cache operations.
-
-Provides high-level interface for memory cache operations with TTL support,
-BaseModel serialization, and thread-safe operations.
-"""
-
 import logging
 from typing import Any
 
@@ -16,26 +9,32 @@ logger = logging.getLogger("MemoryStorageManager")
 
 
 class MemoryStorageManager:
-    """High-level memory storage operations manager."""
-
     def __init__(self):
         self.memory_store = get_memory_store()
 
-    def _serialize_data(self, data: Any) -> Any:
-        """Serialize data for memory storage (BaseModel -> dict)."""
-        if isinstance(data, BaseModel):
-            return data.model_dump()
-        return data
+    @staticmethod
+    def _serialize_data(data: Any) -> Any:
+        return data.model_dump() if isinstance(data, BaseModel) else data
 
-    def _deserialize_data(self, data: Any, model: type[BaseModel] | None = None) -> Any:
-        """Deserialize data from memory storage."""
+    @staticmethod
+    def _deserialize_data(data: Any, model: type[BaseModel] | None = None) -> Any:
         if data is None:
             return None
-
         if model is not None and isinstance(data, dict):
             return model.model_validate(data)
-
         return data
+
+    @staticmethod
+    def _build_context_key(
+        cache_type: str, tenant_id: str, user_id: str | None
+    ) -> str:
+        if cache_type == "tables":
+            return tenant_id
+        if cache_type in {"users", "states", "ai_states"}:
+            if not user_id:
+                raise ValueError(f"user_id is required for {cache_type} cache")
+            return f"{tenant_id}_{user_id}"
+        raise ValueError(f"Invalid cache_type: {cache_type}")
 
     async def get(
         self,
@@ -45,19 +44,6 @@ class MemoryStorageManager:
         key: str,
         model: type[BaseModel] | None = None,
     ) -> Any:
-        """
-        Get value from memory cache.
-
-        Args:
-            cache_type: "users", "tables", or "states"
-            tenant_id: Tenant identifier
-            user_id: User identifier (required for users/states)
-            key: Cache key
-            model: Optional BaseModel for deserialization
-
-        Returns:
-            Cached value or None if not found/expired
-        """
         try:
             context_key = self._build_context_key(cache_type, tenant_id, user_id)
             data = await self.memory_store.get(cache_type, context_key, key)
@@ -75,25 +61,10 @@ class MemoryStorageManager:
         value: Any,
         ttl: int | None = None,
     ) -> bool:
-        """
-        Set value in memory cache.
-
-        Args:
-            cache_type: "users", "tables", or "states"
-            tenant_id: Tenant identifier
-            user_id: User identifier (required for users/states)
-            key: Cache key
-            value: Value to cache
-            ttl: Time to live in seconds
-
-        Returns:
-            True if successful, False otherwise
-        """
         try:
             context_key = self._build_context_key(cache_type, tenant_id, user_id)
-            serialized_value = self._serialize_data(value)
             return await self.memory_store.set(
-                cache_type, context_key, key, serialized_value, ttl
+                cache_type, context_key, key, self._serialize_data(value), ttl
             )
         except Exception as e:
             logger.error(f"Failed to set key '{key}' in {cache_type} cache: {e}")
@@ -102,18 +73,6 @@ class MemoryStorageManager:
     async def delete(
         self, cache_type: str, tenant_id: str, user_id: str | None, key: str
     ) -> bool:
-        """
-        Delete key from memory cache.
-
-        Args:
-            cache_type: "users", "tables", or "states"
-            tenant_id: Tenant identifier
-            user_id: User identifier (required for users/states)
-            key: Cache key to delete
-
-        Returns:
-            True if deleted or didn't exist, False on error
-        """
         try:
             context_key = self._build_context_key(cache_type, tenant_id, user_id)
             return await self.memory_store.delete(cache_type, context_key, key)
@@ -124,18 +83,6 @@ class MemoryStorageManager:
     async def exists(
         self, cache_type: str, tenant_id: str, user_id: str | None, key: str
     ) -> bool:
-        """
-        Check if key exists in memory cache.
-
-        Args:
-            cache_type: "users", "tables", or "states"
-            tenant_id: Tenant identifier
-            user_id: User identifier (required for users/states)
-            key: Cache key to check
-
-        Returns:
-            True if exists and not expired, False otherwise
-        """
         try:
             context_key = self._build_context_key(cache_type, tenant_id, user_id)
             return await self.memory_store.exists(cache_type, context_key, key)
@@ -148,12 +95,6 @@ class MemoryStorageManager:
     async def get_ttl(
         self, cache_type: str, tenant_id: str, user_id: str | None, key: str
     ) -> int:
-        """
-        Get remaining TTL for key.
-
-        Returns:
-            Remaining TTL in seconds, -1 if no expiry, -2 if doesn't exist
-        """
         try:
             context_key = self._build_context_key(cache_type, tenant_id, user_id)
             return await self.memory_store.get_ttl(cache_type, context_key, key)
@@ -166,15 +107,6 @@ class MemoryStorageManager:
     async def set_ttl(
         self, cache_type: str, tenant_id: str, user_id: str | None, key: str, ttl: int
     ) -> bool:
-        """
-        Set TTL for key.
-
-        Args:
-            ttl: Time to live in seconds
-
-        Returns:
-            True if successful, False otherwise
-        """
         try:
             context_key = self._build_context_key(cache_type, tenant_id, user_id)
             return await self.memory_store.set_ttl(cache_type, context_key, key, ttl)
@@ -187,17 +119,6 @@ class MemoryStorageManager:
     async def get_all_keys(
         self, cache_type: str, tenant_id: str, user_id: str | None
     ) -> dict[str, Any]:
-        """
-        Get all keys for a context.
-
-        Args:
-            cache_type: "users", "tables", or "states"
-            tenant_id: Tenant identifier
-            user_id: User identifier (required for users/states)
-
-        Returns:
-            Dictionary of all non-expired key-value pairs
-        """
         try:
             context_key = self._build_context_key(cache_type, tenant_id, user_id)
             return await self.memory_store.get_all_keys(cache_type, context_key)
@@ -205,21 +126,5 @@ class MemoryStorageManager:
             logger.error(f"Failed to get all keys from {cache_type} cache: {e}")
             return {}
 
-    def _build_context_key(
-        self, cache_type: str, tenant_id: str, user_id: str | None
-    ) -> str:
-        """Build context key for isolation."""
-        if cache_type == "tables":
-            # Tables only use tenant_id for context
-            return tenant_id
-        elif cache_type in ["users", "states"]:
-            # Users and states use tenant_id and user_id
-            if not user_id:
-                raise ValueError(f"user_id is required for {cache_type} cache")
-            return f"{tenant_id}_{user_id}"
-        else:
-            raise ValueError(f"Invalid cache_type: {cache_type}")
 
-
-# Global storage manager instance
 storage_manager = MemoryStorageManager()

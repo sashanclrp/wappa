@@ -1,17 +1,6 @@
-"""
-WhatsApp interactive message handler implementation.
+"""WhatsApp interactive message handler (buttons, lists, CTA URL)."""
 
-Provides interactive messaging functionality for WhatsApp Business API:
-- Button messages (quick reply buttons, max 3)
-- List messages (sectioned lists, max 10 sections with 10 rows each)
-- Call-to-action messages (URL buttons)
-
-This handler is used by WhatsAppMessenger via composition pattern to implement
-the interactive methods of the IMessenger interface.
-
-Based on existing whatsapp_latest/services/interactive_message.py functionality
-with SOLID architecture improvements.
-"""
+from typing import Any
 
 from wappa.core.logging.logger import get_logger
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
@@ -25,29 +14,21 @@ from wappa.messaging.whatsapp.models.interactive_models import (
     validate_header_constraints,
 )
 from wappa.messaging.whatsapp.utils.error_helpers import handle_whatsapp_error
+from wappa.schemas.core.recipient import apply_recipient_to_payload
 from wappa.schemas.core.types import PlatformType
+
+_VALID_HEADER_TYPES = {
+    HeaderType.TEXT,
+    HeaderType.IMAGE,
+    HeaderType.VIDEO,
+    HeaderType.DOCUMENT,
+}
 
 
 class WhatsAppInteractiveHandler:
-    """
-    WhatsApp-specific implementation for interactive messaging operations.
-
-    Provides methods for sending interactive messages via WhatsApp Business API:
-    - send_buttons_menu: Quick reply button messages
-    - send_list_menu: Sectioned list messages
-    - send_cta_button: Call-to-action URL button messages
-
-    Used by WhatsAppMessenger via composition to implement IMessenger interactive methods.
-    Follows the same patterns as WhatsAppMediaHandler for consistency.
-    """
+    """WhatsApp interactive messaging via composition in WhatsAppMessenger."""
 
     def __init__(self, client: WhatsAppClient, tenant_id: str):
-        """Initialize interactive handler with WhatsApp client.
-
-        Args:
-            client: Configured WhatsApp client for API operations
-            tenant_id: Tenant identifier (phone_number_id in WhatsApp context)
-        """
         self.client = client
         self._tenant_id = tenant_id
         self.logger = get_logger(__name__)
@@ -55,38 +36,22 @@ class WhatsAppInteractiveHandler:
     def _validation_error(
         self, error: str, error_code: str, recipient: str
     ) -> MessageResult:
-        """Create a validation error MessageResult.
-
-        Args:
-            error: Human-readable error message
-            error_code: Machine-readable error code
-            recipient: Phone number of the intended recipient
-
-        Returns:
-            MessageResult with success=False and error details
-        """
         return MessageResult(
             success=False,
             error=error,
             error_code=error_code,
             recipient=recipient,
+            recipient_bsuid=None,
+            recipient_phone=None,
             platform=PlatformType.WHATSAPP,
             tenant_id=self._tenant_id,
+            api_response=None,
         )
 
     def _check_validations(
         self, validations: list[tuple[bool, str, str]], recipient: str
     ) -> MessageResult | None:
-        """Check a list of validation rules and return first error if any.
-
-        Args:
-            validations: List of tuples (condition, error_message, error_code)
-                         where condition=True means validation failed
-            recipient: Phone number for error result
-
-        Returns:
-            MessageResult if validation failed, None if all validations pass
-        """
+        # Each tuple is (failed_condition, error_message, error_code).
         for condition, error, code in validations:
             if condition:
                 return self._validation_error(error, code, recipient)
@@ -95,32 +60,18 @@ class WhatsAppInteractiveHandler:
     def _validate_media_header(
         self, header: InteractiveHeader, recipient: str
     ) -> MessageResult | None:
-        """Validate media header has required id or link field.
+        match header.type:
+            case HeaderType.IMAGE:
+                media_field, media_name = header.image, "Image"
+            case HeaderType.VIDEO:
+                media_field, media_name = header.video, "Video"
+            case HeaderType.DOCUMENT:
+                media_field, media_name = header.document, "Document"
+            case _:
+                return None
 
-        Args:
-            header: The interactive header to validate
-            recipient: Phone number for error result
-
-        Returns:
-            MessageResult if validation failed, None if valid
-        """
-        media_field_map = {
-            HeaderType.IMAGE: header.image,
-            HeaderType.VIDEO: header.video,
-            HeaderType.DOCUMENT: header.document,
-        }
-        media_names = {
-            HeaderType.IMAGE: "Image",
-            HeaderType.VIDEO: "Video",
-            HeaderType.DOCUMENT: "Document",
-        }
-
-        media_field = media_field_map.get(header.type)
-        media_name = media_names.get(header.type)
-
-        if media_name and (
-            not media_field
-            or (not media_field.get("id") and not media_field.get("link"))
+        if not media_field or (
+            not media_field.get("id") and not media_field.get("link")
         ):
             return self._validation_error(
                 f"{media_name} header must include either 'id' or 'link'",
@@ -129,58 +80,68 @@ class WhatsAppInteractiveHandler:
             )
         return None
 
+    def _build_interactive_payload(
+        self,
+        recipient: str,
+        interactive_data: dict[str, Any],
+        reply_to_message_id: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "type": "interactive",
+            "interactive": interactive_data,
+        }
+        apply_recipient_to_payload(payload, recipient)
+        if reply_to_message_id:
+            payload["context"] = {"message_id": reply_to_message_id}
+        return payload
+
+    async def _send_message_payload(
+        self, payload: dict[str, Any], recipient: str
+    ) -> MessageResult:
+        response = await self.client.post_request(payload)
+        return MessageResult.from_response_payload(
+            response,
+            tenant_id=self._tenant_id,
+            fallback_recipient=recipient,
+        )
+
+    def _build_header_dict(self, header: InteractiveHeader) -> dict[str, Any]:
+        header_dict: dict[str, Any] = {"type": header.type.value}
+        match header.type:
+            case HeaderType.TEXT:
+                header_dict["text"] = header.text
+            case HeaderType.IMAGE if header.image:
+                header_dict["image"] = header.image
+            case HeaderType.VIDEO if header.video:
+                header_dict["video"] = header.video
+            case HeaderType.DOCUMENT if header.document:
+                header_dict["document"] = header.document
+        return header_dict
+
     @property
     def platform(self) -> PlatformType:
-        """Get the platform this handler operates on."""
         return PlatformType.WHATSAPP
 
     @property
     def tenant_id(self) -> str:
-        """Get the tenant ID this handler serves."""
         return self._tenant_id
 
     async def send_buttons_menu(
         self,
-        to: str,
+        recipient: str,
         body: str,
         buttons: list[ReplyButton],
         header: InteractiveHeader | None = None,
         footer_text: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        """
-        Send an interactive button menu message via WhatsApp.
-
-        Based on existing WhatsAppServiceInteractive.send_buttons_menu() with
-        improved error handling, logging, and result structure.
-
-        Args:
-            to: Recipient's phone number
-            body: Main message text (max 1024 chars)
-            buttons: List of ReplyButton models (max 3 buttons)
-            header: Optional InteractiveHeader model with type and content
-            footer_text: Footer text (max 60 chars)
-            reply_to_message_id: Optional message ID to reply to
-
-        Returns:
-            MessageResult with operation status and metadata
-
-        Raises:
-            ValueError: If any input parameters are invalid
-        """
         try:
-            # Validate using utility functions
             validate_buttons_menu_limits(buttons)
             if header:
                 validate_header_constraints(header, footer_text)
 
-            # Basic field validations
-            valid_header_types = {
-                HeaderType.TEXT,
-                HeaderType.IMAGE,
-                HeaderType.VIDEO,
-                HeaderType.DOCUMENT,
-            }
             basic_validations: list[tuple[bool, str, str]] = [
                 (
                     len(body) > 1024,
@@ -193,15 +154,14 @@ class WhatsAppInteractiveHandler:
                     "FOOTER_TOO_LONG",
                 ),
             ]
-            if error := self._check_validations(basic_validations, to):
+            if error := self._check_validations(basic_validations, recipient):
                 return error
 
-            # Header validations
             if header:
                 header_validations: list[tuple[bool, str, str]] = [
                     (
-                        header.type not in valid_header_types,
-                        f"Header type must be one of {[t.value for t in valid_header_types]}",
+                        header.type not in _VALID_HEADER_TYPES,
+                        f"Header type must be one of {[t.value for t in _VALID_HEADER_TYPES]}",
                         "INVALID_HEADER_TYPE",
                     ),
                     (
@@ -210,13 +170,11 @@ class WhatsAppInteractiveHandler:
                         "INVALID_TEXT_HEADER",
                     ),
                 ]
-                if error := self._check_validations(header_validations, to):
+                if error := self._check_validations(header_validations, recipient):
+                    return error
+                if error := self._validate_media_header(header, recipient):
                     return error
 
-                if error := self._validate_media_header(header, to):
-                    return error
-
-            # Construct button objects with validation
             formatted_buttons = []
             for button in buttons:
                 button_validations: list[tuple[bool, str, str]] = [
@@ -231,85 +189,49 @@ class WhatsAppInteractiveHandler:
                         "BUTTON_ID_TOO_LONG",
                     ),
                 ]
-                if error := self._check_validations(button_validations, to):
+                if error := self._check_validations(button_validations, recipient):
                     return error
-
                 formatted_buttons.append(
                     {"type": "reply", "reply": {"id": button.id, "title": button.title}}
                 )
 
-            # Construct payload
-            payload = {
-                "messaging_product": "whatsapp",
-                "recipient_type": "individual",
-                "to": to,
-                "type": "interactive",
-                "interactive": {
-                    "type": "button",
-                    "body": {"text": body},
-                    "action": {"buttons": formatted_buttons},
-                },
+            interactive_data: dict[str, Any] = {
+                "type": "button",
+                "body": {"text": body},
+                "action": {"buttons": formatted_buttons},
             }
-
-            # Add reply context if specified
-            if reply_to_message_id:
-                payload["context"] = {"message_id": reply_to_message_id}
-
-            # Add header if specified
+            payload = self._build_interactive_payload(
+                recipient=recipient,
+                interactive_data=interactive_data,
+                reply_to_message_id=reply_to_message_id,
+            )
             if header:
-                # Convert InteractiveHeader model to dict format for API
-                header_dict = {
-                    "type": header.type.value  # Convert enum to string
-                }
-
-                # Add type-specific content
-                if header.type == HeaderType.TEXT:
-                    header_dict["text"] = header.text
-                elif header.type == HeaderType.IMAGE and header.image:
-                    header_dict["image"] = header.image
-                elif header.type == HeaderType.VIDEO and header.video:
-                    header_dict["video"] = header.video
-                elif header.type == HeaderType.DOCUMENT and header.document:
-                    header_dict["document"] = header.document
-
-                payload["interactive"]["header"] = header_dict
-
-            # Add footer if specified
+                payload["interactive"]["header"] = self._build_header_dict(header)
             if footer_text:
                 payload["interactive"]["footer"] = {"text": footer_text}
 
             self.logger.debug(
-                f"Sending interactive button menu to {to} with {len(buttons)} buttons"
+                f"Sending interactive button menu to {recipient} with {len(buttons)} buttons"
             )
-
-            # Send using WhatsApp client
-            response = await self.client.post_request(payload)
-
-            message_id = response.get("messages", [{}])[0].get("id")
+            result = await self._send_message_payload(payload, recipient)
             self.logger.info(
-                f"Interactive button menu sent successfully to {to}, id: {message_id}"
+                f"Interactive button menu sent successfully to {result.recipient}, "
+                f"id: {result.message_id}"
             )
-
-            return MessageResult(
-                success=True,
-                message_id=message_id,
-                recipient=to,
-                platform=PlatformType.WHATSAPP,
-                tenant_id=self._tenant_id,
-            )
+            return result
 
         except Exception as e:
             return handle_whatsapp_error(
                 error=e,
                 operation="send interactive button menu",
-                recipient=to,
+                recipient=recipient,
                 tenant_id=self._tenant_id,
                 logger=self.logger,
             )
 
     async def send_list_menu(
         self,
-        to: str,
+        recipient: str,
         body: str,
         button_text: str,
         sections: list[ListSection],
@@ -317,26 +239,8 @@ class WhatsAppInteractiveHandler:
         footer_text: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        """
-        Send an interactive list menu message via WhatsApp.
-
-        Based on existing WhatsAppServiceInteractive.send_list_menu() with
-        improved error handling, logging, and result structure.
-
-        Args:
-            to: Recipient's phone number
-            body: Main message text (max 4096 chars)
-            button_text: Text for the button that opens the list (max 20 chars)
-            sections: List of ListSection models with title and rows
-            header: Header text (max 60 chars)
-            footer_text: Footer text (max 60 chars)
-            reply_to_message_id: Optional message ID to reply to
-
-        Returns:
-            MessageResult with operation status and metadata
-        """
         try:
-            # Log validation error for button text (helpful for debugging config issues)
+            # Emit explicit error log for oversized button_text before validation short-circuits.
             if len(button_text) > 20:
                 self.logger.error(
                     f"WhatsApp List Button Text Validation Failed: '{button_text}' "
@@ -344,7 +248,6 @@ class WhatsAppInteractiveHandler:
                     f"Please shorten the button text in your configuration."
                 )
 
-            # Basic field validations
             basic_validations: list[tuple[bool, str, str]] = [
                 (
                     len(body) > 4096,
@@ -372,10 +275,9 @@ class WhatsAppInteractiveHandler:
                     "FOOTER_TOO_LONG",
                 ),
             ]
-            if error := self._check_validations(basic_validations, to):
+            if error := self._check_validations(basic_validations, recipient):
                 return error
 
-            # Validate and format sections
             formatted_sections = []
             all_row_ids: list[str] = []
 
@@ -392,7 +294,7 @@ class WhatsAppInteractiveHandler:
                         "TOO_MANY_ROWS",
                     ),
                 ]
-                if error := self._check_validations(section_validations, to):
+                if error := self._check_validations(section_validations, recipient):
                     return error
 
                 formatted_rows = []
@@ -419,11 +321,10 @@ class WhatsAppInteractiveHandler:
                             "DUPLICATE_ROW_ID",
                         ),
                     ]
-                    if error := self._check_validations(row_validations, to):
+                    if error := self._check_validations(row_validations, recipient):
                         return error
 
                     all_row_ids.append(row.id)
-
                     formatted_row = {"id": row.id, "title": row.title}
                     if row.description:
                         formatted_row["description"] = row.description
@@ -433,56 +334,36 @@ class WhatsAppInteractiveHandler:
                     {"title": section.title, "rows": formatted_rows}
                 )
 
-            # Construct payload
-            payload = {
-                "messaging_product": "whatsapp",
-                "recipient_type": "individual",
-                "to": to,
-                "type": "interactive",
-                "interactive": {
-                    "type": "list",
-                    "body": {"text": body},
-                    "action": {"button": button_text, "sections": formatted_sections},
-                },
+            interactive_data = {
+                "type": "list",
+                "body": {"text": body},
+                "action": {"button": button_text, "sections": formatted_sections},
             }
-
-            # Add reply context if specified
-            if reply_to_message_id:
-                payload["context"] = {"message_id": reply_to_message_id}
-
-            # Add header if specified
+            payload = self._build_interactive_payload(
+                recipient=recipient,
+                interactive_data=interactive_data,
+                reply_to_message_id=reply_to_message_id,
+            )
             if header:
                 payload["interactive"]["header"] = {"type": "text", "text": header}
-
-            # Add footer if specified
             if footer_text:
                 payload["interactive"]["footer"] = {"text": footer_text}
 
             self.logger.debug(
-                f"Sending list menu message to {to} with {len(sections)} sections"
+                f"Sending list menu message to {recipient} with {len(sections)} sections"
             )
-
-            # Send using WhatsApp client
-            response = await self.client.post_request(payload)
-
-            message_id = response.get("messages", [{}])[0].get("id")
+            result = await self._send_message_payload(payload, recipient)
             self.logger.info(
-                f"List menu message sent successfully to {to}, id: {message_id}"
+                f"List menu message sent successfully to {result.recipient}, "
+                f"id: {result.message_id}"
             )
-
-            return MessageResult(
-                success=True,
-                message_id=message_id,
-                recipient=to,
-                platform=PlatformType.WHATSAPP,
-                tenant_id=self._tenant_id,
-            )
+            return result
 
         except Exception as e:
             return handle_whatsapp_error(
                 error=e,
                 operation="send list menu",
-                recipient=to,
+                recipient=recipient,
                 tenant_id=self._tenant_id,
                 logger=self.logger,
                 extra_context=f"button_text: '{button_text}', sections_count: {len(sections)}, body_length: {len(body)}",
@@ -491,7 +372,7 @@ class WhatsAppInteractiveHandler:
 
     async def send_cta_button(
         self,
-        to: str,
+        recipient: str,
         body: str,
         button_text: str,
         button_url: str,
@@ -499,26 +380,7 @@ class WhatsAppInteractiveHandler:
         footer_text: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        """
-        Send an interactive Call-to-Action URL button message via WhatsApp.
-
-        Based on existing WhatsAppServiceInteractive.send_cta_button() with
-        improved error handling, logging, and result structure.
-
-        Args:
-            to: Recipient's phone number
-            body: Required. Message body text
-            button_text: Required. Text to display on the button
-            button_url: Required. URL to load when button is tapped
-            header_text: Text to display in the header
-            footer_text: Text to display in the footer
-            reply_to_message_id: Optional message ID to reply to
-
-        Returns:
-            MessageResult with operation status and metadata
-        """
         try:
-            # Validate parameters
             validations: list[tuple[bool, str, str]] = [
                 (
                     not all([body, button_text, button_url]),
@@ -526,70 +388,47 @@ class WhatsAppInteractiveHandler:
                     "MISSING_REQUIRED_PARAMS",
                 ),
                 (
-                    not (
-                        button_url.startswith("http://")
-                        or button_url.startswith("https://")
-                    ),
+                    not button_url.startswith(("http://", "https://")),
                     "button_url must start with http:// or https://",
                     "INVALID_URL_FORMAT",
                 ),
             ]
-            if error := self._check_validations(validations, to):
+            if error := self._check_validations(validations, recipient):
                 return error
 
-            # Construct payload
-            payload = {
-                "messaging_product": "whatsapp",
-                "recipient_type": "individual",
-                "to": to,
-                "type": "interactive",
-                "interactive": {
-                    "type": "cta_url",
-                    "body": {"text": body},
-                    "action": {
-                        "name": "cta_url",
-                        "parameters": {"display_text": button_text, "url": button_url},
-                    },
+            interactive_data = {
+                "type": "cta_url",
+                "body": {"text": body},
+                "action": {
+                    "name": "cta_url",
+                    "parameters": {"display_text": button_text, "url": button_url},
                 },
             }
-
-            # Add reply context if specified
-            if reply_to_message_id:
-                payload["context"] = {"message_id": reply_to_message_id}
-
-            # Add optional header if provided
+            payload = self._build_interactive_payload(
+                recipient=recipient,
+                interactive_data=interactive_data,
+                reply_to_message_id=reply_to_message_id,
+            )
             if header_text:
                 payload["interactive"]["header"] = {"type": "text", "text": header_text}
-
-            # Add optional footer if provided
             if footer_text:
                 payload["interactive"]["footer"] = {"text": footer_text}
 
             self.logger.debug(
-                f"Sending CTA button message to {to} with URL: {button_url}"
+                f"Sending CTA button message to {recipient} with URL: {button_url}"
             )
-
-            # Send using WhatsApp client
-            response = await self.client.post_request(payload)
-
-            message_id = response.get("messages", [{}])[0].get("id")
+            result = await self._send_message_payload(payload, recipient)
             self.logger.info(
-                f"CTA button message sent successfully to {to}, id: {message_id}"
+                f"CTA button message sent successfully to {result.recipient}, "
+                f"id: {result.message_id}"
             )
-
-            return MessageResult(
-                success=True,
-                message_id=message_id,
-                recipient=to,
-                platform=PlatformType.WHATSAPP,
-                tenant_id=self._tenant_id,
-            )
+            return result
 
         except Exception as e:
             return handle_whatsapp_error(
                 error=e,
                 operation="send CTA button message",
-                recipient=to,
+                recipient=recipient,
                 tenant_id=self._tenant_id,
                 logger=self.logger,
             )

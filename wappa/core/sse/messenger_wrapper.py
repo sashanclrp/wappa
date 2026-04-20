@@ -1,5 +1,3 @@
-"""Messenger wrapper that publishes full bot message payloads via SSE."""
-
 from __future__ import annotations
 
 from collections.abc import Awaitable
@@ -13,11 +11,15 @@ from .handlers import publish_sse_event
 
 if TYPE_CHECKING:
     from ...messaging.whatsapp.models.basic_models import MessageResult
-    from ...messaging.whatsapp.models.interactive_models import ListSection
+    from ...messaging.whatsapp.models.interactive_models import (
+        InteractiveHeader,
+        ListSection,
+        ReplyButton,
+    )
 
 
 class SSEMessengerWrapper(IMessenger):
-    """Wrap IMessenger and publish full outgoing bot payloads to SSE."""
+    # Wrap IMessenger and publish full outgoing bot payloads to SSE.
 
     def __init__(
         self,
@@ -35,13 +37,12 @@ class SSEMessengerWrapper(IMessenger):
         self._metadata = metadata
 
     def update_metadata(self, **kwargs: Any) -> None:
-        """Merge key-value pairs into the wrapper's metadata dict."""
         if self._metadata is None:
             self._metadata = {}
         self._metadata.update(kwargs)
 
     def __getattr__(self, name: str) -> Any:
-        """Delegate attribute access to the inner messenger for full transparency."""
+        # Delegate attribute access to the inner messenger.
         return getattr(self._inner, name)
 
     @property
@@ -79,7 +80,6 @@ class SSEMessengerWrapper(IMessenger):
         return result
 
     def _to_serializable(self, value: Any) -> Any:
-        """Convert complex payload values into JSON-serializable structures."""
         if isinstance(value, Path):
             return str(value)
 
@@ -244,10 +244,10 @@ class SSEMessengerWrapper(IMessenger):
 
     async def send_button_message(
         self,
-        buttons: list[dict[str, str]],
+        buttons: list[ReplyButton],
         recipient: str,
         body: str,
-        header: dict | None = None,
+        header: InteractiveHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:

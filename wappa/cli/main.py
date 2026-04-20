@@ -1,9 +1,3 @@
-"""
-Wappa CLI main module.
-
-Provides clean command-line interface for development and production workflows.
-"""
-
 import os
 import shutil
 import subprocess
@@ -16,6 +10,8 @@ from rich.table import Table
 
 app = typer.Typer(help="Wappa WhatsApp Business Framework CLI")
 console = Console()
+_SAFE_EXISTING_FILES = frozenset({"pyproject.toml", "uv.lock", "README.md"})
+_SUPPORTED_SERVERS = frozenset({"uvicorn", "hypercorn"})
 
 # Example projects metadata
 EXAMPLES = {
@@ -102,17 +98,7 @@ EXAMPLES = {
 
 
 def _get_template_content(template_name: str) -> str:
-    """
-    Load template content from the templates directory.
-
-    Args:
-        template_name: Name of the template file (e.g., 'main.py.template')
-
-    Returns:
-        Template content as string
-    """
-    template_dir = Path(__file__).parent / "templates"
-    template_path = template_dir / template_name
+    template_path = Path(__file__).parent / "templates" / template_name
 
     if not template_path.exists():
         typer.echo(f"❌ Template not found: {template_name}", err=True)
@@ -121,13 +107,15 @@ def _get_template_content(template_name: str) -> str:
     return template_path.read_text()
 
 
-def _initialize_project(directory: str) -> None:
-    """
-    Initialize a new Wappa project in the specified directory.
+def _list_existing_user_files(directory: Path) -> list[Path]:
+    return [
+        path
+        for path in directory.iterdir()
+        if not path.name.startswith(".") and path.name not in _SAFE_EXISTING_FILES
+    ]
 
-    Args:
-        directory: Target directory for project initialization
-    """
+
+def _initialize_project(directory: str) -> None:
     project_path = Path(directory).resolve()
 
     # Check if directory exists, create if it doesn't
@@ -139,13 +127,7 @@ def _initialize_project(directory: str) -> None:
             typer.echo(f"❌ Failed to create directory {project_path}: {e}", err=True)
             raise typer.Exit(1) from None
 
-    # Check if directory is empty (except for hidden files and common files like pyproject.toml)
-    existing_files = [
-        f
-        for f in project_path.iterdir()
-        if not f.name.startswith(".")
-        and f.name not in ["pyproject.toml", "uv.lock", "README.md"]
-    ]
+    existing_files = _list_existing_user_files(project_path)
 
     if existing_files:
         typer.echo(f"⚠️  Directory {project_path} is not empty:", err=True)
@@ -158,13 +140,11 @@ def _initialize_project(directory: str) -> None:
     typer.echo(f"🚀 Initializing Wappa project in: {project_path}")
 
     try:
-        # Create directory structure
         (project_path / "app").mkdir(exist_ok=True)
         (project_path / "app" / "scores").mkdir(exist_ok=True)
 
         typer.echo("📁 Created directory structure")
 
-        # Create files from templates
         templates_to_create = {
             "app/__init__.py": "__init__.py.template",
             "app/main.py": "main.py.template",
@@ -176,9 +156,7 @@ def _initialize_project(directory: str) -> None:
 
         for file_path, template_name in templates_to_create.items():
             full_path = project_path / file_path
-            template_content = _get_template_content(template_name)
-
-            full_path.write_text(template_content)
+            full_path.write_text(_get_template_content(template_name))
             typer.echo(f"📝 Created: {file_path}")
 
         typer.echo()
@@ -201,26 +179,11 @@ def _initialize_project(directory: str) -> None:
 
 
 def _resolve_module_name(file_path: str) -> tuple[str, Path]:
-    """
-    Convert a file path to a Python module name and working directory.
-
-    Handles both flat and nested project structures:
-        main.py -> ("main", Path("."))
-        app/main.py -> ("app.main", Path("."))  # Use dotted import from project root
-        examples/redis_demo/main.py -> ("examples.redis_demo.main", Path("."))
-
-    Returns:
-        tuple[str, Path]: (module_name, working_directory)
-    """
     path = Path(file_path)
-    working_dir = Path(".")
-
     if path.suffix == ".py":
         path = path.with_suffix("")
-
     module_name = str(path).replace(os.path.sep, ".")
-
-    return module_name, working_dir
+    return module_name, Path(".")
 
 
 def _build_uvicorn_cmd(
@@ -279,28 +242,12 @@ def _run_server(
     reload: bool = False,
     server: str = "uvicorn",
 ) -> None:
-    """
-    Run ASGI server with the specified configuration.
-
-    Shared logic for both development and production server commands.
-    Supports uvicorn and hypercorn as server backends via the ``server``
-    parameter or the ``WAPPA_SERVER`` environment variable.
-
-    Args:
-        file_path: Path to the Python file containing the Wappa app
-        app_var: Name of the Wappa instance variable
-        host: Host address to bind to
-        port: Port number to bind to
-        workers: Number of worker processes (production only)
-        reload: Enable auto-reload (development only)
-        server: ASGI server backend ("uvicorn" or "hypercorn")
-    """
     if not Path(file_path).exists():
         typer.echo(f"❌ File not found: {file_path}", err=True)
         raise typer.Exit(1)
 
     server = server.lower()
-    if server not in ("uvicorn", "hypercorn"):
+    if server not in _SUPPORTED_SERVERS:
         typer.echo(
             f"❌ Unsupported server: {server}. Use 'uvicorn' or 'hypercorn'.",
             err=True,
@@ -368,15 +315,6 @@ def dev(
         envvar="WAPPA_SERVER",
     ),
 ) -> None:
-    """
-    Run development server with auto-reload.
-
-    Examples:
-        wappa dev main.py
-        wappa dev examples/redis_demo/main.py --port 8080
-        wappa dev src/app.py --app my_wappa_app
-        wappa dev main.py --server hypercorn
-    """
     _run_server(file_path, app_var, host, port, reload=True, server=server)
 
 
@@ -401,14 +339,6 @@ def prod(
         envvar="WAPPA_SERVER",
     ),
 ) -> None:
-    """
-    Run production server (no auto-reload).
-
-    Examples:
-        wappa prod main.py
-        wappa prod main.py --workers 4 --port 8080
-        wappa prod main.py --server hypercorn --workers 2
-    """
     _run_server(
         file_path, app_var, host, port, workers=workers, reload=False, server=server
     )
@@ -420,19 +350,6 @@ def init(
         ".", help="Directory to initialize (default: current directory)"
     ),
 ):
-    """
-    Initialize a new Wappa project.
-
-    Creates a basic Wappa project structure with:
-    - app/ directory with main.py and master_event.py
-    - scores/ directory (empty)
-    - .gitignore file
-    - .env template file
-
-    Examples:
-        wappa init            # Initialize in current directory
-        wappa init my-bot     # Initialize in ./my-bot/ directory
-    """
     _initialize_project(directory)
 
 
@@ -442,36 +359,13 @@ def examples(
         ".", help="Directory to copy example to (default: current directory)"
     ),
 ):
-    """
-    Browse and copy Wappa example projects.
-
-    Interactive menu to select from various example projects:
-    - Basic project template
-    - Echo bot example
-    - Expiry actions demo (inactivity detection)
-    - JSON cache demo
-    - Redis cache demo
-    - OpenAI transcription
-    - Full-featured bot
-
-    Examples:
-        wappa examples           # Show examples menu
-        wappa examples my-bot    # Copy to ./my-bot/ directory
-    """
     _show_examples_menu(directory)
 
 
 def _show_examples_menu(target_directory: str) -> None:
-    """
-    Display interactive examples menu and handle selection.
-
-    Args:
-        target_directory: Directory to copy the selected example to
-    """
     console.print("\n🚀 [bold blue]Wappa Example Projects[/bold blue]")
     console.print("Choose an example to copy to your project:\n")
 
-    # Create examples table
     table = Table(show_header=True, header_style="bold cyan")
     table.add_column("#", style="dim", width=3)
     table.add_column("Name", style="bold")
@@ -480,8 +374,8 @@ def _show_examples_menu(target_directory: str) -> None:
     table.add_column("Key Features", style="yellow")
 
     example_keys = list(EXAMPLES.keys())
-    for i, (_key, example) in enumerate(EXAMPLES.items(), 1):
-        features_text = ", ".join(example["features"][:3])  # Show first 3 features
+    for i, example in enumerate(EXAMPLES.values(), 1):
+        features_text = ", ".join(example["features"][:3])
         if len(example["features"]) > 3:
             features_text += "..."
 
@@ -496,10 +390,11 @@ def _show_examples_menu(target_directory: str) -> None:
     console.print(table)
     console.print("\n")
 
-    # Get user selection
     while True:
         try:
-            choice = typer.prompt("Enter your choice (1-7) or 'q' to quit")
+            choice = typer.prompt(
+                f"Enter your choice (1-{len(example_keys)}) or 'q' to quit"
+            )
 
             if choice.lower() == "q":
                 console.print("👋 Goodbye!")
@@ -535,13 +430,6 @@ def _show_examples_menu(target_directory: str) -> None:
 
 
 def _copy_example(example_key: str, target_directory: str) -> None:
-    """
-    Copy selected example to target directory.
-
-    Args:
-        example_key: Key of the example to copy
-        target_directory: Directory to copy to
-    """
     examples_dir = Path(__file__).parent / "examples"
     source_path = examples_dir / example_key
     target_path = Path(target_directory).resolve()
@@ -551,19 +439,12 @@ def _copy_example(example_key: str, target_directory: str) -> None:
         raise typer.Exit(1)
 
     try:
-        # Create target directory if it doesn't exist
         if target_directory != "." and not target_path.exists():
             target_path.mkdir(parents=True, exist_ok=True)
             console.print(f"📁 Created directory: {target_path}")
 
-        # Check if target directory is empty (except for standard files)
         if target_path.exists():
-            existing_files = [
-                f
-                for f in target_path.iterdir()
-                if not f.name.startswith(".")
-                and f.name not in ["pyproject.toml", "uv.lock", "README.md"]
-            ]
+            existing_files = _list_existing_user_files(target_path)
 
             if existing_files:
                 console.print(f"⚠️  Directory {target_path} is not empty:")
@@ -575,9 +456,7 @@ def _copy_example(example_key: str, target_directory: str) -> None:
 
         console.print(f"🚀 Copying {EXAMPLES[example_key]['name']} to {target_path}")
 
-        # Copy all files from the example (including hidden files, excluding .git and __pycache__)
         for item in source_path.iterdir():
-            # Skip .git and __pycache__ directories
             if item.name in {".git", "__pycache__"}:
                 continue
 
@@ -600,7 +479,6 @@ def _copy_example(example_key: str, target_directory: str) -> None:
         console.print("3. Add your WhatsApp credentials to .env file (if not present)")
         console.print("4. Start development: uv run wappa dev app/main.py")
 
-        # Show example-specific instructions
         if example_key == "redis_cache_example":
             console.print("\n🔧 Redis-specific setup:")
             console.print("   - Install and start Redis server")
@@ -617,6 +495,8 @@ def _copy_example(example_key: str, target_directory: str) -> None:
 
         console.print("\n📖 Check the README.md for detailed setup instructions")
 
+    except typer.Exit:
+        raise
     except Exception as e:
         console.print(f"❌ Failed to copy example: {e}")
         raise typer.Exit(1) from None
