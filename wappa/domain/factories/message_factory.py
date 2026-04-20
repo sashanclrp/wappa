@@ -1,40 +1,17 @@
-"""
-Message factory pattern for creating platform-specific message objects.
-
-This factory creates properly formatted message objects that can be sent through
-the IMessenger interface while maintaining platform compatibility and type safety.
-"""
+# Platform-specific message payload factory.
 
 from abc import ABC, abstractmethod
 from typing import Any
 
+from wappa.schemas.core.recipient import apply_recipient_to_payload
 from wappa.schemas.core.types import PlatformType
 
 
 class MessageFactory(ABC):
-    """
-    Abstract factory for creating platform-specific message objects.
-
-    This factory creates properly formatted message objects that can be
-    sent through the IMessenger interface while maintaining platform
-    compatibility and type safety.
-
-    Supports messaging operations:
-    - Basic messages (create_text_message, create_read_status_message)
-    - Media messages (create_image_message, create_video_message, etc.)
-
-    Future implementations will add:
-    - Interactive messages (create_button_message, create_list_message, etc.)
-    - Specialized messages (create_contact_message, create_location_message, etc.)
-    """
-
     @property
     @abstractmethod
-    def platform(self) -> PlatformType:
-        """Get the platform this factory creates messages for."""
-        pass
+    def platform(self) -> PlatformType: ...
 
-    # Basic Messages
     @abstractmethod
     def create_text_message(
         self,
@@ -42,36 +19,13 @@ class MessageFactory(ABC):
         recipient: str,
         reply_to_message_id: str | None = None,
         disable_preview: bool = False,
-    ) -> dict[str, Any]:
-        """Create a text message payload.
-
-        Args:
-            text: Text content of the message
-            recipient: Recipient identifier
-            reply_to_message_id: Optional message ID to reply to
-            disable_preview: Whether to disable URL preview
-
-        Returns:
-            Platform-specific message payload
-        """
-        pass
+    ) -> dict[str, Any]: ...
 
     @abstractmethod
     def create_read_status_message(
         self, message_id: str, typing: bool = False
-    ) -> dict[str, Any]:
-        """Create a read status message payload.
+    ) -> dict[str, Any]: ...
 
-        Args:
-            message_id: Message ID to mark as read
-            typing: Whether to show typing indicator
-
-        Returns:
-            Platform-specific read status payload
-        """
-        pass
-
-    # Media Messages
     @abstractmethod
     def create_image_message(
         self,
@@ -80,20 +34,7 @@ class MessageFactory(ABC):
         caption: str | None = None,
         reply_to_message_id: str | None = None,
         is_url: bool = False,
-    ) -> dict[str, Any]:
-        """Create an image message payload.
-
-        Args:
-            media_reference: Media ID or URL
-            recipient: Recipient identifier
-            caption: Optional caption for the image
-            reply_to_message_id: Optional message ID to reply to
-            is_url: Whether media_reference is a URL (True) or media ID (False)
-
-        Returns:
-            Platform-specific image message payload
-        """
-        pass
+    ) -> dict[str, Any]: ...
 
     @abstractmethod
     def create_video_message(
@@ -103,20 +44,7 @@ class MessageFactory(ABC):
         caption: str | None = None,
         reply_to_message_id: str | None = None,
         is_url: bool = False,
-    ) -> dict[str, Any]:
-        """Create a video message payload.
-
-        Args:
-            media_reference: Media ID or URL
-            recipient: Recipient identifier
-            caption: Optional caption for the video
-            reply_to_message_id: Optional message ID to reply to
-            is_url: Whether media_reference is a URL (True) or media ID (False)
-
-        Returns:
-            Platform-specific video message payload
-        """
-        pass
+    ) -> dict[str, Any]: ...
 
     @abstractmethod
     def create_audio_message(
@@ -125,19 +53,7 @@ class MessageFactory(ABC):
         recipient: str,
         reply_to_message_id: str | None = None,
         is_url: bool = False,
-    ) -> dict[str, Any]:
-        """Create an audio message payload.
-
-        Args:
-            media_reference: Media ID or URL
-            recipient: Recipient identifier
-            reply_to_message_id: Optional message ID to reply to
-            is_url: Whether media_reference is a URL (True) or media ID (False)
-
-        Returns:
-            Platform-specific audio message payload
-        """
-        pass
+    ) -> dict[str, Any]: ...
 
     @abstractmethod
     def create_document_message(
@@ -147,20 +63,7 @@ class MessageFactory(ABC):
         filename: str | None = None,
         reply_to_message_id: str | None = None,
         is_url: bool = False,
-    ) -> dict[str, Any]:
-        """Create a document message payload.
-
-        Args:
-            media_reference: Media ID or URL
-            recipient: Recipient identifier
-            filename: Optional filename for the document
-            reply_to_message_id: Optional message ID to reply to
-            is_url: Whether media_reference is a URL (True) or media ID (False)
-
-        Returns:
-            Platform-specific document message payload
-        """
-        pass
+    ) -> dict[str, Any]: ...
 
     @abstractmethod
     def create_sticker_message(
@@ -169,54 +72,49 @@ class MessageFactory(ABC):
         recipient: str,
         reply_to_message_id: str | None = None,
         is_url: bool = False,
-    ) -> dict[str, Any]:
-        """Create a sticker message payload.
-
-        Args:
-            media_reference: Media ID or URL
-            recipient: Recipient identifier
-            reply_to_message_id: Optional message ID to reply to
-            is_url: Whether media_reference is a URL (True) or media ID (False)
-
-        Returns:
-            Platform-specific sticker message payload
-        """
-        pass
-
-    # Validation
-    @abstractmethod
-    def validate_message(self, message_payload: dict[str, Any]) -> bool:
-        """Validate message payload against platform constraints.
-
-        Args:
-            message_payload: Message payload to validate
-
-        Returns:
-            True if payload is valid, False otherwise
-        """
-        pass
+    ) -> dict[str, Any]: ...
 
     @abstractmethod
-    def get_message_limits(self) -> dict[str, Any]:
-        """Get platform-specific text message limits.
+    def validate_message(self, message_payload: dict[str, Any]) -> bool: ...
 
-        Returns only text message limits. For other domain limits, use:
-        - MediaFactory.get_media_limits() for media limits
-        - Interactive endpoint for interactive message limits
-        - Templates endpoint for template limits
-
-        Returns:
-            Dictionary containing text message limits (max lengths, etc.)
-        """
-        pass
+    @abstractmethod
+    def get_message_limits(self) -> dict[str, Any]: ...
 
 
 class WhatsAppMessageFactory(MessageFactory):
-    """WhatsApp implementation of the message factory."""
+    def _build_media_payload(
+        self,
+        media_type: str,
+        media_reference: str,
+        recipient: str,
+        reply_to_message_id: str | None = None,
+        is_url: bool = False,
+        caption: str | None = None,
+        filename: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "type": media_type,
+        }
+        apply_recipient_to_payload(payload, recipient)
+
+        media_obj: dict[str, Any] = (
+            {"link": media_reference} if is_url else {"id": media_reference}
+        )
+        if caption:
+            media_obj["caption"] = caption
+        if filename:
+            media_obj["filename"] = filename
+        payload[media_type] = media_obj
+
+        if reply_to_message_id:
+            payload["context"] = {"message_id": reply_to_message_id}
+
+        return payload
 
     @property
     def platform(self) -> PlatformType:
-        """Get the platform this factory creates messages for."""
         return PlatformType.WHATSAPP
 
     def create_text_message(
@@ -226,22 +124,14 @@ class WhatsAppMessageFactory(MessageFactory):
         reply_to_message_id: str | None = None,
         disable_preview: bool = False,
     ) -> dict[str, Any]:
-        """Create WhatsApp text message payload.
-
-        Creates properly formatted WhatsApp Business API payload for text messages
-        with support for URL preview control and reply context.
-        """
-        # Check for URLs for preview control
         has_url = "http://" in text or "https://" in text
-
-        payload = {
+        payload: dict[str, Any] = {
             "messaging_product": "whatsapp",
-            "to": recipient,
             "type": "text",
             "text": {"body": text, "preview_url": has_url and not disable_preview},
         }
+        apply_recipient_to_payload(payload, recipient)
 
-        # Add reply context if specified
         if reply_to_message_id:
             payload["context"] = {"message_id": reply_to_message_id}
 
@@ -250,21 +140,13 @@ class WhatsAppMessageFactory(MessageFactory):
     def create_read_status_message(
         self, message_id: str, typing: bool = False
     ) -> dict[str, Any]:
-        """Create WhatsApp read status payload with typing support.
-
-        Creates WhatsApp Business API payload for marking messages as read
-        with optional typing indicator support.
-        """
-        payload = {
+        payload: dict[str, Any] = {
             "messaging_product": "whatsapp",
             "status": "read",
             "message_id": message_id,
         }
-
-        # Add typing indicator if requested (key requirement)
         if typing:
             payload["typing_indicator"] = {"type": "text"}
-
         return payload
 
     def create_image_message(
@@ -275,28 +157,14 @@ class WhatsAppMessageFactory(MessageFactory):
         reply_to_message_id: str | None = None,
         is_url: bool = False,
     ) -> dict[str, Any]:
-        """Create WhatsApp image message payload."""
-        payload = {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "to": recipient,
-            "type": "image",
-        }
-
-        # Create media object based on reference type
-        media_obj = {"link": media_reference} if is_url else {"id": media_reference}
-
-        # Add optional caption
-        if caption:
-            media_obj["caption"] = caption
-
-        payload["image"] = media_obj
-
-        # Add reply context if specified
-        if reply_to_message_id:
-            payload["context"] = {"message_id": reply_to_message_id}
-
-        return payload
+        return self._build_media_payload(
+            "image",
+            media_reference,
+            recipient,
+            reply_to_message_id,
+            is_url,
+            caption=caption,
+        )
 
     def create_video_message(
         self,
@@ -306,28 +174,14 @@ class WhatsAppMessageFactory(MessageFactory):
         reply_to_message_id: str | None = None,
         is_url: bool = False,
     ) -> dict[str, Any]:
-        """Create WhatsApp video message payload."""
-        payload = {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "to": recipient,
-            "type": "video",
-        }
-
-        # Create media object based on reference type
-        media_obj = {"link": media_reference} if is_url else {"id": media_reference}
-
-        # Add optional caption
-        if caption:
-            media_obj["caption"] = caption
-
-        payload["video"] = media_obj
-
-        # Add reply context if specified
-        if reply_to_message_id:
-            payload["context"] = {"message_id": reply_to_message_id}
-
-        return payload
+        return self._build_media_payload(
+            "video",
+            media_reference,
+            recipient,
+            reply_to_message_id,
+            is_url,
+            caption=caption,
+        )
 
     def create_audio_message(
         self,
@@ -336,24 +190,9 @@ class WhatsAppMessageFactory(MessageFactory):
         reply_to_message_id: str | None = None,
         is_url: bool = False,
     ) -> dict[str, Any]:
-        """Create WhatsApp audio message payload."""
-        payload = {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "to": recipient,
-            "type": "audio",
-        }
-
-        # Create media object based on reference type
-        media_obj = {"link": media_reference} if is_url else {"id": media_reference}
-
-        payload["audio"] = media_obj
-
-        # Add reply context if specified
-        if reply_to_message_id:
-            payload["context"] = {"message_id": reply_to_message_id}
-
-        return payload
+        return self._build_media_payload(
+            "audio", media_reference, recipient, reply_to_message_id, is_url
+        )
 
     def create_document_message(
         self,
@@ -363,28 +202,14 @@ class WhatsAppMessageFactory(MessageFactory):
         reply_to_message_id: str | None = None,
         is_url: bool = False,
     ) -> dict[str, Any]:
-        """Create WhatsApp document message payload."""
-        payload = {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "to": recipient,
-            "type": "document",
-        }
-
-        # Create media object based on reference type
-        media_obj = {"link": media_reference} if is_url else {"id": media_reference}
-
-        # Add optional filename
-        if filename:
-            media_obj["filename"] = filename
-
-        payload["document"] = media_obj
-
-        # Add reply context if specified
-        if reply_to_message_id:
-            payload["context"] = {"message_id": reply_to_message_id}
-
-        return payload
+        return self._build_media_payload(
+            "document",
+            media_reference,
+            recipient,
+            reply_to_message_id,
+            is_url,
+            filename=filename,
+        )
 
     def create_sticker_message(
         self,
@@ -393,66 +218,34 @@ class WhatsAppMessageFactory(MessageFactory):
         reply_to_message_id: str | None = None,
         is_url: bool = False,
     ) -> dict[str, Any]:
-        """Create WhatsApp sticker message payload."""
-        payload = {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "to": recipient,
-            "type": "sticker",
-        }
-
-        # Create media object based on reference type
-        media_obj = {"link": media_reference} if is_url else {"id": media_reference}
-
-        payload["sticker"] = media_obj
-
-        # Add reply context if specified
-        if reply_to_message_id:
-            payload["context"] = {"message_id": reply_to_message_id}
-
-        return payload
+        return self._build_media_payload(
+            "sticker", media_reference, recipient, reply_to_message_id, is_url
+        )
 
     def validate_message(self, message_payload: dict[str, Any]) -> bool:
-        """Validate WhatsApp message payload.
-
-        Performs basic validation against WhatsApp Business API requirements.
-        """
         try:
-            # Check required fields
-            if "messaging_product" not in message_payload:
+            if message_payload.get("messaging_product") != "whatsapp":
                 return False
-            if message_payload["messaging_product"] != "whatsapp":
-                return False
-            if "to" not in message_payload:
+            if "to" not in message_payload and "recipient" not in message_payload:
                 return False
 
-            # Validate text messages
             if message_payload.get("type") == "text":
-                if "text" not in message_payload:
-                    return False
-                if "body" not in message_payload["text"]:
-                    return False
-                if len(message_payload["text"]["body"]) > 4096:
+                text = message_payload.get("text") or {}
+                body = text.get("body")
+                if not body or len(body) > 4096:
                     return False
 
-            # Validate read status messages
-            return not (
-                "status" in message_payload
-                and message_payload["status"] == "read"
+            if (
+                message_payload.get("status") == "read"
                 and "message_id" not in message_payload
-            )
+            ):
+                return False
 
+            return True
         except (KeyError, TypeError):
             return False
 
     def get_message_limits(self) -> dict[str, Any]:
-        """Get WhatsApp-specific text message limits.
-
-        Returns current WhatsApp Business API limits for text message validation.
-        Note: For media limits, use MediaFactory.get_media_limits().
-              For interactive limits, see /api/whatsapp/interactive/limits.
-              For template limits, see /api/whatsapp/templates/limits.
-        """
         return {
             "max_text_length": 4096,
             "max_preview_url_text_length": 4096,

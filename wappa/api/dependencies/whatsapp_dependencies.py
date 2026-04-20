@@ -7,13 +7,14 @@ factory pattern, client management, and messenger implementations.
 
 from fastapi import Depends, Request
 
+from wappa.api.dependencies.whatsapp_media_dependencies import (
+    get_whatsapp_media_factory,
+)
 from wappa.api.utils.tenant_helpers import require_tenant_context
 from wappa.core.logging.logger import get_logger
 from wappa.domain.builders.message_builder import MessageBuilder
-from wappa.domain.factories.message_factory import (
-    MessageFactory,
-    WhatsAppMessageFactory,
-)
+from wappa.domain.factories.media_factory import WhatsAppMediaFactory
+from wappa.domain.factories.message_factory import WhatsAppMessageFactory
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.services.tenant_credentials_service import TenantCredentialsService
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
@@ -33,11 +34,11 @@ from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessen
 from wappa.messaging.whatsapp.services import WhatsAppTemplateInfoService
 
 
-async def get_whatsapp_message_factory() -> MessageFactory:
+async def get_whatsapp_message_factory() -> WhatsAppMessageFactory:
     """Get WhatsApp message factory.
 
     Returns:
-        MessageFactory implementation for WhatsApp platform
+        WhatsAppMessageFactory instance for WhatsApp platform
     """
     return WhatsAppMessageFactory()
 
@@ -163,19 +164,10 @@ async def get_whatsapp_messenger(
     specialized_handler: WhatsAppSpecializedHandler = Depends(
         get_whatsapp_specialized_handler
     ),
+    message_factory: WhatsAppMessageFactory = Depends(get_whatsapp_message_factory),
+    media_factory: WhatsAppMediaFactory = Depends(get_whatsapp_media_factory),
 ) -> IMessenger:
-    """Get unified WhatsApp messenger implementation with complete functionality.
-
-    Args:
-        client: Configured WhatsApp client
-        media_handler: Configured media handler for upload operations
-        interactive_handler: Configured interactive handler for button/list/CTA operations
-        template_handler: Configured template handler for business template operations
-        specialized_handler: Configured specialized handler for contact/location operations
-
-    Returns:
-        Complete IMessenger implementation for WhatsApp messaging (text + media + interactive + template + specialized)
-    """
+    """Get unified WhatsApp messenger implementation with complete functionality."""
     tenant_id = require_tenant_context()
     return WhatsAppMessenger(
         client=client,
@@ -184,11 +176,13 @@ async def get_whatsapp_messenger(
         template_handler=template_handler,
         specialized_handler=specialized_handler,
         tenant_id=tenant_id,
+        message_factory=message_factory,
+        media_factory=media_factory,
     )
 
 
 async def get_message_builder(
-    factory: MessageFactory = Depends(get_whatsapp_message_factory),
+    factory: WhatsAppMessageFactory = Depends(get_whatsapp_message_factory),
 ) -> MessageBuilder:
     """Get message builder for fluent message construction.
 

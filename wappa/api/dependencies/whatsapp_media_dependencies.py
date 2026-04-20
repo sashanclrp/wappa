@@ -5,16 +5,16 @@ Provides dependency injection for WhatsApp media services including
 media handlers, media messengers, and media factories.
 """
 
-from wappa.domain.factories.media_factory import MediaFactory, WhatsAppMediaFactory
+from wappa.domain.factories.media_factory import WhatsAppMediaFactory
 
 # WhatsAppMediaMessenger removed - using unified WhatsAppMessenger instead
 
 
-async def get_whatsapp_media_factory() -> MediaFactory:
+async def get_whatsapp_media_factory() -> WhatsAppMediaFactory:
     """Get WhatsApp media factory.
 
     Returns:
-        MediaFactory implementation for WhatsApp platform
+        WhatsAppMediaFactory instance for WhatsApp platform
     """
     return WhatsAppMediaFactory()
 
