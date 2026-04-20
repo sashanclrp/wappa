@@ -112,7 +112,10 @@ class WhatsAppContact(BaseModel):
         alias="user_id",
         description="Business Scoped User ID (BSUID) - stable identifier from webhook",
     )
-    profile: ContactProfile = Field(..., description="User profile information")
+    profile: ContactProfile | None = Field(
+        None,
+        description="User profile information. Meta may omit this in some webhooks.",
+    )
     identity_key_hash: str | None = Field(
         None, description="Identity key hash (only if identity change check enabled)"
     )

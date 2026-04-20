@@ -228,6 +228,11 @@ class WhatsAppContactAdapter(BaseContact):
         return self._contact.bsuid
 
     @property
+    def wa_id(self) -> str:
+        """Get the WhatsApp numeric user ID / phone number if available."""
+        return self._contact.wa_id
+
+    @property
     def username(self) -> str | None:
         """Get the WhatsApp username if available (v24.0+)."""
         return self._contact.profile.username if self._contact.profile else None

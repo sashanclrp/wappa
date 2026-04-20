@@ -8,6 +8,7 @@ Key Design Decisions:
 - Proper error handling and logging
 """
 
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -213,6 +214,111 @@ class WhatsAppClient:
         """Update last activity timestamp."""
         self.__class__.last_activity = datetime.now(UTC)
 
+    def _mask_headers(self, headers: dict[str, str]) -> dict[str, str]:
+        """Return a log-safe copy of HTTP headers."""
+        masked_headers = dict(headers)
+        authorization = masked_headers.get("Authorization")
+        if authorization:
+            parts = authorization.split(" ", 1)
+            token = parts[1] if len(parts) == 2 else parts[0]
+            token = f"{token[:8]}...{token[-4:]}" if len(token) > 10 else "***"
+            masked_headers["Authorization"] = (
+                f"{parts[0]} {token}" if len(parts) == 2 else token
+            )
+        return masked_headers
+
+    def _parse_response_text(self, response_text: str) -> dict[str, Any] | None:
+        """Parse a JSON response body when possible."""
+        if not response_text:
+            return None
+        try:
+            parsed = json.loads(response_text)
+        except json.JSONDecodeError:
+            return None
+        return parsed if isinstance(parsed, dict) else {"data": parsed}
+
+    def _extract_meta_error_summary(
+        self, response_payload: dict[str, Any] | None
+    ) -> dict[str, Any] | None:
+        """Extract the most useful fields from Meta's error envelope."""
+        if not isinstance(response_payload, dict):
+            return None
+
+        error = response_payload.get("error")
+        if not isinstance(error, dict):
+            return None
+
+        summary = {
+            "message": error.get("message"),
+            "type": error.get("type"),
+            "code": error.get("code"),
+            "error_subcode": error.get("error_subcode"),
+            "fbtrace_id": error.get("fbtrace_id"),
+        }
+
+        error_data = error.get("error_data")
+        if isinstance(error_data, dict) and error_data.get("details"):
+            summary["details"] = error_data["details"]
+
+        return {key: value for key, value in summary.items() if value is not None}
+
+    def _log_outbound_request(
+        self,
+        *,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        payload: dict[str, Any] | None = None,
+        files: dict[str, Any] | None = None,
+    ) -> None:
+        """Log outbound request details with safe redaction."""
+        self.logger.debug(
+            "%s request to %s for tenant %s",
+            method,
+            url,
+            self.tenant_id,
+        )
+        self.logger.debug("Headers: %s", self._mask_headers(headers))
+
+        if payload is not None:
+            self.logger.debug("Payload: %s", payload)
+            if "to" in payload:
+                self.logger.debug("Recipient routing: to=%s", payload["to"])
+            elif "recipient" in payload:
+                self.logger.debug("Recipient routing: recipient=%s", payload["recipient"])
+
+        if files is not None:
+            self.logger.debug("Files: %s", list(files.keys()))
+
+    def _log_http_error(
+        self,
+        *,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        status: int,
+        payload: dict[str, Any] | None = None,
+        response_text: str | None = None,
+    ) -> None:
+        """Log HTTP failures with the exact response body and Meta error fields."""
+        response_payload = self._parse_response_text(response_text or "")
+        meta_error = self._extract_meta_error_summary(response_payload)
+
+        self.logger.error(
+            "HTTP %s error for tenant %s: status=%s url=%s",
+            method,
+            self.tenant_id,
+            status,
+            url,
+        )
+        self.logger.debug("Failed headers: %s", self._mask_headers(headers))
+        if payload is not None:
+            self.logger.debug("Failed payload: %s", payload)
+        if response_text:
+            self.logger.error("Meta raw response: %s", response_text)
+        if meta_error is not None:
+            self.logger.error("Meta error summary: %s", meta_error)
+
     async def post_request(
         self,
         payload: dict[str, Any],
@@ -235,6 +341,8 @@ class WhatsAppClient:
         """
         self._update_activity()
         url = custom_url or self.url_builder.get_messages_url()
+        headers: dict[str, str] = {}
+        response_text = ""
 
         try:
             if files:
@@ -244,45 +352,43 @@ class WhatsAppClient:
                 )  # aiohttp sets Content-Type
                 data = self.form_builder.build_form_data(payload, files)
 
-                self.logger.debug(
-                    f"Sending multipart request to {url} for tenant {self.tenant_id}"
+                self._log_outbound_request(
+                    method="POST multipart",
+                    url=url,
+                    headers=headers,
+                    payload=payload,
+                    files=files,
                 )
-                self.logger.debug(f"Payload: {payload}")
-                self.logger.debug(f"Files: {list(files.keys())}")
 
                 async with self.session.post(
                     url, headers=headers, data=data
                 ) as response:
+                    response_text = await response.text()
                     response.raise_for_status()
-                    response_data = await response.json()
-                    self.logger.debug(f"Response: {response_data}")
+                    response_data = self._parse_response_text(response_text) or {}
+                    self.logger.debug("Response: %s", response_data)
                     return response_data
             else:
                 # Standard JSON request
                 headers = self._get_headers()
 
-                self.logger.debug(
-                    f"Sending JSON request to {url} for tenant {self.tenant_id}"
+                self._log_outbound_request(
+                    method="POST",
+                    url=url,
+                    headers=headers,
+                    payload=payload,
                 )
-                self.logger.debug(f"Payload: {payload}")
 
                 async with self.session.post(
                     url, headers=headers, json=payload
                 ) as response:
+                    response_text = await response.text()
                     response.raise_for_status()
-                    response_data = await response.json()
-                    self.logger.debug(f"Response: {response_data}")
+                    response_data = self._parse_response_text(response_text) or {}
+                    self.logger.debug("Response: %s", response_data)
                     return response_data
 
         except aiohttp.ClientResponseError as http_err:
-            # Enhanced error logging
-            try:
-                error_text = (
-                    await response.text() if "response" in locals() else "No response"
-                )
-            except Exception:
-                error_text = "Error reading response"
-
             # Special handling for authentication errors
             if http_err.status == 401:
                 self.logger.error("🚨" * 10)
@@ -294,19 +400,19 @@ class WhatsAppClient:
                 )
                 self.logger.error(f"🚨 Token starts with: {self.access_token[:20]}...")
                 self.logger.error(f"🚨 URL: {url}")
-                self.logger.error(f"🚨 Response: {error_text}")
+                self.logger.error(f"🚨 Response: {response_text or 'No response body'}")
                 self.logger.error(
                     "🚨 ACTION REQUIRED: Update WhatsApp access token in environment variables!"
                 )
                 self.logger.error("🚨" * 10)
-            else:
-                self.logger.error(
-                    f"HTTP error for tenant {self.tenant_id}: {http_err.status} - {error_text}"
-                )
-                self.logger.debug(f"Failed URL: {url}")
-                self.logger.debug(
-                    f"Failed headers: {headers if 'headers' in locals() else 'N/A'}"
-                )
+            self._log_http_error(
+                method="POST",
+                url=url,
+                headers=headers,
+                status=http_err.status,
+                payload=payload,
+                response_text=response_text,
+            )
             raise
         except Exception as err:
             self.logger.error(f"Unexpected error for tenant {self.tenant_id}: {err}")

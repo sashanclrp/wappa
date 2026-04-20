@@ -646,8 +646,8 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         for contact in webhook.get_contacts():
             if contact.user_id == sender_id:
                 return UserBase(
-                    platform_user_id=contact.user_id,
-                    phone_number=contact.user_id,
+                    platform_user_id=getattr(contact, "wa_id", "") or "",
+                    phone_number=getattr(contact, "wa_id", "") or "",
                     bsuid=getattr(contact, "bsuid", None),
                     username=getattr(contact, "username", None),
                     country_code=getattr(contact, "country_code", None),
