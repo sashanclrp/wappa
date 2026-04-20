@@ -1,278 +1,175 @@
-"""
-WhatsApp template message handler.
+"""WhatsApp template message handler (text, media, and location templates)."""
 
-Provides template messaging operations using WhatsApp Cloud API:
-- Text-only templates
-- Media templates (image, video, document headers)
-- Location templates with coordinate headers
-
-Migrated from whatsapp_latest/services/send_templates.py with SOLID architecture.
-"""
+from typing import Any
 
 from wappa.core.logging.logger import get_logger
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.template_models import (
-    MediaType,
     TemplateParameter,
     TemplateParameterType,
+    WhatsAppTemplateMediaType,
 )
+from wappa.messaging.whatsapp.utils.error_helpers import handle_whatsapp_error
+from wappa.schemas.core.recipient import apply_recipient_to_payload
 
 
 class WhatsAppTemplateHandler:
-    """
-    Handler for WhatsApp template message operations.
-
-    Provides composition-based template functionality for WhatsAppMessenger:
-    - Text templates with parameter substitution
-    - Media templates with header media content
-    - Location templates with geographic coordinates
-
-    Based on WhatsApp Cloud API 2025 template specifications.
-    """
+    """Template message operations for WhatsAppMessenger."""
 
     def __init__(self, client: WhatsAppClient, tenant_id: str):
-        """Initialize template handler.
-
-        Args:
-            client: Configured WhatsApp client for API operations
-            tenant_id: Tenant identifier for logging context
-        """
         self.client = client
         self._tenant_id = tenant_id
         self.logger = get_logger(__name__)
 
-    def _build_text_parameter(self, param: TemplateParameter) -> dict:
-        """Convert TemplateParameter to WhatsApp API format.
-
-        Args:
-            param: TemplateParameter object with type, text, and optional parameter_name
-
-        Returns:
-            Dict formatted for WhatsApp API with type, text, and optional parameter_name
-        """
-        param_dict = {"type": "text", "text": param.text}
+    def _build_text_parameter(self, param: TemplateParameter) -> dict[str, Any]:
+        param_dict: dict[str, Any] = {"type": "text", "text": param.text}
         if param.parameter_name:
             param_dict["parameter_name"] = param.parameter_name
         return param_dict
 
+    def _build_body_component(
+        self, body_parameters: list[TemplateParameter] | None
+    ) -> dict[str, Any] | None:
+        if not body_parameters:
+            return None
+        api_parameters = [
+            self._build_text_parameter(param)
+            for param in body_parameters
+            if param.type == TemplateParameterType.TEXT
+        ]
+        return {"type": "body", "parameters": api_parameters}
+
+    def _build_template_payload(
+        self,
+        recipient: str,
+        template_data: dict[str, Any],
+        *,
+        include_recipient_type: bool = True,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "messaging_product": "whatsapp",
+            "type": "template",
+            "template": template_data,
+        }
+        if include_recipient_type:
+            payload["recipient_type"] = "individual"
+        apply_recipient_to_payload(payload, recipient)
+        return payload
+
+    async def _send_template_payload(
+        self, payload: dict[str, Any], recipient: str
+    ) -> MessageResult:
+        response = await self.client.post_request(payload)
+        return MessageResult.from_response_payload(
+            response,
+            tenant_id=self._tenant_id,
+            fallback_recipient=recipient,
+        )
+
+    def _build_template_data(
+        self,
+        template_name: str,
+        language_code: str,
+        components: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {
+            "name": template_name,
+            "language": {"code": language_code},
+        }
+        if components:
+            data["components"] = components
+        return data
+
     async def send_text_template(
         self,
-        phone_number: str,
+        recipient: str,
         template_name: str,
         body_parameters: list[TemplateParameter] | None = None,
         language_code: str = "es",
     ) -> MessageResult:
-        """
-        Send a text-only WhatsApp template message.
-
-        Args:
-            phone_number: Recipient's phone number in E.164 format
-            template_name: Name of the approved template
-            body_parameters: List of parameters for template text replacement
-            language_code: BCP-47 language code for the template
-
-        Returns:
-            MessageResult with operation status and metadata
-
-        Raises:
-            ValueError: If template parameters are invalid
-            Exception: For API request failures
-        """
         try:
-            # Build template data
-            template_data = {"name": template_name, "language": {"code": language_code}}
-
-            # Add body parameters if provided
-            if body_parameters:
-                # Convert TemplateParameter objects to API format
-                api_parameters = [
-                    self._build_text_parameter(param)
-                    for param in body_parameters
-                    if param.type == TemplateParameterType.TEXT
-                ]
-                # Future: Add support for currency, date_time, etc.
-
-                template_data["components"] = [
-                    {"type": "body", "parameters": api_parameters}
-                ]
-
-            # Build message payload
-            payload = {
-                "messaging_product": "whatsapp",
-                "to": phone_number,
-                "type": "template",
-                "template": template_data,
-            }
-
-            self.logger.debug(
-                f"Sending text template '{template_name}' to {phone_number}"
+            body_component = self._build_body_component(body_parameters)
+            template_data = self._build_template_data(
+                template_name,
+                language_code,
+                components=[body_component] if body_component else None,
+            )
+            # Text-only templates omit recipient_type for WhatsApp API compatibility.
+            payload = self._build_template_payload(
+                recipient, template_data, include_recipient_type=False
             )
 
-            # Send template message
-            response = await self.client.post_request(payload)
-
-            # Parse response
-            if response.get("messages"):
-                message_id = response["messages"][0].get("id")
-                self.logger.info(
-                    f"Text template '{template_name}' sent successfully to {phone_number}"
-                )
-
-                return MessageResult(
-                    success=True,
-                    message_id=message_id,
-                    platform="whatsapp",
-                    api_response=response,
-                )
-            else:
-                error_msg = f"No message ID in response for template '{template_name}'"
-                self.logger.error(error_msg)
-
-                return MessageResult(
-                    success=False,
-                    platform="whatsapp",
-                    error=error_msg,
-                    error_code="NO_MESSAGE_ID",
-                    api_response=response,
-                )
+            self.logger.debug(f"Sending text template '{template_name}' to {recipient}")
+            result = await self._send_template_payload(payload, recipient)
+            self.logger.info(
+                f"Text template '{template_name}' sent successfully to {result.recipient}"
+            )
+            return result
 
         except Exception as e:
-            error_msg = f"Failed to send text template '{template_name}' to {phone_number}: {str(e)}"
-            self.logger.exception(error_msg)
-
-            return MessageResult(
-                success=False,
-                platform="whatsapp",
-                error=error_msg,
-                error_code="TEMPLATE_SEND_FAILED",
+            return handle_whatsapp_error(
+                error=e,
+                operation=f"send text template '{template_name}'",
+                recipient=recipient,
+                tenant_id=self._tenant_id,
+                logger=self.logger,
             )
 
     async def send_media_template(
         self,
-        phone_number: str,
+        recipient: str,
         template_name: str,
-        media_type: MediaType,
+        media_type: WhatsAppTemplateMediaType,
         media_id: str | None = None,
         media_url: str | None = None,
         body_parameters: list[TemplateParameter] | None = None,
         language_code: str = "es",
     ) -> MessageResult:
-        """
-        Send a WhatsApp template message with media header.
-
-        Args:
-            phone_number: Recipient's phone number in E.164 format
-            template_name: Name of the approved template
-            media_type: Type of media (image, video, document)
-            media_id: ID of pre-uploaded media (exclusive with media_url)
-            media_url: URL of media to include (exclusive with media_id)
-            body_parameters: List of parameters for template text replacement
-            language_code: BCP-47 language code for the template
-
-        Returns:
-            MessageResult with operation status and metadata
-
-        Raises:
-            ValueError: If media parameters are invalid or both/neither media source provided
-            Exception: For API request failures
-        """
         try:
-            # Validate media source
-            if (media_id and media_url) or (not media_id and not media_url):
+            if bool(media_id) == bool(media_url):
                 raise ValueError(
                     "Either media_id or media_url must be provided, but not both"
                 )
 
-            # Build header component with media
+            media_source = {"id": media_id} if media_id else {"link": media_url}
             header_component = {
                 "type": "header",
                 "parameters": [
-                    {
-                        "type": media_type.value,
-                        media_type.value: {"id": media_id}
-                        if media_id
-                        else {"link": media_url},
-                    }
+                    {"type": media_type.value, media_type.value: media_source}
                 ],
             }
 
-            # Build template components
-            components = [header_component]
+            components: list[dict[str, Any]] = [header_component]
+            if body_component := self._build_body_component(body_parameters):
+                components.append(body_component)
 
-            # Add body parameters if provided
-            if body_parameters:
-                api_parameters = [
-                    self._build_text_parameter(param)
-                    for param in body_parameters
-                    if param.type == TemplateParameterType.TEXT
-                ]
-                components.append({"type": "body", "parameters": api_parameters})
-
-            # Build template data
-            template_data = {
-                "name": template_name,
-                "language": {"code": language_code},
-                "components": components,
-            }
-
-            # Build message payload
-            payload = {
-                "messaging_product": "whatsapp",
-                "recipient_type": "individual",
-                "to": phone_number,
-                "type": "template",
-                "template": template_data,
-            }
+            template_data = self._build_template_data(
+                template_name, language_code, components=components
+            )
+            payload = self._build_template_payload(recipient, template_data)
 
             self.logger.debug(
-                f"Sending media template '{template_name}' ({media_type.value}) to {phone_number}"
+                f"Sending media template '{template_name}' ({media_type.value}) to {recipient}"
             )
-
-            # Send template message
-            response = await self.client.post_request(payload)
-
-            # Parse response
-            if response.get("messages"):
-                message_id = response["messages"][0].get("id")
-                self.logger.info(
-                    f"Media template '{template_name}' sent successfully to {phone_number}"
-                )
-
-                return MessageResult(
-                    success=True,
-                    message_id=message_id,
-                    platform="whatsapp",
-                    api_response=response,
-                )
-            else:
-                error_msg = (
-                    f"No message ID in response for media template '{template_name}'"
-                )
-                self.logger.error(error_msg)
-
-                return MessageResult(
-                    success=False,
-                    platform="whatsapp",
-                    error=error_msg,
-                    error_code="NO_MESSAGE_ID",
-                    api_response=response,
-                )
+            result = await self._send_template_payload(payload, recipient)
+            self.logger.info(
+                f"Media template '{template_name}' sent successfully to {result.recipient}"
+            )
+            return result
 
         except Exception as e:
-            error_msg = f"Failed to send media template '{template_name}' to {phone_number}: {str(e)}"
-            self.logger.exception(error_msg)
-
-            return MessageResult(
-                success=False,
-                platform="whatsapp",
-                error=error_msg,
-                error_code="MEDIA_TEMPLATE_SEND_FAILED",
+            return handle_whatsapp_error(
+                error=e,
+                operation=f"send media template '{template_name}'",
+                recipient=recipient,
+                tenant_id=self._tenant_id,
+                logger=self.logger,
             )
 
     async def send_location_template(
         self,
-        phone_number: str,
+        recipient: str,
         template_name: str,
         latitude: str,
         longitude: str,
@@ -281,153 +178,57 @@ class WhatsAppTemplateHandler:
         body_parameters: list[TemplateParameter] | None = None,
         language_code: str = "es",
     ) -> MessageResult:
-        """
-        Send a location-based WhatsApp template message.
-
-        Args:
-            phone_number: Recipient's phone number in E.164 format
-            template_name: Name of the approved template
-            latitude: Location latitude as string
-            longitude: Location longitude as string
-            name: Name/title of the location
-            address: Physical address of the location
-            body_parameters: List of parameters for template text replacement
-            language_code: BCP-47 language code for the template
-
-        Returns:
-            MessageResult with operation status and metadata
-
-        Raises:
-            ValueError: If location parameters are invalid
-            Exception: For API request failures
-        """
         try:
-            # Validate coordinates (basic range check)
             try:
                 lat = float(latitude)
                 lon = float(longitude)
-                if not (-90 <= lat <= 90):
-                    raise ValueError("Latitude must be between -90 and 90 degrees")
-                if not (-180 <= lon <= 180):
-                    raise ValueError("Longitude must be between -180 and 180 degrees")
             except ValueError as e:
-                if "could not convert" in str(e):
-                    raise ValueError(
-                        "Latitude and longitude must be valid numbers"
-                    ) from e
-                raise
+                raise ValueError(
+                    "Latitude and longitude must be valid numbers"
+                ) from e
+            if not -90 <= lat <= 90:
+                raise ValueError("Latitude must be between -90 and 90 degrees")
+            if not -180 <= lon <= 180:
+                raise ValueError("Longitude must be between -180 and 180 degrees")
 
-            # Build location parameter
-            location_param = {
-                "type": "location",
-                "location": {
-                    "latitude": latitude,
-                    "longitude": longitude,
-                    "name": name,
-                    "address": address,
-                },
+            header_component = {
+                "type": "header",
+                "parameters": [
+                    {
+                        "type": "location",
+                        "location": {
+                            "latitude": latitude,
+                            "longitude": longitude,
+                            "name": name,
+                            "address": address,
+                        },
+                    }
+                ],
             }
 
-            # Build header component with location
-            header_component = {"type": "header", "parameters": [location_param]}
+            components: list[dict[str, Any]] = [header_component]
+            if body_component := self._build_body_component(body_parameters):
+                components.append(body_component)
 
-            # Build template components
-            components = [header_component]
-
-            # Add body parameters if provided
-            if body_parameters:
-                api_parameters = [
-                    self._build_text_parameter(param)
-                    for param in body_parameters
-                    if param.type == TemplateParameterType.TEXT
-                ]
-                components.append({"type": "body", "parameters": api_parameters})
-
-            # Build template data
-            template_data = {
-                "name": template_name,
-                "language": {"code": language_code},
-                "components": components,
-            }
-
-            # Build message payload
-            payload = {
-                "messaging_product": "whatsapp",
-                "recipient_type": "individual",
-                "to": phone_number,
-                "type": "template",
-                "template": template_data,
-            }
+            template_data = self._build_template_data(
+                template_name, language_code, components=components
+            )
+            payload = self._build_template_payload(recipient, template_data)
 
             self.logger.debug(
-                f"Sending location template '{template_name}' to {phone_number}"
+                f"Sending location template '{template_name}' to {recipient}"
             )
-
-            # Send template message
-            response = await self.client.post_request(payload)
-
-            # Parse response
-            if response.get("messages"):
-                message_id = response["messages"][0].get("id")
-                self.logger.info(
-                    f"Location template '{template_name}' sent successfully to {phone_number}"
-                )
-
-                return MessageResult(
-                    success=True,
-                    message_id=message_id,
-                    platform="whatsapp",
-                    api_response=response,
-                )
-            else:
-                error_msg = (
-                    f"No message ID in response for location template '{template_name}'"
-                )
-                self.logger.error(error_msg)
-
-                return MessageResult(
-                    success=False,
-                    platform="whatsapp",
-                    error=error_msg,
-                    error_code="NO_MESSAGE_ID",
-                    api_response=response,
-                )
+            result = await self._send_template_payload(payload, recipient)
+            self.logger.info(
+                f"Location template '{template_name}' sent successfully to {result.recipient}"
+            )
+            return result
 
         except Exception as e:
-            error_msg = f"Failed to send location template '{template_name}' to {phone_number}: {str(e)}"
-            self.logger.exception(error_msg)
-
-            return MessageResult(
-                success=False,
-                platform="whatsapp",
-                error=error_msg,
-                error_code="LOCATION_TEMPLATE_SEND_FAILED",
+            return handle_whatsapp_error(
+                error=e,
+                operation=f"send location template '{template_name}'",
+                recipient=recipient,
+                tenant_id=self._tenant_id,
+                logger=self.logger,
             )
-
-    async def get_template_info(self, template_name: str) -> dict:
-        """
-        Get information about a specific template.
-
-        Args:
-            template_name: Name of the template to query
-
-        Returns:
-            Dict with template information or error details
-        """
-        try:
-            # This would typically call WhatsApp's template management API
-            # For now, return basic info structure
-            self.logger.debug(f"Getting template info for '{template_name}'")
-
-            return {
-                "template_name": template_name,
-                "status": "APPROVED",  # This should come from actual API
-                "category": "MARKETING",  # This should come from actual API
-                "language": "es",  # This should come from actual API
-            }
-
-        except Exception as e:
-            self.logger.exception(
-                f"Failed to get template info for '{template_name}': {str(e)}"
-            )
-            return {"template_name": template_name, "error": str(e), "status": "ERROR"}

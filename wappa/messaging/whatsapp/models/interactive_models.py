@@ -1,47 +1,20 @@
-"""
-Interactive message models for WhatsApp messaging.
-
-Pydantic schemas for interactive messaging operations based on WhatsApp Cloud API 2025
-specifications and existing interactive_message.py implementation patterns.
-
-Supports three types of interactive messages:
-1. Button Messages - Quick reply buttons (max 3)
-2. List Messages - Sectioned lists with rows (max 10 sections, 10 rows each)
-3. Call-to-Action Messages - URL buttons with external links
-"""
+"""Interactive message models for WhatsApp messaging."""
 
 from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
 
-
-class InteractiveType(Enum):
-    """Supported interactive message types for WhatsApp."""
-
-    BUTTON = "button"
-    LIST = "list"
-    CTA_URL = "cta_url"
+from wappa.schemas.core.recipient import RecipientRequest
 
 
 class HeaderType(Enum):
-    """Supported header types for interactive messages."""
-
     TEXT = "text"
     IMAGE = "image"
     VIDEO = "video"
     DOCUMENT = "document"
 
 
-class InteractiveMessage(BaseModel):
-    """Base interactive message schema for interactive operations.
-
-    Common fields for all interactive message types based on existing
-    WhatsAppServiceInteractive implementation patterns.
-    """
-
-    recipient: str = Field(
-        ..., pattern=r"^\d{10,15}$", description="Recipient phone number"
-    )
+class InteractiveMessage(RecipientRequest):
     body: str = Field(
         ..., min_length=1, max_length=4096, description="Main message text"
     )
@@ -51,15 +24,11 @@ class InteractiveMessage(BaseModel):
 
 
 class ReplyButton(BaseModel):
-    """Reply button for button messages."""
-
     id: str = Field(..., max_length=256, description="Unique button identifier")
     title: str = Field(..., max_length=20, description="Button display text")
 
 
 class InteractiveHeader(BaseModel):
-    """Header for interactive messages with media support."""
-
     type: HeaderType = Field(
         ..., description="Header type (text, image, video, document)"
     )
@@ -79,27 +48,19 @@ class InteractiveHeader(BaseModel):
     @field_validator("text")
     @classmethod
     def validate_text_header(cls, v, info):
-        """Validate text header is provided for text type."""
-        if info.data and info.data.get("type") == HeaderType.TEXT and not v:
+        if info.data.get("type") == HeaderType.TEXT and not v:
             raise ValueError("Text header must include 'text' field")
         return v
 
     @field_validator("image", "video", "document")
     @classmethod
     def validate_media_header(cls, v, info):
-        """Validate media headers have id or link."""
         if v and not (v.get("id") or v.get("link")):
             raise ValueError("Media header must include either 'id' or 'link'")
         return v
 
 
 class ButtonMessage(InteractiveMessage):
-    """Button message schema for send_button_message operations.
-
-    Supports up to 3 quick reply buttons with text headers and footers.
-    Based on existing send_buttons_menu() implementation.
-    """
-
     buttons: list[ReplyButton] = Field(
         ..., min_length=1, max_length=3, description="List of reply buttons (max 3)"
     )
@@ -111,7 +72,6 @@ class ButtonMessage(InteractiveMessage):
     @field_validator("buttons")
     @classmethod
     def validate_button_uniqueness(cls, v):
-        """Validate button IDs are unique."""
         button_ids = [button.id for button in v]
         if len(button_ids) != len(set(button_ids)):
             raise ValueError("Button IDs must be unique")
@@ -119,8 +79,6 @@ class ButtonMessage(InteractiveMessage):
 
 
 class ListRow(BaseModel):
-    """Row within a list section."""
-
     id: str = Field(..., max_length=200, description="Unique row identifier")
     title: str = Field(..., max_length=24, description="Row title")
     description: str | None = Field(
@@ -129,8 +87,6 @@ class ListRow(BaseModel):
 
 
 class ListSection(BaseModel):
-    """Section within a list message."""
-
     title: str = Field(..., max_length=24, description="Section title")
     rows: list[ListRow] = Field(
         ...,
@@ -142,7 +98,6 @@ class ListSection(BaseModel):
     @field_validator("rows")
     @classmethod
     def validate_row_uniqueness(cls, v):
-        """Validate row IDs are unique within section."""
         row_ids = [row.id for row in v]
         if len(row_ids) != len(set(row_ids)):
             raise ValueError("Row IDs must be unique within section")
@@ -150,12 +105,6 @@ class ListSection(BaseModel):
 
 
 class ListMessage(InteractiveMessage):
-    """List message schema for send_list_message operations.
-
-    Supports sectioned lists with up to 10 sections and 10 rows per section.
-    Based on existing send_list_menu() implementation.
-    """
-
     button_text: str = Field(
         ..., max_length=20, description="Text for the button that opens the list"
     )
@@ -170,24 +119,13 @@ class ListMessage(InteractiveMessage):
     @field_validator("sections")
     @classmethod
     def validate_global_row_uniqueness(cls, v):
-        """Validate row IDs are unique across all sections."""
-        all_row_ids = []
-        for section in v:
-            for row in section.rows:
-                all_row_ids.append(row.id)
-
+        all_row_ids = [row.id for section in v for row in section.rows]
         if len(all_row_ids) != len(set(all_row_ids)):
             raise ValueError("Row IDs must be unique across all sections")
         return v
 
 
 class CTAMessage(InteractiveMessage):
-    """Call-to-Action message schema for send_cta_message operations.
-
-    Supports URL buttons for external links.
-    Based on existing send_cta_button() implementation.
-    """
-
     button_text: str = Field(
         ..., min_length=1, description="Text to display on the button"
     )
@@ -197,16 +135,7 @@ class CTAMessage(InteractiveMessage):
     header: str | None = Field(None, description="Optional header text")
     footer: str | None = Field(None, description="Optional footer text")
 
-    @field_validator("button_url")
-    @classmethod
-    def validate_url_format(cls, v):
-        """Validate URL format is http:// or https://."""
-        if not (v.startswith("http://") or v.startswith("https://")):
-            raise ValueError("button_url must start with http:// or https://")
-        return v
 
-
-# Validation utility functions for use in handlers
 def validate_buttons_menu_limits(buttons: list[ReplyButton]) -> None:
     """Validate button menu constraints based on WhatsApp API limits."""
     if len(buttons) > 3:
