@@ -183,9 +183,7 @@ class WhatsAppTemplateHandler:
                 lat = float(latitude)
                 lon = float(longitude)
             except ValueError as e:
-                raise ValueError(
-                    "Latitude and longitude must be valid numbers"
-                ) from e
+                raise ValueError("Latitude and longitude must be valid numbers") from e
             if not -90 <= lat <= 90:
                 raise ValueError("Latitude must be between -90 and 90 degrees")
             if not -180 <= lon <= 180:

@@ -210,6 +210,7 @@ async def send_location_template(
     await _maybe_set_template_state(result, request, state_service)
     return result
 
+
 # Example endpoint demonstrating complex template usage
 @router.post(
     "/send-welcome-template",

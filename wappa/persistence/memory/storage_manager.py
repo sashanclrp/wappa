@@ -25,9 +25,7 @@ class MemoryStorageManager:
         return data
 
     @staticmethod
-    def _build_context_key(
-        cache_type: str, tenant_id: str, user_id: str | None
-    ) -> str:
+    def _build_context_key(cache_type: str, tenant_id: str, user_id: str | None) -> str:
         if cache_type == "tables":
             return tenant_id
         if cache_type in {"users", "states", "ai_states"}:

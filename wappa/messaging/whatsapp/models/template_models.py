@@ -198,8 +198,27 @@ class TemplateLanguage(BaseModel):
     @classmethod
     def validate_language_code(cls, v):
         common_codes = {
-            "es", "en", "en_US", "pt_BR", "fr", "de", "it", "ja", "ko", "zh",
-            "ar", "hi", "ru", "tr", "nl", "sv", "da", "no", "pl", "cs", "hu",
+            "es",
+            "en",
+            "en_US",
+            "pt_BR",
+            "fr",
+            "de",
+            "it",
+            "ja",
+            "ko",
+            "zh",
+            "ar",
+            "hi",
+            "ru",
+            "tr",
+            "nl",
+            "sv",
+            "da",
+            "no",
+            "pl",
+            "cs",
+            "hu",
         }
         if v not in common_codes and not v.replace("_", "").replace("-", "").isalpha():
             raise ValueError(f"Invalid language code format: {v}")
@@ -235,7 +254,9 @@ class TextTemplateMessage(BaseTemplateMessage):
 
 
 class MediaTemplateMessage(BaseTemplateMessage):
-    media_type: WhatsAppTemplateMediaType = Field(..., description="Media type for header")
+    media_type: WhatsAppTemplateMediaType = Field(
+        ..., description="Media type for header"
+    )
     media_id: str | None = Field(None, min_length=1, description="Uploaded media ID")
     media_url: str | None = Field(None, pattern=r"^https?://", description="Media URL")
     body_parameters: list[TemplateParameter] | None = Field(
@@ -266,7 +287,11 @@ class MediaTemplateMessage(BaseTemplateMessage):
     @field_validator("template_metadata")
     @classmethod
     def validate_transcript_for_media_type(cls, v, info):
-        if v and v.media_transcript and info.data.get("media_type") == WhatsAppTemplateMediaType.IMAGE:
+        if (
+            v
+            and v.media_transcript
+            and info.data.get("media_type") == WhatsAppTemplateMediaType.IMAGE
+        ):
             raise ValueError(
                 "media_transcript field is not supported for image media type. "
                 "Transcript is only valid for video and audio media types."

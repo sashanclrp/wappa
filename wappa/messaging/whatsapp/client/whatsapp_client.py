@@ -285,7 +285,9 @@ class WhatsAppClient:
             if "to" in payload:
                 self.logger.debug("Recipient routing: to=%s", payload["to"])
             elif "recipient" in payload:
-                self.logger.debug("Recipient routing: recipient=%s", payload["recipient"])
+                self.logger.debug(
+                    "Recipient routing: recipient=%s", payload["recipient"]
+                )
 
         if files is not None:
             self.logger.debug("Files: %s", list(files.keys()))

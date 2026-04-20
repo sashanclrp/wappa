@@ -234,9 +234,7 @@ async def get_template_status(
         language=template.language or "unknown",
         category=template.category,
         components=[
-            component.model_dump()
-            if hasattr(component, "model_dump")
-            else component
+            component.model_dump() if hasattr(component, "model_dump") else component
             for component in template.components
         ],
     )

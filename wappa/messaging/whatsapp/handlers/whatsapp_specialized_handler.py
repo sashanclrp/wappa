@@ -135,7 +135,9 @@ class WhatsAppSpecializedHandler:
                 f"Sending location ({latitude}, {longitude}) to {recipient}"
             )
             result = await self._send_payload(payload, recipient)
-            self.logger.info(f"Location message sent successfully to {result.recipient}")
+            self.logger.info(
+                f"Location message sent successfully to {result.recipient}"
+            )
             return result
 
         except Exception as e:
@@ -169,7 +171,9 @@ class WhatsAppSpecializedHandler:
 
             self.logger.debug(f"Sending location request to {recipient}")
             result = await self._send_payload(payload, recipient)
-            self.logger.info(f"Location request sent successfully to {result.recipient}")
+            self.logger.info(
+                f"Location request sent successfully to {result.recipient}"
+            )
             return result
 
         except Exception as e:

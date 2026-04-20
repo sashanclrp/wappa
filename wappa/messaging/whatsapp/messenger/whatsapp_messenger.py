@@ -285,9 +285,7 @@ class WhatsAppMessenger(IMessenger):
         if isinstance(media_source, str) and (
             media_source.startswith("http://") or media_source.startswith("https://")
         ):
-            self.logger.debug(
-                f"Using media URL for {media_type.value}: {media_source}"
-            )
+            self.logger.debug(f"Using media URL for {media_type.value}: {media_source}")
             return {"link": media_source}, None
 
         # Heuristic: short string without slashes is treated as an existing media ID.
@@ -395,7 +393,8 @@ class WhatsAppMessenger(IMessenger):
                     )
                 case _:
                     return self._error_result(
-                        f"Unsupported media type: {media_type}", "INVALID_MEDIA_TYPE",
+                        f"Unsupported media type: {media_type}",
+                        "INVALID_MEDIA_TYPE",
                         recipient=recipient,
                     )
 

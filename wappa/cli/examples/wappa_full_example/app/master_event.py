@@ -91,7 +91,9 @@ class WappaFullExampleHandler(WappaEventHandler):
                 )
                 user_profile = UserProfile(
                     user_id=webhook.user.user_id,
-                    phone_number=webhook.user.phone_number if webhook.user.has_phone_number else None,
+                    phone_number=webhook.user.phone_number
+                    if webhook.user.has_phone_number
+                    else None,
                     bsuid=webhook.user.bsuid if webhook.user.has_bsuid else None,
                 )
 

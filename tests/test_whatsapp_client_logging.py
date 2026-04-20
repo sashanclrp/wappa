@@ -76,7 +76,7 @@ async def test_post_request_logs_meta_error_details_and_masks_token(caplog) -> N
         )
 
     assert "Meta raw response" in caplog.text
-    assert "Unexpected key \\\"recipient\\\" on param." in caplog.text
+    assert 'Unexpected key \\"recipient\\" on param.' in caplog.text
     assert "Meta error summary" in caplog.text
     assert "Bearer 12345678...wxyz" in caplog.text
     assert "1234567890abcdefghijklmnopqrstuvwxyz" not in caplog.text

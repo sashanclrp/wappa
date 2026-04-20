@@ -297,7 +297,9 @@ async def validate_coordinates(
         region = "Unknown"
         if -90 <= request.latitude <= 90 and -180 <= request.longitude <= 180:
             region = (
-                "Northern Hemisphere" if request.latitude >= 0 else "Southern Hemisphere"
+                "Northern Hemisphere"
+                if request.latitude >= 0
+                else "Southern Hemisphere"
             )
 
         result = LocationValidationResult(
