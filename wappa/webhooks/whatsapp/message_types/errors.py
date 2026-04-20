@@ -84,13 +84,12 @@ class WhatsAppWebhookError(BaseModel):
         return self.has_error_code(130429)
 
     def is_bsuid_auth_error(self) -> bool:
-        """Check if this is a BSUID authentication message error (code 131062).
+        # Error 131062 = attempting to send auth messages to a BSUID instead of a phone number.
+        from wappa.messaging.whatsapp.utils.error_helpers import (
+            ERROR_CODE_BSUID_NOT_SUPPORTED,
+        )
 
-        Error 131062 occurs when attempting to send authentication messages
-        to a user's BSUID instead of their phone number. Authentication messages
-        must be sent to phone numbers only.
-        """
-        return self.has_error_code(131062)
+        return self.has_error_code(ERROR_CODE_BSUID_NOT_SUPPORTED)
 
     def is_system_error(self) -> bool:
         """

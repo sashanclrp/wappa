@@ -9,7 +9,6 @@ Provides common functionality for route handlers including:
 """
 
 from .error_helpers import (
-    handle_messaging_result,
     map_error_to_status,
     map_whatsapp_api_error_to_status,
     raise_for_failed_result,
@@ -30,7 +29,6 @@ __all__ = [
     "convert_list_sections_to_dict",
     "dispatch_message_event",
     "fire_api_event",
-    "handle_messaging_result",
     "map_error_to_status",
     "map_whatsapp_api_error_to_status",
     "raise_for_failed_result",
