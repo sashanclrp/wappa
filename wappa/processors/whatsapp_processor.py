@@ -13,6 +13,7 @@ from wappa.processors.base_processor import (
     ProcessorCapabilities,
     ProcessorError,
 )
+from wappa.schemas.core.recipient import looks_like_bsuid, looks_like_phone_number
 from wappa.schemas.core.types import ErrorCode, MessageType, PlatformType
 from wappa.webhooks.core.base_message import BaseMessage
 from wappa.webhooks.core.base_status import BaseMessageStatus
@@ -32,6 +33,7 @@ if TYPE_CHECKING:
         TenantBase,
         UniversalWebhook,
         UserBase,
+        WhatsAppIncomingWebhookData,
     )
 
 
@@ -409,6 +411,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
         # Create user base from contacts
         user_base = self._create_user_base_from_contacts(webhook, message.sender_id)
+        whatsapp_data = self._create_whatsapp_incoming_data(webhook, message.sender_id)
 
         # Extract WhatsApp-specific contexts
         business_context = self._extract_business_context(raw_message)
@@ -418,6 +421,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         return IncomingMessageWebhook(
             tenant=tenant_base,
             user=user_base,
+            whatsapp=whatsapp_data,
             message=message,
             business_context=business_context,
             forward_context=forward_context,
@@ -646,7 +650,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         for contact in webhook.get_contacts():
             if contact.user_id == sender_id:
                 return UserBase(
-                    platform_user_id=getattr(contact, "wa_id", "") or "",
                     phone_number=getattr(contact, "wa_id", "") or "",
                     bsuid=getattr(contact, "bsuid", None),
                     username=getattr(contact, "username", None),
@@ -655,14 +658,36 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                     identity_key_hash=getattr(contact, "identity_key_hash", None),
                 )
 
+        fallback_phone = sender_id if looks_like_phone_number(sender_id) else ""
+        fallback_bsuid = sender_id if looks_like_bsuid(sender_id) else None
         return UserBase(
-            platform_user_id=sender_id,
-            phone_number=sender_id,
-            bsuid=None,
+            phone_number=fallback_phone,
+            bsuid=fallback_bsuid,
             username=None,
             country_code=None,
             profile_name=None,
             identity_key_hash=None,
+        )
+
+    def _create_whatsapp_incoming_data(
+        self, webhook: BaseWebhook, sender_id: str
+    ) -> "WhatsAppIncomingWebhookData":
+        from wappa.webhooks.core.webhook_interfaces import WhatsAppIncomingWebhookData
+
+        for contact in webhook.get_contacts():
+            if contact.user_id == sender_id:
+                return WhatsAppIncomingWebhookData(
+                    wa_id=getattr(contact, "wa_id", None) or None,
+                    bsuid=getattr(contact, "bsuid", None),
+                    username=getattr(contact, "username", None),
+                    country_code=getattr(contact, "country_code", None),
+                )
+
+        return WhatsAppIncomingWebhookData(
+            wa_id=sender_id if looks_like_phone_number(sender_id) else None,
+            bsuid=sender_id if looks_like_bsuid(sender_id) else None,
+            username=None,
+            country_code=None,
         )
 
     def _extract_business_context(

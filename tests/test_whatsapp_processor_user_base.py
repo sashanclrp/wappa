@@ -51,7 +51,6 @@ def test_create_user_base_from_contacts_preserves_wa_id_when_bsuid_exists() -> N
     )
 
     assert user.bsuid == "CO.2186878922080769"
-    assert user.platform_user_id == "573168227670"
     assert user.phone_number == "573168227670"
     assert user.user_id == "CO.2186878922080769"
 
@@ -99,5 +98,7 @@ async def test_create_universal_webhook_accepts_contact_without_profile() -> Non
     webhook = await processor.create_universal_webhook(payload)
 
     assert webhook.user.user_id == "CO.2186878922080769"
-    assert webhook.user.platform_user_id == "573168227670"
     assert webhook.user.phone_number == "573168227670"
+    assert webhook.whatsapp is not None
+    assert webhook.whatsapp.wa_id == "573168227670"
+    assert webhook.whatsapp.bsuid == "CO.2186878922080769"

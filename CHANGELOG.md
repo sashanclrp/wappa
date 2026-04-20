@@ -11,13 +11,17 @@ Patch release focused on stabilizing the BSUID rollout handling introduced in `0
 
 ### Fixed
 - Prefer the WhatsApp numeric `wa_id` for the `init` example's reply path, instead of the BSUID-preferred `webhook.user.user_id`, so the example keeps working on tenants where BSUID outbound messaging is not yet enabled.
-- Fixed `WhatsAppContactAdapter` and `WhatsAppWebhookProcessor` so `IncomingMessageWebhook.user.platform_user_id` and `.phone_number` preserve the sender `wa_id` even when a BSUID is present.
+- Fixed `WhatsAppContactAdapter` and `WhatsAppWebhookProcessor` so `IncomingMessageWebhook.whatsapp.wa_id` and `IncomingMessageWebhook.user.phone_number` preserve the sender `wa_id` even when a BSUID is present.
 - Relaxed WhatsApp webhook contact parsing so `contacts[].profile` is optional; Meta can omit `profile` in real production webhooks and Wappa now parses those payloads without failing the entire webhook.
 - Improved outbound WhatsApp HTTP logging to capture the exact Meta error response body and a structured error summary before `raise_for_status()` discards the details.
 - Masked Authorization headers in outbound request/error logs to avoid leaking full bearer tokens in debug output.
 
 ### Added
 - Added regression coverage for WhatsApp client error logging, WA ID preservation when BSUID is present, and webhook parsing when `contacts[].profile` is omitted.
+
+### Changed
+- Removed `IncomingMessageWebhook.user.platform_user_id` from the universal user contract for this hotfix path and exposed WhatsApp-specific sender data under `IncomingMessageWebhook.whatsapp` instead.
+- `IncomingMessageWebhook.user.user_id` now consistently resolves to the preferred stable identifier (BSUID first, then phone number), while `IncomingMessageWebhook.whatsapp.wa_id` is the explicit field for WhatsApp reply routing.
 
 ## [0.3.0] - 2026-04-20
 

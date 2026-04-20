@@ -46,10 +46,9 @@ class UserBase(BaseModel):
     Based on WhatsApp's contact structure but platform-agnostic.
 
     Field vs Property Pattern:
-    - platform_user_id: Raw platform-specific ID field (WhatsApp wa_id, Teams user ID, etc.)
     - phone_number: Raw phone number field from webhook
     - bsuid: Raw BSUID field from webhook (v24.0+)
-    - user_id: @property returning BSUID if available, else platform_user_id, else phone_number
+    - user_id: @property returning BSUID if available, else phone_number
     """
 
     model_config = ConfigDict(
@@ -57,10 +56,6 @@ class UserBase(BaseModel):
     )
 
     # Core user identification (raw fields from webhook)
-    platform_user_id: str = Field(
-        default="",
-        description="Platform-specific user ID (WhatsApp wa_id, Teams user ID, etc.)",
-    )
     phone_number: str = Field(
         default="",
         description="User's phone number (may be empty for username-only users)",
@@ -95,12 +90,10 @@ class UserBase(BaseModel):
         Get the recommended user identifier.
 
         Returns:
-            BSUID if available, otherwise falls back to platform_user_id, then phone_number.
+            BSUID if available, otherwise falls back to phone_number.
         """
         if self.bsuid and self.bsuid.strip():
             return self.bsuid.strip()
-        if self.platform_user_id and self.platform_user_id.strip():
-            return self.platform_user_id.strip()
         return self.phone_number
 
     @property

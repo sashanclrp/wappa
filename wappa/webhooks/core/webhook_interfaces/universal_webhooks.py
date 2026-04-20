@@ -40,6 +40,31 @@ class SystemEventType(str, Enum):
     MARKETING_PREFERENCE = "marketing_preference"
 
 
+class WhatsAppIncomingWebhookData(BaseModel):
+    """WhatsApp-specific sender data for incoming webhooks."""
+
+    model_config = ConfigDict(
+        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+    )
+
+    wa_id: str | None = Field(
+        default=None,
+        description="WhatsApp numeric user ID / phone number if available",
+    )
+    bsuid: str | None = Field(
+        default=None,
+        description="Business Scoped User ID if available",
+    )
+    username: str | None = Field(
+        default=None,
+        description="WhatsApp username if available",
+    )
+    country_code: str | None = Field(
+        default=None,
+        description="WhatsApp country code if available",
+    )
+
+
 class IncomingMessageWebhook(BaseModel):
     """
     Universal interface for all incoming messages from users to businesses.
@@ -58,6 +83,10 @@ class IncomingMessageWebhook(BaseModel):
     # Core identification
     tenant: TenantBase = Field(description="Business/tenant identification")
     user: UserBase = Field(description="User/sender identification")
+    whatsapp: WhatsAppIncomingWebhookData | None = Field(
+        default=None,
+        description="WhatsApp-specific sender data",
+    )
 
     # Message content (supports all message types)
     message: BaseMessage = Field(
