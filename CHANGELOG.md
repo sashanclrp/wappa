@@ -5,6 +5,44 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.6] - 2026-04-20
+
+Identity and domain-context propagation across every SSE event, end-to-end. Breaking cleanup of the v0.3.4 identity-threading approach: no more per-construction ``bsuid``/``phone_number``/``metadata`` arguments on wrappers or publishers; a single request-scoped ``SSEEventContext`` populated at each framework entry point drives every envelope that fires inside it. Fixes the v0.3.4/0.3.5 null-identity and missing-metadata bugs in ``outgoing_bot_message`` and ``incoming_message`` at the root.
+
+### Added
+- **``wappa.sse`` module** — public surface for app-side SSE context manipulation:
+  - ``update_metadata(**kwargs)`` — merge domain fields (e.g. ``conversation_id``, ``chat_id``, ``run_id``) into the envelope of every SSE event emitted inside the current scope.
+  - ``update_identity(user_id=None, bsuid=None, phone_number=None)`` — override identity fields after a cache/DB lookup promotes a wa_id-only request to a canonical BSUID.
+  - ``get_context()`` — direct read access to the active ``SSEEventContext``.
+  - ``sse_event_scope(...)`` — async context manager that installs a fresh ``SSEEventContext`` (used internally by framework entry points; exposed for standalone scripts and tests).
+  - ``derive_identifiers(user_obj)`` — extract ``(bsuid, phone_number)`` from any ``UserBase``-shaped object.
+  - ``classify_meta_identifier(value)`` — split a Meta identifier by shape into ``(bsuid, phone_number)`` using the canonical BSUID regex.
+- **Deferred ``incoming_message`` emission** — ``SSEMessageHandler.log_incoming_message`` now stages the normalised payload on the active context instead of publishing immediately. The framework flushes it from ``post_process_message`` (after ``process_message`` returns), so metadata the app set during its pipeline lands on the envelope subscribers see.
+- **Automatic context population at every entry point**:
+  - ``WebhookController`` opens a scope before dispatch, derived from ``webhook.user`` for incoming messages and ``classify_meta_identifier`` for status/error webhooks.
+  - ``APIEventDispatcher`` opens a scope around ``handle_api_message`` using ``event.user_id`` and ``event.recipient``.
+  - ``ExpiryDispatcher`` opens a scope around every expiry handler task using the key's tenant and identifier.
+
+### Changed (Breaking)
+- ``publish_sse_event(event_hub, *, event_type, source, payload)`` — removed ``tenant_id``, ``user_id``, ``bsuid``, ``phone_number``, ``platform``, ``metadata`` arguments. All envelope identity + metadata is read from the active ``SSEEventContext``.
+- ``SSEEventHub.publish(*, event_type, source, payload)`` — same removal; envelope built from the active context.
+- ``SSEMessengerWrapper(inner, event_hub)`` — removed ``tenant``, ``user_id``, ``bsuid``, ``phone_number``, ``metadata`` constructor arguments and the ``update_metadata(**kwargs)`` instance method.
+- ``SSEMessageHandler`` / ``SSEStatusHandler`` / ``SSEErrorHandler`` — removed ``metadata`` constructor argument and ``update_metadata(**kwargs)`` method from all three.
+- ``SSEEventsPlugin(metadata=...)`` constructor argument and ``update_metadata(**kwargs)`` runtime fan-out — removed. Per-request metadata is now the only metadata, and it lives on the context.
+- ``WappaContextFactory.create_context(..., bsuid=..., phone_number=...)`` — removed the identity kwargs. The SSE wrapper reads everything from context.
+- ``publish_api_sse_event(event_hub, event)`` — removed the ``metadata`` argument; promotes ``event.user_id`` / ``event.recipient`` onto the active context before publishing.
+
+### Migration
+Apps that were constructing ``SSEMessengerWrapper`` manually (e.g. inside expiry or cron handlers that built their own messenger chain) must:
+
+1. Drop the ``tenant=``, ``user_id=``, ``bsuid=``, ``phone_number=``, ``metadata=`` kwargs from the constructor — keep only ``inner=`` and ``event_hub=``.
+2. Wrap the handler body in ``async with sse_event_scope(tenant_id=..., user_id=..., bsuid=..., phone_number=...):`` so the wrapper has identity to publish with. Standalone handlers outside the framework dispatchers need this; framework-dispatched handlers get it automatically.
+3. Replace ``messenger.update_metadata(run_id=..., conversation_id=...)`` with ``wappa.sse.update_metadata(run_id=..., conversation_id=...)``.
+4. Replace any ``SSEMessageHandler(metadata=...)`` / ``SSEStatusHandler(metadata=...)`` / ``SSEErrorHandler(metadata=...)`` / ``SSEEventsPlugin(metadata=...)`` constructor kwargs and their ``update_metadata(...)`` calls with ``wappa.sse.update_metadata(...)`` calls inside the pipeline (or with ``sse_event_scope(metadata={...})`` kwarg for request-initial values).
+
+### Tests
+- Added ``tests/test_sse_context_flow.py`` (8 cases): scope set/reset, ``update_metadata`` and ``update_identity`` on an active scope, no-op behaviour outside a scope, envelope identity propagation, default envelope when no scope is active, ``SSEMessengerWrapper`` publishing from context, deferred ``incoming_message`` picking up mid-pipeline metadata, and the empty-staged-payload safety case.
+
 ## [0.3.5] - 2026-04-20
 
 Hotfix for `SSEMessageHandler` using the wrong attribute name on `UserBase`.

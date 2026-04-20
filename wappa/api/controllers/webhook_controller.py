@@ -16,6 +16,11 @@ from wappa.core.logging.context import (
 from wappa.core.logging.logger import get_logger
 from wappa.core.pubsub import PubSubMessengerWrapper
 from wappa.core.sse import SSEEventHub, SSEMessengerWrapper
+from wappa.core.sse.context import (
+    classify_meta_identifier,
+    derive_identifiers,
+    sse_event_scope,
+)
 from wappa.domain.factories import MessengerFactory
 from wappa.persistence.cache_factory import create_cache_factory
 from wappa.processors.factory import processor_factory
@@ -180,6 +185,18 @@ class WebhookController:
             # System-level webhooks may not carry user identity; use internal fallback.
             user_id = self._resolve_handler_user_id(get_current_user_context())
 
+            # Resolve identity signals for the SSE envelope from the webhook
+            # itself so every event emitted inside this scope (incoming,
+            # outgoing bot, status, error) carries coherent bsuid/phone.
+            sse_user_id, sse_bsuid, sse_phone = self._derive_sse_identity(
+                universal_webhook, user_id
+            )
+            sse_platform = (
+                universal_webhook.platform.value
+                if getattr(universal_webhook, "platform", None)
+                else platform_type.value
+            )
+
             self.logger.debug(
                 f"🎯 Using tenant_id: {effective_tenant_id}, user_id: {user_id} "
                 f"(webhook_tenant: {webhook_tenant_id}, owner: {owner_id})"
@@ -197,20 +214,29 @@ class WebhookController:
                 f"(tenant: {effective_tenant_id}, user: {user_id})"
             )
 
-            dispatch_result = await self.event_dispatcher.dispatch_universal_webhook(
-                universal_webhook=universal_webhook,
+            async with sse_event_scope(
                 tenant_id=effective_tenant_id,
-                request_handler=request_handler,
-            )
+                user_id=sse_user_id,
+                bsuid=sse_bsuid,
+                phone_number=sse_phone,
+                platform=sse_platform,
+            ):
+                dispatch_result = (
+                    await self.event_dispatcher.dispatch_universal_webhook(
+                        universal_webhook=universal_webhook,
+                        tenant_id=effective_tenant_id,
+                        request_handler=request_handler,
+                    )
+                )
 
-            if dispatch_result.get("success", False):
-                self.logger.debug(
-                    f"✅ Webhook processing completed successfully for tenant: {effective_tenant_id}"
-                )
-            else:
-                self.logger.error(
-                    f"❌ Webhook dispatch failed for tenant {effective_tenant_id}: {dispatch_result.get('error')}"
-                )
+                if dispatch_result.get("success", False):
+                    self.logger.debug(
+                        f"✅ Webhook processing completed successfully for tenant: {effective_tenant_id}"
+                    )
+                else:
+                    self.logger.error(
+                        f"❌ Webhook dispatch failed for tenant {effective_tenant_id}: {dispatch_result.get('error')}"
+                    )
 
         except Exception as e:
             self.logger.error(
@@ -249,8 +275,6 @@ class WebhookController:
                     messenger = SSEMessengerWrapper(
                         inner=messenger,
                         event_hub=sse_event_hub,
-                        tenant=tenant_id,
-                        user_id=user_id,
                     )
 
             cache_factory = self._create_cache_factory(request, tenant_id, user_id)
@@ -287,6 +311,41 @@ class WebhookController:
                 exc_info=True,
             )
             raise RuntimeError(f"Handler creation failed: {e}") from e
+
+    def _derive_sse_identity(
+        self, webhook: Any, fallback_user_id: str
+    ) -> tuple[str, str | None, str | None]:
+        """Resolve ``(user_id, bsuid, phone_number)`` for the SSE envelope.
+
+        Pulls identity directly off the universal webhook whenever possible so
+        every SSE event fired inside this request carries aligned fields.
+        Falls back to ``classify_meta_identifier`` (BSUID-shape check) for
+        status/error webhooks that don't carry a ``UserBase``.
+        """
+        from wappa.webhooks.core.webhook_interfaces import (
+            ErrorWebhook,
+            IncomingMessageWebhook,
+            StatusWebhook,
+        )
+
+        if isinstance(webhook, IncomingMessageWebhook) and webhook.user:
+            bsuid, phone = derive_identifiers(webhook.user)
+            return webhook.user.user_id or fallback_user_id, bsuid, phone
+
+        if isinstance(webhook, StatusWebhook):
+            user_id = webhook.user_id or fallback_user_id
+            # classify_meta_identifier splits user_id into (bsuid, phone) by
+            # shape; prefer the explicit recipient_phone_id when Meta sent one.
+            bsuid, shape_phone = classify_meta_identifier(user_id)
+            phone = webhook.recipient_phone_id or shape_phone
+            return user_id, bsuid, phone
+
+        if isinstance(webhook, ErrorWebhook):
+            return fallback_user_id, None, None
+
+        # SystemWebhook or unknown — best effort from fallback.
+        bsuid, phone = classify_meta_identifier(fallback_user_id)
+        return fallback_user_id, bsuid, phone
 
     def _resolve_handler_user_id(self, user_id: str | None) -> str:
         if user_id:

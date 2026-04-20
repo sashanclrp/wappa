@@ -11,6 +11,7 @@ from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING
 
 from wappa.core.logging.logger import get_logger
+from wappa.core.sse.context import classify_meta_identifier, sse_event_scope
 from wappa.domain.events.api_message_event import APIMessageEvent
 
 if TYPE_CHECKING:
@@ -84,7 +85,22 @@ class APIEventDispatcher:
             # Create context-bound handler clone with dependencies injected
             request_handler = self._create_api_request_handler(event, request)
 
-            await request_handler.handle_api_message(event)
+            # Resolve SSE identity from the event: if `user_id` is a BSUID
+            # shape, surface it; otherwise treat `recipient` as the wa_id and
+            # fall back to `user_id` for the canonical envelope slot.
+            canonical_user_id = event.user_id or event.recipient
+            bsuid, phone = classify_meta_identifier(event.recipient)
+            if bsuid is None:
+                bsuid, _ = classify_meta_identifier(canonical_user_id)
+
+            async with sse_event_scope(
+                tenant_id=event.tenant_id or "unknown",
+                user_id=canonical_user_id,
+                bsuid=bsuid,
+                phone_number=phone,
+                platform=event.platform or "whatsapp",
+            ):
+                await request_handler.handle_api_message(event)
 
             self.logger.debug(
                 f"API event dispatched: {event.message_type} to {event.recipient} "

@@ -1,5 +1,14 @@
 """SSE event hub and wrappers for real-time event streaming."""
 
+from .context import (
+    SSEEventContext,
+    classify_meta_identifier,
+    derive_identifiers,
+    get_sse_context,
+    sse_event_scope,
+    update_identity,
+    update_metadata,
+)
 from .event_hub import SSEEventHub, SSESubscription
 from .handlers import (
     _BUILTIN_SSE_EVENT_TYPES,
@@ -15,6 +24,7 @@ from .handlers import (
 from .messenger_wrapper import SSEMessengerWrapper
 
 __all__ = [
+    "SSEEventContext",
     "SSEEventHub",
     "SSESubscription",
     "SSEEventType",
@@ -27,4 +37,10 @@ __all__ = [
     "SSEMessengerWrapper",
     "publish_sse_event",
     "publish_api_sse_event",
+    "get_sse_context",
+    "update_metadata",
+    "update_identity",
+    "sse_event_scope",
+    "derive_identifiers",
+    "classify_meta_identifier",
 ]

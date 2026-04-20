@@ -15,6 +15,7 @@ from ..events.default_handlers import (
     MessageLogStrategy,
     StatusLogStrategy,
 )
+from .context import classify_meta_identifier, get_sse_context, update_identity
 from .event_hub import SSEEventHub
 
 if TYPE_CHECKING:
@@ -69,30 +70,22 @@ async def publish_sse_event(
     event_hub: SSEEventHub | None,
     *,
     event_type: str,
-    tenant_id: str,
-    user_id: str,
-    bsuid: str | None = None,
-    phone_number: str | None = None,
-    platform: str,
     source: str,
     payload: dict[str, Any],
-    metadata: dict[str, Any] | None = None,
 ) -> int:
-    """Publish one event to SSE subscribers without impacting main flow."""
+    """Publish one event to SSE subscribers without impacting main flow.
+
+    Identity + metadata come from the active ``SSEEventContext`` — callers
+    supply only event-specific fields.
+    """
     if event_hub is None:
         return 0
 
     try:
         subscribers = await event_hub.publish(
             event_type=event_type,
-            tenant_id=tenant_id,
-            user_id=user_id,
-            bsuid=bsuid,
-            phone_number=phone_number,
-            platform=platform,
             source=source,
             payload=payload,
-            metadata=metadata,
         )
         if subscribers > 0:
             logger.debug(
@@ -107,23 +100,38 @@ async def publish_sse_event(
 async def publish_api_sse_event(
     event_hub: SSEEventHub | None,
     event: APIMessageEvent,
-    metadata: dict[str, Any] | None = None,
 ) -> int:
-    """Publish full API outgoing message context through SSE."""
+    """Publish full API outgoing message context through SSE.
+
+    Promotes any identity carried on the event (``user_id``, ``recipient``)
+    onto the active SSE context before publishing, so envelope fields align
+    with the outgoing message without the caller plumbing identity.
+    """
+    bsuid, phone = classify_meta_identifier(event.recipient)
+    user_id = event.user_id or event.recipient
+    # Prefer BSUID-shaped user_id as canonical identity for the envelope's
+    # bsuid slot even if the transport recipient is a phone number.
+    if bsuid is None:
+        bsuid, _ = classify_meta_identifier(user_id)
+    update_identity(user_id=user_id, bsuid=bsuid, phone_number=phone)
+
     return await publish_sse_event(
         event_hub,
         event_type="outgoing_api_message",
-        tenant_id=event.tenant_id or "unknown",
-        user_id=event.recipient,
-        platform=event.platform,
         source="api",
         payload=event.model_dump(mode="json", exclude_none=False),
-        metadata=metadata,
     )
 
 
 class SSEMessageHandler(DefaultMessageHandler):
-    """Wraps default incoming-message logging and publishes SSE payloads."""
+    """Defers ``incoming_message`` SSE emission until after the app pipeline.
+
+    ``log_incoming_message`` stages the normalised payload; the framework's
+    ``post_process_message`` hook flushes it. That ordering lets apps enrich
+    ``SSEEventContext.metadata`` (conversation_id, chat_id, run_id, …)
+    inside ``process_message`` and have those values land on the SSE
+    envelope subscribers see.
+    """
 
     def __init__(
         self,
@@ -133,7 +141,6 @@ class SSEMessageHandler(DefaultMessageHandler):
         log_level: LogLevel = LogLevel.INFO,
         content_preview_length: int = 100,
         mask_sensitive_data: bool = True,
-        metadata: dict[str, Any] | None = None,
     ):
         if inner_handler:
             super().__init__(
@@ -152,36 +159,37 @@ class SSEMessageHandler(DefaultMessageHandler):
             )
 
         self._event_hub = event_hub
-        self._metadata = metadata
-
-    def update_metadata(self, **kwargs: Any) -> None:
-        """Merge key-value pairs into the handler's metadata dict."""
-        if self._metadata is None:
-            self._metadata = {}
-        self._metadata.update(kwargs)
 
     async def log_incoming_message(self, webhook: IncomingMessageWebhook) -> None:
-        """Log incoming message then publish full webhook payload via SSE."""
+        """Log locally and stage the SSE payload for deferred emission."""
         await super().log_incoming_message(webhook)
 
-        tenant_id = webhook.tenant.get_tenant_key() if webhook.tenant else "unknown"
-        user = webhook.user
-        user_id = user.user_id if user else "unknown"
-        bsuid = (user.bsuid or None) if user else None
-        phone_number = (user.phone_number or None) if user else None
-        platform = webhook.platform.value if webhook.platform else "whatsapp"
+        ctx = get_sse_context()
+        if ctx is None:
+            return
+
+        ctx._pending_incoming = {
+            "event_type": "incoming_message",
+            "source": "webhook",
+            "payload": _normalized_webhook_payload(webhook),
+        }
+
+    async def post_process_message(self, webhook: IncomingMessageWebhook) -> None:
+        """Flush any staged ``incoming_message`` payload now that the app pipeline finished."""
+        await super().post_process_message(webhook)
+
+        ctx = get_sse_context()
+        if ctx is None or ctx._pending_incoming is None:
+            return
+
+        pending = ctx._pending_incoming
+        ctx._pending_incoming = None
 
         await publish_sse_event(
             self._event_hub,
-            event_type="incoming_message",
-            tenant_id=tenant_id,
-            user_id=user_id,
-            bsuid=bsuid,
-            phone_number=phone_number,
-            platform=platform,
-            source="webhook",
-            payload=_normalized_webhook_payload(webhook),
-            metadata=self._metadata,
+            event_type=pending["event_type"],
+            source=pending["source"],
+            payload=pending["payload"],
         )
 
 
@@ -194,7 +202,6 @@ class SSEStatusHandler(DefaultStatusHandler):
         inner_handler: DefaultStatusHandler | None = None,
         log_strategy: StatusLogStrategy = StatusLogStrategy.IMPORTANT_ONLY,
         log_level: LogLevel = LogLevel.INFO,
-        metadata: dict[str, Any] | None = None,
     ):
         if inner_handler:
             super().__init__(
@@ -209,31 +216,16 @@ class SSEStatusHandler(DefaultStatusHandler):
             )
 
         self._event_hub = event_hub
-        self._metadata = metadata
-
-    def update_metadata(self, **kwargs: Any) -> None:
-        """Merge key-value pairs into the handler's metadata dict."""
-        if self._metadata is None:
-            self._metadata = {}
-        self._metadata.update(kwargs)
 
     async def handle_status(self, webhook: StatusWebhook) -> dict[str, Any]:
         """Handle status, then publish full status webhook data."""
         result = await super().handle_status(webhook)
 
-        tenant_id = webhook.tenant.get_tenant_key() if webhook.tenant else "unknown"
-        platform = webhook.platform.value if webhook.platform else "whatsapp"
-        user_id = webhook.recipient_id or "unknown"
-
         await publish_sse_event(
             self._event_hub,
             event_type="status_change",
-            tenant_id=tenant_id,
-            user_id=user_id,
-            platform=platform,
             source="webhook",
             payload=_normalized_webhook_payload(webhook),
-            metadata=self._metadata,
         )
 
         return result
@@ -249,7 +241,6 @@ class SSEErrorHandler(DefaultErrorHandler):
         log_strategy: ErrorLogStrategy = ErrorLogStrategy.ALL,
         escalation_threshold: int = 5,
         escalation_window_minutes: int = 10,
-        metadata: dict[str, Any] | None = None,
     ):
         if inner_handler:
             super().__init__(
@@ -266,30 +257,16 @@ class SSEErrorHandler(DefaultErrorHandler):
             )
 
         self._event_hub = event_hub
-        self._metadata = metadata
-
-    def update_metadata(self, **kwargs: Any) -> None:
-        """Merge key-value pairs into the handler's metadata dict."""
-        if self._metadata is None:
-            self._metadata = {}
-        self._metadata.update(kwargs)
 
     async def handle_error(self, webhook: ErrorWebhook) -> dict[str, Any]:
         """Handle error and publish full webhook payload through SSE."""
         result = await super().handle_error(webhook)
 
-        tenant_id = webhook.tenant.get_tenant_key() if webhook.tenant else "unknown"
-        platform = webhook.platform.value if webhook.platform else "whatsapp"
-
         await publish_sse_event(
             self._event_hub,
             event_type="webhook_error",
-            tenant_id=tenant_id,
-            user_id="system",
-            platform=platform,
             source="webhook",
             payload=_normalized_webhook_payload(webhook),
-            metadata=self._metadata,
         )
 
         return result

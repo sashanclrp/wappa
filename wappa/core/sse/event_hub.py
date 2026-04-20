@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from .context import SSEEventContext, get_sse_context
+
 
 @dataclass(slots=True)
 class SSESubscription:
@@ -67,26 +69,21 @@ class SSEEventHub:
         self,
         *,
         event_type: str,
-        tenant_id: str,
-        user_id: str,
-        bsuid: str | None = None,
-        phone_number: str | None = None,
-        platform: str,
         source: str,
         payload: dict[str, Any],
-        metadata: dict[str, Any] | None = None,
     ) -> int:
-        """Fan out one event to all matching subscribers."""
+        """Fan out one event to all matching subscribers.
+
+        Identity (tenant, user, BSUID, phone) and metadata are read from the
+        active ``SSEEventContext``. Callers set that context once per
+        request at the framework entry point; publishers stay identity-free.
+        """
+        ctx = get_sse_context() or SSEEventContext()
         event = self._build_event(
             event_type=event_type,
-            tenant_id=tenant_id,
-            user_id=user_id,
-            bsuid=bsuid,
-            phone_number=phone_number,
-            platform=platform,
             source=source,
             payload=payload,
-            metadata=metadata,
+            context=ctx,
         )
 
         async with self._lock:
@@ -97,8 +94,8 @@ class SSEEventHub:
             if not self._matches(
                 subscriber=subscriber,
                 event_type=event_type,
-                tenant_id=tenant_id,
-                user_id=user_id,
+                tenant_id=ctx.tenant_id,
+                user_id=ctx.user_id,
             ):
                 continue
 
@@ -115,11 +112,11 @@ class SSEEventHub:
 
         close_event = self._build_event(
             event_type="stream_closed",
-            tenant_id="system",
-            user_id="system",
-            platform="system",
             source="wappa",
             payload={"reason": "shutdown"},
+            context=SSEEventContext(
+                tenant_id="system", user_id="system", platform="system"
+            ),
         )
 
         for subscriber in subscribers:
@@ -143,28 +140,23 @@ class SSEEventHub:
         self,
         *,
         event_type: str,
-        tenant_id: str,
-        user_id: str,
-        bsuid: str | None = None,
-        phone_number: str | None = None,
-        platform: str,
         source: str,
         payload: dict[str, Any],
-        metadata: dict[str, Any] | None = None,
+        context: SSEEventContext,
     ) -> dict[str, Any]:
         """Build the SSE envelope sent to clients."""
         return {
             "event_id": str(uuid4()),
             "event_type": event_type,
             "timestamp": datetime.now(UTC).isoformat(),
-            "tenant_id": tenant_id,
-            "user_id": user_id,
-            "bsuid": bsuid,
-            "phone_number": phone_number,
-            "platform": platform,
+            "tenant_id": context.tenant_id,
+            "user_id": context.user_id,
+            "bsuid": context.bsuid,
+            "phone_number": context.phone_number,
+            "platform": context.platform,
             "source": source,
             "payload": payload,
-            "metadata": metadata,
+            "metadata": dict(context.metadata) if context.metadata else None,
         }
 
     def _matches(
