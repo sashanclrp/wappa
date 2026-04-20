@@ -5,6 +5,17 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2026-04-20
+
+Patch release enriching SSE event envelopes with explicit `bsuid` and `phone_number` identity fields alongside the existing canonical `user_id`.
+
+### Changed
+- **SSE envelope gains `bsuid` and `phone_number` top-level fields** — every event published through `SSEEventHub.publish()` now carries both identity signals explicitly. `user_id` continues to hold the canonical identifier (BSUID when present, wa_id otherwise); `bsuid` and `phone_number` let consumers distinguish the two without pattern-matching the canonical value.
+- `publish_sse_event()` and `SSEEventHub.publish()` / `_build_event()` accept the new optional `bsuid: str | None` and `phone_number: str | None` keyword arguments (default `None` — fully backwards-compatible).
+- `SSEMessageHandler.log_incoming_message()` populates both fields from `webhook.user.bsuid` and `webhook.user.wa_id` for all `incoming_message` events. Empty strings are normalised to `None`.
+- `SSEMessengerWrapper.__init__()` accepts `bsuid` and `phone_number` and threads them into every `outgoing_bot_message` event.
+- `WappaContextFactory.create_context()` and `_create_messenger()` accept `bsuid` and `phone_number` and forward them to `SSEMessengerWrapper` when wrapping the outbound messenger.
+
 ## [0.3.3] - 2026-04-20
 
 Patch release adding an optional `user_id` parameter to every outbound send endpoint and `StatusWebhook`, and flipping `UserBase.user_id` to prefer BSUID over wa_id across all webhook types.

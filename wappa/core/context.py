@@ -72,6 +72,8 @@ class WappaContextFactory:
         tenant_id: str,
         user_id: str | None = None,
         *,
+        bsuid: str | None = None,
+        phone_number: str | None = None,
         include_messenger: bool = False,
         platform: PlatformType = PlatformType.WHATSAPP,
     ) -> WappaContext:
@@ -97,7 +99,9 @@ class WappaContextFactory:
 
         messenger = None
         if include_messenger:
-            messenger = await self._create_messenger(tenant_id, user_id, platform)
+            messenger = await self._create_messenger(
+                tenant_id, user_id, platform, bsuid=bsuid, phone_number=phone_number
+            )
 
         ctx = WappaContext(
             tenant_id=tenant_id,
@@ -145,6 +149,9 @@ class WappaContextFactory:
         tenant_id: str,
         user_id: str | None,
         platform: PlatformType,
+        *,
+        bsuid: str | None = None,
+        phone_number: str | None = None,
     ) -> IMessenger | None:
         """Create messenger using same logic as WebhookController."""
         try:
@@ -186,6 +193,8 @@ class WappaContextFactory:
                         event_hub=sse_event_hub,
                         tenant=tenant_id,
                         user_id=user_id or "",
+                        bsuid=bsuid,
+                        phone_number=phone_number,
                         metadata=sse_metadata,
                     )
 

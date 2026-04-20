@@ -71,6 +71,8 @@ async def publish_sse_event(
     event_type: str,
     tenant_id: str,
     user_id: str,
+    bsuid: str | None = None,
+    phone_number: str | None = None,
     platform: str,
     source: str,
     payload: dict[str, Any],
@@ -85,6 +87,8 @@ async def publish_sse_event(
             event_type=event_type,
             tenant_id=tenant_id,
             user_id=user_id,
+            bsuid=bsuid,
+            phone_number=phone_number,
             platform=platform,
             source=source,
             payload=payload,
@@ -161,7 +165,10 @@ class SSEMessageHandler(DefaultMessageHandler):
         await super().log_incoming_message(webhook)
 
         tenant_id = webhook.tenant.get_tenant_key() if webhook.tenant else "unknown"
-        user_id = webhook.user.user_id if webhook.user else "unknown"
+        user = webhook.user
+        user_id = user.user_id if user else "unknown"
+        bsuid = (user.bsuid or None) if user else None
+        phone_number = (user.wa_id or None) if user else None
         platform = webhook.platform.value if webhook.platform else "whatsapp"
 
         await publish_sse_event(
@@ -169,6 +176,8 @@ class SSEMessageHandler(DefaultMessageHandler):
             event_type="incoming_message",
             tenant_id=tenant_id,
             user_id=user_id,
+            bsuid=bsuid,
+            phone_number=phone_number,
             platform=platform,
             source="webhook",
             payload=_normalized_webhook_payload(webhook),

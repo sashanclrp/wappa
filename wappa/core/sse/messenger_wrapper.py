@@ -28,12 +28,16 @@ class SSEMessengerWrapper(IMessenger):
         event_hub: SSEEventHub,
         tenant: str,
         user_id: str,
+        bsuid: str | None = None,
+        phone_number: str | None = None,
         metadata: dict[str, Any] | None = None,
     ):
         self._inner = inner
         self._event_hub = event_hub
         self._tenant = tenant
         self._user_id = user_id
+        self._bsuid = bsuid
+        self._phone_number = phone_number
         self._metadata = metadata
 
     def update_metadata(self, **kwargs: Any) -> None:
@@ -67,6 +71,8 @@ class SSEMessengerWrapper(IMessenger):
             event_type="outgoing_bot_message",
             tenant_id=self._tenant,
             user_id=self._user_id,
+            bsuid=self._bsuid,
+            phone_number=self._phone_number,
             platform=self._inner.platform.value,
             source="bot_messenger",
             payload={
