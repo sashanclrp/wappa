@@ -8,6 +8,9 @@ Build intelligent WhatsApp bots, workflows, and chat applications with clean arc
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com)
 [![WhatsApp Business API](https://img.shields.io/badge/WhatsApp-Business%20API-25D366.svg)](https://developers.facebook.com/docs/whatsapp)
+[![Version](https://img.shields.io/badge/version-0.3.0-orange.svg)](CHANGELOG.md)
+
+> **v0.3.0 — Architectural Hardening Release** — ~3,500 lines of dead code removed, factory pattern completed for cross-platform messages, two runtime bugs fixed (`MediaType` shadowing, case-sensitive 401 detection), enum duplication eliminated across the codebase. See [CHANGELOG.md](CHANGELOG.md) for the full breakdown.
 
 ---
 
@@ -49,6 +52,29 @@ app.run()
 - **Media Handling** - Images, videos, audio, documents with automatic upload/download
 - **Templates** - Pre-approved business message templates
 
+### 🆔 **Recipient Contract and BSUID Support**
+- **Stable Internal Contract** - Wappa keeps the framework-facing parameter as `recipient` across `self.messenger.send_*`, API routes, and request models
+- **Transport Resolution** - In the WhatsApp adapter, `recipient` is resolved to:
+  - `to` when the identifier is a phone number
+  - `recipient` when the identifier is a BSUID
+- **BSUID-Aware Outbound** - Text, media, interactive, template, and specialized messages use the same internal recipient resolution
+- **No Framework Fallback** - If a message type cannot be sent via BSUID, Wappa does not automatically downgrade to phone-number transport
+
+#### Important BSUID Risk
+Wappa currently treats BSUID support as a transport concern, not as a delivery fallback workflow.
+
+This means:
+- your application can keep calling `send_*` with `recipient=...` exactly as before
+- Wappa will choose the correct WhatsApp request field internally
+- but if Meta rejects a BSUID for a specific message type, Wappa will return an explicit error instead of retrying with a phone number
+
+This is intentional for now. The fallback policy depends on each Wappa implementation because only the application knows:
+- whether a phone number is available
+- whether falling back is legally or product-wise acceptable
+- whether that specific message should be retried with a different recipient identity
+
+If your bot needs automatic fallback, implement it in your application layer around `self.messenger`, your user identity store, or your delivery orchestration logic.
+
 ### 🛠️ **Developer Experience**
 ```bash
 # Initialize new project
@@ -69,6 +95,32 @@ app = Wappa(cache="redis")  # or "memory" or "json"
 # Automatic state persistence
 await self.state_cache.set("conversation", {"step": "greeting"})
 ```
+
+### 🏭 **Factory Pattern for Cross-Platform Messages** (v0.3.0)
+Text, read-status, and media payloads are produced by dedicated factories (`WhatsAppMessageFactory`, `WhatsAppMediaFactory`) and consumed by `WhatsAppMessenger` through dependency injection. This keeps pure payload construction separate from I/O and gives you clean injection points in FastAPI routes.
+
+```python
+# Defaults keep the library ergonomic:
+messenger = WhatsAppMessenger(
+    client=client,
+    media_handler=media_handler,
+    interactive_handler=interactive_handler,
+    template_handler=template_handler,
+    specialized_handler=specialized_handler,
+    tenant_id=tenant_id,
+)
+
+# Or inject custom factories for advanced use cases (testing, multi-tenant extensions):
+messenger = WhatsAppMessenger(
+    client=client,
+    # ... handlers ...
+    tenant_id=tenant_id,
+    message_factory=MyCustomMessageFactory(),
+    media_factory=MyCustomMediaFactory(),
+)
+```
+
+**Why only text/media have factories?** Interactive messages, templates, and specialized types (contact, location) are platform-specific — Telegram has inline keyboards instead of WhatsApp buttons/lists, templates are WA-only, and Instagram has quick replies but no lists. Factories are reserved for concepts that truly cross platforms. Platform-specific types are owned by their corresponding handlers.
 
 ## 📦 Installation
 

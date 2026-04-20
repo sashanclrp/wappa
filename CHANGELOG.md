@@ -5,6 +5,96 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-20
+
+Major architectural hardening release. ~3,500 lines of dead code and redundancy removed, two real runtime bugs fixed, enum duplication eliminated across the codebase, factory pattern completed for cross-platform message types, **and the recipient contract formalized to handle Meta's BSUID rollout transparently**.
+
+### 🆔 Recipient Contract Formalization (Most Important Change for End Users)
+
+**Context**: Meta introduced **BSUID** (Business-Scoped User ID) as an alternative recipient identifier alongside phone numbers in the WhatsApp Cloud API. Meta also changed the transport field name depending on identifier type — phone numbers go in `"to"`, BSUIDs go in `"recipient"`. Applications that hardcoded `"to": phone` were silently breaking when handed a BSUID.
+
+**Wappa's response in v0.3.0**: the framework now owns the entire identifier-to-transport resolution so that application code stays identifier-agnostic.
+
+- **Stable public contract**. Your code keeps calling `self.messenger.send_*(..., recipient=...)` exactly as before. Nothing in the bot layer needs to change to support BSUIDs.
+- **Automatic transport routing**. Wappa inspects the identifier shape and routes it to the correct WhatsApp field:
+  - Phone number (e.g. `+573001234567`) → emitted as `"to"` in the payload
+  - BSUID (e.g. `CO.abc123`) → emitted as `"recipient"` in the payload
+  - The old and new field names never leak out of the adapter.
+- **Format validation at the boundary**. Phone numbers are sanitized (strip spaces/dashes/parens) then matched against `^\+?[1-9]\d{6,20}$`. BSUIDs must match `^[A-Z]{2}\.[A-Za-z0-9]{1,128}$` with the country prefix validated against the full ISO 3166-1 alpha-2 set. Invalid identifiers are rejected with `ValueError` before any HTTP call.
+- **No automatic fallback**. If Meta rejects a BSUID for a message type that does not support BSUID recipients (e.g. authentication templates), Wappa returns an explicit `MessageResult.error_code = "BSUID_RECIPIENT_NOT_SUPPORTED"` (backed by Meta error code `131062`). The framework does **not** silently downgrade to a phone number, because only the application knows whether a phone number is available for that user and whether downgrading is legally / product-wise acceptable. If your application wants fallback, implement it in your event handler around the returned `MessageResult`.
+- **New public types** under `wappa.schemas.core.recipient`:
+  - `RecipientKind` enum (`PHONE_NUMBER`, `BSUID`)
+  - `ResolvedRecipient` — the normalized identifier with its target transport field
+  - `RecipientRequest` — shared Pydantic boundary model that adapter request models inherit from, so every inbound FastAPI route canonicalizes the `recipient` field the same way
+  - `apply_recipient_to_payload(payload, recipient)` — mutator used by every outbound WA method
+  - `resolve_recipient()`, `normalize_recipient_identifier()`, `looks_like_phone_number()`, `looks_like_bsuid()` — helpers for custom integrations
+
+**If you are a Wappa user, this is the change that matters**. Everything else in this release is internal hardening; this section is why v0.3.0 exists as a coordinated release rather than a string of patches. You get BSUID support without touching a line of your bot code.
+
+### 🐛 Bug Fixes (Real Issues Found)
+
+- **`MediaType` enum shadowing in WhatsAppMessenger**: `whatsapp_messenger.py` imported `MediaType` from `media_models` at module level, then re-imported a **different** `MediaType` (from `template_models`, with only 3 members vs. the canonical 5) as a local import. This silently shadowed the canonical enum in a 400+ line section of the module. Fixed by renaming the template variant to `WhatsAppTemplateMediaType` and removing the local import.
+- **Case-sensitive authentication detection**: `is_authentication_error()` checked `"Unauthorized"` with exact case, missing lowercase variants like `"unauthorized request"` emitted by some HTTP libraries. Fixed to compare case-insensitively.
+
+### 🏗️ Architectural Changes
+
+- **Factory pattern completed for cross-platform messages**: `WhatsAppMessenger` now accepts `WhatsAppMessageFactory` and `WhatsAppMediaFactory` via dependency injection. `send_text`, `mark_as_read`, and `_send_media` (powering `send_image`, `send_video`, `send_audio`, `send_document`, `send_sticker`) delegate payload construction to factories instead of building inline. Factories remain the single source of truth for text/media/read-status payloads. Interactive, template, and specialized messages continue to delegate through their platform-specific handlers — this is intentional since those concepts (WhatsApp buttons, WA-only templates, etc.) do not map cleanly across platforms like Telegram or Instagram.
+- **Messenger constructor is backward-compatible**: `message_factory` and `media_factory` are optional kwargs; if omitted, default instances are created — so existing user code that constructs `WhatsAppMessenger(...)` directly keeps working.
+- **Centralized BSUID error handling**: `ERROR_CODE_BSUID_NOT_SUPPORTED = 131062` and `BSUID_ERROR_TAG = "BSUID_RECIPIENT_NOT_SUPPORTED"` are now defined once in `wappa/messaging/whatsapp/utils/error_helpers.py`. The API layer's `ERROR_CODE_MAPPING` and the webhook layer's `is_bsuid_auth_error()` both import from this single source instead of hardcoding the values in three places.
+- **`ContextLogger` accepted as logger parameter**: `handle_whatsapp_error()` now accepts `Logger | ContextLogger`, removing the need for `cast(Logger, self.logger)` gymnastics at call sites.
+
+### 🧹 Dead Code Removed
+
+- **`InteractiveType` enum shadow** (`wappa/messaging/whatsapp/models/interactive_models.py`): removed entirely — zero references to its members (`BUTTON`, `LIST`, `CTA_URL`) anywhere in the repo. The canonical cross-platform `InteractiveType` in `wappa.schemas.core.types` is unaffected.
+- **`handle_messaging_result`** (`wappa/api/utils/error_helpers.py`): exported publicly but zero callers across the entire repo (tests, examples, docs included). Removed from the module and from `wappa.api.utils.__init__` exports.
+- **`validate_coordinates` on `WhatsAppSpecializedHandler`**: orphaned — the API route has its own inline validation; the handler method was never invoked.
+- **`get_template_info` on `WhatsAppTemplateHandler`**: returned hardcoded fake data (`status=APPROVED`, `category=MARKETING`); no callers; removed to avoid latent bugs.
+
+### 🔄 Enum Deduplication
+
+- **`wappa/webhooks/core/types.py` is now a re-export shim** of `wappa/schemas/core/types.py`. The two files were previously byte-for-byte identical (254 lines each). The 13+ existing imports from `wappa.webhooks.core.types` continue to work unchanged, but now they resolve to the canonical enum objects — so `wappa.webhooks.core.types.InteractiveType is wappa.schemas.core.types.InteractiveType` evaluates `True`.
+- **`MediaType` in `template_models` renamed to `WhatsAppTemplateMediaType`**: the template-specific media enum (only IMAGE/VIDEO/DOCUMENT) now has a name that makes its WA-only scope obvious. The canonical `MediaType` with 5 members (AUDIO/DOCUMENT/IMAGE/STICKER/VIDEO) in `media_models` is unchanged.
+
+### ✨ Simplifications (~3,500 lines removed)
+
+Six specialized simplifier agents ran in parallel over the codebase, each focused on a bounded zone. Total net removal ~3,500 lines, broken down as:
+
+- Messenger core: ~1,150 lines
+- Persistence layer (cache factory, JSON/memory/Redis backends): ~620 lines
+- Core event flow and webhook dispatcher: ~485 lines
+- WhatsApp handlers (interactive, template, specialized): ~449 lines
+- CLI and API entry surfaces: ~416 lines
+- Models and schema boundaries: ~379 lines
+
+Highlights:
+- Multi-line docstrings stripped across the codebase; replaced with one-line comments only where WHY is non-obvious.
+- `if/elif` chains replaced with Python 3.12 `match/case` statements where they reduced branching depth.
+- Duplicated body-parameter validators in `TextTemplateMessage`, `MediaTemplateMessage`, `LocationTemplateMessage` extracted to a shared `_ensure_text_body_parameters()` helper.
+- Duplicated latitude/longitude validators consolidated into `_validate_coordinate(value, label, limit)`.
+- `RecipientRequest` shared boundary model introduced in `wappa/schemas/core/recipient.py` and reused by all adapter-facing request models.
+- Dead `InteractiveType` shadow enum removed; `MediaType` shadow renamed for clarity.
+- Redundant `_normalize_cache_type` helper inlined in `cache_factory.py`.
+- `_NAMESPACES` tuple introduced in `MemoryStore` to eliminate 4-way duplication across `__init__`, cleanup, and namespace guards.
+
+### ✅ Quality
+
+- **Ruff F-checks**: 0 errors across `wappa/` package.
+- **Test suite**: 16/16 pass.
+- **New test coverage**: `tests/test_whatsapp_payload_factories.py` and `tests/test_recipient_resolution.py` lock in the recipient routing contract and factory behavior. `tests/test_cache_backends_contracts.py` covers cache-factory edge cases.
+
+### 📋 Upgrade Notes
+
+This is a **minor-version bump (0.2.x → 0.3.0)** rather than a patch because of the scope of internal restructuring. The public library surface (`from wappa import Wappa, WappaEventHandler, WappaBuilder`) is unchanged and backward compatible.
+
+**Breaking changes** (narrow internal API only — most users will not be affected):
+- `wappa.messaging.whatsapp.models.template_models.MediaType` → `WhatsAppTemplateMediaType`. If you imported the old name from this specific module (not from `wappa.messaging.whatsapp.models.media_models`), update the import.
+- `wappa.api.utils.handle_messaging_result` removed. If you somehow depended on it, migrate to `raise_for_failed_result`.
+- `wappa.messaging.whatsapp.models.interactive_models.InteractiveType` removed (was dead code). Use `wappa.schemas.core.types.InteractiveType` for cross-platform interactive type classification.
+
+**Non-breaking enhancements**:
+- `WhatsAppMessenger.__init__` accepts new optional `message_factory` and `media_factory` kwargs.
+- `handle_whatsapp_error` accepts `Logger | ContextLogger`.
+
 ## [0.2.32] - 2026-04-14
 
 ### Added
