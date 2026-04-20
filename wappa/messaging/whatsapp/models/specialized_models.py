@@ -1,15 +1,8 @@
-"""
-WhatsApp specialized message models.
-
-Provides Pydantic v2 validation models for WhatsApp specialized operations:
-- ContactMessage: Contact card sharing with comprehensive contact information
-- LocationMessage: Geographic location sharing with coordinates
-- LocationRequestMessage: Interactive location request from users
-
-Based on WhatsApp Cloud API 2025 specialized message specifications.
-"""
+"""WhatsApp specialized message models."""
 
 from pydantic import BaseModel, Field, field_validator
+
+from wappa.schemas.core.recipient import RecipientRequest
 
 # Note: All contact type enums removed - WhatsApp accepts any string values
 # Common type values across all fields: "HOME", "WORK", etc.
@@ -17,8 +10,6 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class ContactAddress(BaseModel):
-    """Contact address information."""
-
     street: str | None = Field(None, max_length=500, description="Street address")
     city: str | None = Field(None, max_length=100, description="City name")
     state: str | None = Field(None, max_length=100, description="State or province")
@@ -31,8 +22,6 @@ class ContactAddress(BaseModel):
 
 
 class ContactEmail(BaseModel):
-    """Contact email information."""
-
     email: str = Field(
         ..., pattern=r"^[^@]+@[^@]+\.[^@]+$", description="Email address"
     )
@@ -40,8 +29,6 @@ class ContactEmail(BaseModel):
 
 
 class ContactName(BaseModel):
-    """Contact name information."""
-
     formatted_name: str = Field(
         ..., min_length=1, max_length=100, description="Full formatted name"
     )
@@ -54,23 +41,18 @@ class ContactName(BaseModel):
     @field_validator("formatted_name")
     @classmethod
     def validate_formatted_name_required(cls, v):
-        """Validate that formatted_name is not empty."""
         if not v or not v.strip():
             raise ValueError("formatted_name is required and cannot be empty")
         return v.strip()
 
 
 class ContactOrganization(BaseModel):
-    """Contact organization information."""
-
     company: str | None = Field(None, max_length=100, description="Company name")
     department: str | None = Field(None, max_length=100, description="Department")
     title: str | None = Field(None, max_length=100, description="Job title")
 
 
 class ContactPhone(BaseModel):
-    """Contact phone information."""
-
     phone: str = Field(
         ..., pattern=r"^\+?[\d\s\-\(\)]{7,20}$", description="Phone number"
     )
@@ -82,15 +64,11 @@ class ContactPhone(BaseModel):
 
 
 class ContactUrl(BaseModel):
-    """Contact URL information."""
-
     url: str = Field(..., pattern=r"^https?://", description="Website URL")
     type: str | None = Field(None, description="URL type (e.g., HOME, WORK)")
 
 
 class ContactCard(BaseModel):
-    """Complete contact card information."""
-
     addresses: list[ContactAddress] | None = Field(
         None, max_length=5, description="Contact addresses"
     )
@@ -111,31 +89,13 @@ class ContactCard(BaseModel):
         None, max_length=5, description="Website URLs"
     )
 
-    @field_validator("phones")
-    @classmethod
-    def validate_at_least_one_phone(cls, v):
-        """Validate that at least one phone number is provided."""
-        if not v or len(v) == 0:
-            raise ValueError("At least one phone number is required")
-        return v
 
-
-class ContactMessage(BaseModel):
-    """Contact card message request."""
-
-    recipient: str = Field(
-        ..., pattern=r"^\d{10,15}$", description="Recipient phone number"
-    )
+class ContactMessage(RecipientRequest):
     contact: ContactCard = Field(..., description="Contact card information")
     reply_to_message_id: str | None = Field(None, description="Message ID to reply to")
 
 
-class LocationMessage(BaseModel):
-    """Location sharing message request."""
-
-    recipient: str = Field(
-        ..., pattern=r"^\d{10,15}$", description="Recipient phone number"
-    )
+class LocationMessage(RecipientRequest):
     latitude: float = Field(
         ..., ge=-90, le=90, description="Location latitude (-90 to 90)"
     )
@@ -147,12 +107,7 @@ class LocationMessage(BaseModel):
     reply_to_message_id: str | None = Field(None, description="Message ID to reply to")
 
 
-class LocationRequestMessage(BaseModel):
-    """Location request message (asks user to share their location)."""
-
-    recipient: str = Field(
-        ..., pattern=r"^\d{10,15}$", description="Recipient phone number"
-    )
+class LocationRequestMessage(RecipientRequest):
     body: str = Field(
         ..., min_length=1, max_length=1024, description="Request message text"
     )
@@ -160,16 +115,12 @@ class LocationRequestMessage(BaseModel):
 
 
 class ContactValidationResult(BaseModel):
-    """Contact validation result."""
-
     valid: bool = Field(..., description="Whether contact is valid")
     errors: list[str] | None = Field(None, description="Validation errors")
     warnings: list[str] | None = Field(None, description="Validation warnings")
 
 
 class LocationValidationResult(BaseModel):
-    """Location validation result."""
-
     valid: bool = Field(..., description="Whether location is valid")
     latitude: float | None = Field(None, description="Validated latitude")
     longitude: float | None = Field(None, description="Validated longitude")
@@ -179,10 +130,7 @@ class LocationValidationResult(BaseModel):
     )
 
 
-# Example contact structures for common use cases
 class BusinessContact(BaseModel):
-    """Simplified business contact model."""
-
     business_name: str = Field(..., max_length=100, description="Business name")
     phone: str = Field(
         ..., pattern=r"^\+?[\d\s\-\(\)]{7,20}$", description="Business phone"
@@ -196,7 +144,6 @@ class BusinessContact(BaseModel):
     address: str | None = Field(None, max_length=500, description="Business address")
 
     def to_contact_card(self) -> ContactCard:
-        """Convert to full ContactCard format."""
         phones = [ContactPhone(phone=self.phone, type="WORK")]
         emails = [ContactEmail(email=self.email, type="WORK")] if self.email else None
         urls = [ContactUrl(url=self.website, type="WORK")] if self.website else None
@@ -211,8 +158,6 @@ class BusinessContact(BaseModel):
 
 
 class PersonalContact(BaseModel):
-    """Simplified personal contact model."""
-
     first_name: str = Field(..., max_length=50, description="First name")
     last_name: str | None = Field(None, max_length=50, description="Last name")
     phone: str = Field(
@@ -223,7 +168,6 @@ class PersonalContact(BaseModel):
     )
 
     def to_contact_card(self) -> ContactCard:
-        """Convert to full ContactCard format."""
         formatted_name = (
             f"{self.first_name} {self.last_name}".strip()
             if self.last_name

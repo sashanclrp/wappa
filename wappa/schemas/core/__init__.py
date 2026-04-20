@@ -1,17 +1,18 @@
-"""
-Core schema abstractions for the Mimeia AI Agent Platform.
-
-This module provides platform-agnostic base classes and types that enable
-unified processing across multiple messaging platforms (WhatsApp, Telegram, Teams, Instagram).
-
-Note: Universal webhook interfaces (UserBase, StatusWebhook, etc.) have been moved to
-wappa.webhooks.core.webhook_interfaces for better organization and BSUID support.
-"""
+"""Core schema abstractions for the Mimeia AI Agent Platform."""
 
 # Platform-agnostic base classes
 from .base_message import BaseMessage, BaseTextMessage
 from .base_status import BaseMessageStatus
 from .base_webhook import BaseWebhook
+from .recipient import (
+    RecipientIdentifier,
+    RecipientKind,
+    RecipientRequest,
+    ResolvedRecipient,
+    apply_recipient_to_payload,
+    normalize_recipient_identifier,
+    resolve_recipient,
+)
 
 # Core types
 from .types import (
@@ -35,6 +36,13 @@ __all__ = [
     "MediaType",
     "ConversationType",
     "ErrorCode",
+    "RecipientIdentifier",
+    "RecipientRequest",
+    "RecipientKind",
+    "ResolvedRecipient",
+    "apply_recipient_to_payload",
+    "normalize_recipient_identifier",
+    "resolve_recipient",
     # Base classes
     "BaseMessage",
     "BaseTextMessage",

@@ -1,19 +1,11 @@
-"""
-Pydantic models for state handler API endpoints.
-
-This module defines request/response models for the state handler assignment API,
-which allows assigning cache-based state handlers to users after any message type
-has been sent.
-"""
-
 from typing import Any
 
 from pydantic import BaseModel, Field
 
+from wappa.schemas.core.recipient import RecipientRequest
+
 
 class HandlerStateConfig(BaseModel):
-    """Configuration for assigning a cache state handler to a user."""
-
     handler_value: str = Field(
         ...,
         description="Unique identifier for the handler state",
@@ -34,23 +26,13 @@ class HandlerStateConfig(BaseModel):
     )
 
 
-class SetHandlerStateRequest(BaseModel):
-    """Request to assign a state handler to a user."""
-
-    recipient: str = Field(
-        ...,
-        description="User phone number (recipient)",
-        pattern=r"^\+?[1-9]\d{1,14}$",  # E.164 format
-    )
-
+class SetHandlerStateRequest(RecipientRequest):
     handler_config: HandlerStateConfig = Field(
         ..., description="Handler state configuration"
     )
 
 
 class HandlerStateResponse(BaseModel):
-    """Response after setting handler state."""
-
     success: bool
     message: str
     recipient: str
