@@ -14,8 +14,10 @@ context is automatically cleared when the entry-point scope exits.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -26,10 +28,13 @@ __all__ = [
     "get_sse_context",
     "update_metadata",
     "update_identity",
+    "flush_incoming_sse",
     "sse_event_scope",
     "derive_identifiers",
     "classify_meta_identifier",
 ]
+
+logger = logging.getLogger(__name__)
 
 _BSUID_PATTERN = re.compile(r"^[A-Z]{2}\.[A-Za-z0-9]{1,128}$")
 
@@ -38,10 +43,10 @@ _BSUID_PATTERN = re.compile(r"^[A-Z]{2}\.[A-Za-z0-9]{1,128}$")
 class SSEEventContext:
     """Per-request state shared by every SSE publisher.
 
-    ``metadata`` is a mutable dict the app enriches during the pipeline.
-    ``_pending_incoming`` holds the ``incoming_message`` payload between the
-    default handler's ``log_incoming_message`` (where it's staged) and
-    ``post_process_message`` (where it's flushed with enriched metadata).
+    ``_pending_incoming`` + ``_pending_flush`` stage an ``incoming_message``
+    payload until identity/metadata is ready; the first of
+    ``update_metadata``, ``update_identity``, outgoing send, or
+    ``post_process_message`` wins and emits.
     """
 
     tenant_id: str = "unknown"
@@ -51,6 +56,7 @@ class SSEEventContext:
     platform: str = "whatsapp"
     metadata: dict[str, Any] = field(default_factory=dict)
     _pending_incoming: dict[str, Any] | None = None
+    _pending_flush: Callable[[dict[str, Any]], Awaitable[None]] | None = None
 
 
 _sse_event_context: ContextVar[SSEEventContext | None] = ContextVar(
@@ -63,17 +69,37 @@ def get_sse_context() -> SSEEventContext | None:
     return _sse_event_context.get()
 
 
-def update_metadata(**kwargs: Any) -> None:
-    """Merge values into the current SSE context's metadata bag.
+def flush_incoming_sse() -> None:
+    """Emit any staged ``incoming_message`` SSE event now.
 
-    No-op when no SSE context is active (e.g. outside a framework entry-point
-    scope). Apps call this from inside the pipeline to enrich conversation,
-    chat, run, and similar domain identifiers onto every SSE event.
+    Idempotent: the first caller claims the pending payload and schedules
+    the publish as a background task; subsequent callers are no-ops. Also
+    invoked automatically by ``update_metadata``, ``update_identity``, and
+    the messenger wrapper before any outgoing send.
+    """
+    ctx = _sse_event_context.get()
+    if ctx is None or ctx._pending_incoming is None or ctx._pending_flush is None:
+        return
+    pending = ctx._pending_incoming
+    flush = ctx._pending_flush
+    ctx._pending_incoming = None
+    ctx._pending_flush = None
+    try:
+        asyncio.create_task(flush(pending))
+    except RuntimeError:
+        logger.debug("SSE flush skipped: no running event loop")
+
+
+def update_metadata(**kwargs: Any) -> None:
+    """Merge values into the SSE context's metadata bag and flush any staged incoming event.
+
+    No-op when no SSE context is active.
     """
     ctx = _sse_event_context.get()
     if ctx is None:
         return
     ctx.metadata.update(kwargs)
+    flush_incoming_sse()
 
 
 def update_identity(
@@ -82,12 +108,9 @@ def update_identity(
     bsuid: str | None = None,
     phone_number: str | None = None,
 ) -> None:
-    """Override identity fields on the current SSE context.
+    """Override identity fields on the SSE context and flush any staged incoming event.
 
-    Useful after a cache or DB lookup promotes a wa_id-only request into a
-    canonical BSUID, or when an expiry handler hydrates phone_number from
-    stored user state. ``None`` arguments are ignored — only the supplied
-    fields are written. No-op when no SSE context is active.
+    ``None`` arguments are ignored. No-op when no SSE context is active.
     """
     ctx = _sse_event_context.get()
     if ctx is None:
@@ -98,6 +121,7 @@ def update_identity(
         ctx.bsuid = bsuid
     if phone_number is not None:
         ctx.phone_number = phone_number
+    flush_incoming_sse()
 
 
 def classify_meta_identifier(value: str | None) -> tuple[str | None, str | None]:

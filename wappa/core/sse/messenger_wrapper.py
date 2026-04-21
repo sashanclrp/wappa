@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from ...domain.interfaces.messaging_interface import IMessenger
 from ...schemas.core.types import PlatformType
+from .context import flush_incoming_sse
 from .event_hub import SSEEventHub
 from .handlers import publish_sse_event
 
@@ -54,6 +55,9 @@ class SSEMessengerWrapper(IMessenger):
         request_payload: dict[str, Any],
         operation: Awaitable[MessageResult],
     ) -> MessageResult:
+        # Ordering guard: emit any staged incoming_message before outgoing.
+        flush_incoming_sse()
+
         result = await operation
 
         await publish_sse_event(

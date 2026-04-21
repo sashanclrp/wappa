@@ -15,7 +15,12 @@ from ..events.default_handlers import (
     MessageLogStrategy,
     StatusLogStrategy,
 )
-from .context import classify_meta_identifier, get_sse_context, update_identity
+from .context import (
+    classify_meta_identifier,
+    flush_incoming_sse,
+    get_sse_context,
+    update_identity,
+)
 from .event_hub import SSEEventHub
 
 if TYPE_CHECKING:
@@ -124,13 +129,13 @@ async def publish_api_sse_event(
 
 
 class SSEMessageHandler(DefaultMessageHandler):
-    """Defers ``incoming_message`` SSE emission until after the app pipeline.
+    """Stages ``incoming_message`` SSE events for eager flush.
 
-    ``log_incoming_message`` stages the normalised payload; the framework's
-    ``post_process_message`` hook flushes it. That ordering lets apps enrich
-    ``SSEEventContext.metadata`` (conversation_id, chat_id, run_id, …)
-    inside ``process_message`` and have those values land on the SSE
-    envelope subscribers see.
+    ``log_incoming_message`` stages the payload + flush callback on the
+    request-scoped context. Flush fires on the first of: ``update_metadata``
+    / ``update_identity`` call, outgoing send via ``SSEMessengerWrapper``,
+    or ``post_process_message`` (safety net) — guaranteeing
+    ``incoming_message`` always precedes ``outgoing_bot_message``.
     """
 
     def __init__(
@@ -160,8 +165,17 @@ class SSEMessageHandler(DefaultMessageHandler):
 
         self._event_hub = event_hub
 
+    async def _flush_pending(self, pending: dict[str, Any]) -> None:
+        """Publish a previously-staged ``incoming_message`` payload."""
+        await publish_sse_event(
+            self._event_hub,
+            event_type=pending["event_type"],
+            source=pending["source"],
+            payload=pending["payload"],
+        )
+
     async def log_incoming_message(self, webhook: IncomingMessageWebhook) -> None:
-        """Log locally and stage the SSE payload for deferred emission."""
+        """Log locally and stage the SSE payload for eager flush."""
         await super().log_incoming_message(webhook)
 
         ctx = get_sse_context()
@@ -173,24 +187,12 @@ class SSEMessageHandler(DefaultMessageHandler):
             "source": "webhook",
             "payload": _normalized_webhook_payload(webhook),
         }
+        ctx._pending_flush = self._flush_pending
 
     async def post_process_message(self, webhook: IncomingMessageWebhook) -> None:
-        """Flush any staged ``incoming_message`` payload now that the app pipeline finished."""
+        """Safety-net flush for pipelines that never enriched metadata or sent a reply."""
         await super().post_process_message(webhook)
-
-        ctx = get_sse_context()
-        if ctx is None or ctx._pending_incoming is None:
-            return
-
-        pending = ctx._pending_incoming
-        ctx._pending_incoming = None
-
-        await publish_sse_event(
-            self._event_hub,
-            event_type=pending["event_type"],
-            source=pending["source"],
-            payload=pending["payload"],
-        )
+        flush_incoming_sse()
 
 
 class SSEStatusHandler(DefaultStatusHandler):

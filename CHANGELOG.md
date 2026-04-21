@@ -5,6 +5,23 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.7] - 2026-04-20
+
+Eager emission of ``incoming_message`` SSE events. v0.3.6 deferred the emission until ``post_process_message`` so metadata the app set during ``process_message`` could land on the envelope — correct for metadata, but it inverted the wire order: subscribers saw ``outgoing_bot_message`` before ``incoming_message``, which broke optimistic UI renderers that rely on arrival order. v0.3.7 flushes the staged payload at the first signal that identity + metadata is ready, without sacrificing enrichment.
+
+### Added
+- **``flush_incoming_sse()``** (``wappa.sse``) — explicit flush of any staged ``incoming_message`` payload. Idempotent: the first caller claims the pending payload and schedules the publish as a background task; subsequent callers are no-ops.
+- **``SSEEventContext._pending_flush``** — per-request async callback the default handler registers at stage time so the flush is callable from anywhere that has the context.
+
+### Changed
+- **``update_metadata(**kwargs)``** now auto-flushes a staged ``incoming_message`` after merging. The first metadata update signals "identity + metadata ready" → the event emits immediately, before the handler sends its reply.
+- **``update_identity(...)``** same auto-flush after writing identity fields.
+- **``SSEMessengerWrapper._send_with_sse``** calls ``flush_incoming_sse()`` before running the outgoing operation — ordering guard that guarantees ``incoming_message`` precedes ``outgoing_bot_message`` even when the app never enriches metadata.
+- **``SSEMessageHandler.post_process_message``** reduced to a safety-net call to ``flush_incoming_sse()`` for pipelines that never enrich and never send (pure logging handlers).
+
+### Migration
+None. Fully backwards-compatible with v0.3.6 apps — no signature changes, no removed exports. Apps using ``update_metadata`` / ``update_identity`` from inside their pipeline now see ``incoming_message`` fire right after that call instead of at the end, with the same envelope contents.
+
 ## [0.3.6] - 2026-04-20
 
 Identity and domain-context propagation across every SSE event, end-to-end. Breaking cleanup of the v0.3.4 identity-threading approach: no more per-construction ``bsuid``/``phone_number``/``metadata`` arguments on wrappers or publishers; a single request-scoped ``SSEEventContext`` populated at each framework entry point drives every envelope that fires inside it. Fixes the v0.3.4/0.3.5 null-identity and missing-metadata bugs in ``outgoing_bot_message`` and ``incoming_message`` at the root.
