@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING, Any
 
 from ...core.logging.logger import get_app_logger
 from ...persistence.redis.redis_manager import RedisManager
+from ..messaging.middleware.pubsub_notification import PubSubNotificationMiddleware
+from ..messaging.pipeline import PRIORITY_NOTIFICATIONS
 from ..pubsub import (
     PubSubMessageHandler,
     PubSubStatusHandler,
@@ -89,9 +91,23 @@ class RedisPubSubPlugin:
         self._api_post_process_hook = None
 
     def configure(self, builder: WappaBuilder) -> None:
-        """Register startup and shutdown hooks with the builder."""
+        """Register hooks and (optionally) the outbound pub/sub middleware.
+
+        The ``PubSubNotificationMiddleware`` carries no request-scoped state
+        (identity comes from ``SSEEventContext`` at handle time) so it can
+        be registered synchronously at configure time — removing the need
+        for any ``app.state.pubsub_wrap_messenger`` flag that the controller
+        would have to branch on.
+        """
         builder.add_startup_hook(self._startup_hook, priority=22)
         builder.add_shutdown_hook(self._shutdown_hook, priority=22)
+
+        if self.publish_bot_replies:
+            builder.add_messenger_middleware(
+                PubSubNotificationMiddleware(),
+                priority=PRIORITY_NOTIFICATIONS,
+            )
+
         get_app_logger().debug("RedisPubSubPlugin configured")
 
     async def startup(self, app: FastAPI) -> None:
@@ -153,9 +169,9 @@ class RedisPubSubPlugin:
             event_handler.add_api_post_process_hook(_pubsub_api_hook)
             handlers_wrapped.append("outgoing_message")
 
-        # Set flag for messenger wrapping (handled in webhook_controller)
+        # Bot-reply middleware was registered in configure() via
+        # builder.add_messenger_middleware; just record for logging.
         if self.publish_bot_replies:
-            app.state.pubsub_wrap_messenger = True
             handlers_wrapped.append("bot_reply")
 
         # Store plugin reference
@@ -173,8 +189,6 @@ class RedisPubSubPlugin:
 
         if hasattr(app.state, "redis_pubsub_plugin"):
             del app.state.redis_pubsub_plugin
-        if hasattr(app.state, "pubsub_wrap_messenger"):
-            del app.state.pubsub_wrap_messenger
         get_app_logger().info("RedisPubSubPlugin shutdown completed")
 
     async def get_health_status(self, app: FastAPI) -> dict[str, Any]:
@@ -192,7 +206,7 @@ class RedisPubSubPlugin:
                 "message_handler": self._original_message_handler is not None,
                 "status_handler": self._original_status_handler is not None,
                 "api_post_process": self._api_post_process_hook is not None,
-                "messenger_wrapper": getattr(app.state, "pubsub_wrap_messenger", False),
+                "messenger_wrapper": self.publish_bot_replies,
             },
         }
 

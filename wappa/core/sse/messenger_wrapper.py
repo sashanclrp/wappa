@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from collections.abc import Awaitable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -33,6 +34,13 @@ class SSEMessengerWrapper(IMessenger):
         inner: IMessenger,
         event_hub: SSEEventHub,
     ):
+        warnings.warn(
+            "SSEMessengerWrapper is deprecated; register "
+            "SSELifecycleMiddleware via WappaBuilder.add_messenger_middleware "
+            "instead. This class will be removed in v0.6.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._inner = inner
         self._event_hub = event_hub
 

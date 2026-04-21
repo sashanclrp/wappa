@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -29,6 +30,13 @@ class PubSubMessengerWrapper(IMessenger):
         tenant: str,
         user_id: str,
     ):
+        warnings.warn(
+            "PubSubMessengerWrapper is deprecated; register "
+            "PubSubNotificationMiddleware via WappaBuilder.add_messenger_middleware "
+            "instead. This class will be removed in v0.6.0.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._inner = inner
         self._tenant = tenant
         self._user_id = user_id

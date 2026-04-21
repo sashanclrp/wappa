@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import FastAPI
 
 from ..logging.logger import get_app_logger
+from ..messaging.pipeline import MessengerMiddleware, MiddlewareEntry
 
 if TYPE_CHECKING:
     from .plugin import WappaPlugin
@@ -46,6 +47,7 @@ class WappaBuilder:
         self.routers: list[tuple[Any, dict]] = []  # (router, include_kwargs)
         self.startup_hooks: list[tuple[Callable, int]] = []  # (hook, priority)
         self.shutdown_hooks: list[tuple[Callable, int]] = []  # (hook, priority)
+        self.messenger_middleware: list[MiddlewareEntry] = []  # (middleware, priority)
         self.config_overrides: dict[str, Any] = {}
 
     def add_plugin(self, plugin: "WappaPlugin") -> "WappaBuilder":
@@ -161,6 +163,53 @@ class WappaBuilder:
         self.shutdown_hooks.append((hook, priority))
         return self
 
+    def add_messenger_middleware(
+        self,
+        middleware: MessengerMiddleware,
+        priority: int = 50,
+    ) -> "WappaBuilder":
+        """
+        Register middleware to apply to every outbound ``IMessenger`` call.
+
+        The framework assembles a :class:`MessengerPipeline` per request and
+        runs the registered middleware in priority order around the raw
+        messenger send. Cross-cutting concerns (cache, SSE lifecycle, pub/sub
+        notifications, retry, metrics, tracing) each live in a single
+        middleware rather than in a copy-pasted wrapper class.
+
+        Priority Convention (lower = closer to raw transport / inner):
+
+        - 10: Reliability (retry, circuit-breaker)
+        - 30: Domain notifications (pub/sub)
+        - 50: Caching / persistence  **← downstream cache middleware goes here**
+        - 70: Lifecycle events (SSE)
+        - 90: Observability (metrics, tracing)
+
+        The pipeline runs outer → inner on the way in, then inner → outer on
+        the way out. So a higher-priority middleware publishes its post-hook
+        *after* any lower-priority middleware has completed. This is how the
+        framework guarantees "cache write finishes before SSE publishes":
+        the cache middleware sits at priority 50, the SSE middleware sits at
+        priority 70, and the SSE ``publish`` call only runs after the whole
+        inner chain (including the cache write) returns.
+
+        Args:
+            middleware: ``MessengerMiddleware`` instance (app-scoped, shared).
+            priority: Execution band; see table above. Default 50.
+
+        Returns:
+            Self for method chaining.
+
+        Example::
+
+            builder.add_messenger_middleware(
+                CacheMessengerMiddleware(cache=redis_cache),
+                priority=50,
+            )
+        """
+        self.messenger_middleware.append((middleware, priority))
+        return self
+
     def configure(self, **overrides: Any) -> "WappaBuilder":
         """
         Override default FastAPI configuration.
@@ -234,6 +283,13 @@ class WappaBuilder:
 
         app = FastAPI(**default_config)
         logger.debug(f"Created FastAPI app: {default_config['title']}")
+
+        # Expose the registered messenger middleware as mutable app state so
+        # plugins can append runtime-constructed middleware from their
+        # startup hooks (e.g., SSEEventsPlugin needs the live SSEEventHub).
+        # Startup hooks all complete before the first request, so the list
+        # is effectively frozen once serving begins.
+        app.state.messenger_middleware = list(self.messenger_middleware)
 
         # Step 3: Add all middleware via app.add_middleware()
         # Sort by priority (reverse order because FastAPI adds middleware in reverse)

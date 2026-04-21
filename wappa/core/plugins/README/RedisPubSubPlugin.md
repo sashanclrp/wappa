@@ -94,7 +94,12 @@ wappa:notify:{tenant}:{user_id}:{event_type}
 
 ## How it works
 
-The plugin uses a decorator/wrapper pattern to intercept events at each stage without modifying existing handler code.
+The plugin intercepts events at each stage without modifying existing handler code. Outbound bot replies (`bot_reply`) are intercepted through the **messenger middleware pipeline**; inbound events (`incoming_message`, `status_change`) are intercepted by wrapping the default webhook handlers.
+
+**During `configure()`** (synchronous, before the app starts) the plugin:
+
+1. Registers startup/shutdown hooks at priority `22`
+2. When `publish_bot_replies=True`, registers `PubSubNotificationMiddleware` via `builder.add_messenger_middleware(...)` at priority `30` (domain-notifications band) — this is what publishes `bot_reply` on every successful `self.messenger.send_*()` call
 
 **During startup** the plugin:
 
@@ -104,15 +109,22 @@ The plugin uses a decorator/wrapper pattern to intercept events at each stage wi
 4. Wraps the default message handler with `PubSubMessageHandler` (publishes `incoming_message` after the original handler runs)
 5. Wraps the default status handler with `PubSubStatusHandler` (publishes `status_change` after the original handler runs)
 6. Registers a post-process hook on `WappaEventHandler` via `add_api_post_process_hook` to call `publish_api_notification` after API sends (publishes `outgoing_message`)
-7. Sets `app.state.pubsub_wrap_messenger = True` so the webhook controller wraps `self.messenger` with `PubSubMessengerWrapper` at request time (publishes `bot_reply` for every successful `send_*()` call)
 
 **During shutdown** it:
 
 1. Removes the API post-process hook (via `remove_api_post_process_hook`)
-2. Removes `app.state.redis_pubsub_plugin` and `app.state.pubsub_wrap_messenger`
+2. Removes `app.state.redis_pubsub_plugin`
 3. Logs shutdown completion
 
-The `PubSubMessengerWrapper` implements the full `IMessenger` interface, delegating every method to the inner messenger and publishing a `bot_reply` notification after each successful send. `mark_as_read()` is intentionally not wrapped since it is not a message.
+### Why bot_reply is now middleware
+
+Pre-v0.4.0 the plugin flipped `app.state.pubsub_wrap_messenger = True` and the webhook controller branched on that flag to wrap `self.messenger` with a `PubSubMessengerWrapper` — a ~300 LOC class that re-implemented all 18 `IMessenger` methods purely to emit a `bot_reply` notification after each send. Adding a sibling concern (a cache write, a metrics probe) forced the same copy-paste.
+
+In v0.4.0 that wrapper was rewritten as a ~60 LOC `PubSubNotificationMiddleware` on the general messenger pipeline. It reads tenant + user identity from the active `SSEEventContext` (set once per request by the framework entry point), so the middleware is app-scoped and shared across requests. Adding another outbound concern is a single `add_messenger_middleware` call at the right priority — no new `app.state` flags, no controller changes, no private-attribute drilling.
+
+`mark_as_read()` still bypasses the pipeline (it is not a user-visible message), matching legacy behaviour.
+
+The legacy `PubSubMessengerWrapper` is kept as a deprecation shim through v0.5.0 and will be removed in v0.6.0. See [MessengerMiddleware.md](./MessengerMiddleware.md) for the full design.
 
 ## Subscription examples
 
@@ -212,4 +224,4 @@ Returns a dictionary with:
 ```
 
 - `healthy` reflects whether `RedisManager.is_initialized()` returns `True` at the time of the check.
-- `handlers_wrapped` shows which handlers were successfully wrapped during startup. If a handler is `false`, the corresponding event type is not being published.
+- `handlers_wrapped` shows which handlers were successfully wrapped during startup. If a handler is `false`, the corresponding event type is not being published. `messenger_wrapper` reflects whether the outbound `PubSubNotificationMiddleware` is active (controlled by the `publish_bot_replies` constructor flag).

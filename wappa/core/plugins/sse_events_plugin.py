@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any
 
 from ...api.routes.sse import router as sse_router
 from ...core.logging.logger import get_app_logger
+from ...core.messaging.middleware.sse_lifecycle import SSELifecycleMiddleware
+from ...core.messaging.pipeline import PRIORITY_LIFECYCLE
 from ...core.sse import (
     SUPPORTED_SSE_EVENT_TYPES,
     SSEErrorHandler,
@@ -52,12 +54,28 @@ class SSEEventsPlugin:
         self._original_status_handler = None
         self._original_error_handler = None
         self._api_post_process_hook = None
+        self._event_hub: SSEEventHub | None = None
 
     def configure(self, builder: WappaBuilder) -> None:
-        """Register SSE routes and lifecycle hooks."""
+        """Register SSE routes, lifecycle hooks, and the outbound middleware.
+
+        The ``SSEEventHub`` is constructed here (synchronously — it owns
+        only asyncio primitives) so the outbound messenger middleware can
+        be registered through the public ``add_messenger_middleware`` API
+        at configure time, rather than via private ``app.state`` flags
+        that the controller would have to know about.
+        """
         builder.add_router(sse_router)
         builder.add_startup_hook(self._startup_hook, priority=24)
         builder.add_shutdown_hook(self._shutdown_hook, priority=24)
+
+        self._event_hub = SSEEventHub(queue_size=self.queue_size)
+        if self.publish_bot_replies:
+            builder.add_messenger_middleware(
+                SSELifecycleMiddleware(self._event_hub),
+                priority=PRIORITY_LIFECYCLE,
+            )
+
         get_app_logger().debug("SSEEventsPlugin configured")
 
     async def startup(self, app: FastAPI) -> None:
@@ -69,11 +87,16 @@ class SSEEventsPlugin:
         await self._shutdown_hook(app)
 
     async def _startup_hook(self, app: FastAPI) -> None:
-        """Inject SSE wrappers and initialize event hub."""
+        """Publish event hub to app.state and wrap inbound handlers."""
         app_logger = get_app_logger()
         app_logger.info("=== SSE PLUGIN INITIALIZATION ===")
 
-        event_hub = SSEEventHub(queue_size=self.queue_size)
+        # Hub was constructed in configure() — expose on app.state so the
+        # SSE router (which subscribes clients) can reach it at runtime.
+        event_hub = self._event_hub
+        if event_hub is None:  # pragma: no cover — configure() is mandatory
+            event_hub = SSEEventHub(queue_size=self.queue_size)
+            self._event_hub = event_hub
         app.state.sse_event_hub = event_hub
 
         for event_type in self.custom_event_types:
@@ -133,7 +156,8 @@ class SSEEventsPlugin:
             handlers_wrapped.append("outgoing_api_message")
 
         if self.publish_bot_replies:
-            app.state.sse_wrap_messenger = True
+            # Middleware already registered in configure() via
+            # builder.add_messenger_middleware — record for health reporting.
             handlers_wrapped.append("outgoing_bot_message")
 
         app.state.sse_events_plugin = self
@@ -167,10 +191,9 @@ class SSEEventsPlugin:
 
         if hasattr(app.state, "sse_events_plugin"):
             del app.state.sse_events_plugin
-        if hasattr(app.state, "sse_wrap_messenger"):
-            del app.state.sse_wrap_messenger
         if hasattr(app.state, "sse_event_hub"):
             del app.state.sse_event_hub
+        self._event_hub = None
 
         get_app_logger().info("SSEEventsPlugin shutdown completed")
 
@@ -197,7 +220,8 @@ class SSEEventsPlugin:
                 "status_handler": self._original_status_handler is not None,
                 "error_handler": self._original_error_handler is not None,
                 "api_post_process": self._api_post_process_hook is not None,
-                "messenger_wrapper": getattr(app.state, "sse_wrap_messenger", False),
+                "messenger_wrapper": self.publish_bot_replies
+                and self._event_hub is not None,
             },
             "hub": hub_stats,
         }

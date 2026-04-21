@@ -79,20 +79,33 @@ Supported `event_types` values:
 
 ## How the plugin works
 
+**During `configure()`** (synchronous, before the app starts) the plugin:
+
+1. Creates the in-memory `SSEEventHub` (the router and the middleware both need a reference to it, and it owns only asyncio primitives, so it's safe to build eagerly)
+2. Registers the SSE HTTP routes
+3. Registers `SSELifecycleMiddleware(event_hub)` via `builder.add_messenger_middleware(...)` at priority `70` (lifecycle band) — this is what publishes `outgoing_bot_message` when `publish_bot_replies=True`
+4. Registers startup/shutdown hooks at priority `24`
+
 **During startup** the plugin:
 
-1. Creates an in-memory `SSEEventHub`
-2. Registers SSE routes
-3. Wraps default webhook handlers to publish SSE events (passing `metadata` to each wrapper)
-4. Registers a post-process hook on `WappaEventHandler` for API outgoing events (via `add_api_post_process_hook`)
-5. Marks messenger wrapping in `app.state` so webhook request handlers wrap `self.messenger`
+1. Publishes the event hub to `app.state.sse_event_hub` so the SSE router can reach it at request time
+2. Wraps the default webhook handlers (`SSEMessageHandler`, `SSEStatusHandler`, `SSEErrorHandler`) to publish `incoming_message`, `status_change`, and `webhook_error` events — these react to the inbound side of the framework, which does not yet have a middleware pipeline of its own
+3. Registers a post-process hook on `WappaEventHandler` for API outgoing events (via `add_api_post_process_hook`)
 
 **During shutdown** it:
 
-1. Restores original webhook handlers
+1. Restores the original webhook handlers
 2. Removes the API post-process hook (via `remove_api_post_process_hook`)
 3. Closes SSE subscriptions cleanly
 4. Clears plugin state from `app.state`
+
+### Why messenger wrapping is now middleware
+
+Pre-v0.4.0 the plugin set `app.state.sse_wrap_messenger = True` and the webhook controller branched on that flag to wrap `self.messenger` with an `SSEMessengerWrapper`. That wrapper re-implemented all 18 `IMessenger` methods just to intercept each one. Downstream apps that needed a cache write to complete before the SSE publish had to drill `messenger._inner` and `sse_wrapper._event_hub` to reassemble the stack manually.
+
+In v0.4.0 that wrapper was rewritten as a ~50 LOC `SSELifecycleMiddleware` inside the general messenger pipeline. Ordering with any other concern (cache, pub/sub, retry) is now declarative via priority; there are no private attributes to drill. See [MessengerMiddleware.md](./MessengerMiddleware.md) for the full picture.
+
+The legacy `SSEMessengerWrapper` is kept as a deprecation shim through v0.5.0 and will be removed in v0.6.0.
 
 ## Event envelope format
 

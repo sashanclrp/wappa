@@ -48,10 +48,11 @@ app = builder.build()
 
 The builder exposes these registration methods that plugins call during `configure()`:
 
-- `builder.add_middleware(cls, priority=50, **kwargs)` -- register middleware with priority ordering
+- `builder.add_middleware(cls, priority=50, **kwargs)` -- register HTTP middleware with priority ordering
 - `builder.add_router(router, **kwargs)` -- register a FastAPI router
 - `builder.add_startup_hook(hook, priority=50)` -- register an async startup function
 - `builder.add_shutdown_hook(hook, priority=50)` -- register an async shutdown function
+- `builder.add_messenger_middleware(mw, priority=50)` -- register outbound **messenger** middleware (see [MessengerMiddleware](./MessengerMiddleware.md))
 
 ### Wappa Class
 
@@ -88,7 +89,7 @@ Hooks and middleware use a numeric priority to control execution order:
 | 22 | Event cleanup | RedisPubSubPlugin, SSEEventsPlugin |
 | 20 | Infrastructure cleanup | RedisPlugin |
 
-### Middleware Priority (higher = outer/earlier)
+### HTTP Middleware Priority (higher = outer/earlier)
 
 | Priority | Middleware | Plugin |
 |---|---|---|
@@ -102,6 +103,27 @@ Hooks and middleware use a numeric priority to control execution order:
 ```
 Request --> Owner(90) --> ErrorHandler(80) --> RequestLogging(70) --> Auth(60) --> Route
 ```
+
+### Messenger Middleware Priority (higher = outer/earlier)
+
+A **parallel** priority system governs outbound messaging. Every `self.messenger.send_*()` call flows through a priority-ordered pipeline of `MessengerMiddleware` instances — the outbound equivalent of HTTP middleware on the inbound side. This replaced the pre-v0.4.0 inheritance-based wrappers (`SSEMessengerWrapper`, `PubSubMessengerWrapper`) that forced controllers to hardcode composition and downstream apps to drill private attributes.
+
+| Priority | Band | Middleware | Plugin |
+|---|---|---|---|
+| 90 | Observability | (reserved for metrics, tracing) | -- |
+| 70 | Lifecycle events | `SSELifecycleMiddleware` | SSEEventsPlugin |
+| 50 | Caching / persistence | (downstream `CacheMessengerMiddleware`) | user code |
+| 30 | Domain notifications | `PubSubNotificationMiddleware` | RedisPubSubPlugin |
+| 10 | Reliability | (reserved for retry, circuit-breaker) | -- |
+
+```
+self.messenger.send_text(...)
+  --> SSE lifecycle(70) --> Cache(50) --> PubSub(30) --> raw transport
+```
+
+Because higher priority runs its post-hook **last**, a higher-priority middleware sees the result only after every lower-priority middleware has completed. This is what guarantees, for example, that a cache write at priority 50 finishes before the SSE `outgoing_bot_message` publish at priority 70 — the ordering is declarative, not topological.
+
+Full guide: [MessengerMiddleware.md](./MessengerMiddleware.md).
 
 ## Plugin Categories
 
@@ -117,11 +139,14 @@ Request --> Owner(90) --> ErrorHandler(80) --> RequestLogging(70) --> Auth(60) -
 - **RedisPubSubPlugin** -- Redis PubSub notifications for distributed event broadcasting
 - **ExpiryPlugin** -- Redis key expiry listener for time-based automation
 
-### Middleware Wrappers
+### HTTP Middleware Wrappers
 - **AuthPlugin** -- strategy-based authentication (Bearer, Basic, JWT, custom)
 - **CORSPlugin** -- Cross-Origin Resource Sharing configuration
 - **RateLimitPlugin** -- bring-your-own rate limiting middleware
 - **CustomMiddlewarePlugin** -- generic wrapper for any user-defined middleware
+
+### Outbound Messaging
+- **Messenger Middleware Pipeline** -- priority-ordered middleware around every `self.messenger.send_*` call; how SSEEventsPlugin and RedisPubSubPlugin intercept outbound messages without wrapping the whole messenger class. See [MessengerMiddleware.md](./MessengerMiddleware.md).
 
 ### Integrations
 - **WebhookPlugin** -- custom webhook endpoints for payment providers and third-party services
@@ -244,3 +269,9 @@ app.add_plugin(MyPlugin(some_config="value"))
 | RateLimitPlugin | `rate_limit_plugin.py` | [RateLimitPlugin.md](./RateLimitPlugin.md) |
 | CustomMiddlewarePlugin | `custom_middleware_plugin.py` | [CustomMiddlewarePlugin.md](./CustomMiddlewarePlugin.md) |
 | WebhookPlugin | `webhook_plugin.py` | [WebhookPlugin.md](./WebhookPlugin.md) |
+
+## Cross-cutting surfaces (not plugins)
+
+| Surface | File | README |
+|---|---|---|
+| Messenger Middleware Pipeline | `core/messaging/pipeline.py` | [MessengerMiddleware.md](./MessengerMiddleware.md) |

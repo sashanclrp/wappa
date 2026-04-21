@@ -14,8 +14,7 @@ from wappa.core.logging.context import (
     set_request_context,
 )
 from wappa.core.logging.logger import get_logger
-from wappa.core.pubsub import PubSubMessengerWrapper
-from wappa.core.sse import SSEEventHub, SSEMessengerWrapper
+from wappa.core.messaging.pipeline import MessengerPipeline
 from wappa.core.sse.context import (
     classify_meta_identifier,
     derive_identifiers,
@@ -257,25 +256,24 @@ class WebhookController:
                 self.logger.warning("No HTTP session available in app state")
 
             messenger_factory = MessengerFactory(http_session)
-            messenger = await messenger_factory.create_messenger(
+            raw_messenger = await messenger_factory.create_messenger(
                 platform=platform_type,
                 tenant_id=tenant_id,
             )
 
-            if getattr(request.app.state, "pubsub_wrap_messenger", False):
-                messenger = PubSubMessengerWrapper(
-                    inner=messenger,
-                    tenant=tenant_id,
-                    user_id=user_id,
-                )
-
-            if getattr(request.app.state, "sse_wrap_messenger", False):
-                sse_event_hub = getattr(request.app.state, "sse_event_hub", None)
-                if isinstance(sse_event_hub, SSEEventHub):
-                    messenger = SSEMessengerWrapper(
-                        inner=messenger,
-                        event_hub=sse_event_hub,
-                    )
+            # Compose cross-cutting concerns (SSE lifecycle, pub/sub
+            # notifications, caching, metrics, ...) uniformly via the
+            # middleware pipeline. Plugins register middleware through
+            # ``WappaBuilder.add_messenger_middleware`` or append to
+            # ``app.state.messenger_middleware`` during their startup hook;
+            # the controller stays agnostic of any specific concern.
+            messenger_middleware = getattr(
+                request.app.state, "messenger_middleware", ()
+            )
+            messenger = MessengerPipeline(
+                raw=raw_messenger,
+                middleware=messenger_middleware,
+            )
 
             cache_factory = self._create_cache_factory(request, tenant_id, user_id)
 

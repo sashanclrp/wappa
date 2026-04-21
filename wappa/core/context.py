@@ -156,35 +156,24 @@ class WappaContextFactory:
                 return None
 
             messenger_factory = MessengerFactory(http_session)
-            messenger = await messenger_factory.create_messenger(
+            raw_messenger = await messenger_factory.create_messenger(
                 platform=platform,
                 tenant_id=tenant_id,
             )
 
-            # Wrap with PubSub if active
-            if getattr(self._app.state, "pubsub_wrap_messenger", False):
-                from wappa.core.pubsub import PubSubMessengerWrapper
+            # Apply the app-level messenger middleware pipeline. Identity
+            # and metadata are read from the active ``SSEEventContext`` at
+            # handle time, so middleware works uniformly across webhook,
+            # API, and expiry entry points without per-site branching.
+            from wappa.core.messaging.pipeline import MessengerPipeline
 
-                messenger = PubSubMessengerWrapper(
-                    inner=messenger,
-                    tenant=tenant_id,
-                    user_id=user_id or "",
-                )
-
-            # Wrap with SSE if active — identity and metadata come from the
-            # active SSEEventContext at publish time (populated by whichever
-            # entry point set the scope).
-            if getattr(self._app.state, "sse_wrap_messenger", False):
-                from wappa.core.sse import SSEEventHub, SSEMessengerWrapper
-
-                sse_event_hub = getattr(self._app.state, "sse_event_hub", None)
-                if isinstance(sse_event_hub, SSEEventHub):
-                    messenger = SSEMessengerWrapper(
-                        inner=messenger,
-                        event_hub=sse_event_hub,
-                    )
-
-            return messenger
+            messenger_middleware = getattr(
+                self._app.state, "messenger_middleware", ()
+            )
+            return MessengerPipeline(
+                raw=raw_messenger,
+                middleware=messenger_middleware,
+            )
 
         except Exception as e:
             self.logger.error(f"Messenger creation failed: {e}")

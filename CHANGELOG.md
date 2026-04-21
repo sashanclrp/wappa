@@ -5,6 +5,55 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-20
+
+Messenger middleware pipeline. Replaces the inheritance-based wrapper stack (``SSEMessengerWrapper``, ``PubSubMessengerWrapper``) with a priority-ordered ``MessengerPipeline`` and ``MessengerMiddleware`` protocol. Cross-cutting concerns (cache, SSE lifecycle, pub/sub notifications, retry, metrics, tracing) are now each a ~40–60 LOC class registered through one public API. The ``WebhookController`` no longer hardcodes wrapper composition; plugins no longer communicate with it through ``app.state`` boolean flags; downstream apps that needed custom ordering (e.g. "cache write must finish before SSE publishes") no longer drill private attributes to achieve it. Fully backwards compatible — legacy wrappers remain as thin deprecation shims.
+
+### Added
+- **``wappa.core.messaging.pipeline``** — new public module exposing ``MessengerPipeline``, ``MessengerMiddleware`` (Protocol), ``SendInvocation``, ``SendNext``, and ``MiddlewareEntry``. The pipeline implements ``IMessenger`` once; adding a new ``IMessenger`` method now touches a single file instead of every wrapper.
+- **``SendInvocation``** — frozen dataclass capturing ``method_name``, ``message_type``, ``recipient``, ``args``, ``kwargs``, and ``arguments`` (keyed by parameter name for uniform event emission). ``with_arguments(...)`` builds a rewritten copy for middleware that modify payloads.
+- **``WappaBuilder.add_messenger_middleware(mw, priority=50)``** — register middleware around every outbound ``IMessenger`` call. Plugins and user code use the same API; the controller stays agnostic. Priority bands: ``PRIORITY_RELIABILITY=10``, ``PRIORITY_NOTIFICATIONS=30``, ``PRIORITY_CACHE=50``, ``PRIORITY_LIFECYCLE=70``, ``PRIORITY_OBSERVABILITY=90`` (exported as constants).
+- **``SSELifecycleMiddleware``** — ``wappa/core/messaging/middleware/sse_lifecycle.py``. ~50 LOC. Replaces the 465-LOC ``SSEMessengerWrapper`` with the same ``flush → await → publish`` semantics and the same wire envelope.
+- **``PubSubNotificationMiddleware``** — ``wappa/core/messaging/middleware/pubsub_notification.py``. Replaces ``PubSubMessengerWrapper``. App-scoped (constructed once); reads tenant + user identity from the active ``SSEEventContext`` instead of per-request construction.
+- **``MessengerPipeline.raw_messenger`` and ``MessengerPipeline.middleware_chain``** — public introspection properties so tests and debugging no longer need underscore drilling.
+- **Docs** — new [MessengerMiddleware.md](./wappa/core/plugins/README/MessengerMiddleware.md) covering the pipeline, priority bands, and how to write custom middleware. Architecture.md, SSEEventsPlugin.md, and RedisPubSubPlugin.md updated to describe the new surface.
+
+### Changed
+- **``WebhookController._create_request_handler``** — the hardcoded ``if app.state.pubsub_wrap_messenger / if app.state.sse_wrap_messenger`` branching is gone. It builds one ``MessengerPipeline`` from ``app.state.messenger_middleware`` regardless of which plugins are active.
+- **``WappaContextFactory._create_messenger``** (non-webhook entry points: API, expiry) — same simplification; both call sites now go through the pipeline.
+- **``SSEEventsPlugin``** — creates the ``SSEEventHub`` in ``configure()`` (sync, safe — only asyncio primitives) and registers ``SSELifecycleMiddleware`` via ``add_messenger_middleware`` at priority 70. No longer sets ``app.state.sse_wrap_messenger``.
+- **``RedisPubSubPlugin``** — registers ``PubSubNotificationMiddleware`` via ``add_messenger_middleware`` at priority 30 during ``configure()``. No longer sets ``app.state.pubsub_wrap_messenger``.
+
+### Deprecated
+- **``SSEMessengerWrapper``** (``wappa.core.sse.messenger_wrapper``) — emits ``DeprecationWarning`` on construction. Functional equivalent lives in ``SSELifecycleMiddleware``. Removal planned for **v0.6.0**.
+- **``PubSubMessengerWrapper``** (``wappa.core.pubsub.messenger_wrapper``) — same deprecation policy. Use ``PubSubNotificationMiddleware`` via ``RedisPubSubPlugin``.
+- **``app.state.sse_wrap_messenger``** and **``app.state.pubsub_wrap_messenger``** — the framework no longer reads them. Will be removed alongside the deprecated wrappers in v0.6.0.
+
+### Migration
+No action required for apps that build through the plugin surface (``SSEEventsPlugin``, ``RedisPubSubPlugin``). The SSE wire envelope is identical to v0.3.7.
+
+Apps that bypassed the plugin surface and constructed wrappers directly (rare but documented as a pattern for custom cache ordering) migrate with one line:
+
+```python
+# Before (drills private attributes on every upgrade)
+raw = app_messenger._inner._inner
+hub = app_messenger._event_hub
+app_messenger = SSEMessengerWrapper(
+    inner=CacheMessengerWrapper(inner=raw, ...),
+    event_hub=hub,
+)
+
+# After
+builder.add_messenger_middleware(
+    CacheMessengerMiddleware(cache=...),
+    priority=50,  # PRIORITY_CACHE — runs inside the SSE lifecycle band (70),
+                  # so SSE publishes after the cache write completes
+)
+```
+
+### Backlog
+A future [Domain Event Bus](./backlog/260420-messenger-middleware-domain-event-bus.md) (``bus.subscribe(OutgoingMessageDispatched, handler)`` replacing middleware-as-subscribers) is documented but explicitly deferred — the current surface handles the observed workload; the bus will be promoted when ≥5 observers of the same event exist in production or when cross-event subscriber composition becomes necessary.
+
 ## [0.3.7] - 2026-04-20
 
 Eager emission of ``incoming_message`` SSE events. v0.3.6 deferred the emission until ``post_process_message`` so metadata the app set during ``process_message`` could land on the envelope — correct for metadata, but it inverted the wire order: subscribers saw ``outgoing_bot_message`` before ``incoming_message``, which broke optimistic UI renderers that rely on arrival order. v0.3.7 flushes the staged payload at the first signal that identity + metadata is ready, without sacrificing enrichment.
