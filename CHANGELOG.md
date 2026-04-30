@@ -5,6 +5,28 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-04-30
+
+Hard cut on legacy env var support. v0.5.0 shipped alias resolution with deprecation warnings — this patch removes all of that boilerplate. The canonical names from v0.5.0 are now the only names accepted. If an old name is detected at startup the process exits immediately with a clear error listing every var that needs renaming. No silent drift, no compatibility shims.
+
+### Changed
+- **`settings.py`** — `_resolve_with_alias()` removed entirely. All env vars read directly via `os.getenv` using canonical names only.
+- **`_check_legacy_vars()`** — new startup guard that raises `EnvironmentError` listing every stale var found, with the canonical rename for each. Fails fast before any framework state is initialised.
+- `_validate_whatsapp_credentials()` now reports all missing vars in a single error instead of failing on the first one.
+
+### Migration
+Same renames as v0.5.0 — if you skipped that release, rename these in your `.env`:
+
+```
+ENVIRONMENT              → SYSTEM_ENVIRONMENT
+LOG_LEVEL                → SYSTEM_LOG_LEVEL
+LOG_DIR                  → SYSTEM_LOG_DIR
+TIME_ZONE                → SYSTEM_TIME_ZONE
+API_VERSION              → META_API_VERSION
+BASE_URL                 → META_BASE_URL
+WHATSAPP_WEBHOOK_VERIFY_TOKEN → WP_WEBHOOK_VERIFY_TOKEN
+```
+
 ## [0.5.0] - 2026-04-30
 
 **Breaking change** — env var naming policy. All framework-owned runtime vars now live under a `SYSTEM_*` prefix; the Meta Graph API version var moves to `META_API_VERSION`. WhatsApp transport vars are fully consolidated under `WP_*`. All old names are accepted as legacy aliases and emit a `DeprecationWarning` at startup, so existing deployments continue to work until you migrate.
