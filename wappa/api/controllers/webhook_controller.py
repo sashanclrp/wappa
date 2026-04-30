@@ -66,7 +66,7 @@ class WebhookController:
             )
 
         if hub_mode == "subscribe" and hub_challenge:
-            expected = settings.whatsapp_webhook_verify_token
+            expected = settings.wp_webhook_verify_token
             if not hub_verify_token:
                 self.logger.error(f"❌ Missing verification token for {platform}")
                 raise HTTPException(

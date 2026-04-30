@@ -84,7 +84,7 @@ async def detailed_health_check() -> dict[str, Any]:
             "whatsapp": {
                 "configured": bool(settings.wp_access_token and settings.wp_phone_id),
                 "webhook_token_configured": bool(
-                    settings.whatsapp_webhook_verify_token
+                    settings.wp_webhook_verify_token
                 ),
                 "phone_id": settings.wp_phone_id,
                 "business_id": settings.wp_bid,

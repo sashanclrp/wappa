@@ -5,6 +5,43 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-04-30
+
+**Breaking change** — env var naming policy. All framework-owned runtime vars now live under a `SYSTEM_*` prefix; the Meta Graph API version var moves to `META_API_VERSION`. WhatsApp transport vars are fully consolidated under `WP_*`. All old names are accepted as legacy aliases and emit a `DeprecationWarning` at startup, so existing deployments continue to work until you migrate.
+
+### Changed
+- **`SYSTEM_ENVIRONMENT`** is now canonical (was `ENVIRONMENT`).
+- **`SYSTEM_LOG_LEVEL`** is now canonical (was `LOG_LEVEL`).
+- **`SYSTEM_LOG_DIR`** is now canonical (was `LOG_DIR`).
+- **`SYSTEM_TIME_ZONE`** is now canonical (was `TIME_ZONE`).
+- **`META_API_VERSION`** is now canonical (was `API_VERSION`).
+- **`META_BASE_URL`** is now canonical (was `BASE_URL`).
+- **`WP_WEBHOOK_VERIFY_TOKEN`** is now canonical (was `WHATSAPP_WEBHOOK_VERIFY_TOKEN`) — consolidates the `WP_*` namespace for all WhatsApp transport credentials.
+- **`settings.wp_webhook_verify_token`** — Python attribute renamed to match (`was whatsapp_webhook_verify_token`).
+- `PORT`, `DATABASE_URL`, `REDIS_URL`, and all other `WP_*` / `REDIS_*` vars are unchanged.
+
+### Added
+- **`_resolve_with_alias(canonical, legacy, default)`** — internal helper in `wappa.core.config.settings` that resolves a canonical env var name first and falls back to a legacy alias with a one-time `DeprecationWarning`.
+- **`.env.example`** (root) — new source-of-truth template with a policy block at the top explaining the five ownership namespaces (`PORT`/`DATABASE_URL`/`REDIS_URL` unprefixed; `SYSTEM_*`; `META_*`/`WP_*`; `OPENAI_*`/`ANTHROPIC_*`; app-specific prefix of your choice).
+- All six CLI example `.env.example` templates updated to the canonical names.
+
+### Migration
+
+Rename these vars in your `.env` (old names continue to work but warn at startup):
+
+```
+# Old → New
+ENVIRONMENT              → SYSTEM_ENVIRONMENT
+LOG_LEVEL                → SYSTEM_LOG_LEVEL
+LOG_DIR                  → SYSTEM_LOG_DIR
+TIME_ZONE                → SYSTEM_TIME_ZONE
+API_VERSION              → META_API_VERSION
+BASE_URL                 → META_BASE_URL (rarely set; internal default is unchanged)
+WHATSAPP_WEBHOOK_VERIFY_TOKEN → WP_WEBHOOK_VERIFY_TOKEN
+```
+
+If you reference `settings.whatsapp_webhook_verify_token` in your app code, rename it to `settings.wp_webhook_verify_token`.
+
 ## [0.4.0] - 2026-04-20
 
 Messenger middleware pipeline. Replaces the inheritance-based wrapper stack (``SSEMessengerWrapper``, ``PubSubMessengerWrapper``) with a priority-ordered ``MessengerPipeline`` and ``MessengerMiddleware`` protocol. Cross-cutting concerns (cache, SSE lifecycle, pub/sub notifications, retry, metrics, tracing) are now each a ~40–60 LOC class registered through one public API. The ``WebhookController`` no longer hardcodes wrapper composition; plugins no longer communicate with it through ``app.state`` boolean flags; downstream apps that needed custom ordering (e.g. "cache write must finish before SSE publishes") no longer drill private attributes to achieve it. Fully backwards compatible — legacy wrappers remain as thin deprecation shims.

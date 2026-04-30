@@ -103,7 +103,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     def validate_webhook_signature(
         self, payload: bytes, signature: str, **kwargs
     ) -> bool:
-        if not settings.whatsapp_webhook_verify_token:
+        if not settings.wp_webhook_verify_token:
             self.logger.warning(
                 "WhatsApp webhook verification token not configured - skipping signature validation"
             )
@@ -118,7 +118,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
             provided_hash = signature.removeprefix("sha256=")
             expected_hash = hmac.new(
-                settings.whatsapp_webhook_verify_token.encode("utf-8"),
+                settings.wp_webhook_verify_token.encode("utf-8"),
                 payload,
                 hashlib.sha256,
             ).hexdigest()
