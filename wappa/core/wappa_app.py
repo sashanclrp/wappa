@@ -7,13 +7,16 @@ The class now uses WappaBuilder internally for unified plugin-based architecture
 
 import subprocess
 import sys
-from collections.abc import Callable
-from typing import TYPE_CHECKING
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 import uvicorn
 from fastapi import FastAPI
+from pydantic import BaseModel
 
 from wappa.api.routes.webhooks import create_webhook_router
+from wappa.processors.factory import processor_factory
+from wappa.schemas.core.types import PlatformType
 
 from .config.settings import settings
 from .events import APIEventDispatcher, WappaEventDispatcher
@@ -23,6 +26,8 @@ from .plugins.wappa_core_plugin import WappaCorePlugin
 from .types import CacheType, CacheTypeOptions, validate_cache_type
 
 if TYPE_CHECKING:
+    from wappa.webhooks.core.webhook_interfaces import CustomWebhook
+
     from .events import WappaEventHandler
     from .factory.plugin import WappaPlugin
 
@@ -209,8 +214,15 @@ class Wappa:
         # defers plugin configuration to startup hooks
         app = self._builder.build()
 
+        # Wire the registry into the shared processor singleton so Pydantic
+        # validation accepts registered field values alongside the built-ins.
+        whatsapp_processor = processor_factory.get_processor(PlatformType.WHATSAPP)
+        whatsapp_processor.set_field_registry(self._builder.field_registry)
+
         # Create both dispatchers for the event handler
-        webhook_dispatcher = WappaEventDispatcher(self._event_handler)
+        webhook_dispatcher = WappaEventDispatcher(
+            self._event_handler, field_registry=self._builder.field_registry
+        )
         api_dispatcher = APIEventDispatcher(self._event_handler)
 
         # Add webhook routes to the built app
@@ -401,6 +413,27 @@ class Wappa:
         logger = get_app_logger()
         router_name = getattr(router, "prefix", "router")
         logger.debug(f"Router added to Wappa: {router_name} with config: {kwargs}")
+
+        return self
+
+    def register_webhook_field(
+        self,
+        field_name: str,
+        *,
+        parser: type[BaseModel] | Callable[[dict[str, Any]], BaseModel],
+        handler: Callable[["CustomWebhook"], Awaitable[None]],
+    ) -> "Wappa":
+        """
+        Register a typed handler for a non-built-in Meta webhook field.
+
+        Convenience wrapper around :meth:`WappaBuilder.register_webhook_field`
+        for apps using the simple ``Wappa(...)`` constructor instead of the
+        builder. See ``WappaBuilder.register_webhook_field`` for details.
+        """
+        self._builder.register_webhook_field(field_name, parser=parser, handler=handler)
+
+        logger = get_app_logger()
+        logger.debug(f"Custom webhook field registered: {field_name}")
 
         return self
 

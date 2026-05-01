@@ -21,6 +21,7 @@ Usage:
 from .core.base_webhook import BaseContact, BaseWebhook, BaseWebhookMetadata
 from .core.types import PlatformType, UniversalMessageData, WebhookType
 from .core.webhook_interfaces.universal_webhooks import (
+    CustomWebhook,
     ErrorWebhook,
     IncomingMessageWebhook,
     StatusWebhook,
@@ -50,6 +51,7 @@ __all__ = [
     "ErrorWebhook",
     "SystemWebhook",
     "SystemEventType",
+    "CustomWebhook",
     "UniversalMessageData",
     "PlatformType",
     "WebhookType",

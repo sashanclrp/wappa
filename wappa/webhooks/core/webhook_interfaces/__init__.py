@@ -27,6 +27,7 @@ from .base_components import (
     UserBase,
 )
 from .universal_webhooks import (
+    CustomWebhook,
     ErrorWebhook,
     IncomingMessageWebhook,
     StatusWebhook,
@@ -53,5 +54,6 @@ __all__ = [
     "ErrorWebhook",
     "SystemWebhook",
     "SystemEventType",
+    "CustomWebhook",
     "UniversalWebhook",
 ]

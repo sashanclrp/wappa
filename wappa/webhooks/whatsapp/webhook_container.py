@@ -7,8 +7,16 @@ all WhatsApp message types and status updates.
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
+from wappa.core.events.field_registry import BUILTIN_WEBHOOK_FIELDS
 from wappa.webhooks.core.base_webhook import (
     BaseContact,
     BaseWebhook,
@@ -99,22 +107,79 @@ class WebhookValue(BaseModel):
         return v
 
 
+class CustomWebhookValue(BaseModel):
+    """
+    Permissive value container for app-registered custom webhook fields.
+
+    Built-in fields (``messages``, ``user_preferences``, ``user_id_update``)
+    use the strict :class:`WebhookValue` model. App-registered fields
+    (e.g. ``message_template_status_update``) use this permissive model —
+    the framework never imposes a schema; the app's registered parser does
+    that downstream in the processor.
+    """
+
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
+
+
 class WebhookChange(BaseModel):
     """
     Change object describing what changed in the webhook.
 
-    WhatsApp Business webhooks use different field values:
+    WhatsApp Business webhooks use different field values. Three are handled
+    natively by the framework:
     - 'messages': incoming messages, status updates, and errors
     - 'user_preferences': marketing preference changes
     - 'user_id_update': BSUID change notifications
+
+    Any other field value (e.g. ``message_template_status_update``) is only
+    accepted when the app has registered a typed handler for it via
+    ``WappaBuilder.register_webhook_field`` (the registry is propagated into
+    Pydantic's validation context). Unknown, unregistered fields still raise
+    a validation error.
     """
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    field: Literal["messages", "user_preferences", "user_id_update"] = Field(
-        ..., description="Webhook field type"
+    field: str = Field(..., description="Webhook field type")
+    value: WebhookValue | CustomWebhookValue = Field(
+        ..., description="The webhook payload data"
     )
-    value: WebhookValue = Field(..., description="The webhook payload data")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _route_field(cls, data: Any, info: ValidationInfo) -> Any:
+        """Gate ``field`` against built-ins + registry, route ``value`` accordingly.
+
+        Built-in fields pre-validate with the strict ``WebhookValue`` model so
+        malformed payloads surface as clear field errors rather than falling
+        through to the permissive ``CustomWebhookValue`` path.
+        Registered custom fields use the permissive path; unregistered fields raise.
+        """
+        if not isinstance(data, dict):
+            return data
+
+        field = data.get("field")
+        raw_value = data.get("value")
+
+        if field in BUILTIN_WEBHOOK_FIELDS:
+            if isinstance(raw_value, dict):
+                return {**data, "value": WebhookValue.model_validate(raw_value)}
+            return data
+
+        registry = (
+            info.context.get("field_registry") if info.context is not None else None
+        )
+
+        if registry is None or field not in registry:
+            registered = sorted(registry.fields()) if registry is not None else []
+            raise ValueError(
+                f"Unknown webhook field '{field}'. Built-in fields: "
+                f"{sorted(BUILTIN_WEBHOOK_FIELDS)}; registered fields: {registered}"
+            )
+
+        if isinstance(raw_value, dict):
+            return {**data, "value": CustomWebhookValue.model_validate(raw_value)}
+        return data
 
 
 class WebhookEntry(BaseModel):
@@ -311,12 +376,11 @@ class WhatsAppWebhook(BaseWebhook):
                 if change.field in ("user_preferences", "user_id_update"):
                     return True
                 # System messages within the messages field
+                messages = getattr(change.value, "messages", None)
                 if (
                     change.field == "messages"
-                    and change.value.messages
-                    and all(
-                        msg.get("type") == "system" for msg in change.value.messages
-                    )
+                    and messages
+                    and all(msg.get("type") == "system" for msg in messages)
                 ):
                     return True
         return False
@@ -329,7 +393,7 @@ class WhatsAppWebhook(BaseWebhook):
 
         for entry in self.entry:
             for change in entry.changes:
-                if change.value.messages is not None:
+                if getattr(change.value, "messages", None) is not None:
                     return True
         return False
 
@@ -341,7 +405,7 @@ class WhatsAppWebhook(BaseWebhook):
 
         for entry in self.entry:
             for change in entry.changes:
-                if change.value.statuses is not None:
+                if getattr(change.value, "statuses", None) is not None:
                     return True
         return False
 
@@ -353,7 +417,18 @@ class WhatsAppWebhook(BaseWebhook):
 
         for entry in self.entry:
             for change in entry.changes:
-                if change.value.errors is not None:
+                if getattr(change.value, "errors", None) is not None:
+                    return True
+        return False
+
+    @property
+    def is_custom_field(self) -> bool:
+        """Check if this webhook is for an app-registered custom field."""
+        if not self.entry:
+            return False
+        for entry in self.entry:
+            for change in entry.changes:
+                if change.field not in BUILTIN_WEBHOOK_FIELDS:
                     return True
         return False
 
@@ -364,16 +439,30 @@ class WhatsAppWebhook(BaseWebhook):
         return self.entry[0].id
 
     def get_phone_number_id(self) -> str:
-        """Get the business phone number ID from the first entry."""
+        """Get the business phone number ID from the first entry.
+
+        Returns an empty string when the webhook is for a custom registered
+        field whose ``value`` does not include phone-number metadata
+        (e.g. ``message_template_status_update``).
+        """
         if not self.entry:
             raise ValueError("No entry data available")
-        return self.entry[0].changes[0].value.metadata.phone_number_id
+        metadata = getattr(self.entry[0].changes[0].value, "metadata", None)
+        if metadata is None:
+            return ""
+        return metadata.phone_number_id
 
     def get_display_phone_number(self) -> str:
-        """Get the business display phone number from the first entry."""
+        """Get the business display phone number from the first entry.
+
+        Empty string when the value does not carry metadata (custom fields).
+        """
         if not self.entry:
             raise ValueError("No entry data available")
-        return self.entry[0].changes[0].value.metadata.display_phone_number
+        metadata = getattr(self.entry[0].changes[0].value, "metadata", None)
+        if metadata is None:
+            return ""
+        return metadata.display_phone_number
 
     def get_raw_user_preferences(self) -> list[dict[str, Any]]:
         """
@@ -384,8 +473,9 @@ class WhatsAppWebhook(BaseWebhook):
         items = []
         for entry in self.entry:
             for change in entry.changes:
-                if change.value.user_preferences:
-                    items.extend(change.value.user_preferences)
+                prefs = getattr(change.value, "user_preferences", None)
+                if prefs:
+                    items.extend(prefs)
         return items
 
     def get_raw_user_id_updates(self) -> list[dict[str, Any]]:
@@ -397,8 +487,9 @@ class WhatsAppWebhook(BaseWebhook):
         items = []
         for entry in self.entry:
             for change in entry.changes:
-                if change.value.user_id_update:
-                    items.extend(change.value.user_id_update)
+                updates = getattr(change.value, "user_id_update", None)
+                if updates:
+                    items.extend(updates)
         return items
 
     def get_raw_messages(self) -> list[dict[str, Any]]:
@@ -407,11 +498,12 @@ class WhatsAppWebhook(BaseWebhook):
 
         Returns empty list if no messages present.
         """
-        messages = []
+        messages: list[dict[str, Any]] = []
         for entry in self.entry:
             for change in entry.changes:
-                if change.value.messages:
-                    messages.extend(change.value.messages)
+                value_messages = getattr(change.value, "messages", None)
+                if value_messages:
+                    messages.extend(value_messages)
         return messages
 
     def get_raw_statuses(self) -> list[dict[str, Any]]:
@@ -420,11 +512,12 @@ class WhatsAppWebhook(BaseWebhook):
 
         Returns empty list if no statuses present.
         """
-        statuses = []
+        statuses: list[dict[str, Any]] = []
         for entry in self.entry:
             for change in entry.changes:
-                if change.value.statuses:
-                    statuses.extend(change.value.statuses)
+                value_statuses = getattr(change.value, "statuses", None)
+                if value_statuses:
+                    statuses.extend(value_statuses)
         return statuses
 
     def get_contacts(self) -> list[BaseContact]:
@@ -433,16 +526,14 @@ class WhatsAppWebhook(BaseWebhook):
 
         Returns empty list if no contacts present.
         """
-        contacts = []
+        contacts: list[BaseContact] = []
         for entry in self.entry:
             for change in entry.changes:
-                if change.value.contacts:
-                    # Convert WhatsApp contacts to universal interface
-                    adapted_contacts = [
-                        WhatsAppContactAdapter(contact)
-                        for contact in change.value.contacts
-                    ]
-                    contacts.extend(adapted_contacts)
+                value_contacts = getattr(change.value, "contacts", None)
+                if value_contacts:
+                    contacts.extend(
+                        WhatsAppContactAdapter(contact) for contact in value_contacts
+                    )
         return contacts
 
     def get_whatsapp_contacts(self) -> list[WhatsAppContact]:
@@ -451,11 +542,12 @@ class WhatsAppWebhook(BaseWebhook):
 
         Returns empty list if no contacts present.
         """
-        contacts = []
+        contacts: list[WhatsAppContact] = []
         for entry in self.entry:
             for change in entry.changes:
-                if change.value.contacts:
-                    contacts.extend(change.value.contacts)
+                value_contacts = getattr(change.value, "contacts", None)
+                if value_contacts:
+                    contacts.extend(value_contacts)
         return contacts
 
     # Implement abstract methods from BaseWebhook

@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Any
 
 from wappa.core.logging.logger import get_logger
 from wappa.webhooks import (
+    CustomWebhook,
     ErrorWebhook,
     IncomingMessageWebhook,
     StatusWebhook,
@@ -13,6 +14,7 @@ if TYPE_CHECKING:
     from wappa.webhooks import UniversalWebhook
 
     from .event_handler import WappaEventHandler
+    from .field_registry import FieldHandlerRegistry
 
 
 _WEBHOOK_EMOJI = {
@@ -20,6 +22,7 @@ _WEBHOOK_EMOJI = {
     "StatusWebhook": "📊",
     "ErrorWebhook": "🚨",
     "SystemWebhook": "⚙️",
+    "CustomWebhook": "🧩",
 }
 
 _STATUS_EMOJI = {
@@ -33,9 +36,14 @@ _STATUS_EMOJI = {
 class WappaEventDispatcher:
     # Routes universal webhooks to the user's event handler.
 
-    def __init__(self, event_handler: "WappaEventHandler"):
+    def __init__(
+        self,
+        event_handler: "WappaEventHandler",
+        field_registry: "FieldHandlerRegistry | None" = None,
+    ):
         self.logger = get_logger(__name__)
         self._event_handler = event_handler
+        self._field_registry = field_registry
 
         self.logger.info(
             f"WappaEventDispatcher initialized with {event_handler.__class__.__name__}"
@@ -85,6 +93,10 @@ class WappaEventDispatcher:
                     )
                 case SystemWebhook():
                     result = await self._handle_system_webhook(
+                        universal_webhook, handler
+                    )
+                case CustomWebhook():
+                    result = await self._handle_custom_webhook(
                         universal_webhook, handler
                     )
                 case _:
@@ -238,4 +250,56 @@ class WappaEventDispatcher:
                 "success": False,
                 "error": str(e),
                 "action": "handler_error",
+            }
+
+    async def _handle_custom_webhook(
+        self,
+        webhook: "CustomWebhook",
+        handler: "WappaEventHandler",
+    ) -> dict[str, Any]:
+        # Custom webhooks bypass the WappaEventHandler — they are dispatched
+        # to the per-field handler the app registered with the builder. The
+        # processor only emits CustomWebhook for fields the registry knows
+        # about, so a missing handler here is a wiring bug, not user input.
+        field_name = webhook.field_name
+        try:
+            self.logger.info(
+                f"🧩 Custom webhook field: {field_name} (tenant: {handler.tenant_id})"
+            )
+
+            spec = (
+                self._field_registry.get(field_name)
+                if self._field_registry is not None
+                else None
+            )
+            if spec is None:
+                self.logger.error(
+                    f"No registered handler for custom field '{field_name}' "
+                    f"— dispatcher and processor are out of sync."
+                )
+                return {
+                    "success": False,
+                    "action": "handler_missing",
+                    "field_name": field_name,
+                    "tenant_id": handler.tenant_id,
+                }
+
+            await spec.handler(webhook)
+
+            return {
+                "success": True,
+                "action": "custom_webhook_processed",
+                "field_name": field_name,
+                "tenant_id": handler.tenant_id,
+            }
+
+        except Exception as e:
+            self.logger.error(
+                f"Error in custom handler for '{field_name}': {e}", exc_info=True
+            )
+            return {
+                "success": False,
+                "error": str(e),
+                "action": "handler_error",
+                "field_name": field_name,
             }

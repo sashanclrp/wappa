@@ -15,6 +15,7 @@ webhook structure. All platforms (Teams, Telegram, Instagram) must adapt to thes
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -595,5 +596,74 @@ class SystemWebhook(BaseModel):
         self.raw_webhook_data = raw_data
 
 
+class CustomWebhook(BaseModel):
+    """
+    Universal interface for app-registered Meta webhook field values.
+
+    Apps register a typed ``(parser, handler)`` for each Meta field value the
+    framework does not natively understand (e.g. ``message_template_status_update``,
+    ``account_update``, ``phone_number_quality_update``). The processor builds
+    a ``CustomWebhook`` whose ``parsed`` attribute is the parser's output —
+    typed, never a raw dict — and the dispatcher routes it to the registered
+    async handler.
+
+    The original ``value`` dict from Meta is preserved in ``raw_value`` so
+    handlers can inspect fields the parser may have ignored.
+    """
+
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+        validate_assignment=True,
+        arbitrary_types_allowed=True,
+    )
+
+    tenant: TenantBase = Field(description="Business/tenant identification")
+
+    field_name: str = Field(
+        description="The Meta webhook field value (e.g. 'message_template_status_update')"
+    )
+    parsed: BaseModel = Field(
+        description="App-supplied Pydantic model parsed from the raw value dict"
+    )
+    raw_value: dict = Field(
+        description="Original Meta 'value' dict, preserved for fields the parser may have ignored"
+    )
+
+    timestamp: datetime = Field(description="When the webhook was received")
+    platform: PlatformType = Field(description="Source messaging platform")
+    webhook_id: str = Field(description="Unique identifier for this webhook event")
+
+    raw_webhook_data: dict | None = Field(
+        default=None,
+        description="Original raw webhook JSON payload",
+        exclude=True,
+    )
+
+    def get_summary(self) -> dict[str, Any]:
+        """Get a summary of this webhook for logging and monitoring."""
+        return {
+            "webhook_type": "custom",
+            "platform": self.platform.value,
+            "field_name": self.field_name,
+            "tenant": self.tenant.get_tenant_key(),
+            "timestamp": self.timestamp.isoformat(),
+        }
+
+    def get_raw_webhook_data(self) -> dict | None:
+        """Get the original raw webhook JSON payload."""
+        return self.raw_webhook_data
+
+    def set_raw_webhook_data(self, raw_data: dict) -> None:
+        """Set the original raw webhook JSON payload."""
+        self.raw_webhook_data = raw_data
+
+
 # Type union for all universal webhook interfaces
-UniversalWebhook = IncomingMessageWebhook | StatusWebhook | ErrorWebhook | SystemWebhook
+UniversalWebhook = (
+    IncomingMessageWebhook
+    | StatusWebhook
+    | ErrorWebhook
+    | SystemWebhook
+    | CustomWebhook
+)

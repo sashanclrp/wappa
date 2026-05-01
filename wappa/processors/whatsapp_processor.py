@@ -20,10 +20,12 @@ from wappa.webhooks.core.base_status import BaseMessageStatus
 from wappa.webhooks.core.base_webhook import BaseWebhook
 
 if TYPE_CHECKING:
+    from wappa.core.events.field_registry import FieldHandlerRegistry
     from wappa.webhooks.core.webhook_interfaces import (
         AdReferralBase,
         BusinessContextBase,
         ConversationBase,
+        CustomWebhook,
         ErrorDetailBase,
         ErrorWebhook,
         ForwardContextBase,
@@ -42,6 +44,8 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
     def __init__(self):
         super().__init__()
+
+        self._field_registry: FieldHandlerRegistry | None = None
 
         # Define WhatsApp-specific capabilities
         self._capabilities = ProcessorCapabilities(
@@ -80,6 +84,10 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     @property
     def capabilities(self) -> ProcessorCapabilities:
         return self._capabilities
+
+    def set_field_registry(self, registry: "FieldHandlerRegistry | None") -> None:
+        """Attach (or clear) the app-supplied custom webhook field registry."""
+        self._field_registry = registry
 
     def _register_message_handlers(self) -> None:
         self.register_message_handler("text", self._create_text_message)
@@ -136,7 +144,10 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         try:
             from wappa.webhooks.whatsapp.webhook_container import WhatsAppWebhook
 
-            webhook = WhatsAppWebhook.model_validate(payload)
+            # A missing registry means no custom fields are registered — only
+            # built-ins are accepted, preserving backwards-compatible 400s.
+            context = {"field_registry": self._field_registry}
+            webhook = WhatsAppWebhook.model_validate(payload, context=context)
             self.logger.debug(
                 f"Successfully parsed WhatsApp webhook from {webhook.business_id}"
             )
@@ -313,6 +324,10 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 universal_webhook = await self._create_error_webhook(
                     webhook, tenant_base, **kwargs
                 )
+            elif webhook.is_custom_field and self._field_registry is not None:
+                universal_webhook = await self._create_custom_webhook(
+                    webhook, tenant_base, payload, **kwargs
+                )
             else:
                 universal_webhook = None
 
@@ -375,13 +390,23 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     ) -> "TenantBase":
         from wappa.webhooks.core.webhook_interfaces import TenantBase
 
-        whatsapp_metadata = webhook.get_metadata()._metadata
+        # Built-in field payloads carry value.metadata with phone number info.
+        # Custom registered fields (e.g. message_template_status_update) do
+        # not — fall back to the WABA ID + URL-supplied tenant_id.
+        first_value = webhook.entry[0].changes[0].value
+        metadata = getattr(first_value, "metadata", None)
+        if metadata is not None:
+            return TenantBase(
+                business_phone_number_id=metadata.phone_number_id,
+                display_phone_number=metadata.display_phone_number,
+                platform_tenant_id=metadata.phone_number_id,
+            )
 
+        waba_id = webhook.entry[0].id
         return TenantBase(
-            business_phone_number_id=whatsapp_metadata.phone_number_id,
-            display_phone_number=whatsapp_metadata.display_phone_number,
-            # For WhatsApp, phone_number_id IS the tenant identifier
-            platform_tenant_id=whatsapp_metadata.phone_number_id,
+            business_phone_number_id="",
+            display_phone_number="",
+            platform_tenant_id=tenant_id or waba_id,
         )
 
     async def _create_incoming_message_webhook(
@@ -519,6 +544,52 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             errors=error_details,
             timestamp=datetime.now(UTC),
             error_level="system",
+            platform=PlatformType.WHATSAPP,
+            webhook_id=webhook.get_webhook_id(),
+        )
+
+    async def _create_custom_webhook(
+        self,
+        webhook: BaseWebhook,
+        tenant_base: "TenantBase",
+        payload: dict[str, Any],
+        **kwargs,
+    ) -> "CustomWebhook":
+        """Build a CustomWebhook for an app-registered Meta webhook field.
+
+        Parser failures bubble up as ``ProcessorError`` — a registered field
+        whose payload doesn't match the app's schema is a real error, not a
+        silent drop.
+        """
+        from wappa.webhooks.core.webhook_interfaces import CustomWebhook
+
+        change = webhook.entry[0].changes[0]
+        field_name = change.field
+        handler_spec = self._field_registry.get(field_name)
+        if handler_spec is None:
+            raise ProcessorError(
+                f"No registered handler for webhook field '{field_name}'",
+                ErrorCode.PROCESSING_ERROR,
+                PlatformType.WHATSAPP,
+            )
+
+        raw_value: dict[str, Any] = change.value.model_dump()
+
+        try:
+            parsed = handler_spec.parser(raw_value)
+        except Exception as e:
+            raise ProcessorError(
+                f"Parser for field '{field_name}' failed: {e}",
+                ErrorCode.PROCESSING_ERROR,
+                PlatformType.WHATSAPP,
+            ) from e
+
+        return CustomWebhook(
+            tenant=tenant_base,
+            field_name=field_name,
+            parsed=parsed,
+            raw_value=raw_value,
+            timestamp=datetime.now(UTC),
             platform=PlatformType.WHATSAPP,
             webhook_id=webhook.get_webhook_id(),
         )

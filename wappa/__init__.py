@@ -22,6 +22,7 @@ from .core.wappa_app import Wappa
 from .domain.events.cron_event import CronEvent
 from .domain.events.external_event import ExternalEvent
 from .domain.interfaces.webhook_processor import IWebhookProcessor
+from .webhooks.core.webhook_interfaces import CustomWebhook
 
 __version__ = settings.version
 
@@ -31,6 +32,8 @@ __all__ = [
     "WappaEventHandler",
     "WappaBuilder",
     "WappaPlugin",
+    # Custom Webhook Field Registry
+    "CustomWebhook",
     # External Webhook Gateway
     "ExternalEvent",
     "IWebhookProcessor",

@@ -5,16 +5,20 @@ This module provides the WappaBuilder class that enables users to create
 highly customized FastAPI applications using a plugin-based architecture.
 """
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
+from pydantic import BaseModel
 
+from ..events.field_registry import FieldHandlerRegistry
 from ..logging.logger import get_app_logger
 from ..messaging.pipeline import MessengerMiddleware, MiddlewareEntry
 
 if TYPE_CHECKING:
+    from wappa.webhooks.core.webhook_interfaces import CustomWebhook
+
     from .plugin import WappaPlugin
 
 
@@ -49,6 +53,7 @@ class WappaBuilder:
         self.shutdown_hooks: list[tuple[Callable, int]] = []  # (hook, priority)
         self.messenger_middleware: list[MiddlewareEntry] = []  # (middleware, priority)
         self.config_overrides: dict[str, Any] = {}
+        self.field_registry: FieldHandlerRegistry = FieldHandlerRegistry()
 
     def add_plugin(self, plugin: "WappaPlugin") -> "WappaBuilder":
         """
@@ -208,6 +213,63 @@ class WappaBuilder:
             )
         """
         self.messenger_middleware.append((middleware, priority))
+        return self
+
+    def register_webhook_field(
+        self,
+        field_name: str,
+        *,
+        parser: type[BaseModel] | Callable[[dict[str, Any]], BaseModel],
+        handler: Callable[["CustomWebhook"], Awaitable[None]],
+    ) -> "WappaBuilder":
+        """
+        Register a typed handler for a non-built-in Meta webhook field.
+
+        Built-in fields (``messages``, ``user_preferences``, ``user_id_update``)
+        are handled by the framework via :class:`WappaEventHandler`. Any other
+        Meta field value (e.g. ``message_template_status_update``,
+        ``account_update``, ``phone_number_quality_update``) is rejected with
+        a 400 unless registered here.
+
+        The ``parser`` is mandatory — handlers always receive a typed
+        Pydantic model via ``CustomWebhook.parsed`` so business logic never
+        deals with raw dicts. Pass either a ``BaseModel`` subclass (the
+        framework will call ``.model_validate``) or any callable that
+        accepts the raw ``value`` dict and returns a ``BaseModel``.
+
+        Args:
+            field_name: Meta webhook field value to handle.
+            parser: ``BaseModel`` subclass or callable producing one.
+            handler: Async callable invoked with the resulting
+                ``CustomWebhook``.
+
+        Returns:
+            Self for method chaining.
+
+        Raises:
+            ValueError: If ``field_name`` collides with a built-in or is
+                already registered.
+            TypeError: If ``parser`` or ``handler`` are the wrong shape.
+
+        Example::
+
+            class TemplateStatusUpdate(BaseModel):
+                event: str
+                message_template_id: str
+                message_template_name: str
+                reason: str | None = None
+
+            async def on_template_status(webhook: CustomWebhook) -> None:
+                update: TemplateStatusUpdate = webhook.parsed
+                ...
+
+            builder.register_webhook_field(
+                "message_template_status_update",
+                parser=TemplateStatusUpdate,
+                handler=on_template_status,
+            )
+        """
+        self.field_registry.register(field_name, parser=parser, handler=handler)
         return self
 
     def configure(self, **overrides: Any) -> "WappaBuilder":
