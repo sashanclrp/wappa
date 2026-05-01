@@ -16,6 +16,9 @@ if TYPE_CHECKING:
         ReplyButton,
     )
 
+TemplateBodyParameters = list[dict] | None
+TemplateOverride = bool | None
+
 
 class IMessenger(ABC):
     @property
@@ -129,8 +132,11 @@ class IMessenger(ABC):
         self,
         template_name: str,
         recipient: str,
-        body_parameters: list[dict] | None = None,
+        body_parameters: TemplateBodyParameters = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: TemplateOverride = None,
     ) -> MessageResult: ...
 
     @abstractmethod
@@ -141,8 +147,11 @@ class IMessenger(ABC):
         media_type: str,
         media_id: str | None = None,
         media_url: str | None = None,
-        body_parameters: list[dict] | None = None,
+        body_parameters: TemplateBodyParameters = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: TemplateOverride = None,
     ) -> MessageResult: ...
 
     @abstractmethod
@@ -154,8 +163,11 @@ class IMessenger(ABC):
         longitude: str,
         name: str,
         address: str,
-        body_parameters: list[dict] | None = None,
+        body_parameters: TemplateBodyParameters = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: TemplateOverride = None,
     ) -> MessageResult: ...
 
     # Specialized

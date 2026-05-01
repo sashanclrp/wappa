@@ -30,6 +30,7 @@ from .template_models import (
     TemplateValidationResult,
     TextTemplateMessage,
     TextTemplateMetadata,
+    WhatsAppTemplateType,
 )
 
 __all__ = [
@@ -54,6 +55,7 @@ __all__ = [
     "BusinessContact",
     "PersonalContact",
     "TemplateParameter",
+    "WhatsAppTemplateType",
     "TextTemplateMetadata",
     "TextTemplateMessage",
     "MediaTemplateMetadata",

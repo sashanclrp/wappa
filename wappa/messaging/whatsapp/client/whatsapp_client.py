@@ -37,6 +37,13 @@ class WhatsAppUrlBuilder:
         """Build URL for sending messages."""
         return f"{self.base_url}/{self.api_version}/{self.phone_number_id}/messages"
 
+    def get_marketing_messages_url(self) -> str:
+        """Build URL for sending marketing template messages (MM-LITE)."""
+        return (
+            f"{self.base_url}/{self.api_version}/"
+            f"{self.phone_number_id}/marketing_messages"
+        )
+
     def get_media_url(self, media_id: str | None = None) -> str:
         """Build URL for media operations.
 
@@ -321,6 +328,11 @@ class WhatsAppClient:
         if meta_error is not None:
             self.logger.error("Meta error summary: %s", meta_error)
 
+    def _build_post_response(self, response_text: str) -> dict[str, Any]:
+        response_data = self._parse_response_text(response_text) or {}
+        self.logger.debug("Response: %s", response_data)
+        return response_data
+
     async def post_request(
         self,
         payload: dict[str, Any],
@@ -367,9 +379,7 @@ class WhatsAppClient:
                 ) as response:
                     response_text = await response.text()
                     response.raise_for_status()
-                    response_data = self._parse_response_text(response_text) or {}
-                    self.logger.debug("Response: %s", response_data)
-                    return response_data
+                    return self._build_post_response(response_text)
             else:
                 # Standard JSON request
                 headers = self._get_headers()
@@ -386,9 +396,7 @@ class WhatsAppClient:
                 ) as response:
                     response_text = await response.text()
                     response.raise_for_status()
-                    response_data = self._parse_response_text(response_text) or {}
-                    self.logger.debug("Response: %s", response_data)
-                    return response_data
+                    return self._build_post_response(response_text)
 
         except aiohttp.ClientResponseError as http_err:
             # Special handling for authentication errors

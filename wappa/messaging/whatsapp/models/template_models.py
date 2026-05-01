@@ -3,7 +3,14 @@
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from wappa.schemas.core.recipient import RecipientRequest
 
@@ -24,6 +31,12 @@ class TemplateParameterType(str, Enum):
     LOCATION = "location"
 
 
+class WhatsAppTemplateType(str, Enum):
+    MARKETING = "marketing"
+    UTILITY = "utility"
+    AUTHENTICATION = "authentication"
+
+
 class TemplateParameter(BaseModel):
     type: TemplateParameterType = Field(..., description="Parameter type")
     text: str | None = Field(
@@ -41,10 +54,14 @@ class TemplateParameter(BaseModel):
 
     @field_validator("text")
     @classmethod
-    def validate_text_required_for_text_type(cls, v, info):
-        if info.data.get("type") == TemplateParameterType.TEXT and not v:
+    def validate_text_required_for_text_type(
+        cls,
+        value: str | None,
+        info: ValidationInfo,
+    ) -> str | None:
+        if info.data.get("type") == TemplateParameterType.TEXT and not value:
             raise ValueError("Text content is required for text type parameters")
-        return v
+        return value
 
 
 class TemplateComponent(BaseModel):
@@ -196,7 +213,7 @@ class TemplateLanguage(BaseModel):
 
     @field_validator("code")
     @classmethod
-    def validate_language_code(cls, v):
+    def validate_language_code(cls, value: str) -> str:
         common_codes = {
             "es",
             "en",
@@ -220,9 +237,10 @@ class TemplateLanguage(BaseModel):
             "cs",
             "hu",
         }
-        if v not in common_codes and not v.replace("_", "").replace("-", "").isalpha():
-            raise ValueError(f"Invalid language code format: {v}")
-        return v
+        normalized_code = value.replace("_", "").replace("-", "")
+        if value not in common_codes and not normalized_code.isalpha():
+            raise ValueError(f"Invalid language code format: {value}")
+        return value
 
 
 class BaseTemplateMessage(RecipientRequest):
@@ -232,6 +250,24 @@ class BaseTemplateMessage(RecipientRequest):
     language: TemplateLanguage = Field(
         default_factory=TemplateLanguage, description="Template language"
     )
+    template_type: WhatsAppTemplateType = Field(
+        ..., description="Template category used for route selection"
+    )
+    override: bool | None = Field(
+        default=None,
+        description=(
+            "Optional route override. Only compatible with marketing templates. "
+            "When false, marketing templates use Cloud API /messages."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_override_compatibility(self):
+        if self.template_type != WhatsAppTemplateType.MARKETING and self.override:
+            raise ValueError(
+                "override parameter is only compatible with template_type='marketing'"
+            )
+        return self
 
 
 class TextTemplateMessage(BaseTemplateMessage):
@@ -286,17 +322,21 @@ class MediaTemplateMessage(BaseTemplateMessage):
 
     @field_validator("template_metadata")
     @classmethod
-    def validate_transcript_for_media_type(cls, v, info):
+    def validate_transcript_for_media_type(
+        cls,
+        value: MediaTemplateMetadata | None,
+        info: ValidationInfo,
+    ) -> MediaTemplateMetadata | None:
         if (
-            v
-            and v.media_transcript
+            value
+            and value.media_transcript
             and info.data.get("media_type") == WhatsAppTemplateMediaType.IMAGE
         ):
             raise ValueError(
                 "media_transcript field is not supported for image media type. "
                 "Transcript is only valid for video and audio media types."
             )
-        return v
+        return value
 
 
 class LocationTemplateMessage(BaseTemplateMessage):

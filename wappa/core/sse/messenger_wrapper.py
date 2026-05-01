@@ -98,6 +98,18 @@ class SSEMessengerWrapper(IMessenger):
 
         return value
 
+    @staticmethod
+    def _template_options(
+        language_code: str,
+        template_type: str,
+        override: bool | None,
+    ) -> dict[str, str | bool | None]:
+        return {
+            "language_code": language_code,
+            "template_type": template_type,
+            "override": override,
+        }
+
     async def send_text(
         self,
         text: str,
@@ -343,6 +355,9 @@ class SSEMessengerWrapper(IMessenger):
         recipient: str,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: bool | None = None,
     ) -> MessageResult:
         return await self._send_with_sse(
             message_type="text_template",
@@ -350,13 +365,15 @@ class SSEMessengerWrapper(IMessenger):
                 "template_name": template_name,
                 "recipient": recipient,
                 "body_parameters": body_parameters,
-                "language_code": language_code,
+                **self._template_options(language_code, template_type, override),
             },
             operation=self._inner.send_text_template(
                 template_name,
                 recipient,
                 body_parameters,
                 language_code,
+                template_type=template_type,
+                override=override,
             ),
         )
 
@@ -369,6 +386,9 @@ class SSEMessengerWrapper(IMessenger):
         media_url: str | None = None,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: bool | None = None,
     ) -> MessageResult:
         return await self._send_with_sse(
             message_type="media_template",
@@ -379,7 +399,7 @@ class SSEMessengerWrapper(IMessenger):
                 "media_id": media_id,
                 "media_url": media_url,
                 "body_parameters": body_parameters,
-                "language_code": language_code,
+                **self._template_options(language_code, template_type, override),
             },
             operation=self._inner.send_media_template(
                 template_name,
@@ -389,6 +409,8 @@ class SSEMessengerWrapper(IMessenger):
                 media_url,
                 body_parameters,
                 language_code,
+                template_type=template_type,
+                override=override,
             ),
         )
 
@@ -402,6 +424,9 @@ class SSEMessengerWrapper(IMessenger):
         address: str,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: bool | None = None,
     ) -> MessageResult:
         return await self._send_with_sse(
             message_type="location_template",
@@ -413,7 +438,7 @@ class SSEMessengerWrapper(IMessenger):
                 "name": name,
                 "address": address,
                 "body_parameters": body_parameters,
-                "language_code": language_code,
+                **self._template_options(language_code, template_type, override),
             },
             operation=self._inner.send_location_template(
                 template_name,
@@ -424,6 +449,8 @@ class SSEMessengerWrapper(IMessenger):
                 address,
                 body_parameters,
                 language_code,
+                template_type=template_type,
+                override=override,
             ),
         )
 

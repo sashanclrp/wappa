@@ -209,7 +209,7 @@ class MessengerPipeline(IMessenger):
         method_name: str,
         message_type: str,
         recipient: str,
-        arguments: dict[str, Any],
+        arguments: Mapping[str, Any],
     ) -> Awaitable[MessageResult]:
         """Build the :class:`SendInvocation` and hand it to the pre-composed chain.
 
@@ -227,6 +227,18 @@ class MessengerPipeline(IMessenger):
                 arguments=arguments,
             )
         )
+
+    @staticmethod
+    def _template_options(
+        language_code: str,
+        template_type: str,
+        override: bool | None,
+    ) -> dict[str, str | bool | None]:
+        return {
+            "language_code": language_code,
+            "template_type": template_type,
+            "override": override,
+        }
 
     # ------------------------------------------------------------------ #
     # IMessenger basic messaging.
@@ -446,6 +458,9 @@ class MessengerPipeline(IMessenger):
         recipient: str,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: bool | None = None,
     ) -> MessageResult:
         return await self._invoke(
             "send_text_template",
@@ -455,7 +470,7 @@ class MessengerPipeline(IMessenger):
                 "template_name": template_name,
                 "recipient": recipient,
                 "body_parameters": body_parameters,
-                "language_code": language_code,
+                **self._template_options(language_code, template_type, override),
             },
         )
 
@@ -468,6 +483,9 @@ class MessengerPipeline(IMessenger):
         media_url: str | None = None,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: bool | None = None,
     ) -> MessageResult:
         return await self._invoke(
             "send_media_template",
@@ -480,7 +498,7 @@ class MessengerPipeline(IMessenger):
                 "media_id": media_id,
                 "media_url": media_url,
                 "body_parameters": body_parameters,
-                "language_code": language_code,
+                **self._template_options(language_code, template_type, override),
             },
         )
 
@@ -494,6 +512,9 @@ class MessengerPipeline(IMessenger):
         address: str,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: bool | None = None,
     ) -> MessageResult:
         return await self._invoke(
             "send_location_template",
@@ -507,7 +528,7 @@ class MessengerPipeline(IMessenger):
                 "name": name,
                 "address": address,
                 "body_parameters": body_parameters,
-                "language_code": language_code,
+                **self._template_options(language_code, template_type, override),
             },
         )
 

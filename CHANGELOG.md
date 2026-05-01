@@ -5,6 +5,33 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-05-01
+
+Marketing template transport split is now first-class: Wappa routes marketing templates through Meta's MM-LITE endpoint (`/marketing_messages`) while keeping utility/auth templates on the standard Cloud API endpoint (`/messages`). This release also hardens the template send contract by making template category explicit and required.
+
+### Added
+- **MM-LITE route support** in WhatsApp transport via `/{PHONE_NUMBER_ID}/marketing_messages`.
+- **Template category enum** for send-template flows: `marketing`, `utility`, `authentication`.
+- **`override` route control** for marketing templates (`override=false` forces Cloud `/messages`).
+- **Regression tests** for category/override validation and endpoint route selection.
+- **Custom webhook field handler registry** for Meta fields not modeled natively (e.g. `message_template_status_update`, `account_update`, `phone_number_quality_update`):
+  - `FieldHandlerRegistry` with parser + handler registration and duplicate/collision guards.
+  - `CustomWebhook` universal webhook type and dispatcher support.
+  - Registry-aware webhook field validation path in WhatsApp processor.
+  - Public registration APIs via `WappaBuilder.register_webhook_field(...)` and `Wappa.register_webhook_field(...)`.
+
+### Changed
+- **Template send routing policy**:
+  - `template_type=marketing` defaults to MM-LITE (`/marketing_messages`).
+  - `template_type=utility|authentication` always uses Cloud API (`/messages`).
+  - Non-marketing + `override=true` is rejected with validation error.
+- **Code-quality refactor** across messenger/template stack to reduce duplication and improve SOLID boundaries without changing behavior.
+- **Webhook processor/dispatcher flow** now accepts and dispatches registered custom field payloads instead of rejecting unknown fields at schema level.
+
+### Breaking
+- **`template_type` is now mandatory** for template send operations (`send-text`, `send-media`, `send-location`) and internal `IMessenger` template methods.
+- Existing callers that did not provide template type must now pass it explicitly.
+
 ## [0.5.1] - 2026-04-30
 
 Hard cut on legacy env var support. v0.5.0 shipped alias resolution with deprecation warnings — this patch removes all of that boilerplate. The canonical names from v0.5.0 are now the only names accepted. If an old name is detected at startup the process exits immediately with a clear error listing every var that needs renaming. No silent drift, no compatibility shims.

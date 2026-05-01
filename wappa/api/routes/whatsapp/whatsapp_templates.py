@@ -41,6 +41,7 @@ from wappa.messaging.whatsapp.models.template_models import (
     LocationTemplateMessage,
     MediaTemplateMessage,
     TextTemplateMessage,
+    WhatsAppTemplateType,
 )
 
 # Error code to HTTP status mapping for template operations
@@ -59,6 +60,16 @@ TEMPLATE_ERROR_GROUPS = {
         "LOCATION_TEMPLATE_SEND_FAILED",
     ): 500,
 }
+
+
+def _template_send_options(
+    request: TextTemplateMessage | MediaTemplateMessage | LocationTemplateMessage,
+) -> dict[str, str | bool | None]:
+    return {
+        "language_code": request.language.code,
+        "template_type": request.template_type.value,
+        "override": request.override,
+    }
 
 
 async def _maybe_set_template_state(
@@ -121,7 +132,7 @@ async def send_text_template(
         template_name=request.template_name,
         recipient=request.recipient,
         body_parameters=convert_body_parameters(request.body_parameters),
-        language_code=request.language.code,
+        **_template_send_options(request),
     )
 
     raise_for_failed_result(result, "send text template", TEMPLATE_ERROR_GROUPS)
@@ -162,7 +173,7 @@ async def send_media_template(
         media_id=request.media_id,
         media_url=request.media_url,
         body_parameters=convert_body_parameters(request.body_parameters),
-        language_code=request.language.code,
+        **_template_send_options(request),
     )
 
     raise_for_failed_result(result, "send media template", TEMPLATE_ERROR_GROUPS)
@@ -203,7 +214,7 @@ async def send_location_template(
         name=request.name,
         address=request.address,
         body_parameters=convert_body_parameters(request.body_parameters),
-        language_code=request.language.code,
+        **_template_send_options(request),
     )
 
     raise_for_failed_result(result, "send location template", TEMPLATE_ERROR_GROUPS)
@@ -241,6 +252,7 @@ async def send_welcome_template(
             recipient=recipient,
             body_parameters=body_parameters,
             language_code="es",
+            template_type=WhatsAppTemplateType.UTILITY.value,
         )
 
         if not result.success:
@@ -287,6 +299,7 @@ async def send_store_location_template(
                 {"type": "text", "text": "Mon-Fri 9AM-6PM"},
             ],
             language_code="es",
+            template_type=WhatsAppTemplateType.UTILITY.value,
         )
 
         if not result.success:

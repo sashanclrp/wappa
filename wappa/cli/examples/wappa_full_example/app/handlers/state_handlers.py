@@ -486,7 +486,10 @@ class StateHandlers:
         try:
             # Echo template back (simple text template)
             result = await self.messenger.send_text_template(
-                recipient=user_id, template_name=template_name, language_code="en_US"
+                recipient=user_id,
+                template_name=template_name,
+                language_code="en_US",
+                template_type="utility",
             )
 
             if not result.success:

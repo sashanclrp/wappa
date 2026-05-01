@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import warnings
+from collections.abc import Awaitable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -60,6 +61,15 @@ class PubSubMessengerWrapper(IMessenger):
             },
         )
 
+    async def _send_with_notification(
+        self,
+        message_type: str,
+        operation: Awaitable[MessageResult],
+    ) -> MessageResult:
+        result = await operation
+        await self._publish_bot_reply(message_type, result)
+        return result
+
     # Properties - delegate to inner
     @property
     def platform(self) -> PlatformType:
@@ -77,11 +87,15 @@ class PubSubMessengerWrapper(IMessenger):
         reply_to_message_id: str | None = None,
         disable_preview: bool = False,
     ) -> MessageResult:
-        result = await self._inner.send_text(
-            text, recipient, reply_to_message_id, disable_preview
+        return await self._send_with_notification(
+            "text",
+            self._inner.send_text(
+                text,
+                recipient,
+                reply_to_message_id,
+                disable_preview,
+            ),
         )
-        await self._publish_bot_reply("text", result)
-        return result
 
     async def mark_as_read(
         self, message_id: str, typing: bool = False
@@ -97,11 +111,15 @@ class PubSubMessengerWrapper(IMessenger):
         caption: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        result = await self._inner.send_image(
-            image_source, recipient, caption, reply_to_message_id
+        return await self._send_with_notification(
+            "image",
+            self._inner.send_image(
+                image_source,
+                recipient,
+                caption,
+                reply_to_message_id,
+            ),
         )
-        await self._publish_bot_reply("image", result)
-        return result
 
     async def send_video(
         self,
@@ -111,11 +129,16 @@ class PubSubMessengerWrapper(IMessenger):
         reply_to_message_id: str | None = None,
         transcript: str | None = None,
     ) -> MessageResult:
-        result = await self._inner.send_video(
-            video_source, recipient, caption, reply_to_message_id, transcript
+        return await self._send_with_notification(
+            "video",
+            self._inner.send_video(
+                video_source,
+                recipient,
+                caption,
+                reply_to_message_id,
+                transcript,
+            ),
         )
-        await self._publish_bot_reply("video", result)
-        return result
 
     async def send_audio(
         self,
@@ -124,11 +147,15 @@ class PubSubMessengerWrapper(IMessenger):
         reply_to_message_id: str | None = None,
         transcript: str | None = None,
     ) -> MessageResult:
-        result = await self._inner.send_audio(
-            audio_source, recipient, reply_to_message_id, transcript
+        return await self._send_with_notification(
+            "audio",
+            self._inner.send_audio(
+                audio_source,
+                recipient,
+                reply_to_message_id,
+                transcript,
+            ),
         )
-        await self._publish_bot_reply("audio", result)
-        return result
 
     async def send_document(
         self,
@@ -138,11 +165,16 @@ class PubSubMessengerWrapper(IMessenger):
         caption: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        result = await self._inner.send_document(
-            document_source, recipient, filename, caption, reply_to_message_id
+        return await self._send_with_notification(
+            "document",
+            self._inner.send_document(
+                document_source,
+                recipient,
+                filename,
+                caption,
+                reply_to_message_id,
+            ),
         )
-        await self._publish_bot_reply("document", result)
-        return result
 
     async def send_sticker(
         self,
@@ -150,11 +182,14 @@ class PubSubMessengerWrapper(IMessenger):
         recipient: str,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        result = await self._inner.send_sticker(
-            sticker_source, recipient, reply_to_message_id
+        return await self._send_with_notification(
+            "sticker",
+            self._inner.send_sticker(
+                sticker_source,
+                recipient,
+                reply_to_message_id,
+            ),
         )
-        await self._publish_bot_reply("sticker", result)
-        return result
 
     # Interactive messaging
     async def send_button_message(
@@ -166,11 +201,17 @@ class PubSubMessengerWrapper(IMessenger):
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        result = await self._inner.send_button_message(
-            buttons, recipient, body, header, footer, reply_to_message_id
+        return await self._send_with_notification(
+            "button",
+            self._inner.send_button_message(
+                buttons,
+                recipient,
+                body,
+                header,
+                footer,
+                reply_to_message_id,
+            ),
         )
-        await self._publish_bot_reply("button", result)
-        return result
 
     async def send_list_message(
         self,
@@ -182,11 +223,18 @@ class PubSubMessengerWrapper(IMessenger):
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        result = await self._inner.send_list_message(
-            sections, recipient, body, button_text, header, footer, reply_to_message_id
+        return await self._send_with_notification(
+            "list",
+            self._inner.send_list_message(
+                sections,
+                recipient,
+                body,
+                button_text,
+                header,
+                footer,
+                reply_to_message_id,
+            ),
         )
-        await self._publish_bot_reply("list", result)
-        return result
 
     async def send_cta_message(
         self,
@@ -198,17 +246,18 @@ class PubSubMessengerWrapper(IMessenger):
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        result = await self._inner.send_cta_message(
-            button_text,
-            button_url,
-            recipient,
-            body,
-            header,
-            footer,
-            reply_to_message_id,
+        return await self._send_with_notification(
+            "cta",
+            self._inner.send_cta_message(
+                button_text,
+                button_url,
+                recipient,
+                body,
+                header,
+                footer,
+                reply_to_message_id,
+            ),
         )
-        await self._publish_bot_reply("cta", result)
-        return result
 
     # Template messaging
     async def send_text_template(
@@ -217,12 +266,21 @@ class PubSubMessengerWrapper(IMessenger):
         recipient: str,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: bool | None = None,
     ) -> MessageResult:
-        result = await self._inner.send_text_template(
-            template_name, recipient, body_parameters, language_code
+        return await self._send_with_notification(
+            "template",
+            self._inner.send_text_template(
+                template_name,
+                recipient,
+                body_parameters,
+                language_code,
+                template_type=template_type,
+                override=override,
+            ),
         )
-        await self._publish_bot_reply("template", result)
-        return result
 
     async def send_media_template(
         self,
@@ -233,18 +291,24 @@ class PubSubMessengerWrapper(IMessenger):
         media_url: str | None = None,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: bool | None = None,
     ) -> MessageResult:
-        result = await self._inner.send_media_template(
-            template_name,
-            recipient,
-            media_type,
-            media_id,
-            media_url,
-            body_parameters,
-            language_code,
+        return await self._send_with_notification(
+            "template",
+            self._inner.send_media_template(
+                template_name,
+                recipient,
+                media_type,
+                media_id,
+                media_url,
+                body_parameters,
+                language_code,
+                template_type=template_type,
+                override=override,
+            ),
         )
-        await self._publish_bot_reply("template", result)
-        return result
 
     async def send_location_template(
         self,
@@ -256,27 +320,34 @@ class PubSubMessengerWrapper(IMessenger):
         address: str,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: bool | None = None,
     ) -> MessageResult:
-        result = await self._inner.send_location_template(
-            template_name,
-            recipient,
-            latitude,
-            longitude,
-            name,
-            address,
-            body_parameters,
-            language_code,
+        return await self._send_with_notification(
+            "template",
+            self._inner.send_location_template(
+                template_name,
+                recipient,
+                latitude,
+                longitude,
+                name,
+                address,
+                body_parameters,
+                language_code,
+                template_type=template_type,
+                override=override,
+            ),
         )
-        await self._publish_bot_reply("template", result)
-        return result
 
     # Specialized messaging
     async def send_contact(
         self, contact: dict, recipient: str, reply_to_message_id: str | None = None
     ) -> MessageResult:
-        result = await self._inner.send_contact(contact, recipient, reply_to_message_id)
-        await self._publish_bot_reply("contact", result)
-        return result
+        return await self._send_with_notification(
+            "contact",
+            self._inner.send_contact(contact, recipient, reply_to_message_id),
+        )
 
     async def send_location(
         self,
@@ -287,17 +358,26 @@ class PubSubMessengerWrapper(IMessenger):
         address: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        result = await self._inner.send_location(
-            latitude, longitude, recipient, name, address, reply_to_message_id
+        return await self._send_with_notification(
+            "location",
+            self._inner.send_location(
+                latitude,
+                longitude,
+                recipient,
+                name,
+                address,
+                reply_to_message_id,
+            ),
         )
-        await self._publish_bot_reply("location", result)
-        return result
 
     async def send_location_request(
         self, body: str, recipient: str, reply_to_message_id: str | None = None
     ) -> MessageResult:
-        result = await self._inner.send_location_request(
-            body, recipient, reply_to_message_id
+        return await self._send_with_notification(
+            "location_request",
+            self._inner.send_location_request(
+                body,
+                recipient,
+                reply_to_message_id,
+            ),
         )
-        await self._publish_bot_reply("location_request", result)
-        return result

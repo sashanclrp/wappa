@@ -9,6 +9,7 @@ from wappa.messaging.whatsapp.models.template_models import (
     TemplateParameter,
     TemplateParameterType,
     WhatsAppTemplateMediaType,
+    WhatsAppTemplateType,
 )
 from wappa.messaging.whatsapp.utils.error_helpers import handle_whatsapp_error
 from wappa.schemas.core.recipient import apply_recipient_to_payload
@@ -57,15 +58,44 @@ class WhatsAppTemplateHandler:
         apply_recipient_to_payload(payload, recipient)
         return payload
 
+    def _resolve_template_send_url(
+        self, template_type: WhatsAppTemplateType, override: bool | None
+    ) -> str | None:
+        if template_type != WhatsAppTemplateType.MARKETING and override:
+            raise ValueError(
+                "override parameter is only compatible with template_type='marketing'"
+            )
+        if template_type == WhatsAppTemplateType.MARKETING:
+            if override is False:
+                return None
+            return self.client.url_builder.get_marketing_messages_url()
+        return None
+
     async def _send_template_payload(
-        self, payload: dict[str, Any], recipient: str
+        self,
+        payload: dict[str, Any],
+        recipient: str,
+        template_type: WhatsAppTemplateType,
+        override: bool | None,
     ) -> MessageResult:
-        response = await self.client.post_request(payload)
+        response = await self.client.post_request(
+            payload, custom_url=self._resolve_template_send_url(template_type, override)
+        )
         return MessageResult.from_response_payload(
             response,
             tenant_id=self._tenant_id,
             fallback_recipient=recipient,
         )
+
+    def _build_components_with_header(
+        self,
+        header_component: dict[str, Any],
+        body_parameters: list[TemplateParameter] | None,
+    ) -> list[dict[str, Any]]:
+        components: list[dict[str, Any]] = [header_component]
+        if body_component := self._build_body_component(body_parameters):
+            components.append(body_component)
+        return components
 
     def _build_template_data(
         self,
@@ -87,6 +117,9 @@ class WhatsAppTemplateHandler:
         template_name: str,
         body_parameters: list[TemplateParameter] | None = None,
         language_code: str = "es",
+        *,
+        template_type: WhatsAppTemplateType,
+        override: bool | None = None,
     ) -> MessageResult:
         try:
             body_component = self._build_body_component(body_parameters)
@@ -101,7 +134,9 @@ class WhatsAppTemplateHandler:
             )
 
             self.logger.debug(f"Sending text template '{template_name}' to {recipient}")
-            result = await self._send_template_payload(payload, recipient)
+            result = await self._send_template_payload(
+                payload, recipient, template_type, override
+            )
             self.logger.info(
                 f"Text template '{template_name}' sent successfully to {result.recipient}"
             )
@@ -125,6 +160,9 @@ class WhatsAppTemplateHandler:
         media_url: str | None = None,
         body_parameters: list[TemplateParameter] | None = None,
         language_code: str = "es",
+        *,
+        template_type: WhatsAppTemplateType,
+        override: bool | None = None,
     ) -> MessageResult:
         try:
             if bool(media_id) == bool(media_url):
@@ -140,19 +178,21 @@ class WhatsAppTemplateHandler:
                 ],
             }
 
-            components: list[dict[str, Any]] = [header_component]
-            if body_component := self._build_body_component(body_parameters):
-                components.append(body_component)
-
             template_data = self._build_template_data(
-                template_name, language_code, components=components
+                template_name,
+                language_code,
+                components=self._build_components_with_header(
+                    header_component, body_parameters
+                ),
             )
             payload = self._build_template_payload(recipient, template_data)
 
             self.logger.debug(
                 f"Sending media template '{template_name}' ({media_type.value}) to {recipient}"
             )
-            result = await self._send_template_payload(payload, recipient)
+            result = await self._send_template_payload(
+                payload, recipient, template_type, override
+            )
             self.logger.info(
                 f"Media template '{template_name}' sent successfully to {result.recipient}"
             )
@@ -177,6 +217,9 @@ class WhatsAppTemplateHandler:
         address: str,
         body_parameters: list[TemplateParameter] | None = None,
         language_code: str = "es",
+        *,
+        template_type: WhatsAppTemplateType,
+        override: bool | None = None,
     ) -> MessageResult:
         try:
             try:
@@ -204,19 +247,21 @@ class WhatsAppTemplateHandler:
                 ],
             }
 
-            components: list[dict[str, Any]] = [header_component]
-            if body_component := self._build_body_component(body_parameters):
-                components.append(body_component)
-
             template_data = self._build_template_data(
-                template_name, language_code, components=components
+                template_name,
+                language_code,
+                components=self._build_components_with_header(
+                    header_component, body_parameters
+                ),
             )
             payload = self._build_template_payload(recipient, template_data)
 
             self.logger.debug(
                 f"Sending location template '{template_name}' to {recipient}"
             )
-            result = await self._send_template_payload(payload, recipient)
+            result = await self._send_template_payload(
+                payload, recipient, template_type, override
+            )
             self.logger.info(
                 f"Location template '{template_name}' sent successfully to {result.recipient}"
             )

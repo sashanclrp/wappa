@@ -27,7 +27,10 @@ from wappa.messaging.whatsapp.models.interactive_models import (
     ReplyButton,
 )
 from wappa.messaging.whatsapp.models.media_models import MediaType
-from wappa.messaging.whatsapp.models.template_models import WhatsAppTemplateMediaType
+from wappa.messaging.whatsapp.models.template_models import (
+    WhatsAppTemplateMediaType,
+    WhatsAppTemplateType,
+)
 from wappa.messaging.whatsapp.utils.error_helpers import handle_whatsapp_error
 from wappa.schemas.core.types import PlatformType
 
@@ -109,6 +112,24 @@ class WhatsAppMessenger(IMessenger):
                     p.get("type"),
                 )
         return result
+
+    def _parse_template_type(self, template_type: str) -> WhatsAppTemplateType | None:
+        try:
+            return WhatsAppTemplateType(template_type)
+        except ValueError:
+            return None
+
+    def _parse_template_enums(
+        self, template_type: str, media_type: str
+    ) -> tuple[WhatsAppTemplateType | None, WhatsAppTemplateMediaType | None]:
+        template_type_enum = self._parse_template_type(template_type)
+        if template_type_enum is None:
+            return None, None
+        try:
+            media_type_enum = WhatsAppTemplateMediaType(media_type)
+        except ValueError:
+            return template_type_enum, None
+        return template_type_enum, media_type_enum
 
     # Basic
 
@@ -492,12 +513,22 @@ class WhatsAppMessenger(IMessenger):
         recipient: str,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: bool | None = None,
     ) -> MessageResult:
+        template_type_enum = self._parse_template_type(template_type)
+        if template_type_enum is None:
+            return self._error_result(
+                f"Invalid template type: {template_type}", "INVALID_TEMPLATE_TYPE"
+            )
         return await self.template_handler.send_text_template(
             recipient=recipient,
             template_name=template_name,
             body_parameters=self._convert_body_parameters(body_parameters),
             language_code=language_code,
+            template_type=template_type_enum,
+            override=override,
         )
 
     async def send_media_template(
@@ -509,10 +540,18 @@ class WhatsAppMessenger(IMessenger):
         media_url: str | None = None,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: bool | None = None,
     ) -> MessageResult:
-        try:
-            media_type_enum = WhatsAppTemplateMediaType(media_type)
-        except ValueError:
+        template_type_enum, media_type_enum = self._parse_template_enums(
+            template_type, media_type
+        )
+        if template_type_enum is None:
+            return self._error_result(
+                f"Invalid template type: {template_type}", "INVALID_TEMPLATE_TYPE"
+            )
+        if media_type_enum is None:
             return self._error_result(
                 f"Invalid media type: {media_type}", "INVALID_MEDIA_TYPE"
             )
@@ -525,6 +564,8 @@ class WhatsAppMessenger(IMessenger):
             media_url=media_url,
             body_parameters=self._convert_body_parameters(body_parameters),
             language_code=language_code,
+            template_type=template_type_enum,
+            override=override,
         )
 
     async def send_location_template(
@@ -537,7 +578,15 @@ class WhatsAppMessenger(IMessenger):
         address: str,
         body_parameters: list[dict] | None = None,
         language_code: str = "es",
+        *,
+        template_type: str,
+        override: bool | None = None,
     ) -> MessageResult:
+        template_type_enum = self._parse_template_type(template_type)
+        if template_type_enum is None:
+            return self._error_result(
+                f"Invalid template type: {template_type}", "INVALID_TEMPLATE_TYPE"
+            )
         return await self.template_handler.send_location_template(
             recipient=recipient,
             template_name=template_name,
@@ -547,6 +596,8 @@ class WhatsAppMessenger(IMessenger):
             address=address,
             body_parameters=self._convert_body_parameters(body_parameters),
             language_code=language_code,
+            template_type=template_type_enum,
+            override=override,
         )
 
     # Specialized
