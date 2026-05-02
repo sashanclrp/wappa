@@ -167,9 +167,7 @@ class WappaContextFactory:
             # API, and expiry entry points without per-site branching.
             from wappa.core.messaging.pipeline import MessengerPipeline
 
-            messenger_middleware = getattr(
-                self._app.state, "messenger_middleware", ()
-            )
+            messenger_middleware = getattr(self._app.state, "messenger_middleware", ())
             return MessengerPipeline(
                 raw=raw_messenger,
                 middleware=messenger_middleware,

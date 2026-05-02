@@ -26,7 +26,32 @@ from wappa.core.logging.context import (
     get_current_tenant_context,
 )
 from wappa.domain.events.api_message_event import APIMessageEvent
+from wappa.domain.interfaces.identity_resolver import IIdentityResolver
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
+
+
+async def resolve_event_user_id(
+    recipient: str,
+    explicit_user_id: str | None,
+    fastapi_request: "FastAPIRequest | Request | None",
+) -> str:
+    """
+    Resolve the canonical ``user_id`` for an APIMessageEvent.
+
+    Precedence: caller-provided ``explicit_user_id`` > registered
+    ``IIdentityResolver`` on ``app.state`` > raw ``recipient``.
+    """
+    if explicit_user_id:
+        return explicit_user_id
+
+    resolver: IIdentityResolver | None = None
+    if fastapi_request is not None:
+        resolver = getattr(fastapi_request.app.state, "identity_resolver", None)
+
+    if resolver is not None:
+        return await resolver.resolve(recipient)
+    return recipient
+
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -119,7 +144,11 @@ def dispatch_message_event(
                 request_obj.model_dump() if hasattr(request_obj, "model_dump") else {}
             )
             recipient: str = getattr(request_obj, "recipient", "")
-            user_id: str = getattr(request_obj, "user_id", None) or recipient
+            user_id = await resolve_event_user_id(
+                recipient=recipient,
+                explicit_user_id=getattr(request_obj, "user_id", None),
+                fastapi_request=fastapi_request,
+            )
 
             # Create and dispatch event asynchronously (fire-and-forget)
             # Pass FastAPI Request to enable DB session injection in handler
@@ -176,17 +205,25 @@ def fire_api_event(
     if dispatcher is None:
         return
 
-    event = APIMessageEvent(
-        message_type=message_type,
-        message_id=result.message_id,
-        recipient=recipient,
-        user_id=user_id or recipient,
-        request_payload=request_payload,
-        response_success=result.success,
-        response_error=result.error,
-        meta_response=getattr(result, "raw_response", None),
-        tenant_id=get_current_tenant_context() or "unknown",
-        owner_id=get_current_owner_context(),
-        platform=platform,
-    )
-    asyncio.create_task(dispatcher.dispatch(event, fastapi_request))
+    async def _build_and_dispatch() -> None:
+        resolved_user_id = await resolve_event_user_id(
+            recipient=recipient,
+            explicit_user_id=user_id,
+            fastapi_request=fastapi_request,
+        )
+        event = APIMessageEvent(
+            message_type=message_type,
+            message_id=result.message_id,
+            recipient=recipient,
+            user_id=resolved_user_id,
+            request_payload=request_payload,
+            response_success=result.success,
+            response_error=result.error,
+            meta_response=getattr(result, "raw_response", None),
+            tenant_id=get_current_tenant_context() or "unknown",
+            owner_id=get_current_owner_context(),
+            platform=platform,
+        )
+        await dispatcher.dispatch(event, fastapi_request)
+
+    asyncio.create_task(_build_and_dispatch())

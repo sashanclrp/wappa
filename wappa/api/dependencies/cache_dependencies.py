@@ -109,4 +109,5 @@ async def get_handler_state_service(
     # For handler state service, we use a placeholder user_id
     # The actual recipient is passed to the service methods
     cache_factory = await get_cache_factory(request, recipient="handler-api")
-    return HandlerStateService(cache_factory)
+    identity_resolver = _get_identity_resolver(request)
+    return HandlerStateService(cache_factory, identity_resolver=identity_resolver)

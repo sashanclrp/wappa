@@ -5,6 +5,30 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-05-02
+
+Identity-resolution seam (introduced in 0.6.1 for templates) now applies uniformly across every Wappa subsystem that scopes per-user state. Host applications register one `IIdentityResolver` and have it apply to template state, handler state, outbound API events, and pub/sub envelopes — eliminating the recurrent bug class where one Wappa surface keys cache by canonical id while another keys by raw transport recipient.
+
+### Added
+- **`HandlerStateService`** now accepts an optional `IIdentityResolver` (default `PassthroughIdentityResolver`). All four methods (`set_handler_state`, `get_handler_state`, `delete_handler_state`, `handler_state_exists`) gain an optional `user_id=` override kwarg that bypasses the resolver. Cached envelope now includes both `recipient` (transport) and `user_id` (canonical).
+- **`user_id` query param** on `GET /whatsapp/state-handlers/get/{recipient}/{handler_value}` and `DELETE /whatsapp/state-handlers/delete/{recipient}/{handler_value}` — explicit canonical-id override for HTTP callers that already resolved identity upstream.
+- **`SetHandlerStateRequest.user_id`** is now forwarded through to the service (was already present on `RecipientRequest` but ignored).
+- **`resolve_event_user_id(recipient, explicit_user_id, fastapi_request)`** helper in `wappa.api.utils.event_decorators` — single resolution-precedence chain (explicit > resolver-on-app-state > raw recipient) used by all `APIMessageEvent` construction sites.
+- **`user_id` kwarg on `dispatch_api_message_event(...)`** — fire-and-forget helper now resolves identity through `resolve_event_user_id` and populates the (previously missing) required `APIMessageEvent.user_id` field.
+- **Resolver propagation tests** (`tests/test_identity_resolver_propagation.py`) covering default-passthrough, custom-resolver, and explicit-override paths for `HandlerStateService`, `TemplateStateService`, `resolve_event_user_id`, and `publish_api_notification`.
+
+### Changed
+- **`@dispatch_message_event` decorator** and **`fire_api_event`** now route the event's `user_id` through `resolve_event_user_id`. When a resolver is registered on `app.state.identity_resolver`, outbound events carry the canonical id; explicit `user_id` on the request body still wins.
+- **`publish_api_notification`** (Redis pub/sub) now keys the envelope by `event.user_id` (canonical, post-resolver) instead of `event.recipient`. The raw transport identifier is preserved inside the payload as `data.recipient` so consumers that need it still have it.
+- **`get_handler_state_service` DI helper** now forwards the registered `IIdentityResolver` from `app.state` into the service, mirroring `get_template_state_service`.
+- **`ICacheFactory` and `RedisCacheFactory` docstrings** updated to recommend scoping caches by the canonical id (`event.user_id`) rather than `event.recipient`, with a note explaining the values are equal under the default passthrough resolver.
+
+### Fixed
+- **`dispatch_api_message_event` was constructing `APIMessageEvent` without the now-required `user_id` field**, which would have raised at runtime under any caller. Now resolves and supplies it.
+
+### Compatibility
+- Fully backwards-compatible. Apps that do not register an `IIdentityResolver` see byte-identical behavior to 0.6.1: cache keys, pub/sub envelopes, and `APIMessageEvent.user_id` all default to the raw `recipient`. Every change is additive — no existing call site needs modification.
+
 ## [0.6.1] - 2026-05-02
 
 Pluggable identity-resolution seam for template state caching. Wappa no longer hard-codes the assumption that the WhatsApp transport recipient (phone number) is the canonical id under which to scope per-user cache state. Host applications can now register an `IIdentityResolver` once at startup to map transport identifiers to whatever canonical user id they use internally (BSUID, account id, household id, etc.). Default behavior is unchanged — naive deployments keep using the recipient as the cache `user_id`.

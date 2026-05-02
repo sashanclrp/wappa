@@ -35,12 +35,25 @@ class ICacheFactory(ABC):
     ITableCache) which provide domain-appropriate method signatures rather than
     the generic ICache interface.
 
+    Identity Scoping:
+        The factory is intentionally unopinionated about how ``user_id`` is
+        derived. When a host application registers an ``IIdentityResolver``
+        via ``WappaBuilder.with_identity_resolver``, framework-internal
+        services (``TemplateStateService``, ``HandlerStateService``, the
+        APIMessageEvent pipeline, pub/sub envelopes) resolve transport
+        recipients into canonical ids before calling these factory methods.
+        Caller-controlled call sites should follow the same convention:
+        prefer the resolved canonical id (e.g. ``event.user_id`` on
+        APIMessageEvent, ``webhook.user.user_id`` on incoming webhooks)
+        over the raw transport recipient when scoping per-user caches.
+
     Example:
         # Webhook flow - uses default context
         cache = factory.create_user_cache()
 
-        # API flow - overrides user_id with recipient
-        cache = factory.create_user_cache(user_id=event.recipient)
+        # API flow - overrides user_id with the canonical id
+        # (event.user_id == event.recipient under the default resolver)
+        cache = factory.create_user_cache(user_id=event.user_id)
     """
 
     def __init__(self, tenant_id: str, user_id: str):
@@ -106,8 +119,11 @@ class ICacheFactory(ABC):
             # Use default context (webhook flow)
             cache = factory.create_state_cache()
 
-            # Override user_id (API flow with different recipient)
-            cache = factory.create_state_cache(user_id=event.recipient)
+            # Override user_id (API flow). Use event.user_id (canonical,
+            # post-IIdentityResolver) rather than event.recipient when an
+            # identity resolver is registered; under the default resolver
+            # the two values are identical.
+            cache = factory.create_state_cache(user_id=event.user_id)
         """
         pass
 
@@ -133,8 +149,9 @@ class ICacheFactory(ABC):
             # Use default context (webhook flow)
             cache = factory.create_user_cache()
 
-            # Override user_id (API flow with different recipient)
-            cache = factory.create_user_cache(user_id=event.recipient)
+            # Override user_id (API flow). Prefer event.user_id (canonical
+            # id post-IIdentityResolver) over event.recipient.
+            cache = factory.create_user_cache(user_id=event.user_id)
         """
         pass
 

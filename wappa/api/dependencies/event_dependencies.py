@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import Request
 
+from wappa.api.utils.event_decorators import resolve_event_user_id
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.context import (
     get_current_owner_context,
@@ -48,6 +49,7 @@ async def dispatch_api_message_event(
     recipient: str,
     request: Request | None = None,
     platform: str = "whatsapp",
+    user_id: str | None = None,
 ) -> None:
     """
     Fire-and-forget API event dispatch helper with database session support.
@@ -69,10 +71,17 @@ async def dispatch_api_message_event(
     if dispatcher is None:
         return
 
+    resolved_user_id = await resolve_event_user_id(
+        recipient=recipient,
+        explicit_user_id=user_id,
+        fastapi_request=request,
+    )
+
     event = APIMessageEvent(
         message_type=message_type,
         message_id=result.message_id,
         recipient=recipient,
+        user_id=resolved_user_id,
         request_payload=request_payload,
         response_success=result.success,
         response_error=result.error,

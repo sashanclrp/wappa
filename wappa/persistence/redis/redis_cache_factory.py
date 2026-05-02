@@ -41,8 +41,10 @@ class RedisCacheFactory(ICacheFactory):
         # Webhook flow - uses default context
         user_cache = factory.create_user_cache()
 
-        # API flow - override user_id with recipient
-        user_cache = factory.create_user_cache(user_id=event.recipient)
+        # API flow - override user_id with the canonical id from the event
+        # (event.user_id is resolver-aware; equals event.recipient under the
+        # default passthrough resolver).
+        user_cache = factory.create_user_cache(user_id=event.user_id)
     """
 
     def create_state_cache(

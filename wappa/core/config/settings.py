@@ -104,7 +104,9 @@ class Settings:
         # ── Persistence (REDIS_*) ────────────────────────────────
         self.redis_url: str | None = os.getenv("REDIS_URL")
         self.redis_max_connections: int = int(os.getenv("REDIS_MAX_CONNECTIONS", "64"))
-        self.redis_connection_timeout: int = int(os.getenv("REDIS_CONNECTION_TIMEOUT", "30"))
+        self.redis_connection_timeout: int = int(
+            os.getenv("REDIS_CONNECTION_TIMEOUT", "30")
+        )
         self.redis_health_check_interval: int = int(
             os.getenv("REDIS_HEALTH_CHECK_INTERVAL", "60")
         )

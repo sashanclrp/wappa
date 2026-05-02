@@ -9,7 +9,7 @@ The state handler API is message-agnostic and can be used after any message
 type (template, media, text, interactive, etc.) to assign workflow routing.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from wappa.api.dependencies.cache_dependencies import get_handler_state_service
 from wappa.api.models.handler_models import (
@@ -85,6 +85,7 @@ async def set_handler_state(
             handler_value=request.handler_config.handler_value,
             ttl_seconds=request.handler_config.ttl_seconds,
             initial_context=request.handler_config.initial_context,
+            user_id=request.user_id,
         )
 
         return HandlerStateResponse(
@@ -111,6 +112,13 @@ async def set_handler_state(
 async def get_handler_state(
     recipient: str,
     handler_value: str,
+    user_id: str | None = Query(
+        default=None,
+        description=(
+            "Optional canonical user id override. When provided, bypasses the "
+            "configured IIdentityResolver and reads cache keyed by this id."
+        ),
+    ),
     handler_service: HandlerStateService = Depends(get_handler_state_service),
 ):
     """
@@ -140,7 +148,9 @@ async def get_handler_state(
     }
     ```
     """
-    state = await handler_service.get_handler_state(recipient, handler_value)
+    state = await handler_service.get_handler_state(
+        recipient, handler_value, user_id=user_id
+    )
 
     if not state:
         raise HTTPException(
@@ -164,6 +174,13 @@ async def get_handler_state(
 async def delete_handler_state(
     recipient: str,
     handler_value: str,
+    user_id: str | None = Query(
+        default=None,
+        description=(
+            "Optional canonical user id override. When provided, bypasses the "
+            "configured IIdentityResolver and deletes cache keyed by this id."
+        ),
+    ),
     handler_service: HandlerStateService = Depends(get_handler_state_service),
 ):
     """
@@ -186,7 +203,9 @@ async def delete_handler_state(
     }
     ```
     """
-    await handler_service.delete_handler_state(recipient, handler_value)
+    await handler_service.delete_handler_state(
+        recipient, handler_value, user_id=user_id
+    )
 
     return {
         "success": True,

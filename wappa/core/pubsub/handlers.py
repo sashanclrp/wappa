@@ -69,7 +69,10 @@ async def publish_api_notification(event: APIMessageEvent) -> int:
     Publish API message notification via PubSub.
 
     Called after API-sent messages (POST /api/messages/*) to notify
-    subscribers of outgoing messages.
+    subscribers of outgoing messages. The pub/sub envelope is keyed by
+    the canonical ``event.user_id`` (post-IIdentityResolver) so subscribers
+    align with cache scoping. ``event.recipient`` is preserved inside the
+    payload for consumers that need the transport identifier.
 
     Returns:
         Number of subscribers that received the message
@@ -77,11 +80,12 @@ async def publish_api_notification(event: APIMessageEvent) -> int:
     return await publish_notification(
         event_type="outgoing_message",
         tenant=event.tenant_id or "unknown",
-        user_id=event.recipient,
+        user_id=event.user_id or event.recipient,
         platform="whatsapp",
         data={
             "message_id": event.message_id or "",
             "message_type": event.message_type,
+            "recipient": event.recipient,
             "success": event.response_success,
         },
     )
