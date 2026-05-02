@@ -26,6 +26,7 @@ from .plugins.wappa_core_plugin import WappaCorePlugin
 from .types import CacheType, CacheTypeOptions, validate_cache_type
 
 if TYPE_CHECKING:
+    from wappa.domain.interfaces.identity_resolver import IIdentityResolver
     from wappa.webhooks.core.webhook_interfaces import CustomWebhook
 
     from .events import WappaEventHandler
@@ -434,6 +435,39 @@ class Wappa:
 
         logger = get_app_logger()
         logger.debug(f"Custom webhook field registered: {field_name}")
+
+        return self
+
+    def set_identity_resolver(self, resolver: "IIdentityResolver") -> "Wappa":
+        """
+        Register an :class:`IIdentityResolver` for cache scoping.
+
+        Convenience wrapper around
+        :meth:`WappaBuilder.with_identity_resolver` for apps using the
+        simple ``Wappa(...)`` constructor instead of the builder.
+
+        When omitted, Wappa uses the passthrough resolver (recipient used
+        as ``user_id`` unchanged), preserving pre-0.6.1 behavior.
+
+        Args:
+            resolver: Application-provided identity resolver instance.
+
+        Returns:
+            Self for method chaining.
+
+        Example::
+
+            class CanonicalIdResolver(IIdentityResolver):
+                async def resolve(self, recipient: str) -> str:
+                    return await db.lookup_canonical_id(recipient)
+
+            app = Wappa()
+            app.set_identity_resolver(CanonicalIdResolver())
+        """
+        self._builder.with_identity_resolver(resolver)
+
+        logger = get_app_logger()
+        logger.debug(f"Identity resolver set: {resolver.__class__.__name__}")
 
         return self
 

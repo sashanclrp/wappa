@@ -9,6 +9,7 @@ from .cache_factory import ICacheFactory
 from .cache_interface import ICache
 from .cache_interfaces import IStateCache, ITableCache, IUserCache
 from .expiry_repository import IExpiryRepository
+from .identity_resolver import IIdentityResolver, PassthroughIdentityResolver
 from .media_interface import IMediaHandler
 from .messaging_interface import IMessenger
 from .pubsub_interface import IPubSubPublisher, PubSubEventType
@@ -29,6 +30,9 @@ __all__ = [
     "IRepositoryFactory",
     "IMessenger",
     "IMediaHandler",
+    # Identity resolution
+    "IIdentityResolver",
+    "PassthroughIdentityResolver",
     # Cache interfaces (type-specific - preferred)
     "IUserCache",
     "IStateCache",

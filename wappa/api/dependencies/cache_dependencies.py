@@ -13,6 +13,7 @@ from wappa.api.services.template_state_service import TemplateStateService
 from wappa.core.logging.context import get_current_tenant_context
 from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.cache_factory import ICacheFactory
+from wappa.domain.interfaces.identity_resolver import IIdentityResolver
 from wappa.persistence.cache_factory import create_cache_factory
 
 logger = get_logger(__name__)
@@ -57,15 +58,24 @@ async def get_cache_factory(
         raise RuntimeError(f"Cache factory creation failed: {e}") from e
 
 
+def _get_identity_resolver(request: Request) -> IIdentityResolver | None:
+    """
+    Return the application-level ``IIdentityResolver``, or ``None`` if none
+    was registered.  ``TemplateStateService`` owns the passthrough default.
+    """
+    return getattr(request.app.state, "identity_resolver", None)
+
+
 async def get_template_state_service(
     request: Request,
 ) -> TemplateStateService:
     """
-    Get template state service with cache factory.
+    Get template state service with cache factory and identity resolver.
 
     Creates a TemplateStateService instance with a cache factory configured
-    for the current request context. The recipient will be set when the
-    service methods are called.
+    for the current request context and an identity resolver pulled from
+    application state (set via ``WappaBuilder.with_identity_resolver`` or
+    ``Wappa.set_identity_resolver``).
 
     Args:
         request: FastAPI request object
@@ -76,7 +86,8 @@ async def get_template_state_service(
     # For template state service, we use a placeholder user_id
     # The actual recipient is passed to the service methods
     cache_factory = await get_cache_factory(request, recipient="template-api")
-    return TemplateStateService(cache_factory)
+    identity_resolver = _get_identity_resolver(request)
+    return TemplateStateService(cache_factory, identity_resolver=identity_resolver)
 
 
 async def get_handler_state_service(

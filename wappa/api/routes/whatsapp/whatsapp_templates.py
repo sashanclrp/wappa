@@ -84,6 +84,7 @@ async def _maybe_set_template_state(
             state_config=request.state_config,
             message_id=result.message_id,
             template_name=request.template_name,
+            user_id=request.state_config.user_id,
         )
 
 

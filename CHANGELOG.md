@@ -5,6 +5,23 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-05-02
+
+Pluggable identity-resolution seam for template state caching. Wappa no longer hard-codes the assumption that the WhatsApp transport recipient (phone number) is the canonical id under which to scope per-user cache state. Host applications can now register an `IIdentityResolver` once at startup to map transport identifiers to whatever canonical user id they use internally (BSUID, account id, household id, etc.). Default behavior is unchanged — naive deployments keep using the recipient as the cache `user_id`.
+
+### Added
+- **`IIdentityResolver`** interface (`wappa.IIdentityResolver`) with `PassthroughIdentityResolver` default. Single seam for mapping transport recipients to canonical user ids.
+- **`WappaBuilder.with_identity_resolver(resolver)`** and **`Wappa.set_identity_resolver(resolver)`** registration APIs. Resolver is exposed at `app.state.identity_resolver` for DI consumers.
+- **`TemplateStateConfig.user_id`** — optional explicit canonical id on the HTTP template-send payload. When provided, bypasses the resolver entirely (use when the caller has already resolved identity upstream).
+- **`user_id` kwarg on `TemplateStateService.set_template_state`** — additive escape hatch for in-process callers that already hold a canonical id.
+
+### Changed
+- **`TemplateStateService.set_template_state`** now resolves the cache `user_id` via the injected `IIdentityResolver` (default passthrough) before calling `cache_factory.create_state_cache(user_id=…)`. The cached state envelope now includes the resolved `user_id` alongside `recipient` for traceability.
+- Removed an internal reflection block (`cache_factory.__class__.__name__.replace("CacheFactory","").lower()` + concrete `create_cache_factory` re-import) that bypassed the `ICacheFactory` contract. The service now uses the existing per-call `user_id` override on `ICacheFactory.create_state_cache(...)`, restoring strict DIP compliance.
+
+### Compatibility
+- Backwards-compatible. Apps that do not register a resolver see identical behavior to 0.6.0 (recipient used as cache `user_id`). The new `user_id` field on `TemplateStateConfig` and the new `user_id` kwarg on `set_template_state` are both optional.
+
 ## [0.6.0] - 2026-05-01
 
 Marketing template transport split is now first-class: Wappa routes marketing templates through Meta's MM-LITE endpoint (`/marketing_messages`) while keeping utility/auth templates on the standard Cloud API endpoint (`/messages`). This release also hardens the template send contract by making template category explicit and required.

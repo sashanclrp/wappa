@@ -7,6 +7,11 @@ Follows SRP: only responsible for template state operations.
 When a template is sent with state_config, this service creates a cache entry
 that can be retrieved when the user responds, enabling routing of responses
 to specific handlers based on the original template context.
+
+Identity scoping is delegated to an injected ``IIdentityResolver`` (default
+passthrough), so host applications can map transport recipients to canonical
+user ids without modifying framework code. Callers that already hold a
+canonical id may pass ``user_id=`` explicitly to bypass the resolver.
 """
 
 from datetime import UTC, datetime
@@ -14,8 +19,11 @@ from typing import Any
 
 from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.cache_factory import ICacheFactory
+from wappa.domain.interfaces.identity_resolver import (
+    IIdentityResolver,
+    PassthroughIdentityResolver,
+)
 from wappa.messaging.whatsapp.models.template_models import TemplateStateConfig
-from wappa.persistence.cache_factory import create_cache_factory
 
 
 class TemplateStateService:
@@ -27,31 +35,28 @@ class TemplateStateService:
 
     Follows:
     - SRP: Only handles template state operations
-    - DIP: Depends on ICacheFactory abstraction
-
-    Example:
-        When a template is sent with state_config:
-        {
-            "state_value": "reschedule_flow",
-            "ttl_seconds": 3600,
-            "initial_context": {"appointment_id": "apt-123"}
-        }
-
-        The service creates a state entry with key "template-reschedule_flow"
-        that contains the template context and can be retrieved when the
-        user responds.
+    - DIP: Depends on ICacheFactory and IIdentityResolver abstractions
+    - OCP: Identity resolution is extended via injection, not modification
     """
 
     STATE_KEY_PREFIX = "template-"
 
-    def __init__(self, cache_factory: ICacheFactory):
+    def __init__(
+        self,
+        cache_factory: ICacheFactory,
+        identity_resolver: IIdentityResolver | None = None,
+    ):
         """
-        Initialize with cache factory for state persistence.
+        Initialize with cache factory and optional identity resolver.
 
         Args:
             cache_factory: Factory for creating cache instances with context
+            identity_resolver: Maps transport recipients to canonical user
+                ids for cache scoping. Defaults to passthrough (recipient
+                used as-is), which preserves pre-existing behavior.
         """
         self.cache_factory = cache_factory
+        self.identity_resolver = identity_resolver or PassthroughIdentityResolver()
         self.logger = get_logger(__name__)
 
     def _make_state_key(self, state_value: str) -> str:
@@ -64,45 +69,43 @@ class TemplateStateService:
         state_config: TemplateStateConfig,
         message_id: str | None,
         template_name: str,
+        user_id: str | None = None,
     ) -> bool:
         """
         Create user cache state for template response routing.
 
-        Creates a state entry keyed by "template-{state_value}" that includes
-        the template context and any initial_context provided.
+        The cache entry is keyed under ``user_id`` when provided, otherwise
+        under whatever the configured ``IIdentityResolver`` returns for
+        ``recipient``. The default resolver returns ``recipient`` unchanged,
+        so naive callers see today's behavior.
 
         Args:
-            recipient: Phone number of the recipient
-            state_config: State configuration from template request
-            message_id: WhatsApp message ID from send response
-            template_name: Name of the template sent
+            recipient: Transport identifier of the recipient (e.g. phone).
+            state_config: State configuration from template request.
+            message_id: WhatsApp message ID from send response.
+            template_name: Name of the template sent.
+            user_id: Optional explicit canonical user id. When provided,
+                bypasses the identity resolver entirely. Use this when the
+                caller has already resolved identity upstream.
 
         Returns:
-            True if state was created successfully, False otherwise
+            True if state was created successfully, False otherwise.
         """
         try:
+            cache_user_id = user_id or await self.identity_resolver.resolve(recipient)
+
             state_key = self._make_state_key(state_config.state_value)
             state_data = {
                 "template_state": state_config.state_value,
                 "template_name": template_name,
                 "message_id": message_id,
                 "recipient": recipient,
+                "user_id": cache_user_id,
                 "created_at": datetime.now(UTC).isoformat(),
                 **(state_config.initial_context or {}),
             }
 
-            # Create a new cache factory with the recipient as user_id
-            # This ensures the state key includes the correct user_id
-            cache_type = self.cache_factory.__class__.__name__.replace(
-                "CacheFactory", ""
-            ).lower()
-            tenant_id = self.cache_factory.tenant_id
-
-            recipient_cache_factory = create_cache_factory(cache_type)(
-                tenant_id=tenant_id, user_id=recipient
-            )
-
-            state_cache = recipient_cache_factory.create_state_cache()
+            state_cache = self.cache_factory.create_state_cache(user_id=cache_user_id)
             success = await state_cache.upsert(
                 handler_name=state_key,
                 state_data=state_data,
@@ -111,8 +114,8 @@ class TemplateStateService:
 
             if success:
                 self.logger.info(
-                    f"Template state created: {state_key} for {recipient}, "
-                    f"TTL: {state_config.ttl_seconds}s"
+                    f"Template state created: {state_key} for user_id={cache_user_id} "
+                    f"(recipient={recipient}), TTL: {state_config.ttl_seconds}s"
                 )
             else:
                 self.logger.warning(f"Failed to create template state: {state_key}")

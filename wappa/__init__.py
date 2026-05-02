@@ -21,6 +21,10 @@ from .core.plugins import ExpiryPlugin
 from .core.wappa_app import Wappa
 from .domain.events.cron_event import CronEvent
 from .domain.events.external_event import ExternalEvent
+from .domain.interfaces.identity_resolver import (
+    IIdentityResolver,
+    PassthroughIdentityResolver,
+)
 from .domain.interfaces.webhook_processor import IWebhookProcessor
 from .webhooks.core.webhook_interfaces import CustomWebhook
 
@@ -43,4 +47,7 @@ __all__ = [
     # Expiry Actions System
     "expiry_registry",
     "ExpiryPlugin",
+    # Identity Resolution
+    "IIdentityResolver",
+    "PassthroughIdentityResolver",
 ]

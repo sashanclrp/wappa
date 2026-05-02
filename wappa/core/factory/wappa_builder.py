@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from ...domain.interfaces.identity_resolver import IIdentityResolver
 from ..events.field_registry import FieldHandlerRegistry
 from ..logging.logger import get_app_logger
 from ..messaging.pipeline import MessengerMiddleware, MiddlewareEntry
@@ -54,6 +55,7 @@ class WappaBuilder:
         self.messenger_middleware: list[MiddlewareEntry] = []  # (middleware, priority)
         self.config_overrides: dict[str, Any] = {}
         self.field_registry: FieldHandlerRegistry = FieldHandlerRegistry()
+        self.identity_resolver: IIdentityResolver | None = None
 
     def add_plugin(self, plugin: "WappaPlugin") -> "WappaBuilder":
         """
@@ -272,6 +274,33 @@ class WappaBuilder:
         self.field_registry.register(field_name, parser=parser, handler=handler)
         return self
 
+    def with_identity_resolver(self, resolver: IIdentityResolver) -> "WappaBuilder":
+        """
+        Register an :class:`IIdentityResolver` for cache scoping.
+
+        The resolver maps transport recipients (e.g. WhatsApp phone numbers)
+        to the canonical user id Wappa should use when scoping per-user
+        caches such as template state. When omitted, Wappa uses the
+        passthrough resolver (recipient used as ``user_id`` unchanged),
+        preserving pre-0.6.1 behavior.
+
+        Args:
+            resolver: Application-provided identity resolver instance.
+
+        Returns:
+            Self for method chaining.
+
+        Example::
+
+            class CanonicalIdResolver(IIdentityResolver):
+                async def resolve(self, recipient: str) -> str:
+                    return await db.lookup_canonical_id(recipient)
+
+            builder.with_identity_resolver(CanonicalIdResolver())
+        """
+        self.identity_resolver = resolver
+        return self
+
     def configure(self, **overrides: Any) -> "WappaBuilder":
         """
         Override default FastAPI configuration.
@@ -352,6 +381,12 @@ class WappaBuilder:
         # Startup hooks all complete before the first request, so the list
         # is effectively frozen once serving begins.
         app.state.messenger_middleware = list(self.messenger_middleware)
+
+        # Expose the identity resolver (if registered) so DI dependencies
+        # such as ``get_template_state_service`` can pick it up. Absence
+        # falls back to PassthroughIdentityResolver inside the dependency.
+        if self.identity_resolver is not None:
+            app.state.identity_resolver = self.identity_resolver
 
         # Step 3: Add all middleware via app.add_middleware()
         # Sort by priority (reverse order because FastAPI adds middleware in reverse)

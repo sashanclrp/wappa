@@ -111,6 +111,18 @@ class TemplateStateConfig(BaseModel):
         default=None,
         description="Optional context data to store with the state",
     )
+    user_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+        description=(
+            "Optional canonical user id for cache scoping. When provided, "
+            "Wappa keys the template state cache under this id directly, "
+            "bypassing the configured IIdentityResolver. Use this when the "
+            "caller has already resolved identity upstream (e.g. mapped a "
+            "phone number to an internal account id)."
+        ),
+    )
 
 
 class TextTemplateMetadata(BaseModel):
