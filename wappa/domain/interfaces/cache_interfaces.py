@@ -354,6 +354,46 @@ class IStateCache(ABC):
         """
         pass
 
+    @abstractmethod
+    async def delete_by_handler_prefix(self, prefix: str) -> int:
+        """
+        Delete every handler entry whose name starts with prefix, scoped to
+        this cache's user_id.
+
+        Pattern matched: {tenant}:state:{prefix}*:{user_id}
+
+        Args:
+            prefix: Handler name prefix (must be non-empty)
+
+        Returns:
+            Count of deleted entries
+
+        Raises:
+            ValueError: If prefix is empty
+
+        Example:
+            count = await state_cache.delete_by_handler_prefix("template-")
+        """
+        pass
+
+    @abstractmethod
+    async def list_handlers(self, prefix: str | None = None) -> list[str]:
+        """
+        Return handler_names currently stored for this user.
+
+        Args:
+            prefix: Optional filter — only handlers starting with this are returned.
+                    Pass None to list all handlers for this user.
+
+        Returns:
+            List of handler name strings
+
+        Example:
+            all_handlers = await state_cache.list_handlers()
+            template_handlers = await state_cache.list_handlers("template-")
+        """
+        pass
+
 
 class ITableCache(ABC):
     """
@@ -569,6 +609,43 @@ class ITableCache(ABC):
 
         Returns:
             List of table row data dictionaries
+        """
+        pass
+
+    @abstractmethod
+    async def delete_table(self, table_name: str) -> int:
+        """
+        Delete every row in table_name for this tenant.
+
+        Pattern matched: {tenant}:df:{table_name}:pkid:*
+
+        Args:
+            table_name: Name of the table to wipe (must be non-empty)
+
+        Returns:
+            Count of deleted rows
+
+        Raises:
+            ValueError: If table_name is empty
+
+        Example:
+            count = await table_cache.delete_table("products")
+        """
+        pass
+
+    @abstractmethod
+    async def list_pkids(self, table_name: str) -> list[str]:
+        """
+        Return all pkids stored for this table under this tenant.
+
+        Args:
+            table_name: Name of the table
+
+        Returns:
+            List of pkid strings
+
+        Example:
+            pkids = await table_cache.list_pkids("products")
         """
         pass
 
@@ -876,5 +953,27 @@ class IAIStateCache(ABC):
 
         Returns:
             Final merged state or None on failure
+        """
+        pass
+
+    @abstractmethod
+    async def delete_by_agent_prefix(self, prefix: str) -> int:
+        """
+        Delete every agent entry whose name starts with prefix, scoped to
+        this cache's user_id.
+
+        Pattern matched: {tenant}:aistate:{prefix}*:{user_id}
+
+        Args:
+            prefix: Agent name prefix (must be non-empty)
+
+        Returns:
+            Count of deleted entries
+
+        Raises:
+            ValueError: If prefix is empty
+
+        Example:
+            count = await ai_state_cache.delete_by_agent_prefix("summarizer-")
         """
         pass

@@ -5,6 +5,18 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-05-02
+
+Adds prefix/glob-aware bulk operations to `IStateCache`, `ITableCache`, and `IAIStateCache`, bringing them to parity with the `delete_all_by_identifier` pattern already present on `IExpiryCache`. Consumers can now wipe or enumerate namespaced entries without importing internal Redis ops or constructing raw key patterns.
+
+### Added
+- **`IStateCache.delete_by_handler_prefix(prefix)`** — deletes every handler entry whose name starts with `prefix` for the scoped `user_id`; pattern `{tenant}:state:{prefix}*:{user_id}`. Raises `ValueError` on empty prefix.
+- **`IStateCache.list_handlers(prefix=None)`** — returns all handler names currently stored for the user; optional `prefix` filter narrows the result.
+- **`ITableCache.delete_table(table_name)`** — deletes every row in `table_name` for the tenant; pattern `{tenant}:df:{table}:pkid:*`. Raises `ValueError` on empty name.
+- **`ITableCache.list_pkids(table_name)`** — returns all pkids stored for a table under this tenant.
+- **`IAIStateCache.delete_by_agent_prefix(prefix)`** — deletes every agent-state entry whose name starts with `prefix` for the scoped `user_id`; pattern `{tenant}:aistate:{prefix}*:{user_id}`. Raises `ValueError` on empty prefix.
+- **`TenantCache._scan_keys_by_pattern(pattern)`** — shared internal helper (collect-without-delete SCAN loop) used by the new listing methods.
+
 ## [0.7.1] - 2026-05-02
 
 WhatsApp message status webhook brought up to date with Meta's reference as of Apr 30 2026. Adds the two status values previously dropped at validation (`played` for voice-note playback receipts, `deleted` for sender-deleted messages), loosens inbound schema strictness so additive Meta payload changes no longer crash the parser, and corrects a pricing-category enum typo that was rejecting `authentication_international` payloads.

@@ -142,6 +142,36 @@ class TenantCache(BaseModel):
             )
             return None
 
+    async def _scan_keys_by_pattern(
+        self, pattern: str, *, alias: PoolAlias | None = None
+    ) -> list[str]:
+        """
+        Collect all keys matching pattern without deleting them.
+
+        Args:
+            pattern: Redis SCAN pattern
+            alias: Redis pool alias (defaults to self.redis_alias)
+        """
+        _alias = alias or self.redis_alias
+        all_keys: list[str] = []
+        cursor = "0"
+
+        try:
+            while True:
+                next_cursor, keys_batch = await scan_keys(
+                    match_pattern=pattern, cursor=cursor, count=100, alias=_alias
+                )
+                all_keys.extend(keys_batch)
+                if next_cursor == "0":
+                    break
+                cursor = next_cursor
+        except Exception as e:
+            logger.error(
+                f"Error scanning keys for pattern '{pattern}': {e}", exc_info=True
+            )
+
+        return all_keys
+
     async def _delete_by_pattern(
         self, pattern: str, *, alias: PoolAlias | None = None
     ) -> int:

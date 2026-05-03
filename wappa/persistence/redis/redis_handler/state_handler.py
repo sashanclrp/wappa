@@ -118,3 +118,48 @@ class RedisStateHandler(TenantCache, IStateCache):
 
     async def renew_ttl(self, handler_name: str, ttl: int) -> bool:
         return await super().renew_ttl(self._key(handler_name), ttl)
+
+    async def delete_by_handler_prefix(self, prefix: str) -> int:
+        if not prefix:
+            raise ValueError("prefix must not be empty")
+
+        pattern = (
+            f"{self.tenant}:{self.keys.handler_prefix}:{prefix}*:{self.user_id}"
+        )
+
+        logger.debug(
+            f"Deleting state handlers with prefix '{prefix}' for user '{self.user_id}' "
+            f"(pattern: '{pattern}')"
+        )
+
+        count = await self._delete_by_pattern(pattern)
+
+        if count > 0:
+            logger.info(
+                f"Deleted {count} state handler(s) with prefix '{prefix}' "
+                f"for user '{self.user_id}'"
+            )
+        else:
+            logger.debug(
+                f"No state handlers found with prefix '{prefix}' for user '{self.user_id}'"
+            )
+
+        return count
+
+    async def list_handlers(self, prefix: str | None = None) -> list[str]:
+        safe_prefix = prefix or ""
+        pattern = (
+            f"{self.tenant}:{self.keys.handler_prefix}:{safe_prefix}*:{self.user_id}"
+        )
+
+        key_prefix = f"{self.tenant}:{self.keys.handler_prefix}:"
+        key_suffix = f":{self.user_id}"
+
+        keys = await self._scan_keys_by_pattern(pattern)
+        handler_names = []
+        for key in keys:
+            if key.startswith(key_prefix) and key.endswith(key_suffix):
+                name = key[len(key_prefix) : -len(key_suffix)]
+                handler_names.append(name)
+
+        return handler_names

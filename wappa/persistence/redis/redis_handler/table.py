@@ -187,6 +187,48 @@ class RedisTable(TenantCache, ITableCache):
         key = self._key(table_name, pkid)
         return await super().renew_ttl(key, ttl)
 
+    async def delete_table(self, table_name: str) -> int:
+        if not table_name:
+            raise ValueError("table_name must not be empty")
+
+        safe_table = table_name.replace(":", "_")
+        pattern = (
+            f"{self.tenant}:{self.keys.table_prefix}:{safe_table}"
+            f":{self.keys.pk_marker}:*"
+        )
+
+        logger.debug(
+            f"Deleting all rows in table '{table_name}' for tenant '{self.tenant}' "
+            f"(pattern: '{pattern}')"
+        )
+
+        count = await self._delete_by_pattern(pattern)
+
+        if count > 0:
+            logger.info(
+                f"Deleted {count} row(s) from table '{table_name}' "
+                f"for tenant '{self.tenant}'"
+            )
+        else:
+            logger.debug(
+                f"No rows found in table '{table_name}' for tenant '{self.tenant}'"
+            )
+
+        return count
+
+    async def list_pkids(self, table_name: str) -> list[str]:
+        pattern = self.keys.table(self.tenant, table_name, "*")
+        pkid_marker = f":{self.keys.pk_marker}:"
+
+        keys = await self._scan_keys_by_pattern(pattern)
+        pkids = []
+        for key in keys:
+            idx = key.rfind(pkid_marker)
+            if idx >= 0:
+                pkids.append(key[idx + len(pkid_marker) :])
+
+        return pkids
+
     async def get_all(
         self,
         table_name: str,
