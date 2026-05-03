@@ -1,5 +1,8 @@
-# AI
-.claude/
+# AI — ignore claude internals but track skills
+.claude/settings.json
+.claude/settings.local.json
+.claude/plans/
+.claude/documents/
 CLAUDE.md
 AGENTS.md
 logs/
