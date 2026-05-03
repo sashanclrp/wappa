@@ -394,6 +394,34 @@ class IStateCache(ABC):
         """
         pass
 
+    @classmethod
+    @abstractmethod
+    async def list_users_with_handler(
+        cls, tenant_id: str, handler_name: str
+    ) -> list[str]:
+        """
+        Return every user_id that has a state entry for handler_name under
+        tenant_id. Tenant-scoped inverse of list_handlers().
+
+        This is a classmethod so it can be called without binding to a specific
+        user — it intentionally scans across all users for the tenant.
+
+        Pattern matched: {tenant}:state:{handler_name}:*
+
+        Args:
+            tenant_id: Tenant identifier
+            handler_name: Exact handler name to look up
+
+        Returns:
+            List of user_id strings that have state for this handler
+
+        Example:
+            active = await RedisStateHandler.list_users_with_handler(
+                tenant_id="myapp", handler_name="human_takeover"
+            )
+        """
+        pass
+
 
 class ITableCache(ABC):
     """

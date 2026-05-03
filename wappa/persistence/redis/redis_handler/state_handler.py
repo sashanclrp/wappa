@@ -7,7 +7,8 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from ....domain.interfaces.cache_interfaces import IStateCache
-from ..ops import hget, hincrby_with_expire, hset
+from ..ops import hget, hincrby_with_expire, hset, scan_keys
+from .utils.key_factory import default_key_factory
 from .utils.serde import dumps, loads
 from .utils.tenant_cache import TenantCache
 
@@ -163,3 +164,40 @@ class RedisStateHandler(TenantCache, IStateCache):
                 handler_names.append(name)
 
         return handler_names
+
+    @classmethod
+    async def list_users_with_handler(
+        cls, tenant_id: str, handler_name: str
+    ) -> list[str]:
+        pattern = (
+            f"{tenant_id}:{default_key_factory.handler_prefix}:{handler_name}:*"
+        )
+        key_prefix = (
+            f"{tenant_id}:{default_key_factory.handler_prefix}:{handler_name}:"
+        )
+
+        user_ids: list[str] = []
+        cursor = "0"
+
+        try:
+            while True:
+                next_cursor, keys_batch = await scan_keys(
+                    match_pattern=pattern,
+                    cursor=cursor,
+                    count=100,
+                    alias="state_handler",
+                )
+                for key in keys_batch:
+                    if key.startswith(key_prefix):
+                        user_ids.append(key[len(key_prefix) :])
+                if next_cursor == "0":
+                    break
+                cursor = next_cursor
+        except Exception as e:
+            logger.error(
+                f"Error listing users for handler '{handler_name}' "
+                f"(tenant: '{tenant_id}'): {e}",
+                exc_info=True,
+            )
+
+        return user_ids

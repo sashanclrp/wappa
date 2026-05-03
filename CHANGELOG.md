@@ -5,6 +5,13 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-05-02
+
+Adds `IStateCache.list_users_with_handler`, the tenant-scoped inverse of `list_handlers`. Callers can now enumerate every `user_id` that holds active state for a given handler name without importing internal Redis ops or building raw SCAN patterns.
+
+### Added
+- **`IStateCache.list_users_with_handler(cls, tenant_id, handler_name) -> list[str]`** — classmethod; scans `{tenant}:state:{handler_name}:*` across all users for the tenant and returns the matching `user_id` list. Fills the API gap that prevented `human_takeover/services/__init__.py:list_all_active` from migrating off raw `scan_keys`.
+
 ## [0.7.2] - 2026-05-02
 
 Adds prefix/glob-aware bulk operations to `IStateCache`, `ITableCache`, and `IAIStateCache`, bringing them to parity with the `delete_all_by_identifier` pattern already present on `IExpiryCache`. Consumers can now wipe or enumerate namespaced entries without importing internal Redis ops or constructing raw key patterns.

@@ -8,7 +8,7 @@ Build intelligent WhatsApp bots, workflows, and chat applications with clean arc
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com)
 [![WhatsApp Business API](https://img.shields.io/badge/WhatsApp-Business%20API-25D366.svg)](https://developers.facebook.com/docs/whatsapp)
-[![Version](https://img.shields.io/badge/version-0.7.2-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.3-orange.svg)](CHANGELOG.md)
 
 > **v0.3.0 — Architectural Hardening Release** — ~3,500 lines of dead code removed, factory pattern completed for cross-platform messages, two runtime bugs fixed (`MediaType` shadowing, case-sensitive 401 detection), enum duplication eliminated across the codebase. See [CHANGELOG.md](CHANGELOG.md) for the full breakdown.
 
