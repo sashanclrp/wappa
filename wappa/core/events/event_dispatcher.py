@@ -29,7 +29,9 @@ _STATUS_EMOJI = {
     "sent": "📤",
     "delivered": "✅",
     "read": "👁️",
+    "played": "🔊",
     "failed": "❌",
+    "deleted": "🗑️",
 }
 
 

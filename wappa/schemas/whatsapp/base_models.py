@@ -272,7 +272,7 @@ class AdReferral(BaseModel):
 class ConversationOrigin(BaseModel):
     """Conversation origin information for pricing."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     type: Literal[
         "authentication",
@@ -288,7 +288,7 @@ class ConversationOrigin(BaseModel):
 class Conversation(BaseModel):
     """Conversation information for message status."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     id: str = Field(..., description="Conversation ID")
     expiration_timestamp: str | None = Field(
@@ -308,9 +308,13 @@ class Conversation(BaseModel):
 class Pricing(BaseModel):
     """Pricing information for message status."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
-    billable: bool = Field(..., description="Whether message is billable")
+    # Phased out under PMP (Per-Message Pricing, July 1, 2025+); kept optional
+    # for backward compatibility with CBP payloads that still emit it.
+    billable: bool | None = Field(
+        None, description="Whether message is billable (deprecated under PMP)"
+    )
     pricing_model: Literal["CBP", "PMP"] = Field(
         ..., description="Pricing model (CBP=conversation-based, PMP=per-message)"
     )
@@ -319,7 +323,7 @@ class Pricing(BaseModel):
     )
     category: Literal[
         "authentication",
-        "authentication-international",
+        "authentication_international",
         "marketing",
         "marketing_lite",
         "referral_conversion",
@@ -331,7 +335,7 @@ class Pricing(BaseModel):
 class ErrorData(BaseModel):
     """Error details for failed messages."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     details: str = Field(..., description="Detailed error description")
 
@@ -339,7 +343,7 @@ class ErrorData(BaseModel):
 class MessageError(BaseModel):
     """Error information for failed messages."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     code: int = Field(..., description="Error code")
     title: str = Field(..., description="Error title")

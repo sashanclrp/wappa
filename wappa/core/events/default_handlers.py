@@ -286,7 +286,9 @@ class DefaultStatusHandler:
             "sent": 0,
             "delivered": 0,
             "read": 0,
+            "played": 0,
             "failed": 0,
+            "deleted": 0,
             "last_processed": None,
         }
 
@@ -345,6 +347,8 @@ class DefaultStatusHandler:
                 "delivered",
                 "failed",
                 "read",
+                "played",
+                "deleted",
                 "undelivered",
             ]
 
@@ -365,7 +369,9 @@ class DefaultStatusHandler:
             "sent": "📤",
             "delivered": "✅",
             "read": "👁️",
+            "played": "🔊",
             "failed": "❌",
+            "deleted": "🗑️",
             "undelivered": "⚠️",
         }
         return icons.get(status.lower(), "📋")

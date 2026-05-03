@@ -53,6 +53,7 @@ class MessageStatus(str, Enum):
     SENT = "sent"
     DELIVERED = "delivered"
     READ = "read"
+    PLAYED = "played"
     FAILED = "failed"
     DELETED = "deleted"
     PENDING = "pending"

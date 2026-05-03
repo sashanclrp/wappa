@@ -5,6 +5,24 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-05-02
+
+WhatsApp message status webhook brought up to date with Meta's reference as of Apr 30 2026. Adds the two status values previously dropped at validation (`played` for voice-note playback receipts, `deleted` for sender-deleted messages), loosens inbound schema strictness so additive Meta payload changes no longer crash the parser, and corrects a pricing-category enum typo that was rejecting `authentication_international` payloads.
+
+### Added
+- `MessageStatus.PLAYED` enum value and corresponding `WhatsAppMessageStatus.is_played` / `is_deleted` helpers; `is_successful` now treats `played` as a delivery-equivalent terminal state.
+- Per-status counters and emoji icons for `played` / `deleted` in the default status handler and event dispatcher; `IMPORTANT_ONLY` log strategy now surfaces both.
+
+### Changed
+- `WhatsAppMessageStatus.wa_status` literal extended to `sent | delivered | read | played | failed | deleted` — voice-played and deleted webhooks now parse instead of 422'ing.
+- Status submodels (`WhatsAppMessageStatus`, `Conversation`, `ConversationOrigin`, `Pricing`, `MessageError`, `ErrorData`) flipped from `extra="forbid"` to `extra="ignore"` so future additive Meta fields are tolerated rather than rejected.
+- `Pricing.billable` is now optional (`bool | None`); the field is being phased out under PMP (Per-Message Pricing).
+- `validate_status_consistency` now only enforces the `failed → errors` invariant; informational errors on non-failed statuses are accepted.
+
+### Fixed
+- `Pricing.category` literal `authentication-international` → `authentication_international` (underscore) to match Meta's documented enum and `ConversationOrigin.type`.
+- Dropped the hardcoded `wamid.` prefix check on message IDs and the empty-`statuses[]` rejection in `WhatsAppStatusWebhook` — both were stricter than the documented contract and could drop valid payloads.
+
 ## [0.7.0] - 2026-05-02
 
 Identity-resolution seam (introduced in 0.6.1 for templates) now applies uniformly across every Wappa subsystem that scopes per-user state. Host applications register one `IIdentityResolver` and have it apply to template state, handler state, outbound API events, and pub/sub envelopes — eliminating the recurrent bug class where one Wappa surface keys cache by canonical id while another keys by raw transport recipient.

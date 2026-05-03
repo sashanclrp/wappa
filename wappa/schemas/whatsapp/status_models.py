@@ -23,13 +23,13 @@ class WhatsAppMessageStatus(BaseMessageStatus):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="ignore", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Core status fields
     id: str = Field(..., description="WhatsApp message ID that this status refers to")
-    wa_status: Literal["sent", "delivered", "read", "failed"] = Field(
-        ..., alias="status", description="Message delivery status"
+    wa_status: Literal["sent", "delivered", "read", "played", "failed", "deleted"] = (
+        Field(..., alias="status", description="Message delivery status")
     )
     wa_timestamp: str = Field(
         ...,
@@ -68,12 +68,9 @@ class WhatsAppMessageStatus(BaseMessageStatus):
     @field_validator("id")
     @classmethod
     def validate_message_id(cls, v: str) -> str:
-        """Validate WhatsApp message ID format."""
+        """Validate WhatsApp message ID is non-empty and reasonably sized."""
         if not v or len(v) < 10:
             raise ValueError("WhatsApp message ID must be at least 10 characters")
-        # WhatsApp message IDs typically start with 'wamid.'
-        if not v.startswith("wamid."):
-            raise ValueError("WhatsApp message ID should start with 'wamid.'")
         return v
 
     @field_validator("wa_timestamp")
@@ -98,20 +95,15 @@ class WhatsAppMessageStatus(BaseMessageStatus):
 
     @model_validator(mode="after")
     def validate_status_consistency(self):
-        """Validate status-specific field consistency."""
-        # Failed status must have errors, others should not
-        if self.wa_status == "failed":
-            if not self.errors or len(self.errors) == 0:
-                raise ValueError("Failed status must include error information")
-        else:
-            if self.errors and len(self.errors) > 0:
-                raise ValueError(
-                    f"Status '{self.wa_status}' should not have error information"
-                )
+        """Validate status-specific field consistency.
 
-        # Pricing information is typically present for sent and first delivered/read
-        # but we won't enforce this as it can vary based on WhatsApp API version
-
+        Only enforces the failed→errors invariant. Non-failed statuses
+        carrying informational errors are accepted (Meta has been observed
+        to attach them in rare cases) — we don't reject otherwise-valid
+        webhooks over this.
+        """
+        if self.wa_status == "failed" and (not self.errors or len(self.errors) == 0):
+            raise ValueError("Failed status must include error information")
         return self
 
     # Abstract property implementations
@@ -146,14 +138,24 @@ class WhatsAppMessageStatus(BaseMessageStatus):
         return self.wa_status == "read"
 
     @property
+    def is_played(self) -> bool:
+        """Check if voice message was played by the recipient."""
+        return self.wa_status == "played"
+
+    @property
     def is_failed(self) -> bool:
         """Check if message failed."""
         return self.wa_status == "failed"
 
     @property
+    def is_deleted(self) -> bool:
+        """Check if message was deleted by the sender."""
+        return self.wa_status == "deleted"
+
+    @property
     def is_successful(self) -> bool:
-        """Check if message was successfully processed (sent, delivered, or read)."""
-        return self.wa_status in ["sent", "delivered", "read"]
+        """Check if message reached the recipient (sent/delivered/read/played)."""
+        return self.wa_status in ["sent", "delivered", "read", "played"]
 
     @property
     def unix_timestamp(self) -> int:
@@ -290,7 +292,7 @@ class WhatsAppMessageStatus(BaseMessageStatus):
     @property
     def is_billable(self) -> bool:
         """Check if this message is billable (if pricing info available)."""
-        if self.pricing:
+        if self.pricing and self.pricing.billable is not None:
             return self.pricing.billable
         return False
 
@@ -407,16 +409,6 @@ class WhatsAppStatusWebhook(BaseModel):
         ..., description="Array of message status updates"
     )
 
-    @field_validator("statuses")
-    @classmethod
-    def validate_statuses_not_empty(
-        cls, v: list[WhatsAppMessageStatus]
-    ) -> list[WhatsAppMessageStatus]:
-        """Validate statuses array is not empty."""
-        if not v or len(v) == 0:
-            raise ValueError("Status webhook must contain at least one status")
-        return v
-
     @property
     def status_count(self) -> int:
         """Get the number of status updates."""
@@ -427,7 +419,8 @@ class WhatsAppStatusWebhook(BaseModel):
         Get statuses filtered by type.
 
         Args:
-            status_type: One of 'sent', 'delivered', 'read', 'failed'
+            status_type: One of 'sent', 'delivered', 'read', 'played',
+                'failed', 'deleted'
 
         Returns:
             List of statuses matching the specified type.
@@ -457,22 +450,23 @@ class WhatsAppStatusWebhook(BaseModel):
             "sent": len(self.get_statuses_by_type("sent")),
             "delivered": len(self.get_statuses_by_type("delivered")),
             "read": len(self.get_statuses_by_type("read")),
+            "played": len(self.get_statuses_by_type("played")),
             "failed": len(self.get_statuses_by_type("failed")),
+            "deleted": len(self.get_statuses_by_type("deleted")),
         }
+
+        successful = (
+            status_counts["sent"]
+            + status_counts["delivered"]
+            + status_counts["read"]
+            + status_counts["played"]
+        )
 
         return {
             "total_statuses": self.status_count,
             "status_counts": status_counts,
             "has_failures": self.has_failures(),
-            "success_rate": (
-                (
-                    status_counts["sent"]
-                    + status_counts["delivered"]
-                    + status_counts["read"]
-                )
-                / self.status_count
-                * 100
-            )
+            "success_rate": (successful / self.status_count * 100)
             if self.status_count > 0
             else 0,
             "failed_message_ids": [status.id for status in self.get_failed_statuses()],
