@@ -6,7 +6,7 @@ Verifies external observable behaviour only:
 - exc_info is captured as an escaped string with no bare newlines
 - Context prefixes [T:...][U:...] become structured fields
 - setup_logging registers the right handler type per rich_format flag
-- setup_app_logging respects LOGS_RICH_FORMAT env var and is_development fallback
+- setup_app_logging respects SYSTEM_LOGS_RICH_FORMAT (via settings.logs_rich_format) and is_development fallback
 """
 
 from __future__ import annotations
@@ -20,6 +20,16 @@ import pytest
 from rich.logging import RichHandler
 
 from wappa.core.logging.logger import WappaJSONFormatter, setup_app_logging, setup_logging
+
+
+def _make_settings(*, is_development: bool, logs_rich_format: bool | None):
+    return patch(
+        "wappa.core.logging.logger.settings",
+        log_level="INFO",
+        log_dir="./logs",
+        is_development=is_development,
+        logs_rich_format=logs_rich_format,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -173,39 +183,25 @@ def test_setup_logging_json_output_is_valid_json() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _patch_settings(is_development: bool):
-    return patch(
-        "wappa.core.logging.logger.settings",
-        log_level="INFO",
-        log_dir="./logs",
-        is_development=is_development,
-    )
-
-
-def test_setup_app_logging_env_true_overrides_prod() -> None:
-    with _patch_settings(is_development=False), patch.dict("os.environ", {"LOGS_RICH_FORMAT": "true"}):
+def test_setup_app_logging_explicit_true_overrides_prod() -> None:
+    with _make_settings(is_development=False, logs_rich_format=True):
         setup_app_logging()
     assert RichHandler in _root_handler_types()
 
 
-def test_setup_app_logging_env_false_overrides_dev() -> None:
-    with _patch_settings(is_development=True), patch.dict("os.environ", {"LOGS_RICH_FORMAT": "false"}):
+def test_setup_app_logging_explicit_false_overrides_dev() -> None:
+    with _make_settings(is_development=True, logs_rich_format=False):
         setup_app_logging()
     assert RichHandler not in _root_handler_types()
 
 
-def test_setup_app_logging_no_env_development_uses_rich() -> None:
-    with _patch_settings(is_development=True), patch.dict("os.environ", {}, clear=True):
-        # clear LOGS_RICH_FORMAT if present
-        import os
-        os.environ.pop("LOGS_RICH_FORMAT", None)
+def test_setup_app_logging_no_override_development_uses_rich() -> None:
+    with _make_settings(is_development=True, logs_rich_format=None):
         setup_app_logging()
     assert RichHandler in _root_handler_types()
 
 
-def test_setup_app_logging_no_env_production_uses_json() -> None:
-    with _patch_settings(is_development=False), patch.dict("os.environ", {}, clear=True):
-        import os
-        os.environ.pop("LOGS_RICH_FORMAT", None)
+def test_setup_app_logging_no_override_production_uses_json() -> None:
+    with _make_settings(is_development=False, logs_rich_format=None):
         setup_app_logging()
     assert RichHandler not in _root_handler_types()

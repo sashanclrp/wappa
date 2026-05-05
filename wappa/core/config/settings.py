@@ -88,6 +88,10 @@ class Settings:
         self.log_level: str = os.getenv("SYSTEM_LOG_LEVEL", "INFO")
         self.log_dir: str = os.getenv("SYSTEM_LOG_DIR", "./logs")
         self.time_zone: str = os.getenv("SYSTEM_TIME_ZONE", "UTC")
+        _rich_raw = os.getenv("SYSTEM_LOGS_RICH_FORMAT", "").strip().lower()
+        self.logs_rich_format: bool | None = (
+            True if _rich_raw == "true" else False if _rich_raw == "false" else None
+        )
 
         # ── Meta / WhatsApp (META_* / WP_*) ─────────────────────
         self.api_version: str = os.getenv("META_API_VERSION", "v25.0")

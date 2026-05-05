@@ -5,13 +5,21 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-05-05
+
+Renames the logging format override env var to `SYSTEM_LOGS_RICH_FORMAT` and consolidates all env var reading into `Settings`, eliminating raw `os.getenv` calls from framework code.
+
+### Changed
+- **`SYSTEM_LOGS_RICH_FORMAT`** replaces `LOGS_RICH_FORMAT` as the env var that controls Rich vs JSON log formatting. Behaviour is identical; only the name changed.
+- **`Settings.logs_rich_format`** (`bool | None`) added to `wappa.core.config.settings`. `setup_app_logging()` now reads this field instead of calling `os.getenv` directly, keeping all env var access in one place.
+
 ## [0.8.0] - 2026-05-05
 
 Environment-aware logging that eliminates production log-rate-limit blowouts, plus fixes for the three Memory and JSON cache backends that could not be instantiated due to missing abstract-method implementations.
 
 ### Added
 - **`WappaJSONFormatter`** — a `logging.Formatter` subclass that emits one valid JSON object per line (`ts`, `level`, `logger`, `msg`, and optionally `tenant`, `user`, `exc`). Exception tracebacks are serialised into the `exc` field with newlines escaped so the single-line contract is never broken. Context prefixes (`[T:…][U:…]`) injected by `ContextLogger` are parsed out and promoted to structured fields. Importable from `wappa.core.logging`.
-- **`LOGS_RICH_FORMAT` env var** — `"true"` forces Rich output in any environment; `"false"` forces JSON. When absent, falls back to `settings.is_development` (Rich in dev, JSON in prod). Takes precedence over `SYSTEM_ENVIRONMENT`.
+- **`SYSTEM_LOGS_RICH_FORMAT` env var** — `"true"` forces Rich output in any environment; `"false"` forces JSON. When absent, falls back to `settings.is_development` (Rich in dev, JSON in prod). Takes precedence over `SYSTEM_ENVIRONMENT`.
 - **`setup_logging(rich_format=True)`** — new keyword-only parameter. When `False`, attaches a plain `StreamHandler` with `WappaJSONFormatter` instead of `RichHandler`. Default `True` preserves existing behaviour for direct callers.
 - **`MemoryStateHandler.delete_by_handler_prefix`**, **`list_handlers`**, **`list_users_with_handler`** — implementations of the abstract methods added to `IStateCache` in 0.7.2/0.7.3.
 - **`JSONStateHandler.delete_by_handler_prefix`**, **`list_handlers`**, **`list_users_with_handler`** — same interface; `list_users_with_handler` globs per-tenant state files and extracts user IDs from stored keys.

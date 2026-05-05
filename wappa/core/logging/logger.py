@@ -308,16 +308,14 @@ def setup_app_logging() -> None:
     Initialize application logging for Wappa platform.
 
     Called once during FastAPI application startup. Format is chosen by:
-    1. ``LOGS_RICH_FORMAT`` env var (``"true"`` / ``"false"``) — explicit override
+    1. ``SYSTEM_LOGS_RICH_FORMAT`` env var (via ``settings.logs_rich_format``) — explicit override
     2. ``settings.is_development`` — ``True`` → rich, ``False`` → json
     """
-    raw_override = os.getenv("LOGS_RICH_FORMAT", "").strip().lower()
-    if raw_override == "true":
-        rich_format = True
-    elif raw_override == "false":
-        rich_format = False
-    else:
-        rich_format = settings.is_development
+    rich_format = (
+        settings.logs_rich_format
+        if settings.logs_rich_format is not None
+        else settings.is_development
+    )
 
     setup_logging(
         level=settings.log_level,
