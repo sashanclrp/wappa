@@ -265,3 +265,48 @@ class MemoryStateHandler(IStateCache):
         return await storage_manager.set_ttl(
             "states", self.tenant, self.user_id, key, ttl
         )
+
+    async def delete_by_handler_prefix(self, prefix: str) -> int:
+        if not prefix:
+            raise ValueError("prefix must not be empty")
+        all_keys = await storage_manager.get_all_keys("states", self.tenant, self.user_id)
+        key_prefix = f"{self.tenant}:{self.keys.handler_prefix}:{prefix}"
+        key_suffix = f":{self.user_id}"
+        count = 0
+        for key in list(all_keys):
+            if key.startswith(key_prefix) and key.endswith(key_suffix):
+                await storage_manager.delete("states", self.tenant, self.user_id, key)
+                count += 1
+        return count
+
+    async def list_handlers(self, prefix: str | None = None) -> list[str]:
+        all_keys = await storage_manager.get_all_keys("states", self.tenant, self.user_id)
+        key_prefix = f"{self.tenant}:{self.keys.handler_prefix}:"
+        key_suffix = f":{self.user_id}"
+        safe_prefix = prefix or ""
+        names = []
+        for key in all_keys:
+            if key.startswith(key_prefix) and key.endswith(key_suffix):
+                name = key[len(key_prefix) : -len(key_suffix)]
+                if name.startswith(safe_prefix):
+                    names.append(name)
+        return names
+
+    @classmethod
+    async def list_users_with_handler(cls, tenant_id: str, handler_name: str) -> list[str]:
+        from .utils.memory_store import get_memory_store
+        from ...redis.redis_handler.utils.key_factory import default_key_factory as kf
+
+        store = get_memory_store()
+        key_prefix = f"{tenant_id}:{kf.handler_prefix}:{handler_name}:"
+        ctx_prefix = f"{tenant_id}_"
+        user_ids: list[str] = []
+        async with store._locks["states"]:
+            for context_key, context_store in store._store["states"].items():
+                if not context_key.startswith(ctx_prefix):
+                    continue
+                for key in context_store:
+                    if key.startswith(key_prefix):
+                        user_ids.append(key[len(key_prefix) :])
+                        break
+        return user_ids

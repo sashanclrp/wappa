@@ -7,15 +7,74 @@ Provides context-aware logging with tenant and user information.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
-from datetime import datetime
+import re
+import traceback
+from datetime import datetime, timezone
 
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.theme import Theme
 
 from wappa.core.config.settings import settings
+
+# Regex to parse [T:...][U:...] context prefixes injected by ContextLogger
+_CTX_PREFIX_RE = re.compile(
+    r"^(?:\[T:(?P<tenant>[^\]]*)\])?(?:\[U:(?P<user>[^\]]*)\])?\s*(?P<rest>.*)",
+    re.DOTALL,
+)
+
+
+class WappaJSONFormatter(logging.Formatter):
+    """
+    Single-line JSON formatter for production log aggregation.
+
+    Each log record is emitted as one JSON object. Exception tracebacks are
+    serialised into the ``exc`` field with newlines escaped, preserving the
+    single-line contract required by platforms like Railway.
+
+    Fields emitted per record:
+    - ``ts``     – ISO-8601 timestamp (UTC, second precision)
+    - ``level``  – log level name
+    - ``logger`` – logger name
+    - ``msg``    – message text (context prefix stripped)
+    - ``tenant`` – tenant ID when present in the message prefix
+    - ``user``   – user ID when present in the message prefix
+    - ``exc``    – single-line traceback string (only when exception info is present)
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        # Parse context prefix out of the message so it becomes structured fields
+        raw_msg = record.getMessage()
+        m = _CTX_PREFIX_RE.match(raw_msg)
+        tenant = m.group("tenant") if m else None
+        user = m.group("user") if m else None
+        clean_msg = m.group("rest") if m else raw_msg
+
+        obj: dict[str, str] = {
+            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).strftime(
+                "%Y-%m-%dT%H:%M:%S"
+            ),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": clean_msg,
+        }
+        if tenant:
+            obj["tenant"] = tenant
+        if user:
+            obj["user"] = user
+        if record.exc_info:
+            obj["exc"] = "".join(traceback.format_exception(*record.exc_info)).replace(
+                "\n", "\\n"
+            )
+            record.exc_info = None  # prevent the base class from appending it again
+        elif record.exc_text:
+            obj["exc"] = record.exc_text.replace("\n", "\\n")
+            record.exc_text = None
+
+        return json.dumps(obj, ensure_ascii=False)
 
 
 class CompactFormatter(logging.Formatter):
@@ -181,12 +240,10 @@ def setup_logging(
     log_dir: str | None = None,
     console_fmt: str | None = None,
     file_fmt: str | None = None,
+    rich_format: bool = True,
 ) -> None:
     """
-    Initialize the root logger with Rich formatting.
-
-    Following the old app's successful pattern with simple formats that don't
-    require context fields. Context will be added via logger wrapper classes.
+    Initialize the root logger.
 
     Parameters
     ----------
@@ -197,60 +254,76 @@ def setup_logging(
     log_dir : str, optional
         Directory for log files (DEV mode only)
     console_fmt : str, optional
-        Console format string (simple format without context fields)
+        Console format string used in Rich mode only
     file_fmt : str, optional
-        File format string (simple format without context fields)
+        File format string used in Rich/DEV mode only
+    rich_format : bool
+        When True (default in dev) uses RichHandler with coloured tracebacks.
+        When False (default in prod) emits compact single-line JSON to stdout —
+        safe for log-aggregation platforms with per-line rate limits.
     """
     lvl = level.upper()
     lvl = lvl if lvl in ("DEBUG", "INFO", "WARNING", "ERROR") else "INFO"
 
-    # Simple formats without context fields (like old app)
-    # RichHandler already shows level and time, so we only need module name and message
-    console_format = console_fmt or "[%(name)s] %(message)s"
-    file_format = file_fmt or "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    handlers: list[logging.Handler] = []
 
-    # Rich console handler
-    rich_handler = RichHandler(
-        console=_console,
-        rich_tracebacks=True,
-        tracebacks_show_locals=True,
-        show_time=True,
-        show_level=True,
-        markup=False,
-    )
-    rich_handler.setFormatter(CompactFormatter(console_format))
+    if rich_format:
+        console_format = console_fmt or "[%(name)s] %(message)s"
+        file_format = file_fmt or "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
 
-    handlers: list[logging.Handler] = [rich_handler]
+        rich_handler = RichHandler(
+            console=_console,
+            rich_tracebacks=True,
+            tracebacks_show_locals=True,
+            show_time=True,
+            show_level=True,
+            markup=False,
+        )
+        rich_handler.setFormatter(CompactFormatter(console_format))
+        handlers.append(rich_handler)
 
-    # Optional file handler for DEV mode
-    if mode.upper() == "DEV" and log_dir:
-        os.makedirs(log_dir, exist_ok=True)
-        logfile = os.path.join(log_dir, f"wappa_{datetime.now():%Y%m%d}.log")
-        file_handler = logging.FileHandler(logfile, encoding="utf-8")
-        file_handler.setFormatter(CompactFormatter(file_format))
-        handlers.append(file_handler)
-        _console.print(f"[green]DEV mode:[/] console + file → {logfile}")
+        if mode.upper() == "DEV" and log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+            logfile = os.path.join(log_dir, f"wappa_{datetime.now():%Y%m%d}.log")
+            file_handler = logging.FileHandler(logfile, encoding="utf-8")
+            file_handler.setFormatter(CompactFormatter(file_format))
+            handlers.append(file_handler)
+            _console.print(f"[green]DEV mode:[/] console + file → {logfile}")
+        else:
+            _console.print(f"Logging configured for mode '{mode}' (rich). Console only.")
     else:
-        _console.print(f"Logging configured for mode '{mode}'. Console only.")
+        json_handler = logging.StreamHandler()
+        json_handler.setFormatter(WappaJSONFormatter())
+        handlers.append(json_handler)
 
-    # Configure root logger with simple format
     logging.basicConfig(level=lvl, handlers=handlers, force=True)
 
-    # Announce logging setup
     setup_logger = logging.getLogger("WappaLoggerSetup")
-    setup_logger.info(f"Logging initialized ({lvl})")
+    fmt_label = "rich" if rich_format else "json"
+    setup_logger.info(f"Logging initialized ({lvl}, format={fmt_label})")
 
 
 def setup_app_logging() -> None:
     """
     Initialize application logging for Wappa platform.
 
-    Called once during FastAPI application startup.
+    Called once during FastAPI application startup. Format is chosen by:
+    1. ``LOGS_RICH_FORMAT`` env var (``"true"`` / ``"false"``) — explicit override
+    2. ``settings.is_development`` — ``True`` → rich, ``False`` → json
     """
+    raw_override = os.getenv("LOGS_RICH_FORMAT", "").strip().lower()
+    if raw_override == "true":
+        rich_format = True
+    elif raw_override == "false":
+        rich_format = False
+    else:
+        rich_format = settings.is_development
+
     setup_logging(
         level=settings.log_level,
         mode="DEV" if settings.is_development else "PROD",
         log_dir=settings.log_dir if settings.is_development else None,
+        rich_format=rich_format,
     )
 
 

@@ -265,3 +265,61 @@ class JSONStateHandler(IStateCache):
         return await storage_manager.set_ttl(
             "states", self.tenant, self.user_id, key, ttl
         )
+
+    async def delete_by_handler_prefix(self, prefix: str) -> int:
+        if not prefix:
+            raise ValueError("prefix must not be empty")
+        all_keys = await storage_manager.get_all_keys("states", self.tenant, self.user_id)
+        key_prefix = f"{self.tenant}:{self.keys.handler_prefix}:{prefix}"
+        key_suffix = f":{self.user_id}"
+        count = 0
+        for key in list(all_keys):
+            if key.startswith(key_prefix) and key.endswith(key_suffix):
+                await storage_manager.delete("states", self.tenant, self.user_id, key)
+                count += 1
+        return count
+
+    async def list_handlers(self, prefix: str | None = None) -> list[str]:
+        all_keys = await storage_manager.get_all_keys("states", self.tenant, self.user_id)
+        key_prefix = f"{self.tenant}:{self.keys.handler_prefix}:"
+        key_suffix = f":{self.user_id}"
+        safe_prefix = prefix or ""
+        names = []
+        for key in all_keys:
+            if key.startswith(key_prefix) and key.endswith(key_suffix):
+                name = key[len(key_prefix) : -len(key_suffix)]
+                if name.startswith(safe_prefix):
+                    names.append(name)
+        return names
+
+    @classmethod
+    async def list_users_with_handler(cls, tenant_id: str, handler_name: str) -> list[str]:
+        import asyncio
+
+        from .utils.file_manager import file_manager
+        from .utils.serialization import extract_cache_file_data
+        from ...redis.redis_handler.utils.key_factory import default_key_factory as kf
+
+        states_dir = file_manager.get_cache_root() / "states"
+        key_prefix = f"{tenant_id}:{kf.handler_prefix}:{handler_name}:"
+        user_ids: list[str] = []
+        try:
+            files = await asyncio.to_thread(
+                lambda: list(states_dir.glob(f"{tenant_id}_*_state.json"))
+            )
+            for file_path in files:
+                file_data = await file_manager.read_file(file_path)
+                cache_data = extract_cache_file_data(file_data)
+                if not cache_data:
+                    continue
+                for key in cache_data:
+                    if key.startswith(key_prefix):
+                        user_ids.append(key[len(key_prefix) :])
+                        break
+        except Exception as exc:
+            logger.error(
+                f"Error listing users for handler '{handler_name}' "
+                f"(tenant: '{tenant_id}'): {exc}",
+                exc_info=True,
+            )
+        return user_ids

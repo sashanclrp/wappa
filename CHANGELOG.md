@@ -5,6 +5,22 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-05-05
+
+Environment-aware logging that eliminates production log-rate-limit blowouts, plus fixes for the three Memory and JSON cache backends that could not be instantiated due to missing abstract-method implementations.
+
+### Added
+- **`WappaJSONFormatter`** — a `logging.Formatter` subclass that emits one valid JSON object per line (`ts`, `level`, `logger`, `msg`, and optionally `tenant`, `user`, `exc`). Exception tracebacks are serialised into the `exc` field with newlines escaped so the single-line contract is never broken. Context prefixes (`[T:…][U:…]`) injected by `ContextLogger` are parsed out and promoted to structured fields. Importable from `wappa.core.logging`.
+- **`LOGS_RICH_FORMAT` env var** — `"true"` forces Rich output in any environment; `"false"` forces JSON. When absent, falls back to `settings.is_development` (Rich in dev, JSON in prod). Takes precedence over `SYSTEM_ENVIRONMENT`.
+- **`setup_logging(rich_format=True)`** — new keyword-only parameter. When `False`, attaches a plain `StreamHandler` with `WappaJSONFormatter` instead of `RichHandler`. Default `True` preserves existing behaviour for direct callers.
+- **`MemoryStateHandler.delete_by_handler_prefix`**, **`list_handlers`**, **`list_users_with_handler`** — implementations of the abstract methods added to `IStateCache` in 0.7.2/0.7.3.
+- **`JSONStateHandler.delete_by_handler_prefix`**, **`list_handlers`**, **`list_users_with_handler`** — same interface; `list_users_with_handler` globs per-tenant state files and extracts user IDs from stored keys.
+- **`MemoryAIState.delete_by_agent_prefix`** and **`JSONAIState.delete_by_agent_prefix`** — implementations of the abstract method added to `IAIStateCache` in 0.7.2.
+
+### Fixed
+- `MemoryAIState`, `MemoryStateHandler`, `JSONStateHandler`, and `JSONAIState` could not be instantiated (`TypeError: Can't instantiate abstract class …`) because abstract methods added to `IStateCache` and `IAIStateCache` in 0.7.2–0.7.3 were never implemented in the non-Redis backends.
+- Production deployments on Railway (and any per-line log-ingestion platform) would exceed the 500 events/sec rate limit on a single webhook error due to `RichHandler` with `tracebacks_show_locals=True` being applied unconditionally. `setup_app_logging()` now defaults to compact JSON in non-development environments.
+
 ## [0.7.3] - 2026-05-02
 
 Adds `IStateCache.list_users_with_handler`, the tenant-scoped inverse of `list_handlers`. Callers can now enumerate every `user_id` that holds active state for a given handler name without importing internal Redis ops or building raw SCAN patterns.
