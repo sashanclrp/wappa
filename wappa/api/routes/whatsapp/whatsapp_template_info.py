@@ -18,7 +18,7 @@ from wappa.messaging.whatsapp.models.template_models import TemplateMessageStatu
 from wappa.messaging.whatsapp.services import WhatsAppTemplateInfoService
 
 router = APIRouter(
-    prefix="/whatsapp/templates",
+    prefix="/templates",
     tags=["WhatsApp - Templates Info"],
     responses={
         400: {"description": "Bad Request - Invalid template query parameters"},

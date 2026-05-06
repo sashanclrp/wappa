@@ -5,6 +5,14 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-05-06
+
+**Breaking** — Fixes doubled `/whatsapp` prefix in all WhatsApp API subrouter paths. Routes that were previously mounted at `/api/whatsapp/whatsapp/messages/...` are now correctly at `/api/whatsapp/messages/...`. All API consumers must update their request paths.
+
+### Changed
+- Subrouter prefixes stripped of redundant `/whatsapp` segment: `/whatsapp/messages` → `/messages`, `/whatsapp/media` → `/media`, `/whatsapp/interactive` → `/interactive`, `/whatsapp/templates` → `/templates`, `/whatsapp/state-handlers` → `/state-handlers`, `/whatsapp` (health) → empty.
+- Combined router retains `prefix="/api/whatsapp"` — canonical API paths are now `/api/whatsapp/{resource}/...` as originally intended.
+
 ## [0.8.2] - 2026-05-05
 
 Standardises the `SYSTEM_LOGS_RICH_FORMAT` env var to accept `TRUE`/`FALSE` (uppercase) consistent with the convention used across all other Wappa boolean env vars.

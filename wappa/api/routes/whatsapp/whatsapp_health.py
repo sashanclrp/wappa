@@ -5,9 +5,9 @@ Provides a single health check endpoint that aggregates health information
 from all WhatsApp services (messages, media, interactive, templates, specialized).
 
 Router configuration:
-- Prefix: /whatsapp
+- Prefix: (none — inherits /api/whatsapp from combined router)
 - Tags: ["WhatsApp - Health"]
-- Full URL: /api/whatsapp/health (when included with /api prefix)
+- Full URL: /api/whatsapp/health
 """
 
 from datetime import UTC, datetime
@@ -23,7 +23,7 @@ from wappa.domain.interfaces.media_interface import IMediaHandler
 from wappa.domain.interfaces.messaging_interface import IMessenger
 
 router = APIRouter(
-    prefix="/whatsapp",
+    prefix="",
     tags=["WhatsApp - Health"],
 )
 

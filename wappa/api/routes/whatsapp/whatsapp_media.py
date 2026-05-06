@@ -13,9 +13,9 @@ Provides REST API endpoints for WhatsApp media operations:
 - DELETE /api/whatsapp/media/{media_id}: Delete media
 
 Router configuration:
-- Prefix: /whatsapp/media
+- Prefix: /media
 - Tags: ["WhatsApp - Media"]
-- Full URL: /api/whatsapp/media/ (when included with /api prefix)
+- Full URL: /api/whatsapp/media/
 """
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
@@ -50,7 +50,7 @@ from wappa.messaging.whatsapp.models.media_models import (
 
 # Create router with WhatsApp Media configuration
 router = APIRouter(
-    prefix="/whatsapp/media",
+    prefix="/media",
     tags=["WhatsApp - Media"],
     responses={
         400: {"description": "Bad Request - Invalid media format or size"},

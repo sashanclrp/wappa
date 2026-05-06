@@ -6,9 +6,9 @@ Provides REST API endpoints for WhatsApp Business template send operations:
 - POST /api/whatsapp/templates/send-media: Send templates with media headers
 - POST /api/whatsapp/templates/send-location: Send templates with location headers
 Router configuration:
-- Prefix: /whatsapp/templates
+- Prefix: /templates
 - Tags: ["WhatsApp - Send Templates"]
-- Full URL: /api/whatsapp/templates/ (when included with /api prefix)
+- Full URL: /api/whatsapp/templates/
 
 State Management:
 All send endpoints support optional state_config for creating user cache state
@@ -90,7 +90,7 @@ async def _maybe_set_template_state(
 
 # Create router with WhatsApp Send Templates configuration
 router = APIRouter(
-    prefix="/whatsapp/templates",
+    prefix="/templates",
     tags=["WhatsApp - Send Templates"],
     responses={
         400: {"description": "Bad Request - Invalid template format or parameters"},

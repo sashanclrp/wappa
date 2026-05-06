@@ -7,9 +7,9 @@ Provides REST API endpoints for WhatsApp interactive operations:
 - POST /api/whatsapp/interactive/send-cta: Send call-to-action messages
 
 Router configuration:
-- Prefix: /whatsapp/interactive
+- Prefix: /interactive
 - Tags: ["WhatsApp - Interactive"]
-- Full URL: /api/whatsapp/interactive/ (when included with /api prefix)
+- Full URL: /api/whatsapp/interactive/
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -63,7 +63,7 @@ INTERACTIVE_ERROR_GROUPS = {
 
 # Create router with WhatsApp Interactive configuration
 router = APIRouter(
-    prefix="/whatsapp/interactive",
+    prefix="/interactive",
     tags=["WhatsApp - Interactive"],
     responses={
         400: {"description": "Bad Request - Invalid interactive message format"},

@@ -18,7 +18,7 @@ from wappa.api.models.handler_models import (
 )
 from wappa.api.services.handler_state_service import HandlerStateService
 
-router = APIRouter(prefix="/whatsapp/state-handlers", tags=["WhatsApp State Handlers"])
+router = APIRouter(prefix="/state-handlers", tags=["WhatsApp State Handlers"])
 
 
 @router.post(

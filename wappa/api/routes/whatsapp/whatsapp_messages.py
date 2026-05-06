@@ -6,9 +6,9 @@ Provides REST API endpoints for WhatsApp messaging operations:
 - POST /api/whatsapp/messages/mark-as-read: Mark messages as read with optional typing
 
 Router configuration:
-- Prefix: /whatsapp/messages
+- Prefix: /messages
 - Tags: ["WhatsApp - Messages"]
-- Full URL: /api/whatsapp/messages/ (when included with /api prefix)
+- Full URL: /api/whatsapp/messages/
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -31,7 +31,7 @@ from wappa.messaging.whatsapp.models.basic_models import (
 
 # Create router with WhatsApp Messages configuration
 router = APIRouter(
-    prefix="/whatsapp/messages",
+    prefix="/messages",
     tags=["WhatsApp - Messages"],
     responses={
         400: {"description": "Bad Request - Invalid message format"},
