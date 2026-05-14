@@ -120,6 +120,21 @@ class RedisStateHandler(TenantCache, IStateCache):
     async def renew_ttl(self, handler_name: str, ttl: int) -> bool:
         return await super().renew_ttl(self._key(handler_name), ttl)
 
+    async def delete_all_for_user(self) -> int:
+        pattern = f"{self.tenant}:{self.keys.handler_prefix}:*:{self.user_id}"
+        logger.debug(
+            f"Deleting all handler states for user '{self.user_id}' "
+            f"(pattern: '{pattern}')"
+        )
+        count = await self._delete_by_pattern(pattern)
+        if count > 0:
+            logger.info(
+                f"Deleted {count} handler state(s) for user '{self.user_id}'"
+            )
+        else:
+            logger.debug(f"No handler states found for user '{self.user_id}'")
+        return count
+
     async def delete_by_handler_prefix(self, prefix: str) -> int:
         if not prefix:
             raise ValueError("prefix must not be empty")

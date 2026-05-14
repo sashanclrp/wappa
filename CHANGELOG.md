@@ -5,6 +5,15 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-05-14
+
+Adds `delete_all_for_user()` to the three user-scoped cache interfaces, allowing callers to wipe all cached state for a user without knowing individual handler/agent/action names. Designed for conversation-close cleanup where the full set of cache keys is unknown.
+
+### Added
+- **`IStateCache.delete_all_for_user()`** — deletes every handler state entry for the cache's `user_id`. Implemented in `RedisStateHandler`, `MemoryStateHandler`, and `JSONStateHandler`.
+- **`IExpiryCache.delete_all_for_user()`** — deletes every expiry trigger whose identifier matches `user_id`. Implemented in `RedisExpiry`.
+- **`IAIStateCache.delete_all_for_user()`** — deletes every AI agent state entry for `user_id` regardless of agent name. Implemented in `RedisAIState`, `MemoryAIState`, and `JSONAIState`.
+
 ## [0.9.0] - 2026-05-06
 
 **Breaking** — Fixes doubled `/whatsapp` prefix in all WhatsApp API subrouter paths. Routes that were previously mounted at `/api/whatsapp/whatsapp/messages/...` are now correctly at `/api/whatsapp/messages/...`. All API consumers must update their request paths.

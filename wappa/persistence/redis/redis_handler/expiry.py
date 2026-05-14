@@ -170,6 +170,22 @@ class RedisExpiry(TenantCache, IExpiryCache):
 
         return count
 
+    async def delete_all_for_user(self) -> int:
+        safe_user = self.user_id.replace(":", "_")
+        pattern = f"{self.tenant}:{self.keys.trigger_prefix}:*:{safe_user}"
+        logger.debug(
+            f"Deleting all expiry triggers for user '{self.user_id}' "
+            f"(pattern: '{pattern}')"
+        )
+        count = await self._delete_by_pattern(pattern)
+        if count > 0:
+            logger.info(
+                f"Deleted {count} expiry trigger(s) for user '{self.user_id}'"
+            )
+        else:
+            logger.debug(f"No expiry triggers found for user '{self.user_id}'")
+        return count
+
     async def exists(self, action: str, identifier: str) -> bool:
         """
         Check if trigger exists (hasn't fired yet).

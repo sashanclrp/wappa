@@ -355,6 +355,19 @@ class IStateCache(ABC):
         pass
 
     @abstractmethod
+    async def delete_all_for_user(self) -> int:
+        """
+        Delete every handler state entry for this cache's user_id,
+        regardless of handler name.
+
+        Pattern matched: {tenant}:state:*:{user_id}
+
+        Returns:
+            Count of deleted entries
+        """
+        pass
+
+    @abstractmethod
     async def delete_by_handler_prefix(self, prefix: str) -> int:
         """
         Delete every handler entry whose name starts with prefix, scoped to
@@ -758,6 +771,19 @@ class IExpiryCache(ABC):
         pass
 
     @abstractmethod
+    async def delete_all_for_user(self) -> int:
+        """
+        Delete every expiry trigger whose identifier matches this cache's
+        user_id, regardless of action.
+
+        Pattern matched: {tenant}:EXPTRIGGER:*:{user_id}
+
+        Returns:
+            Count of deleted triggers
+        """
+        pass
+
+    @abstractmethod
     async def exists(self, action: str, identifier: str) -> bool:
         """
         Check if trigger exists (hasn't fired yet).
@@ -981,6 +1007,19 @@ class IAIStateCache(ABC):
 
         Returns:
             Final merged state or None on failure
+        """
+        pass
+
+    @abstractmethod
+    async def delete_all_for_user(self) -> int:
+        """
+        Delete every AI agent state entry for this cache's user_id,
+        regardless of agent name.
+
+        Pattern matched: {tenant}:aistate:*:{user_id}
+
+        Returns:
+            Count of deleted entries
         """
         pass
 

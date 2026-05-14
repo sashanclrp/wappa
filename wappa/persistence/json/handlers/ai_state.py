@@ -273,6 +273,12 @@ class JSONAIState(IAIStateCache):
             "ai_states", self.tenant, self.user_id, key, ttl
         )
 
+    async def delete_all_for_user(self) -> int:
+        all_keys = await storage_manager.get_all_keys("ai_states", self.tenant, self.user_id)
+        for key in all_keys:
+            await storage_manager.delete("ai_states", self.tenant, self.user_id, key)
+        return len(all_keys)
+
     async def delete_by_agent_prefix(self, prefix: str) -> int:
         if not prefix:
             raise ValueError("prefix must not be empty")
