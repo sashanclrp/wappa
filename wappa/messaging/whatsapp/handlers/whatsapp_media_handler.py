@@ -1,20 +1,13 @@
-"""
-WhatsApp implementation of the IMediaHandler interface.
-
-Refactored from existing WhatsAppServiceMedia in whatsapp_latest/services/handle_media.py
-to follow SOLID principles with dependency injection and proper separation of concerns.
-"""
-
 import mimetypes
 import os
 import tempfile
 import time
 from collections.abc import AsyncIterator
-from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppress
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import Any, BinaryIO
 
-import aiohttp
+import httpx
 
 from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.media_interface import IMediaHandler
@@ -30,59 +23,37 @@ from wappa.schemas.core.types import PlatformType
 
 
 class WhatsAppMediaHandler(IMediaHandler):
-    """
-    WhatsApp implementation of the media handler interface.
-
-    Refactored from existing WhatsAppServiceMedia to follow SOLID principles:
-    - Single Responsibility: Only handles media operations
-    - Open/Closed: Extensible through interface implementation
-    - Dependency Inversion: Depends on WhatsAppClient abstraction
-
-    Based on WhatsApp Cloud API 2025 endpoints:
-    - POST /PHONE_NUMBER_ID/media (upload)
-    - GET /MEDIA_ID (get info/URL)
-    - DELETE /MEDIA_ID (delete)
-    - GET /MEDIA_URL (download)
-    """
+    """WhatsApp implementation of the media handler interface."""
 
     def __init__(self, client: WhatsAppClient, tenant_id: str):
-        """Initialize WhatsApp media handler with client and tenant context.
-
-        Args:
-            client: Configured WhatsApp client for API operations
-            tenant_id: Tenant identifier (phone_number_id in WhatsApp context)
-        """
         self.client = client
         self._tenant_id = tenant_id
         self.logger = get_logger(__name__)
 
     @property
     def platform(self) -> PlatformType:
-        """Get the platform this handler manages."""
         return PlatformType.WHATSAPP
 
     @property
     def tenant_id(self) -> str:
-        """Get the tenant ID this handler serves."""
         return self._tenant_id
 
     @property
     def supported_media_types(self) -> set[str]:
-        """Get supported MIME types for WhatsApp."""
-        supported_types = set()
-        for media_type in MediaType:
-            supported_types.update(MediaType.get_supported_mime_types(media_type))
-        return supported_types
+        return {
+            mime
+            for media_type in MediaType
+            for mime in MediaType.get_supported_mime_types(media_type)
+        }
 
     @property
     def max_file_size(self) -> dict[str, int]:
-        """Get maximum file sizes by media category."""
         return {
-            "image": 5 * 1024 * 1024,  # 5MB
-            "video": 16 * 1024 * 1024,  # 16MB
-            "audio": 16 * 1024 * 1024,  # 16MB
-            "document": 100 * 1024 * 1024,  # 100MB
-            "sticker": 500 * 1024,  # 500KB (animated), 100KB (static)
+            "image": 5 * 1024 * 1024,
+            "video": 16 * 1024 * 1024,
+            "audio": 16 * 1024 * 1024,
+            "document": 100 * 1024 * 1024,
+            "sticker": 500 * 1024,
         }
 
     async def upload_media(
@@ -91,12 +62,6 @@ class WhatsAppMediaHandler(IMediaHandler):
         media_type: str | None = None,
         filename: str | None = None,
     ) -> MediaUploadResult:
-        """
-        Upload media file to WhatsApp servers.
-
-        Based on existing WhatsAppServiceMedia.upload_media() method.
-        Implements POST /PHONE_NUMBER_ID/media endpoint.
-        """
         try:
             media_path = Path(file_path)
             if not media_path.exists():
@@ -107,7 +72,6 @@ class WhatsAppMediaHandler(IMediaHandler):
                     tenant_id=self._tenant_id,
                 )
 
-            # Auto-detect MIME type if not provided
             if media_type is None:
                 media_type = mimetypes.guess_type(media_path)[0]
                 if not media_type:
@@ -118,7 +82,6 @@ class WhatsAppMediaHandler(IMediaHandler):
                         tenant_id=self._tenant_id,
                     )
 
-            # Validate MIME type
             if not self.validate_media_type(media_type):
                 return MediaUploadResult(
                     success=False,
@@ -127,7 +90,6 @@ class WhatsAppMediaHandler(IMediaHandler):
                     tenant_id=self._tenant_id,
                 )
 
-            # Validate file size
             file_size = media_path.stat().st_size
             if not self.validate_file_size(file_size, media_type):
                 max_size = self._get_max_size_for_mime_type(media_type)
@@ -138,18 +100,13 @@ class WhatsAppMediaHandler(IMediaHandler):
                     tenant_id=self._tenant_id,
                 )
 
-            # Prepare upload data
-            data = {"messaging_product": "whatsapp", "type": media_type}
-
-            # Construct upload URL using client's URL builder
             upload_url = self.client.url_builder.get_media_url()
+            data = {"messaging_product": "whatsapp", "type": media_type}
 
             self.logger.debug(f"Uploading media file {media_path.name} to {upload_url}")
 
             with open(media_path, "rb") as file_handle:
                 files = {"file": (filename or media_path.name, file_handle, media_type)}
-
-                # Use the injected client for upload
                 result = await self.client.post_request(
                     payload=data, custom_url=upload_url, files=files
                 )
@@ -187,9 +144,7 @@ class WhatsAppMediaHandler(IMediaHandler):
     async def upload_media_from_bytes(
         self, file_data: bytes, media_type: str, filename: str
     ) -> MediaUploadResult:
-        """Upload media from bytes data."""
         try:
-            # Validate MIME type
             if not self.validate_media_type(media_type):
                 return MediaUploadResult(
                     success=False,
@@ -198,7 +153,6 @@ class WhatsAppMediaHandler(IMediaHandler):
                     tenant_id=self._tenant_id,
                 )
 
-            # Validate file size
             file_size = len(file_data)
             if not self.validate_file_size(file_size, media_type):
                 max_size = self._get_max_size_for_mime_type(media_type)
@@ -209,15 +163,11 @@ class WhatsAppMediaHandler(IMediaHandler):
                     tenant_id=self._tenant_id,
                 )
 
-            # Prepare upload data
-            data = {"messaging_product": "whatsapp", "type": media_type}
-
-            # Construct upload URL using client's URL builder
             upload_url = self.client.url_builder.get_media_url()
+            data = {"messaging_product": "whatsapp", "type": media_type}
+            files = {"file": (filename, file_data, media_type)}
 
             self.logger.debug(f"Uploading media from bytes: {filename}")
-
-            files = {"file": (filename, file_data, media_type)}
 
             result = await self.client.post_request(
                 payload=data, custom_url=upload_url, files=files
@@ -260,14 +210,10 @@ class WhatsAppMediaHandler(IMediaHandler):
         filename: str,
         file_size: int | None = None,
     ) -> MediaUploadResult:
-        """Upload media from file stream."""
         try:
-            # Read stream data
-            file_data = file_stream.read()
-
-            # Use the bytes upload method
-            return await self.upload_media_from_bytes(file_data, media_type, filename)
-
+            return await self.upload_media_from_bytes(
+                file_stream.read(), media_type, filename
+            )
         except Exception as e:
             self.logger.exception(f"Failed to upload {filename} from stream: {e}")
             return MediaUploadResult(
@@ -286,71 +232,72 @@ class WhatsAppMediaHandler(IMediaHandler):
     ) -> MediaUploadResult:
         """Download a public URL and re-upload to WhatsApp Media API.
 
-        Uses a separate HTTP client with NO auth headers to avoid
+        Uses a separate HTTP client with no auth headers to avoid
         leaking the WhatsApp Bearer token to third-party hosts.
         """
         try:
             self.logger.debug(f"Downloading media from URL for re-upload: {url}")
 
-            # Auth isolation: fresh session with zero headers — no Bearer token leak
-            download_timeout = aiohttp.ClientTimeout(total=timeout)
             async with (
-                aiohttp.ClientSession(timeout=download_timeout) as session,
-                session.get(url) as response,
+                httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client,
+                client.stream("GET", url) as response,
             ):
-                    if response.status != 200:
+                if response.status_code != 200:
+                    return MediaUploadResult(
+                        success=False,
+                        error=f"Download failed: HTTP {response.status_code} from {url}",
+                        error_code="DOWNLOAD_FAILED",
+                        tenant_id=self._tenant_id,
+                    )
+
+                content_type = (
+                    response.headers.get("content-type", "").split(";")[0].strip()
+                )
+
+                if not content_type or content_type == "application/octet-stream":
+                    return MediaUploadResult(
+                        success=False,
+                        error=f"Source URL did not provide a usable Content-Type header: {url}",
+                        error_code="MIME_TYPE_UNKNOWN",
+                        tenant_id=self._tenant_id,
+                    )
+
+                if not self.validate_media_type(content_type):
+                    return MediaUploadResult(
+                        success=False,
+                        error=f"Unsupported MIME type '{content_type}' from source URL. Supported types: {sorted(self.supported_media_types)}",
+                        error_code="MIME_TYPE_UNSUPPORTED",
+                        tenant_id=self._tenant_id,
+                    )
+
+                max_size = self._get_max_size_for_mime_type(content_type)
+
+                if (
+                    content_length_str := response.headers.get("content-length")
+                ) and int(content_length_str) > max_size:
+                    return MediaUploadResult(
+                        success=False,
+                        error=f"Source file size ({content_length_str} bytes) exceeds the limit ({max_size} bytes) for type {content_type}",
+                        error_code="FILE_SIZE_EXCEEDED",
+                        tenant_id=self._tenant_id,
+                    )
+
+                data = bytearray()
+                async for chunk in response.aiter_bytes(8192):
+                    data.extend(chunk)
+                    if len(data) > max_size:
                         return MediaUploadResult(
                             success=False,
-                            error=f"Download failed: HTTP {response.status} from {url}",
-                            error_code="DOWNLOAD_FAILED",
-                            tenant_id=self._tenant_id,
-                        )
-
-                    content_type = response.content_type
-                    if not content_type or content_type == "application/octet-stream":
-                        return MediaUploadResult(
-                            success=False,
-                            error=f"Source URL did not provide a usable Content-Type header: {url}",
-                            error_code="MIME_TYPE_UNKNOWN",
-                            tenant_id=self._tenant_id,
-                        )
-
-                    if not self.validate_media_type(content_type):
-                        return MediaUploadResult(
-                            success=False,
-                            error=f"Unsupported MIME type '{content_type}' from source URL. Supported types: {sorted(self.supported_media_types)}",
-                            error_code="MIME_TYPE_UNSUPPORTED",
-                            tenant_id=self._tenant_id,
-                        )
-
-                    max_size = self._get_max_size_for_mime_type(content_type)
-
-                    # Reject early if Content-Length is provided and exceeds limit
-                    content_length = response.content_length
-                    if content_length is not None and content_length > max_size:
-                        return MediaUploadResult(
-                            success=False,
-                            error=f"Source file size ({content_length} bytes) exceeds the limit ({max_size} bytes) for type {content_type}",
+                            error=f"Download aborted: file size exceeded {max_size} bytes for type {content_type}",
                             error_code="FILE_SIZE_EXCEEDED",
                             tenant_id=self._tenant_id,
                         )
 
-                    # Stream download with running size guard
-                    data = bytearray()
-                    async for chunk in response.content.iter_chunked(8192):
-                        data.extend(chunk)
-                        if len(data) > max_size:
-                            return MediaUploadResult(
-                                success=False,
-                                error=f"Download aborted: file size exceeded {max_size} bytes for type {content_type}",
-                                error_code="FILE_SIZE_EXCEEDED",
-                                tenant_id=self._tenant_id,
-                            )
-
-            # Derive a filename extension from the MIME type
             extension_map = self._get_extension_map()
             ext = extension_map.get(content_type, "")
-            upload_filename = f"{filename}{ext}" if not filename.endswith(ext) else filename
+            upload_filename = (
+                f"{filename}{ext}" if not filename.endswith(ext) else filename
+            )
 
             self.logger.debug(
                 f"Downloaded {len(data)} bytes ({content_type}), re-uploading as {upload_filename}"
@@ -380,17 +327,10 @@ class WhatsAppMediaHandler(IMediaHandler):
             )
 
     async def get_media_info(self, media_id: str) -> MediaInfoResult:
-        """
-        Retrieve media information using media ID.
-
-        Based on existing WhatsAppServiceMedia.get_media_url() method.
-        Implements GET /MEDIA_ID endpoint.
-        """
         try:
-            endpoint = f"{media_id}/"
             self.logger.debug(f"Fetching media info for ID: {media_id}")
 
-            result = await self.client.get_request(endpoint=endpoint)
+            result = await self.client.get_request(endpoint=f"{media_id}/")
 
             if not result or "url" not in result:
                 return MediaInfoResult(
@@ -430,22 +370,7 @@ class WhatsAppMediaHandler(IMediaHandler):
         temp_suffix: str | None = None,
         auto_cleanup: bool = True,
     ) -> MediaDownloadResult:
-        """
-        Download WhatsApp media using its media ID.
-
-        Based on existing WhatsAppServiceMedia.download_media() method.
-        Implements workflow: GET /MEDIA_ID -> GET /MEDIA_URL
-
-        Args:
-            media_id: Platform-specific media identifier
-            destination_path: Optional path to save file (ignored if use_tempfile=True)
-            sender_id: Optional sender ID for filename generation
-            use_tempfile: If True, creates a temporary file with automatic cleanup
-            temp_suffix: Custom suffix for temporary file (e.g., '.mp3', '.jpg')
-            auto_cleanup: If True, temp files are cleaned up automatically
-        """
         try:
-            # Get media info first
             media_info_result = await self.get_media_info(media_id)
             if not media_info_result.success:
                 return MediaDownloadResult(
@@ -462,31 +387,25 @@ class WhatsAppMediaHandler(IMediaHandler):
                 f"Starting download for media ID: {media_id} from URL: {media_url}"
             )
 
-            # Use the client for streaming request
-            session, response = await self.client.get_request_stream(media_url)
-
-            try:
-                if response.status != 200:
-                    error_text = await response.text()
+            async with self.client.stream_get(media_url) as response:
+                if response.status_code != 200:
+                    await response.aread()
                     return MediaDownloadResult(
                         success=False,
-                        error=f"Download failed for {media_id}: {response.status} - {error_text}",
-                        error_code=f"HTTP_{response.status}",
+                        error=f"Download failed for {media_id}: {response.status_code} - {response.text}",
+                        error_code=f"HTTP_{response.status_code}",
                         tenant_id=self._tenant_id,
                     )
 
-                # Validate content type and size
                 response_content_type = response.headers.get(
                     "content-type", content_type
                 )
-                content_length_str = response.headers.get("content-length", "0")
 
                 try:
-                    content_length = int(content_length_str)
+                    content_length = int(response.headers.get("content-length", "0"))
                 except ValueError:
                     content_length = 0
 
-                # Validate against platform limits
                 if not self.validate_file_size(content_length, response_content_type):
                     max_size = self._get_max_size_for_mime_type(response_content_type)
                     return MediaDownloadResult(
@@ -496,12 +415,11 @@ class WhatsAppMediaHandler(IMediaHandler):
                         tenant_id=self._tenant_id,
                     )
 
-                # Read response data
                 data = bytearray()
                 downloaded_size = 0
                 max_size = self._get_max_size_for_mime_type(response_content_type)
 
-                async for chunk in response.content.iter_chunked(8192):
+                async for chunk in response.aiter_bytes(8192):
                     if chunk:
                         downloaded_size += len(chunk)
                         if downloaded_size > max_size:
@@ -513,76 +431,64 @@ class WhatsAppMediaHandler(IMediaHandler):
                             )
                         data.extend(chunk)
 
-                # Save to file if destination_path provided or tempfile requested
-                final_path = None
-                is_temp_file = False
+            final_path = None
+            is_temp_file = False
 
-                if use_tempfile:
-                    # Create temporary file
-                    extension_map = self._get_extension_map()
-                    extension = temp_suffix or extension_map.get(
-                        response_content_type, ""
-                    )
+            if use_tempfile:
+                extension_map = self._get_extension_map()
+                extension = temp_suffix or extension_map.get(response_content_type, "")
 
-                    # Create named temporary file
-                    temp_fd, temp_path = tempfile.mkstemp(
-                        suffix=extension, prefix="wappa_media_"
-                    )
-                    try:
-                        with os.fdopen(temp_fd, "wb") as temp_file:
-                            temp_file.write(data)
-                        final_path = Path(temp_path)
-                        is_temp_file = True
-                        self.logger.info(
-                            f"Media downloaded to temp file {final_path} ({downloaded_size} bytes)"
-                        )
-                    except Exception:
-                        # Clean up on error
-                        with suppress(Exception):
-                            os.unlink(temp_path)
-                        raise
-
-                elif destination_path:
-                    # Original destination path logic
-                    extension_map = self._get_extension_map()
-                    extension = extension_map.get(response_content_type, "")
-                    media_type_base = response_content_type.split("/")[0]
-                    timestamp = int(time.time())
-                    filename_final = f"{media_type_base}_{sender_id or 'unknown'}_{timestamp}{extension}"
-
-                    path = Path(destination_path)
-                    path.mkdir(parents=True, exist_ok=True)
-                    final_path = path / filename_final
-
-                    with open(final_path, "wb") as f:
-                        f.write(data)
-
+                temp_fd, temp_path = tempfile.mkstemp(
+                    suffix=extension, prefix="wappa_media_"
+                )
+                try:
+                    with os.fdopen(temp_fd, "wb") as temp_file:
+                        temp_file.write(data)
+                    final_path = Path(temp_path)
+                    is_temp_file = True
                     self.logger.info(
-                        f"Media successfully downloaded to {final_path} ({downloaded_size} bytes)"
+                        f"Media downloaded to temp file {final_path} ({downloaded_size} bytes)"
                     )
+                except Exception:
+                    with suppress(Exception):
+                        os.unlink(temp_path)
+                    raise
 
-                # Create result with temp file handling
-                result = MediaDownloadResult(
-                    success=True,
-                    file_data=bytes(data),
-                    file_path=str(final_path) if final_path else None,
-                    mime_type=response_content_type,
-                    file_size=downloaded_size,
-                    sha256=media_info_result.sha256,
-                    platform=PlatformType.WHATSAPP,
-                    tenant_id=self._tenant_id,
+            elif destination_path:
+                extension_map = self._get_extension_map()
+                extension = extension_map.get(response_content_type, "")
+                media_type_base = response_content_type.split("/")[0]
+                timestamp = int(time.time())
+                filename_final = (
+                    f"{media_type_base}_{sender_id or 'unknown'}_{timestamp}{extension}"
                 )
 
-                # Mark as temp file if needed
-                if is_temp_file:
-                    result.mark_as_temp_file(cleanup_on_exit=auto_cleanup)
+                path = Path(destination_path)
+                path.mkdir(parents=True, exist_ok=True)
+                final_path = path / filename_final
 
-                return result
+                with open(final_path, "wb") as f:
+                    f.write(data)
 
-            finally:
-                # Ensure response is closed
-                if response and not response.closed:
-                    response.release()
+                self.logger.info(
+                    f"Media successfully downloaded to {final_path} ({downloaded_size} bytes)"
+                )
+
+            result = MediaDownloadResult(
+                success=True,
+                file_data=bytes(data),
+                file_path=str(final_path) if final_path else None,
+                mime_type=response_content_type,
+                file_size=downloaded_size,
+                sha256=media_info_result.sha256,
+                platform=PlatformType.WHATSAPP,
+                tenant_id=self._tenant_id,
+            )
+
+            if is_temp_file:
+                result.mark_as_temp_file(cleanup_on_exit=auto_cleanup)
+
+            return result
 
         except Exception as e:
             self.logger.exception(f"Error downloading media ID {media_id}: {e}")
@@ -599,26 +505,13 @@ class WhatsAppMediaHandler(IMediaHandler):
         media_id: str,
         temp_suffix: str | None = None,
         sender_id: str | None = None,
-    ) -> AbstractAsyncContextManager[MediaDownloadResult]:
-        """
-        Download media to a temporary file with automatic cleanup.
-
-        Convenience method that provides a context manager for temporary file handling.
-        The temporary file is automatically deleted when the context exits.
-
-        Args:
-            media_id: Platform-specific media identifier
-            temp_suffix: Custom suffix for temporary file (e.g., '.mp3', '.jpg')
-            sender_id: Optional sender ID for logging/debugging
-
-        Returns:
-            Async context manager yielding MediaDownloadResult with temp file path
+    ):
+        """Download media to a temporary file with automatic cleanup.
 
         Example:
             async with handler.download_media_tempfile(media_id, '.mp3') as result:
                 if result.success:
-                    # Use result.file_path - file auto-deleted on exit
-                    process_audio(result.file_path)
+                    process_audio(result.file_path)  # file auto-deleted on exit
         """
         result = await self.download_media(
             media_id=media_id,
@@ -631,21 +524,10 @@ class WhatsAppMediaHandler(IMediaHandler):
         try:
             yield result
         finally:
-            # Context manager cleanup handled by MediaDownloadResult
             result._cleanup_temp_file()
 
     async def get_media_as_bytes(self, media_id: str) -> MediaDownloadResult:
-        """
-        Download media as bytes without creating any files.
-
-        Memory-only download for processing that doesn't require file system access.
-
-        Args:
-            media_id: Platform-specific media identifier
-
-        Returns:
-            MediaDownloadResult with file_data bytes (file_path will be None)
-        """
+        """Download media as bytes without writing to the file system."""
         return await self.download_media(
             media_id=media_id, destination_path=None, use_tempfile=False
         )
@@ -655,52 +537,32 @@ class WhatsAppMediaHandler(IMediaHandler):
     ) -> AsyncIterator[bytes]:
         """Stream media by ID for large files."""
         try:
-            # Get media info first
             media_info_result = await self.get_media_info(media_id)
             if not media_info_result.success:
                 raise RuntimeError(
                     f"Failed to get media URL for ID {media_id}: {media_info_result.error}"
                 )
 
-            media_url = media_info_result.url
-
-            # Use the client for streaming request
-            session, response = await self.client.get_request_stream(media_url)
-
-            try:
-                if response.status != 200:
-                    error_text = await response.text()
+            async with self.client.stream_get(media_info_result.url) as response:
+                if response.status_code != 200:
+                    await response.aread()
                     raise RuntimeError(
-                        f"Download failed for {media_id}: {response.status} - {error_text}"
+                        f"Download failed for {media_id}: {response.status_code} - {response.text}"
                     )
 
-                async for chunk in response.content.iter_chunked(chunk_size):
+                async for chunk in response.aiter_bytes(chunk_size):
                     if chunk:
                         yield chunk
-
-            finally:
-                # Ensure response is closed
-                if response and not response.closed:
-                    response.release()
 
         except Exception as e:
             self.logger.exception(f"Error streaming media ID {media_id}: {e}")
             raise
 
     async def delete_media(self, media_id: str) -> MediaDeleteResult:
-        """
-        Delete media from WhatsApp servers using the media ID.
-
-        Based on existing WhatsAppServiceMedia.delete_media() method.
-        Implements DELETE /MEDIA_ID endpoint.
-        """
         try:
-            endpoint = f"{media_id}"
-            params = {}
-
             self.logger.debug(f"Attempting to delete media ID: {media_id}")
 
-            result = await self.client.delete_request(endpoint=endpoint, params=params)
+            result = await self.client.delete_request(endpoint=f"{media_id}")
 
             if result.get("success"):
                 self.logger.info(f"Successfully deleted media ID: {media_id}")
@@ -710,16 +572,16 @@ class WhatsAppMediaHandler(IMediaHandler):
                     platform=PlatformType.WHATSAPP,
                     tenant_id=self._tenant_id,
                 )
-            else:
-                error_msg = result.get("error", {}).get("message", "Unknown reason")
-                return MediaDeleteResult(
-                    success=False,
-                    media_id=media_id,
-                    error=f"API indicated deletion failed: {error_msg}",
-                    error_code="DELETION_FAILED",
-                    platform=PlatformType.WHATSAPP,
-                    tenant_id=self._tenant_id,
-                )
+
+            error_msg = result.get("error", {}).get("message", "Unknown reason")
+            return MediaDeleteResult(
+                success=False,
+                media_id=media_id,
+                error=f"API indicated deletion failed: {error_msg}",
+                error_code="DELETION_FAILED",
+                platform=PlatformType.WHATSAPP,
+                tenant_id=self._tenant_id,
+            )
 
         except Exception as e:
             self.logger.exception(f"Error deleting media ID {media_id}: {e}")
@@ -733,16 +595,12 @@ class WhatsAppMediaHandler(IMediaHandler):
             )
 
     def validate_media_type(self, mime_type: str) -> bool:
-        """Validate if MIME type is supported by WhatsApp."""
         return mime_type in self.supported_media_types
 
     def validate_file_size(self, file_size: int, mime_type: str) -> bool:
-        """Validate if file size is within WhatsApp limits."""
-        max_size = self._get_max_size_for_mime_type(mime_type)
-        return file_size <= max_size
+        return file_size <= self._get_max_size_for_mime_type(mime_type)
 
     def get_media_limits(self) -> dict[str, Any]:
-        """Get WhatsApp-specific media limits and constraints."""
         return {
             "max_sizes": self.max_file_size,
             "supported_types": sorted(self.supported_media_types),
@@ -753,20 +611,15 @@ class WhatsAppMediaHandler(IMediaHandler):
         }
 
     def _get_max_size_for_mime_type(self, mime_type: str) -> int:
-        """Get maximum file size for a specific MIME type."""
         if mime_type.startswith("audio/") or mime_type.startswith("video/"):
-            return 16 * 1024 * 1024  # 16MB
-        elif mime_type.startswith("image/"):
-            if mime_type == "image/webp":
-                return 500 * 1024  # 500KB for animated stickers
-            return 5 * 1024 * 1024  # 5MB for regular images
-        elif mime_type.startswith("application/") or mime_type == "text/plain":
-            return 100 * 1024 * 1024  # 100MB
-        else:
-            return 100 * 1024 * 1024  # Default to 100MB
+            return 16 * 1024 * 1024
+        if mime_type == "image/webp":
+            return 500 * 1024
+        if mime_type.startswith("image/"):
+            return 5 * 1024 * 1024
+        return 100 * 1024 * 1024
 
     def _get_extension_map(self) -> dict[str, str]:
-        """Get file extension mapping by MIME type."""
         return {
             "audio/aac": ".aac",
             "audio/amr": ".amr",

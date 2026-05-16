@@ -267,7 +267,9 @@ class JSONStateHandler(IStateCache):
         )
 
     async def delete_all_for_user(self) -> int:
-        all_keys = await storage_manager.get_all_keys("states", self.tenant, self.user_id)
+        all_keys = await storage_manager.get_all_keys(
+            "states", self.tenant, self.user_id
+        )
         for key in all_keys:
             await storage_manager.delete("states", self.tenant, self.user_id, key)
         return len(all_keys)
@@ -275,7 +277,9 @@ class JSONStateHandler(IStateCache):
     async def delete_by_handler_prefix(self, prefix: str) -> int:
         if not prefix:
             raise ValueError("prefix must not be empty")
-        all_keys = await storage_manager.get_all_keys("states", self.tenant, self.user_id)
+        all_keys = await storage_manager.get_all_keys(
+            "states", self.tenant, self.user_id
+        )
         key_prefix = f"{self.tenant}:{self.keys.handler_prefix}:{prefix}"
         key_suffix = f":{self.user_id}"
         count = 0
@@ -286,7 +290,9 @@ class JSONStateHandler(IStateCache):
         return count
 
     async def list_handlers(self, prefix: str | None = None) -> list[str]:
-        all_keys = await storage_manager.get_all_keys("states", self.tenant, self.user_id)
+        all_keys = await storage_manager.get_all_keys(
+            "states", self.tenant, self.user_id
+        )
         key_prefix = f"{self.tenant}:{self.keys.handler_prefix}:"
         key_suffix = f":{self.user_id}"
         safe_prefix = prefix or ""
@@ -299,7 +305,9 @@ class JSONStateHandler(IStateCache):
         return names
 
     @classmethod
-    async def list_users_with_handler(cls, tenant_id: str, handler_name: str) -> list[str]:
+    async def list_users_with_handler(
+        cls, tenant_id: str, handler_name: str
+    ) -> list[str]:
         import asyncio
 
         from .utils.file_manager import file_manager

@@ -179,9 +179,7 @@ class RedisExpiry(TenantCache, IExpiryCache):
         )
         count = await self._delete_by_pattern(pattern)
         if count > 0:
-            logger.info(
-                f"Deleted {count} expiry trigger(s) for user '{self.user_id}'"
-            )
+            logger.info(f"Deleted {count} expiry trigger(s) for user '{self.user_id}'")
         else:
             logger.debug(f"No expiry triggers found for user '{self.user_id}'")
         return count

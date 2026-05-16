@@ -1,15 +1,10 @@
-"""
-Media handling utilities for the Wappa Full Example application.
-
-This module provides functions for downloading and uploading media files,
-handling different media types, and managing local media storage.
-"""
+"""Media handling utilities for the Wappa Full Example application."""
 
 import os
 import tempfile
 from pathlib import Path
 
-import aiohttp
+import httpx
 
 from wappa.webhooks import IncomingMessageWebhook
 
@@ -17,38 +12,22 @@ from wappa.webhooks import IncomingMessageWebhook
 class MediaHandler:
     """Utility class for handling media operations."""
 
-    def __init__(self, temp_dir: str | None = None):
-        """
-        Initialize MediaHandler.
-
-        Args:
-            temp_dir: Optional temporary directory path for downloads
-        """
+    def __init__(self, temp_dir: str | None = None) -> None:
         self.temp_dir = temp_dir or tempfile.gettempdir()
-        self.session: aiohttp.ClientSession | None = None
+        self.session: httpx.AsyncClient | None = None
 
     async def __aenter__(self):
-        """Async context manager entry."""
-        self.session = aiohttp.ClientSession()
+        self.session = httpx.AsyncClient()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Async context manager exit."""
         if self.session:
-            await self.session.close()
+            await self.session.aclose()
 
     async def get_media_info_from_webhook(
         self, webhook: IncomingMessageWebhook
     ) -> dict[str, str] | None:
-        """
-        Extract media information from webhook.
-
-        Args:
-            webhook: IncomingMessageWebhook containing media
-
-        Returns:
-            Dictionary with media info or None if no media found
-        """
+        """Extract media information from a webhook, or None if no media present."""
         message = webhook.message
         message_type = webhook.get_message_type_name().lower()
 
@@ -106,142 +85,36 @@ class MediaHandler:
     async def download_media_by_id(
         self, media_id: str, messenger, media_type: str = None
     ) -> tuple[str, dict[str, str]] | None:
-        """
-        Download media using media_id through WhatsApp API.
-
-        Note: This is a placeholder implementation. The actual implementation
-        would need to integrate with the WhatsApp Business API to download media.
-
-        Args:
-            media_id: Media ID from WhatsApp
-            messenger: IMessenger instance for API calls
-            media_type: Optional media type hint
-
-        Returns:
-            Tuple of (file_path, metadata) or None if failed
-        """
-        try:
-            # This is a placeholder implementation
-            # In a real implementation, you would:
-            # 1. Use messenger or direct API calls to get media URL
-            # 2. Download the media file
-            # 3. Save to temporary location
-            # 4. Return file path and metadata
-
-            # For now, return None to indicate media download not implemented
-            return None
-
-        except Exception as e:
-            print(f"Error downloading media {media_id}: {e}")
-            return None
+        """Placeholder — integrate with WhatsApp Business API to implement."""
+        return None
 
     async def upload_local_media(
         self, file_path: str, media_type: str = None
     ) -> str | None:
-        """
-        Upload local media file to get media_id for sending.
-
-        Note: This is a placeholder implementation. The actual implementation
-        would need to integrate with the WhatsApp Business API media upload endpoint.
-
-        Args:
-            file_path: Path to local media file
-            media_type: Type of media (image, video, audio, document)
-
-        Returns:
-            Media ID if successful, None if failed
-        """
-        try:
-            # This is a placeholder implementation
-            # In a real implementation, you would:
-            # 1. Upload the file to WhatsApp Business API
-            # 2. Get the media_id from the response
-            # 3. Return the media_id
-
-            # For now, return the file path as a placeholder
-            if os.path.exists(file_path):
-                return f"local_{os.path.basename(file_path)}"
-
-            return None
-
-        except Exception as e:
-            print(f"Error uploading media {file_path}: {e}")
-            return None
+        """Placeholder — integrate with WhatsApp Business API media upload to implement."""
+        if os.path.exists(file_path):
+            return f"local_{os.path.basename(file_path)}"
+        return None
 
     def get_local_media_path(self, filename: str, media_subdir: str = None) -> str:
-        """
-        Get path to local media file.
-
-        Args:
-            filename: Name of the media file
-            media_subdir: Optional subdirectory within media folder
-
-        Returns:
-            Full path to media file
-        """
-        # Construct path relative to app directory
-        base_dir = Path(__file__).parent.parent  # Go up to app directory
+        base_dir = Path(__file__).parent.parent
         media_dir = base_dir / "media"
-
         if media_subdir:
             media_dir = media_dir / media_subdir
-
         return str(media_dir / filename)
 
     def media_file_exists(self, filename: str, media_subdir: str = None) -> bool:
-        """
-        Check if local media file exists.
-
-        Args:
-            filename: Name of the media file
-            media_subdir: Optional subdirectory within media folder
-
-        Returns:
-            True if file exists, False otherwise
-        """
-        file_path = self.get_local_media_path(filename, media_subdir)
-        return os.path.exists(file_path)
+        return os.path.exists(self.get_local_media_path(filename, media_subdir))
 
     def get_media_type_from_extension(self, filename: str) -> str:
-        """
-        Determine media type from file extension.
-
-        Args:
-            filename: Name of the file
-
-        Returns:
-            Media type string
-        """
         extension = Path(filename).suffix.lower()
-
-        # Image extensions
-        if extension in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]:
+        if extension in {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}:
             return "image"
-
-        # Video extensions
-        elif extension in [".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm"]:
+        if extension in {".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm"}:
             return "video"
-
-        # Audio extensions
-        elif extension in [".mp3", ".wav", ".aac", ".ogg", ".m4a", ".flac"]:
+        if extension in {".mp3", ".wav", ".aac", ".ogg", ".m4a", ".flac"}:
             return "audio"
-
-        # Document extensions
-        elif extension in [
-            ".pdf",
-            ".doc",
-            ".docx",
-            ".xls",
-            ".xlsx",
-            ".ppt",
-            ".pptx",
-            ".txt",
-        ]:
-            return "document"
-
-        # Default
-        else:
-            return "document"
+        return "document"
 
     async def send_media_by_file(
         self,
@@ -251,19 +124,7 @@ class MediaHandler:
         caption: str = None,
         reply_to_message_id: str = None,
     ) -> dict[str, any]:
-        """
-        Send media file using appropriate messenger method.
-
-        Args:
-            messenger: IMessenger instance
-            recipient: Recipient phone number
-            file_path: Path to media file
-            caption: Optional caption
-            reply_to_message_id: Optional message to reply to
-
-        Returns:
-            Result dictionary with success status and details
-        """
+        """Send a local media file using the appropriate messenger method."""
         try:
             if not os.path.exists(file_path):
                 return {
@@ -343,24 +204,8 @@ class MediaHandler:
         caption: str = None,
         reply_to_message_id: str = None,
     ) -> dict[str, any]:
-        """
-        Send media using media_id (relay existing media).
-
-        Args:
-            messenger: IMessenger instance
-            recipient: Recipient phone number
-            media_id: Media ID to send
-            media_type: Type of media
-            caption: Optional caption
-            reply_to_message_id: Optional message to reply to
-
-        Returns:
-            Result dictionary with success status and details
-        """
+        """Relay existing media by ID using the appropriate messenger method."""
         try:
-            # For relaying media using media_id, we need to use the media_id as source
-            # This assumes the messenger can handle media_id as source parameter
-
             if media_type == "image":
                 result = await messenger.send_image(
                     image_source=media_id,  # Using media_id as source
@@ -426,19 +271,9 @@ class MediaHandler:
             }
 
 
-# Convenience functions for direct use
 async def extract_media_info(webhook: IncomingMessageWebhook) -> dict[str, str] | None:
-    """
-    Extract media information from webhook (convenience function).
-
-    Args:
-        webhook: IncomingMessageWebhook to process
-
-    Returns:
-        Media info dictionary or None
-    """
-    handler = MediaHandler()
-    return await handler.get_media_info_from_webhook(webhook)
+    """Extract media information from a webhook."""
+    return await MediaHandler().get_media_info_from_webhook(webhook)
 
 
 async def send_local_media_file(
@@ -449,23 +284,9 @@ async def send_local_media_file(
     caption: str = None,
     reply_to_message_id: str = None,
 ) -> dict[str, any]:
-    """
-    Send local media file (convenience function).
-
-    Args:
-        messenger: IMessenger instance
-        recipient: Recipient phone number
-        filename: Name of media file in media directory
-        media_subdir: Optional subdirectory
-        caption: Optional caption
-        reply_to_message_id: Optional message to reply to
-
-    Returns:
-        Result dictionary
-    """
+    """Send a local media file from the app's media directory."""
     handler = MediaHandler()
     file_path = handler.get_local_media_path(filename, media_subdir)
-
     return await handler.send_media_by_file(
         messenger=messenger,
         recipient=recipient,
@@ -481,21 +302,8 @@ async def relay_webhook_media(
     recipient: str,
     reply_to_message_id: str = None,
 ) -> dict[str, any]:
-    """
-    Relay media from webhook to recipient (convenience function).
-
-    Args:
-        messenger: IMessenger instance
-        webhook: Original webhook with media
-        recipient: Recipient phone number
-        reply_to_message_id: Optional message to reply to
-
-    Returns:
-        Result dictionary
-    """
+    """Relay media from an incoming webhook to a recipient."""
     handler = MediaHandler()
-
-    # Extract media info from webhook
     media_info = await handler.get_media_info_from_webhook(webhook)
     if not media_info:
         return {
@@ -503,8 +311,6 @@ async def relay_webhook_media(
             "error": "No media found in webhook",
             "method": "no_media",
         }
-
-    # Relay using media_id
     return await handler.send_media_by_id(
         messenger=messenger,
         recipient=recipient,

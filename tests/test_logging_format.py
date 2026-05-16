@@ -19,7 +19,11 @@ from unittest.mock import patch
 import pytest
 from rich.logging import RichHandler
 
-from wappa.core.logging.logger import WappaJSONFormatter, setup_app_logging, setup_logging
+from wappa.core.logging.logger import (
+    WappaJSONFormatter,
+    setup_app_logging,
+    setup_logging,
+)
 
 
 def _make_settings(*, is_development: bool, logs_rich_format: bool | None):
@@ -79,7 +83,10 @@ def test_json_formatter_exc_info_single_line() -> None:
         raise ValueError("boom")
     except ValueError:
         import sys
-        record = _make_record("error occurred", level=logging.ERROR, exc_info=sys.exc_info())
+
+        record = _make_record(
+            "error occurred", level=logging.ERROR, exc_info=sys.exc_info()
+        )
 
     line = fmt.format(record)
     assert "\n" not in line
@@ -129,6 +136,7 @@ def test_json_formatter_ts_format() -> None:
     obj = json.loads(fmt.format(record))
     # Must be parseable as ISO-8601 (YYYY-MM-DDTHH:MM:SS)
     from datetime import datetime
+
     datetime.fromisoformat(obj["ts"])
 
 
@@ -155,7 +163,9 @@ def test_setup_logging_json_format_attaches_stream_handler() -> None:
 
 def test_setup_logging_json_handler_uses_json_formatter() -> None:
     setup_logging(level="INFO", rich_format=False)
-    stream_handlers = [h for h in logging.root.handlers if type(h) is logging.StreamHandler]
+    stream_handlers = [
+        h for h in logging.root.handlers if type(h) is logging.StreamHandler
+    ]
     assert stream_handlers, "no StreamHandler found"
     assert isinstance(stream_handlers[0].formatter, WappaJSONFormatter)
 

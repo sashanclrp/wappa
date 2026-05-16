@@ -1325,14 +1325,14 @@ wheels = [
 
 [[package]]
 name = "wappa"
-version = "0.10.0"
+version = "0.11.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
-    { name = "aiohttp" },
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "fastapi-crons" },
+    { name = "httpx" },
     { name = "hypercorn" },
     { name = "numpy" },
     { name = "openai" },
@@ -1363,10 +1363,10 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiofiles", specifier = ">=24.1.0" },
-    { name = "aiohttp", specifier = ">=3.11.0" },
     { name = "asyncpg", specifier = ">=0.31.0" },
     { name = "fastapi", specifier = ">=0.135.1" },
     { name = "fastapi-crons", specifier = ">=2.0.0" },
+    { name = "httpx", specifier = ">=0.28.0" },
     { name = "hypercorn", specifier = ">=0.17.0" },
     { name = "numpy", specifier = ">=2.2.0" },
     { name = "openai", specifier = ">=1.69.0" },

@@ -5,13 +5,34 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-05-16
+
+Replaces aiohttp with httpx as the async HTTP client across the entire framework. httpx is the modern Python standard with a cleaner API, sync+async support, HTTP/2, and better typing. Includes SOLID improvements in the WhatsApp client: instance-level activity tracking, transport-agnostic form data builder, safe streaming via async context managers, and cleaner error handling.
+
+### Changed
+- **HTTP client migration** — all 6 source files migrated from `aiohttp` to `httpx` (`whatsapp_client.py`, `wappa_core_plugin.py`, `whatsapp_media_handler.py`, `whatsapp_template_info.py`, `messenger_factory.py`, example `media_handler.py`).
+- **`WhatsAppClient`** — constructor now accepts `httpx.AsyncClient` instead of `aiohttp.ClientSession`. Request methods return responses directly (no context manager on response).
+- **`WhatsAppFormDataBuilder.build_form_data()`** — now returns transport-agnostic `(data, files)` dicts instead of `aiohttp.FormData`.
+- **`WhatsAppClient.stream_get()`** — replaces `get_request_stream()` with an `@asynccontextmanager` that eliminates leaked-response risk. Callers use `async with client.stream_get(url) as response:` instead of managing a raw `(session, response)` tuple.
+- **`wappa_core_plugin.py`** — session creation uses `httpx.AsyncHTTPTransport` + `httpx.AsyncClient`. Shutdown uses `.aclose()`.
+- **`whatsapp_media_handler.py`** — `upload_media_from_url()` uses `httpx.AsyncClient` for auth-isolated downloads. `download_media()` and `stream_media()` use the new `stream_get()` context manager.
+- **`whatsapp_template_info.py`** — exception handling updated from `aiohttp.ClientResponseError` to `httpx.HTTPStatusError`.
+- **Exception mapping** — `aiohttp.ClientResponseError` → `httpx.HTTPStatusError` (`.status` → `.response.status_code`), `aiohttp.ClientError` → `httpx.HTTPError`.
+
+### Fixed
+- **`WhatsAppClient.last_activity`** — moved from class-level (shared across all instances) to instance-level, fixing a bug where multiple tenants would overwrite each other's activity timestamp.
+- **Fragile error text capture** — removed `"response" in locals()` antipattern in `get_request`/`delete_request`; httpx's `HTTPStatusError` carries `exc.response.text` directly.
+
+### Removed
+- **`aiohttp` direct dependency** — removed from `pyproject.toml`. (Still present as transitive dependency via `fastapi-crons`.)
+
 ## [0.11.0] - 2026-05-15
 
 Adds `upload_media_from_url()` to `IMediaHandler` and `WhatsAppMediaHandler`, enabling consumers to download a public URL and re-upload it to the WhatsApp Media API in a single call. Uses an isolated HTTP session with no auth headers to prevent Bearer token leakage to third-party hosts.
 
 ### Added
 - **`IMediaHandler.upload_media_from_url(url, *, filename, timeout)`** — new abstract method on the platform-agnostic media interface.
-- **`WhatsAppMediaHandler.upload_media_from_url()`** — full implementation with MIME validation, two-phase file size enforcement (Content-Length header + streaming guard), automatic filename extension derivation, and auth-isolated download via a fresh `aiohttp.ClientSession`.
+- **`WhatsAppMediaHandler.upload_media_from_url()`** — full implementation with MIME validation, two-phase file size enforcement (Content-Length header + streaming guard), automatic filename extension derivation, and auth-isolated download via a fresh `httpx.AsyncClient`.
 - **9 unit tests** covering happy path, auth isolation, download failure, missing/unsupported MIME type, size limits (header and streaming), filename extension, and custom timeout.
 
 ## [0.10.0] - 2026-05-14

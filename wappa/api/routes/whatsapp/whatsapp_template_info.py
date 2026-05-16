@@ -1,6 +1,6 @@
 """WhatsApp template management read endpoints."""
 
-import aiohttp
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from wappa.api.dependencies.whatsapp_dependencies import (
@@ -31,11 +31,11 @@ router = APIRouter(
 )
 
 
-def _raise_info_http_error(exc: aiohttp.ClientResponseError) -> None:
+def _raise_info_http_error(exc: httpx.HTTPStatusError) -> None:
     """Translate Meta Graph API errors into FastAPI HTTP responses."""
     raise HTTPException(
-        status_code=exc.status,
-        detail=f"WhatsApp template info request failed: {exc.message or str(exc)}",
+        status_code=exc.response.status_code,
+        detail=f"WhatsApp template info request failed: {str(exc)}",
     ) from exc
 
 
@@ -113,7 +113,7 @@ async def get_template_by_id(
     request_model = TemplateByIdRequest(template_id=template_id, fields=fields)
     try:
         return await service.get_template_by_id(request_model)
-    except aiohttp.ClientResponseError as exc:
+    except httpx.HTTPStatusError as exc:
         _raise_info_http_error(exc)
 
 
@@ -138,7 +138,7 @@ async def get_template_by_name(
     )
     try:
         return await service.get_template_by_name(request_model)
-    except aiohttp.ClientResponseError as exc:
+    except httpx.HTTPStatusError as exc:
         _raise_info_http_error(exc)
 
 
@@ -183,7 +183,7 @@ async def list_templates(
     )
     try:
         return await service.list_templates(request_model)
-    except aiohttp.ClientResponseError as exc:
+    except httpx.HTTPStatusError as exc:
         _raise_info_http_error(exc)
 
 
@@ -199,7 +199,7 @@ async def get_template_namespace(
     """Fetch WABA namespace metadata used for template management."""
     try:
         return await service.get_template_namespace()
-    except aiohttp.ClientResponseError as exc:
+    except httpx.HTTPStatusError as exc:
         _raise_info_http_error(exc)
 
 
@@ -218,7 +218,7 @@ async def get_template_status(
         response = await service.get_template_by_name(
             TemplateByNameRequest(template_name=template_name)
         )
-    except aiohttp.ClientResponseError as exc:
+    except httpx.HTTPStatusError as exc:
         _raise_info_http_error(exc)
 
     if not response.data:

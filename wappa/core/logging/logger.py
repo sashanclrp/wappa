@@ -290,7 +290,9 @@ def setup_logging(
             handlers.append(file_handler)
             _console.print(f"[green]DEV mode:[/] console + file → {logfile}")
         else:
-            _console.print(f"Logging configured for mode '{mode}' (rich). Console only.")
+            _console.print(
+                f"Logging configured for mode '{mode}' (rich). Console only."
+            )
     else:
         json_handler = logging.StreamHandler()
         json_handler.setFormatter(WappaJSONFormatter())

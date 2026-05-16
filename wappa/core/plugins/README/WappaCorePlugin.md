@@ -70,7 +70,7 @@ When the startup hook fires (priority 10, before any other plugin), the followin
 1. **Initialize logging** -- calls `setup_app_logging()` and obtains the application logger.
 2. **Log environment info** -- version, environment, owner ID, log level, cache type.
 3. **Set cache type in `app.state`** -- stores `app.state.wappa_cache_type` so the webhook controller and other components can detect the active cache backend.
-4. **Create persistent HTTP session** -- an `aiohttp.ClientSession` with connection pooling (100 max connections, 30 s keep-alive, auto-cleanup of closed connections, 30 s total timeout). Stored on `app.state.http_session`.
+4. **Create persistent HTTP client** -- an `httpx.AsyncClient` with connection pooling (100 max connections, 20 keepalive connections, 30 s total timeout). Stored on `app.state.http_session`.
 5. **Log available endpoints** -- health check, WhatsApp API, and API documentation URLs.
 6. **Display webhook URLs** -- generates and logs the WhatsApp webhook URL via `webhook_url_factory` for easy copy-paste into Meta Business settings.
 
@@ -80,7 +80,7 @@ If any step fails, the error is logged (or printed to stdout if logging itself f
 
 When the shutdown hook fires (priority 90, after all other plugins have shut down):
 
-1. **Close HTTP session** -- gracefully closes the `aiohttp.ClientSession` and its underlying TCP connector.
+1. **Close HTTP client** -- gracefully closes the `httpx.AsyncClient` via `.aclose()`.
 2. **Clear app state** -- removes `wappa_cache_type` from `app.state`.
 3. **Log completion** -- confirms clean shutdown or logs any errors encountered.
 

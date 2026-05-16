@@ -274,7 +274,9 @@ class MemoryAIState(IAIStateCache):
         )
 
     async def delete_all_for_user(self) -> int:
-        all_keys = await storage_manager.get_all_keys("ai_states", self.tenant, self.user_id)
+        all_keys = await storage_manager.get_all_keys(
+            "ai_states", self.tenant, self.user_id
+        )
         for key in all_keys:
             await storage_manager.delete("ai_states", self.tenant, self.user_id, key)
         return len(all_keys)
@@ -282,13 +284,17 @@ class MemoryAIState(IAIStateCache):
     async def delete_by_agent_prefix(self, prefix: str) -> int:
         if not prefix:
             raise ValueError("prefix must not be empty")
-        all_keys = await storage_manager.get_all_keys("ai_states", self.tenant, self.user_id)
+        all_keys = await storage_manager.get_all_keys(
+            "ai_states", self.tenant, self.user_id
+        )
         key_prefix = f"{self.tenant}:{self.keys.aistate_prefix}:{prefix}"
         key_suffix = f":{self.user_id}"
         count = 0
         for key in list(all_keys):
             if key.startswith(key_prefix) and key.endswith(key_suffix):
-                await storage_manager.delete("ai_states", self.tenant, self.user_id, key)
+                await storage_manager.delete(
+                    "ai_states", self.tenant, self.user_id, key
+                )
                 count += 1
         return count
 

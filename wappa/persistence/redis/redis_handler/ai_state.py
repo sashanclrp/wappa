@@ -130,9 +130,7 @@ class RedisAIState(TenantCache, IAIStateCache):
         )
         count = await self._delete_by_pattern(pattern)
         if count > 0:
-            logger.info(
-                f"Deleted {count} AI agent state(s) for user '{self.user_id}'"
-            )
+            logger.info(f"Deleted {count} AI agent state(s) for user '{self.user_id}'")
         else:
             logger.debug(f"No AI agent states found for user '{self.user_id}'")
         return count

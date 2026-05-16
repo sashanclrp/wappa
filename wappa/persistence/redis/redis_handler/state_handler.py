@@ -128,9 +128,7 @@ class RedisStateHandler(TenantCache, IStateCache):
         )
         count = await self._delete_by_pattern(pattern)
         if count > 0:
-            logger.info(
-                f"Deleted {count} handler state(s) for user '{self.user_id}'"
-            )
+            logger.info(f"Deleted {count} handler state(s) for user '{self.user_id}'")
         else:
             logger.debug(f"No handler states found for user '{self.user_id}'")
         return count
@@ -139,9 +137,7 @@ class RedisStateHandler(TenantCache, IStateCache):
         if not prefix:
             raise ValueError("prefix must not be empty")
 
-        pattern = (
-            f"{self.tenant}:{self.keys.handler_prefix}:{prefix}*:{self.user_id}"
-        )
+        pattern = f"{self.tenant}:{self.keys.handler_prefix}:{prefix}*:{self.user_id}"
 
         logger.debug(
             f"Deleting state handlers with prefix '{prefix}' for user '{self.user_id}' "
@@ -184,12 +180,8 @@ class RedisStateHandler(TenantCache, IStateCache):
     async def list_users_with_handler(
         cls, tenant_id: str, handler_name: str
     ) -> list[str]:
-        pattern = (
-            f"{tenant_id}:{default_key_factory.handler_prefix}:{handler_name}:*"
-        )
-        key_prefix = (
-            f"{tenant_id}:{default_key_factory.handler_prefix}:{handler_name}:"
-        )
+        pattern = f"{tenant_id}:{default_key_factory.handler_prefix}:{handler_name}:*"
+        key_prefix = f"{tenant_id}:{default_key_factory.handler_prefix}:{handler_name}:"
 
         user_ids: list[str] = []
         cursor = "0"

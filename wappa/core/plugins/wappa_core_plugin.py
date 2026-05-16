@@ -1,14 +1,8 @@
-"""
-Wappa Core Plugin
-
-This plugin encapsulates all traditional Wappa functionality, providing the foundation
-for the Wappa framework through the plugin system. It includes logging, middleware,
-routes, and lifespan management that was previously hardcoded in the Wappa class.
-"""
+"""Core Wappa plugin — logging, middleware, routes, and lifespan management."""
 
 from typing import TYPE_CHECKING
 
-import aiohttp
+import httpx
 from fastapi import FastAPI
 
 from wappa.api.middleware.error_handler import ErrorHandlerMiddleware
@@ -26,63 +20,25 @@ if TYPE_CHECKING:
 
 
 class WappaCorePlugin:
-    """
-    Core Wappa functionality as a plugin.
+    """Core Wappa functionality implemented as a plugin."""
 
-    This plugin provides all the essential Wappa framework functionality:
-    - Application logging setup
-    - HTTP session management
-    - Core middleware stack (Owner, ErrorHandler, RequestLogging)
-    - Core routes (Health, WhatsApp combined)
-    - Webhook URL generation and logging
-    - Cache type configuration
-
-    By implementing core functionality as a plugin, we achieve a unified
-    architecture where all Wappa applications use the same plugin-based
-    foundation, whether they use simple Wappa() or advanced WappaBuilder.
-    """
-
-    def __init__(self, cache_type: CacheType = CacheType.MEMORY):
-        """
-        Initialize Wappa core plugin.
-
-        Args:
-            cache_type: Cache backend to use for the application
-        """
+    def __init__(self, cache_type: CacheType = CacheType.MEMORY) -> None:
         self.cache_type = cache_type
 
     def configure(self, builder: "WappaBuilder") -> None:
-        """
-        Configure core Wappa functionality with the builder.
-
-        Registers:
-        - Core middleware with appropriate priorities
-        - Core routes (health, whatsapp)
-        - Core startup/shutdown hooks
-
-        Args:
-            builder: WappaBuilder instance to configure
-        """
         logger = get_app_logger()
         logger.debug("🏗️ Configuring WappaCorePlugin...")
 
-        # Register core middleware with proper priorities
         # Higher priority numbers run closer to routes (inner middleware)
-        builder.add_middleware(
-            OwnerMiddleware, priority=90
-        )  # Outer - tenant extraction
-        builder.add_middleware(ErrorHandlerMiddleware, priority=80)  # Error handling
-        builder.add_middleware(
-            RequestLoggingMiddleware, priority=70
-        )  # Request logging (inner)
+        builder.add_middleware(OwnerMiddleware, priority=90)
+        builder.add_middleware(ErrorHandlerMiddleware, priority=80)
+        builder.add_middleware(RequestLoggingMiddleware, priority=70)
 
-        # Register core routes
         builder.add_router(health_router)
         builder.add_router(whatsapp_router)
 
-        # Register core lifespan hooks with high priority (runs first/last)
-        builder.add_startup_hook(self._core_startup, priority=10)  # First to run
-        builder.add_shutdown_hook(self._core_shutdown, priority=90)  # Last to run
+        builder.add_startup_hook(self._core_startup, priority=10)
+        builder.add_shutdown_hook(self._core_shutdown, priority=90)
 
         logger.debug(
             f"✅ WappaCorePlugin configured - cache_type: {self.cache_type.value}, "
@@ -90,49 +46,14 @@ class WappaCorePlugin:
         )
 
     async def startup(self, app: FastAPI) -> None:
-        """
-        Plugin startup method required by WappaPlugin protocol.
-
-        Delegates to _core_startup hook method for actual implementation.
-        This maintains compatibility with both the plugin protocol and
-        the hook-based architecture.
-
-        Args:
-            app: FastAPI application instance
-        """
         await self._core_startup(app)
 
     async def shutdown(self, app: FastAPI) -> None:
-        """
-        Plugin shutdown method required by WappaPlugin protocol.
-
-        Delegates to _core_shutdown hook method for actual implementation.
-        This maintains compatibility with both the plugin protocol and
-        the hook-based architecture.
-
-        Args:
-            app: FastAPI application instance
-        """
         await self._core_shutdown(app)
 
     async def _core_startup(self, app: FastAPI) -> None:
-        """
-        Core Wappa startup functionality.
-
-        This hook runs first (priority 10) to establish the foundation that
-        other plugins and hooks can depend on:
-        - Logging system initialization
-        - HTTP session for connection pooling
-        - Cache type configuration
-        - Webhook URL generation and display
-        - Development mode configuration
-
-        Args:
-            app: FastAPI application instance
-        """
         logger = None
         try:
-            # Initialize logging first - this is critical for all other operations
             setup_app_logging()
             logger = get_app_logger()
 
@@ -145,26 +66,23 @@ class WappaCorePlugin:
             if settings.is_development:
                 logger.info(f"🔧 Development mode - logs: {settings.log_dir}")
 
-            # Set cache type in app state for WebhookController detection
             app.state.wappa_cache_type = self.cache_type.value
             logger.debug(f"💾 Set app.state.wappa_cache_type = {self.cache_type.value}")
 
-            # Create persistent HTTP session with optimized connection pooling
-            logger.info("🌐 Creating persistent HTTP session...")
-            connector = aiohttp.TCPConnector(
-                limit=100,  # Max connections
-                keepalive_timeout=30,  # Keep alive timeout
-                enable_cleanup_closed=True,  # Auto cleanup closed connections
+            logger.info("🌐 Creating persistent HTTP client...")
+            transport = httpx.AsyncHTTPTransport(
+                limits=httpx.Limits(
+                    max_connections=100,
+                    max_keepalive_connections=20,
+                ),
             )
-            session = aiohttp.ClientSession(
-                connector=connector, timeout=aiohttp.ClientTimeout(total=30)
+            app.state.http_session = httpx.AsyncClient(
+                transport=transport, timeout=httpx.Timeout(30.0)
             )
-            app.state.http_session = session
             logger.info(
-                "✅ Persistent HTTP session created - connections: 100, keepalive: 30s"
+                "✅ Persistent HTTP client created - connections: 100, keepalive: 20"
             )
 
-            # Log available endpoints
             base_url = (
                 f"http://localhost:{settings.port}"
                 if settings.is_development
@@ -181,7 +99,6 @@ class WappaCorePlugin:
             )
             logger.info("============================")
 
-            # Generate and display WhatsApp webhook URL
             await self._display_webhook_urls(logger, base_url)
 
             logger.info("✅ Wappa core startup completed successfully")
@@ -194,27 +111,14 @@ class WappaCorePlugin:
             raise
 
     async def _core_shutdown(self, app: FastAPI) -> None:
-        """
-        Core Wappa shutdown functionality.
-
-        This hook runs last (priority 90) to clean up core resources after
-        all other plugins have shut down:
-        - Close HTTP session
-        - Final logging
-
-        Args:
-            app: FastAPI application instance
-        """
         logger = get_app_logger()
         logger.info("🛑 Starting Wappa core shutdown...")
 
         try:
-            # Close HTTP session and connector if it exists
             if hasattr(app.state, "http_session"):
-                await app.state.http_session.close()
-                logger.info("🌐 Persistent HTTP session closed cleanly")
+                await app.state.http_session.aclose()
+                logger.info("🌐 Persistent HTTP client closed cleanly")
 
-            # Clear cache type from app state
             if hasattr(app.state, "wappa_cache_type"):
                 del app.state.wappa_cache_type
                 logger.debug("💾 Cache type cleared from app state")
@@ -225,15 +129,8 @@ class WappaCorePlugin:
             logger.error(f"❌ Error during Wappa core shutdown: {e}", exc_info=True)
 
     async def _display_webhook_urls(self, logger, base_url: str) -> None:
-        """
-        Generate and display WhatsApp webhook URLs for user convenience.
-
-        Args:
-            logger: Logger instance
-            base_url: Base URL for the application
-        """
         try:
-            # Import here to avoid circular imports during startup
+            # Imported here to avoid circular imports during startup
             from ..events.webhook_factory import webhook_url_factory
 
             whatsapp_webhook_url = webhook_url_factory.generate_whatsapp_webhook_url()
@@ -250,23 +147,7 @@ class WappaCorePlugin:
             logger.warning(f"⚠️ Could not generate webhook URL: {e}")
 
     def get_cache_type(self) -> CacheType:
-        """
-        Get the configured cache type.
-
-        Returns:
-            CacheType enum value
-        """
         return self.cache_type
 
     def set_cache_type(self, cache_type: CacheType) -> None:
-        """
-        Update the cache type configuration.
-
-        Args:
-            cache_type: New cache type to use
-
-        Note:
-            This should be called before the application starts, as the
-            cache type is set in app state during startup.
-        """
         self.cache_type = cache_type
