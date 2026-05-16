@@ -5,7 +5,7 @@ This module provides the WappaBuilder class that enables users to create
 highly customized FastAPI applications using a plugin-based architecture.
 """
 
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
 
@@ -13,6 +13,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from ...domain.interfaces.identity_resolver import IIdentityResolver
+from ...domain.interfaces.inbox_credential_store import IInboxCredentialStore
+from ...domain.services.inbox_credentials_service import SettingsInboxCredentialStore
 from ..events.field_registry import FieldHandlerRegistry
 from ..logging.logger import get_app_logger
 from ..messaging.pipeline import MessengerMiddleware, MiddlewareEntry
@@ -45,7 +47,7 @@ class WappaBuilder:
             .build())
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize WappaBuilder with empty configuration."""
         self.plugins: list[WappaPlugin] = []
         self.middlewares: list[tuple[type, dict, int]] = []  # (class, kwargs, priority)
@@ -56,6 +58,9 @@ class WappaBuilder:
         self.config_overrides: dict[str, Any] = {}
         self.field_registry: FieldHandlerRegistry = FieldHandlerRegistry()
         self.identity_resolver: IIdentityResolver | None = None
+        self.inbox_credential_store: IInboxCredentialStore = (
+            SettingsInboxCredentialStore()
+        )
 
     def add_plugin(self, plugin: "WappaPlugin") -> "WappaBuilder":
         """
@@ -301,6 +306,18 @@ class WappaBuilder:
         self.identity_resolver = resolver
         return self
 
+    def with_inbox_credential_store(
+        self, store: IInboxCredentialStore
+    ) -> "WappaBuilder":
+        """
+        Register the credential store used to resolve inbox credentials.
+
+        When omitted, Wappa uses ``SettingsInboxCredentialStore`` for the
+        single-inbox environment-variable deployment path.
+        """
+        self.inbox_credential_store = store
+        return self
+
     def configure(self, **overrides: Any) -> "WappaBuilder":
         """
         Override default FastAPI configuration.
@@ -347,7 +364,7 @@ class WappaBuilder:
         # Create unified lifespan (only for async startup/shutdown hooks)
 
         @asynccontextmanager
-        async def unified_lifespan(app: FastAPI):
+        async def unified_lifespan(app: FastAPI) -> AsyncIterator[None]:
             try:
                 # Startup phase - execute async startup hooks only
                 logger.debug("🚀 Starting unified lifespan startup phase...")
@@ -364,7 +381,7 @@ class WappaBuilder:
                 logger.info("✅ All shutdown hooks completed")
 
         # Step 2: Create FastAPI app with lifespan and config
-        default_config = {
+        default_config: dict[str, Any] = {
             "title": "Wappa Application",
             "description": "WhatsApp Business application built with Wappa framework",
             "version": "1.0.0",
@@ -387,6 +404,8 @@ class WappaBuilder:
         # falls back to PassthroughIdentityResolver inside the dependency.
         if self.identity_resolver is not None:
             app.state.identity_resolver = self.identity_resolver
+
+        app.state.inbox_credential_store = self.inbox_credential_store
 
         # Step 3: Add all middleware via app.add_middleware()
         # Sort by priority (reverse order because FastAPI adds middleware in reverse)

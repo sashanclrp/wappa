@@ -21,7 +21,7 @@ class InboxCredentials:
 class InboxNotFoundError(Exception):
     """Raised when an inbox_id is not recognized by the credential store."""
 
-    def __init__(self, inbox_id: str):
+    def __init__(self, inbox_id: str) -> None:
         self.inbox_id = inbox_id
         super().__init__(f"Inbox not found: {inbox_id}")
 
@@ -32,7 +32,7 @@ class IInboxCredentialStore(ABC):
 
     Implementations:
     - SettingsInboxCredentialStore (default): single inbox from env vars
-    - Future: database/Redis-cached credential store for multi-inbox
+    - DatabaseInboxCredentialStore: multi-inbox database lookup with cache
     """
 
     @abstractmethod
@@ -63,3 +63,12 @@ class IInboxCredentialStore(ABC):
             True if inbox is valid and active
         """
         ...
+
+    async def invalidate_cache(self, inbox_id: str) -> None:
+        """
+        Invalidate any cached credentials for an inbox.
+
+        Stores without a cache may keep the default no-op implementation.
+        Host applications should call this after updating inbox credentials.
+        """
+        return None

@@ -169,7 +169,8 @@ Wappa today is WhatsApp-only in implementation but multi-platform in design:
 1. **Universal Webhook Models** (`wappa/webhooks/core/`): `InboxBase`, `UserBase`, `MessageBase`, `StatusBase`, `ErrorBase`, `SystemBase` — platform-agnostic.
 2. **Platform Adapters** (`wappa/webhooks/whatsapp/`, `wappa/messaging/whatsapp/`): Parse WhatsApp-specific payloads into universal models; construct WhatsApp-specific API requests from universal send calls.
 3. **PlatformType enum**: New platforms add a value here. The router, dispatcher, and factory resolve the correct adapter.
-4. **Adding a new platform** requires:
+4. **Inbox Credential Store** (`IInboxCredentialStore`): Resolves the credentials for a concrete `inbox_id`. The default `SettingsInboxCredentialStore` supports a single settings-backed WhatsApp Inbox; hosts that manage many Inboxes inject their own store, including the provided database-backed implementation.
+5. **Adding a new platform** requires:
    - A webhook processor implementing the platform's payload → universal model mapping
    - A messenger implementing `IMessenger` for that platform's send API
    - A credential resolver for that platform's auth (implementing `IInboxCredentialStore`)

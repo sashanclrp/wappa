@@ -5,6 +5,8 @@ Provides dependency injection for WhatsApp messaging services including
 factory pattern, client management, and messenger implementations.
 """
 
+from typing import cast
+
 from fastapi import Depends, Request
 
 from wappa.api.dependencies.whatsapp_media_dependencies import (
@@ -15,8 +17,11 @@ from wappa.core.logging.logger import get_logger
 from wappa.domain.builders.message_builder import MessageBuilder
 from wappa.domain.factories.media_factory import WhatsAppMediaFactory
 from wappa.domain.factories.message_factory import WhatsAppMessageFactory
+from wappa.domain.interfaces.inbox_credential_store import (
+    IInboxCredentialStore,
+    InboxCredentials,
+)
 from wappa.domain.interfaces.messaging_interface import IMessenger
-from wappa.domain.services import SettingsInboxCredentialStore
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
     WhatsAppInteractiveHandler,
@@ -43,6 +48,19 @@ async def get_whatsapp_message_factory() -> WhatsAppMessageFactory:
     return WhatsAppMessageFactory()
 
 
+def get_inbox_credential_store(request: Request) -> IInboxCredentialStore:
+    """Get the app-scoped inbox credential store."""
+    store = getattr(request.app.state, "inbox_credential_store", None)
+    if store is None:
+        raise RuntimeError("Inbox credential store is not configured in app.state")
+    return cast(IInboxCredentialStore, store)
+
+
+async def _resolve_inbox_credentials(request: Request, inbox_id: str) -> InboxCredentials:
+    credential_store = get_inbox_credential_store(request)
+    return await credential_store.get_credentials(inbox_id)
+
+
 async def get_whatsapp_client(request: Request) -> WhatsAppClient:
     """Get configured WhatsApp client with inbox-specific credentials.
 
@@ -60,12 +78,11 @@ async def get_whatsapp_client(request: Request) -> WhatsAppClient:
     # Get inbox ID from context (set by webhook processing or API middleware)
     inbox_id = require_inbox_context()
 
-    credential_store = SettingsInboxCredentialStore()
-
+    credential_store = get_inbox_credential_store(request)
     if not await credential_store.validate_inbox(inbox_id):
         raise ValueError(f"Invalid or inactive inbox: {inbox_id}")
 
-    credentials = await credential_store.get_credentials(inbox_id)
+    credentials = await _resolve_inbox_credentials(request, inbox_id)
     logger = get_logger(__name__)
 
     return WhatsAppClient(
@@ -137,12 +154,12 @@ async def get_whatsapp_specialized_handler(
 
 
 async def get_whatsapp_template_info_service(
+    request: Request,
     client: WhatsAppClient = Depends(get_whatsapp_client),
 ) -> WhatsAppTemplateInfoService:
     """Get configured WhatsApp template info service with WABA context."""
     inbox_id = require_inbox_context()
-    credential_store = SettingsInboxCredentialStore()
-    credentials = await credential_store.get_credentials(inbox_id)
+    credentials = await _resolve_inbox_credentials(request, inbox_id)
     return WhatsAppTemplateInfoService(
         client=client,
         business_account_id=credentials.platform_account_id or "",

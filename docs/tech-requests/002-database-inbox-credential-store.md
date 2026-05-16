@@ -249,13 +249,13 @@ At 100 messages/sec to a single inbox, only 1 DB call every 5 minutes. The Redis
 
 ---
 
-## Open Decisions (resolve before implementing)
+## Resolved Decisions
 
 1. **Should "inbox not found" be cached?** If yes, a non-existent inbox won't hit DB repeatedly. If no, a newly registered inbox becomes available immediately. 
-   - **Rec:** Don't cache negatives. The cost of a DB miss is low, and it avoids stale "not found" when onboarding new inboxes.
+   - **Decision:** Don't cache negatives. The cost of a DB miss is low, and this avoids stale "not found" when onboarding new inboxes.
 
 2. **Should the store model be a Wappa-owned SQLModel class, or just a raw query?**
-   - **Rec:** Provide a recommended `WappaInbox` SQLModel class that host apps can inherit from or ignore. Keep it optional — the store accepts a `db_session_factory` and runs its own query.
+   - **Decision:** Provide an optional `WappaInbox` SQLModel class that host apps can import or ignore. The database-backed store still accepts a `db_session_factory` and reads the host-owned `wappa_inboxes` table directly.
 
 3. **Should `invalidate_cache` be in the interface or a separate concern?**
-   - **Rec:** Add it to the interface with a default no-op. `SettingsInboxCredentialStore.invalidate_cache()` does nothing. `DatabaseInboxCredentialStore.invalidate_cache()` deletes the Redis key. Host apps call it when they update credentials.
+   - **Decision:** Add it to the interface with a default no-op. `SettingsInboxCredentialStore.invalidate_cache()` does nothing. `DatabaseInboxCredentialStore.invalidate_cache()` deletes the Redis key. Host apps call it when they update credentials.

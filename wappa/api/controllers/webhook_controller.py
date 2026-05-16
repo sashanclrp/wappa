@@ -1,5 +1,5 @@
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import HTTPException, Request
 from fastapi.responses import PlainTextResponse
@@ -20,6 +20,7 @@ from wappa.core.sse.context import (
     sse_event_scope,
 )
 from wappa.domain.factories import MessengerFactory
+from wappa.domain.interfaces.inbox_credential_store import IInboxCredentialStore
 from wappa.persistence.cache_factory import create_cache_factory
 from wappa.processors.factory import processor_factory
 from wappa.schemas.core.types import PlatformType
@@ -253,7 +254,8 @@ class WebhookController:
             if not http_session:
                 self.logger.warning("No HTTP session available in app state")
 
-            messenger_factory = MessengerFactory(http_session)
+            credential_store = self._get_inbox_credential_store(request)
+            messenger_factory = MessengerFactory(http_session, credential_store)
             raw_messenger = await messenger_factory.create_messenger(
                 platform=platform_type,
                 inbox_id=inbox_id,
@@ -307,6 +309,12 @@ class WebhookController:
                 exc_info=True,
             )
             raise RuntimeError(f"Handler creation failed: {e}") from e
+
+    def _get_inbox_credential_store(self, request: Request) -> IInboxCredentialStore:
+        store = getattr(request.app.state, "inbox_credential_store", None)
+        if store is None:
+            raise RuntimeError("Inbox credential store is not configured in app.state")
+        return cast(IInboxCredentialStore, store)
 
     def _derive_sse_identity(
         self, webhook: Any, fallback_user_id: str

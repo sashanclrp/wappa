@@ -57,6 +57,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 
 | Term | Definition |
 |------|-----------|
+| **Inbox Credential Store** | The strategy Wappa uses to resolve outbound platform credentials for an Inbox. The default store reads one Inbox from settings; host applications may provide a store backed by their own database and cache. |
 | **Cache Factory** | Creates scoped cache instances. Scoped by `(inbox_id, user_id)`. |
 | **State Cache** | Per-user conversational state within an Inbox. |
 | **User Cache** | Per-user profile/metadata cache within an Inbox. |

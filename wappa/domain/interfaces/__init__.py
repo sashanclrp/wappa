@@ -10,6 +10,11 @@ from .cache_interface import ICache
 from .cache_interfaces import IStateCache, ITableCache, IUserCache
 from .expiry_repository import IExpiryRepository
 from .identity_resolver import IIdentityResolver, PassthroughIdentityResolver
+from .inbox_credential_store import (
+    IInboxCredentialStore,
+    InboxCredentials,
+    InboxNotFoundError,
+)
 from .media_interface import IMediaHandler
 from .messaging_interface import IMessenger
 from .pubsub_interface import IPubSubPublisher, PubSubEventType
@@ -33,6 +38,10 @@ __all__ = [
     # Identity resolution
     "IIdentityResolver",
     "PassthroughIdentityResolver",
+    # Inbox credentials
+    "IInboxCredentialStore",
+    "InboxCredentials",
+    "InboxNotFoundError",
     # Cache interfaces (type-specific - preferred)
     "IUserCache",
     "IStateCache",

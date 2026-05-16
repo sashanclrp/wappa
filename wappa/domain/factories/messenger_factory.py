@@ -3,8 +3,8 @@
 from typing import TYPE_CHECKING
 
 from wappa.core.logging.logger import get_logger
+from wappa.domain.interfaces.inbox_credential_store import IInboxCredentialStore
 from wappa.domain.interfaces.messaging_interface import IMessenger
-from wappa.domain.services.inbox_credentials_service import SettingsInboxCredentialStore
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
     WhatsAppInteractiveHandler,
@@ -28,8 +28,13 @@ if TYPE_CHECKING:
 class MessengerFactory:
     """Factory for creating platform-specific messenger implementations."""
 
-    def __init__(self, http_session: "httpx.AsyncClient" = None) -> None:
+    def __init__(
+        self,
+        http_session: "httpx.AsyncClient | None" = None,
+        credential_store: IInboxCredentialStore | None = None,
+    ) -> None:
         self._http_session = http_session
+        self._credential_store = credential_store
         self.logger = get_logger(__name__)
         self._messenger_cache: dict[str, IMessenger] = {}
 
@@ -64,16 +69,19 @@ class MessengerFactory:
     async def _create_whatsapp_messenger(self, inbox_id: str) -> WhatsAppMessenger:
         self.logger.debug(f"Creating WhatsApp messenger for inbox: {inbox_id}")
 
-        credential_store = SettingsInboxCredentialStore()
-        if not await credential_store.validate_inbox(inbox_id):
+        if self._credential_store is None:
+            raise RuntimeError("Inbox credential store is not configured")
+        if self._http_session is None:
+            raise RuntimeError("HTTP session is not configured")
+
+        if not await self._credential_store.validate_inbox(inbox_id):
             raise ValueError(f"Invalid or inactive inbox: {inbox_id}")
 
-        credentials = await credential_store.get_credentials(inbox_id)
-        access_token = credentials.access_token
+        credentials = await self._credential_store.get_credentials(inbox_id)
 
         client = WhatsAppClient(
             session=self._http_session,
-            access_token=access_token,
+            access_token=credentials.access_token,
             phone_number_id=inbox_id,
             logger=self.logger,
         )
@@ -103,7 +111,7 @@ class MessengerFactory:
         return platform in self.get_supported_platforms()
 
     def clear_cache(
-        self, platform: PlatformType = None, inbox_id: str = None
+        self, platform: PlatformType | None = None, inbox_id: str | None = None
     ) -> None:
         if platform and inbox_id:
             cache_key = f"{platform.value}:{inbox_id}"

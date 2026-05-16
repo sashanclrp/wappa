@@ -27,6 +27,7 @@ from .types import CacheType, CacheTypeOptions, validate_cache_type
 
 if TYPE_CHECKING:
     from wappa.domain.interfaces.identity_resolver import IIdentityResolver
+    from wappa.domain.interfaces.inbox_credential_store import IInboxCredentialStore
     from wappa.webhooks.core.webhook_interfaces import CustomWebhook
 
     from .events import WappaEventHandler
@@ -58,7 +59,12 @@ class Wappa:
         app.run()
     """
 
-    def __init__(self, cache: CacheTypeOptions = "memory", config: dict | None = None):
+    def __init__(
+        self,
+        cache: CacheTypeOptions = "memory",
+        config: dict | None = None,
+        inbox_credential_store: "IInboxCredentialStore | None" = None,
+    ):
         """
         Initialize Wappa application with plugin-based architecture.
 
@@ -68,6 +74,8 @@ class Wappa:
         Args:
             cache: Cache type ('memory', 'redis', 'json')
             config: Optional configuration overrides for FastAPI app
+            inbox_credential_store: Optional custom credential store for resolving
+                inbox credentials. Defaults to SettingsInboxCredentialStore.
 
         Raises:
             ValueError: If cache type is not supported
@@ -81,6 +89,8 @@ class Wappa:
 
         # Initialize WappaBuilder with core plugin
         self._builder = WappaBuilder()
+        if inbox_credential_store is not None:
+            self._builder.with_inbox_credential_store(inbox_credential_store)
         self._core_plugin = WappaCorePlugin(cache_type=self.cache_type)
         self._builder.add_plugin(self._core_plugin)
 
@@ -468,6 +478,23 @@ class Wappa:
 
         logger = get_app_logger()
         logger.debug(f"Identity resolver set: {resolver.__class__.__name__}")
+
+        return self
+
+    def set_inbox_credential_store(
+        self, store: "IInboxCredentialStore"
+    ) -> "Wappa":
+        """
+        Register the credential store used to resolve inbox credentials.
+
+        Convenience wrapper around
+        :meth:`WappaBuilder.with_inbox_credential_store` for apps using the
+        simple ``Wappa(...)`` constructor.
+        """
+        self._builder.with_inbox_credential_store(store)
+
+        logger = get_app_logger()
+        logger.debug(f"Inbox credential store set: {store.__class__.__name__}")
 
         return self
 

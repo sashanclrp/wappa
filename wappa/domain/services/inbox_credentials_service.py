@@ -24,9 +24,13 @@ class SettingsInboxCredentialStore(IInboxCredentialStore):
         if not await self.validate_inbox(inbox_id):
             raise InboxNotFoundError(inbox_id)
 
+        access_token = settings.wp_access_token
+        if access_token is None:
+            raise InboxNotFoundError(inbox_id)
+
         return InboxCredentials(
             inbox_id=inbox_id,
-            access_token=settings.wp_access_token,
+            access_token=access_token,
             platform_account_id=settings.wp_bid or None,
         )
 
@@ -35,3 +39,6 @@ class SettingsInboxCredentialStore(IInboxCredentialStore):
             return bool(settings.wp_access_token and settings.wp_phone_id == inbox_id)
         except Exception:
             return False
+
+    async def invalidate_cache(self, inbox_id: str) -> None:
+        return None
