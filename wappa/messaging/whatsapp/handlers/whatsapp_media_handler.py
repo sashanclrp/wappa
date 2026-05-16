@@ -25,9 +25,9 @@ from wappa.schemas.core.types import PlatformType
 class WhatsAppMediaHandler(IMediaHandler):
     """WhatsApp implementation of the media handler interface."""
 
-    def __init__(self, client: WhatsAppClient, tenant_id: str):
+    def __init__(self, client: WhatsAppClient, inbox_id: str):
         self.client = client
-        self._tenant_id = tenant_id
+        self._inbox_id = inbox_id
         self.logger = get_logger(__name__)
 
     @property
@@ -35,8 +35,8 @@ class WhatsAppMediaHandler(IMediaHandler):
         return PlatformType.WHATSAPP
 
     @property
-    def tenant_id(self) -> str:
-        return self._tenant_id
+    def inbox_id(self) -> str:
+        return self._inbox_id
 
     @property
     def supported_media_types(self) -> set[str]:
@@ -69,7 +69,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                     success=False,
                     error=f"Media file not found: {media_path}",
                     error_code="FILE_NOT_FOUND",
-                    tenant_id=self._tenant_id,
+                    inbox_id=self._inbox_id,
                 )
 
             if media_type is None:
@@ -79,7 +79,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                         success=False,
                         error=f"Could not determine MIME type for file: {media_path}",
                         error_code="MIME_TYPE_UNKNOWN",
-                        tenant_id=self._tenant_id,
+                        inbox_id=self._inbox_id,
                     )
 
             if not self.validate_media_type(media_type):
@@ -87,7 +87,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                     success=False,
                     error=f"Unsupported MIME type '{media_type}'. Supported types: {sorted(self.supported_media_types)}",
                     error_code="MIME_TYPE_UNSUPPORTED",
-                    tenant_id=self._tenant_id,
+                    inbox_id=self._inbox_id,
                 )
 
             file_size = media_path.stat().st_size
@@ -97,7 +97,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                     success=False,
                     error=f"File size ({file_size} bytes) exceeds the limit ({max_size} bytes) for type {media_type}",
                     error_code="FILE_SIZE_EXCEEDED",
-                    tenant_id=self._tenant_id,
+                    inbox_id=self._inbox_id,
                 )
 
             upload_url = self.client.url_builder.get_media_url()
@@ -117,7 +117,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                     success=False,
                     error=f"No media ID in response for {media_path.name}: {result}",
                     error_code="NO_MEDIA_ID",
-                    tenant_id=self._tenant_id,
+                    inbox_id=self._inbox_id,
                 )
 
             self.logger.info(
@@ -129,7 +129,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                 file_size=file_size,
                 mime_type=media_type,
                 platform=PlatformType.WHATSAPP,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
             )
 
         except Exception as e:
@@ -138,7 +138,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                 success=False,
                 error=str(e),
                 error_code="UPLOAD_FAILED",
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
             )
 
     async def upload_media_from_bytes(
@@ -150,7 +150,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                     success=False,
                     error=f"Unsupported MIME type '{media_type}'. Supported types: {sorted(self.supported_media_types)}",
                     error_code="MIME_TYPE_UNSUPPORTED",
-                    tenant_id=self._tenant_id,
+                    inbox_id=self._inbox_id,
                 )
 
             file_size = len(file_data)
@@ -160,7 +160,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                     success=False,
                     error=f"File size ({file_size} bytes) exceeds the limit ({max_size} bytes) for type {media_type}",
                     error_code="FILE_SIZE_EXCEEDED",
-                    tenant_id=self._tenant_id,
+                    inbox_id=self._inbox_id,
                 )
 
             upload_url = self.client.url_builder.get_media_url()
@@ -179,7 +179,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                     success=False,
                     error=f"No media ID in response for {filename}: {result}",
                     error_code="NO_MEDIA_ID",
-                    tenant_id=self._tenant_id,
+                    inbox_id=self._inbox_id,
                 )
 
             self.logger.info(
@@ -191,7 +191,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                 file_size=file_size,
                 mime_type=media_type,
                 platform=PlatformType.WHATSAPP,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
             )
 
         except Exception as e:
@@ -200,7 +200,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                 success=False,
                 error=str(e),
                 error_code="UPLOAD_FAILED",
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
             )
 
     async def upload_media_from_stream(
@@ -220,7 +220,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                 success=False,
                 error=str(e),
                 error_code="UPLOAD_FAILED",
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
             )
 
     async def upload_media_from_url(
@@ -247,7 +247,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                         success=False,
                         error=f"Download failed: HTTP {response.status_code} from {url}",
                         error_code="DOWNLOAD_FAILED",
-                        tenant_id=self._tenant_id,
+                        inbox_id=self._inbox_id,
                     )
 
                 content_type = (
@@ -259,7 +259,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                         success=False,
                         error=f"Source URL did not provide a usable Content-Type header: {url}",
                         error_code="MIME_TYPE_UNKNOWN",
-                        tenant_id=self._tenant_id,
+                        inbox_id=self._inbox_id,
                     )
 
                 if not self.validate_media_type(content_type):
@@ -267,7 +267,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                         success=False,
                         error=f"Unsupported MIME type '{content_type}' from source URL. Supported types: {sorted(self.supported_media_types)}",
                         error_code="MIME_TYPE_UNSUPPORTED",
-                        tenant_id=self._tenant_id,
+                        inbox_id=self._inbox_id,
                     )
 
                 max_size = self._get_max_size_for_mime_type(content_type)
@@ -279,7 +279,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                         success=False,
                         error=f"Source file size ({content_length_str} bytes) exceeds the limit ({max_size} bytes) for type {content_type}",
                         error_code="FILE_SIZE_EXCEEDED",
-                        tenant_id=self._tenant_id,
+                        inbox_id=self._inbox_id,
                     )
 
                 data = bytearray()
@@ -290,7 +290,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                             success=False,
                             error=f"Download aborted: file size exceeded {max_size} bytes for type {content_type}",
                             error_code="FILE_SIZE_EXCEEDED",
-                            tenant_id=self._tenant_id,
+                            inbox_id=self._inbox_id,
                         )
 
             extension_map = self._get_extension_map()
@@ -315,7 +315,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                 success=False,
                 error=f"Download timed out after {timeout}s: {url}",
                 error_code="DOWNLOAD_FAILED",
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
             )
         except Exception as e:
             self.logger.exception(f"Failed to upload media from URL {url}: {e}")
@@ -323,7 +323,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                 success=False,
                 error=str(e),
                 error_code="DOWNLOAD_FAILED",
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
             )
 
     async def get_media_info(self, media_id: str) -> MediaInfoResult:
@@ -337,7 +337,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                     success=False,
                     error=f"Invalid response for media ID {media_id}: {result}",
                     error_code="INVALID_RESPONSE",
-                    tenant_id=self._tenant_id,
+                    inbox_id=self._inbox_id,
                 )
 
             self.logger.info(f"Successfully retrieved media URL for ID: {media_id}")
@@ -349,7 +349,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                 file_size=result.get("file_size"),
                 sha256=result.get("sha256"),
                 platform=PlatformType.WHATSAPP,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
             )
 
         except Exception as e:
@@ -358,7 +358,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                 success=False,
                 error=str(e),
                 error_code="INFO_RETRIEVAL_FAILED",
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
             )
 
     async def download_media(
@@ -377,7 +377,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                     success=False,
                     error=f"Failed to get media URL for ID {media_id}: {media_info_result.error}",
                     error_code="MEDIA_INFO_FAILED",
-                    tenant_id=self._tenant_id,
+                    inbox_id=self._inbox_id,
                 )
 
             media_url = media_info_result.url
@@ -394,7 +394,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                         success=False,
                         error=f"Download failed for {media_id}: {response.status_code} - {response.text}",
                         error_code=f"HTTP_{response.status_code}",
-                        tenant_id=self._tenant_id,
+                        inbox_id=self._inbox_id,
                     )
 
                 response_content_type = response.headers.get(
@@ -412,7 +412,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                         success=False,
                         error=f"Media file size ({content_length} bytes) exceeds max allowed ({max_size} bytes) for type {response_content_type}",
                         error_code="FILE_SIZE_EXCEEDED",
-                        tenant_id=self._tenant_id,
+                        inbox_id=self._inbox_id,
                     )
 
                 data = bytearray()
@@ -427,7 +427,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                                 success=False,
                                 error=f"Download aborted: file size ({downloaded_size}) exceeded max ({max_size}) bytes for type {response_content_type}",
                                 error_code="FILE_SIZE_EXCEEDED",
-                                tenant_id=self._tenant_id,
+                                inbox_id=self._inbox_id,
                             )
                         data.extend(chunk)
 
@@ -482,7 +482,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                 file_size=downloaded_size,
                 sha256=media_info_result.sha256,
                 platform=PlatformType.WHATSAPP,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
             )
 
             if is_temp_file:
@@ -496,7 +496,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                 success=False,
                 error=str(e),
                 error_code="DOWNLOAD_FAILED",
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
             )
 
     @asynccontextmanager
@@ -570,7 +570,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                     success=True,
                     media_id=media_id,
                     platform=PlatformType.WHATSAPP,
-                    tenant_id=self._tenant_id,
+                    inbox_id=self._inbox_id,
                 )
 
             error_msg = result.get("error", {}).get("message", "Unknown reason")
@@ -580,7 +580,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                 error=f"API indicated deletion failed: {error_msg}",
                 error_code="DELETION_FAILED",
                 platform=PlatformType.WHATSAPP,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
             )
 
         except Exception as e:
@@ -591,7 +591,7 @@ class WhatsAppMediaHandler(IMediaHandler):
                 error=str(e),
                 error_code="DELETION_FAILED",
                 platform=PlatformType.WHATSAPP,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
             )
 
     def validate_media_type(self, mime_type: str) -> bool:

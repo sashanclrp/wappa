@@ -27,7 +27,7 @@ class IMessenger(ABC):
 
     @property
     @abstractmethod
-    def tenant_id(self) -> str: ...
+    def inbox_id(self) -> str: ...
 
     @abstractmethod
     async def send_text(

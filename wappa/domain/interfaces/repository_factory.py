@@ -18,16 +18,16 @@ class IRepositoryFactory(ABC):
     """
     Interface for creating context-aware repository instances.
 
-    Ensures all repositories are bound to the correct tenant and user context.
+    Ensures all repositories are bound to the correct inbox and user context.
     """
 
     @abstractmethod
-    def create_user_repository(self, tenant_id: str, user_id: str) -> IUserRepository:
+    def create_user_repository(self, inbox_id: str, user_id: str) -> IUserRepository:
         """
         Create user repository with context binding.
 
         Args:
-            tenant_id: Tenant identifier
+            inbox_id: Inbox identifier
             user_id: User identifier
 
         Returns:
@@ -36,12 +36,12 @@ class IRepositoryFactory(ABC):
         pass
 
     @abstractmethod
-    def create_state_repository(self, tenant_id: str, user_id: str) -> IStateRepository:
+    def create_state_repository(self, inbox_id: str, user_id: str) -> IStateRepository:
         """
         Create state repository with context binding.
 
         Args:
-            tenant_id: Tenant identifier
+            inbox_id: Inbox identifier
             user_id: User identifier
 
         Returns:
@@ -51,13 +51,13 @@ class IRepositoryFactory(ABC):
 
     @abstractmethod
     def create_shared_state_repository(
-        self, tenant_id: str, user_id: str
+        self, inbox_id: str, user_id: str
     ) -> ISharedStateRepository:
         """
         Create shared state repository with context binding.
 
         Args:
-            tenant_id: Tenant identifier
+            inbox_id: Inbox identifier
             user_id: User identifier
 
         Returns:
@@ -66,12 +66,12 @@ class IRepositoryFactory(ABC):
         pass
 
     @abstractmethod
-    def create_expiry_repository(self, tenant_id: str) -> IExpiryRepository:
+    def create_expiry_repository(self, inbox_id: str) -> IExpiryRepository:
         """
         Create expiry repository with context binding.
 
         Args:
-            tenant_id: Tenant identifier
+            inbox_id: Inbox identifier
 
         Returns:
             Context-bound expiry repository instance
@@ -80,13 +80,13 @@ class IRepositoryFactory(ABC):
 
     @abstractmethod
     def create_pubsub_repository(
-        self, tenant_id: str, user_id: str | None = None
+        self, inbox_id: str, user_id: str | None = None
     ) -> IPubSubRepository:
         """
         Create pub/sub repository with context binding.
 
         Args:
-            tenant_id: Tenant identifier
+            inbox_id: Inbox identifier
             user_id: Optional user identifier (for user-specific channels)
 
         Returns:
@@ -95,12 +95,12 @@ class IRepositoryFactory(ABC):
         pass
 
     @abstractmethod
-    def create_tables_repository(self, tenant_id: str) -> ITablesRepository:
+    def create_tables_repository(self, inbox_id: str) -> ITablesRepository:
         """
         Create tables repository with context binding.
 
         Args:
-            tenant_id: Tenant identifier
+            inbox_id: Inbox identifier
 
         Returns:
             Context-bound tables repository instance

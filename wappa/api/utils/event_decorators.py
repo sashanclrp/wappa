@@ -21,10 +21,7 @@ from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
 from fastapi import Request as FastAPIRequest
 
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
-from wappa.core.logging.context import (
-    get_current_owner_context,
-    get_current_tenant_context,
-)
+from wappa.core.logging.context import get_current_inbox_context
 from wappa.domain.events.api_message_event import APIMessageEvent
 from wappa.domain.interfaces.identity_resolver import IIdentityResolver
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
@@ -161,8 +158,7 @@ def dispatch_message_event(
                 response_success=message_result.success,
                 response_error=message_result.error,
                 meta_response=getattr(message_result, "raw_response", None),
-                tenant_id=get_current_tenant_context() or "unknown",
-                owner_id=get_current_owner_context(),
+                inbox_id=get_current_inbox_context() or "unknown",
                 platform=platform,
             )
             asyncio.create_task(dispatcher.dispatch(event, fastapi_request))
@@ -220,8 +216,7 @@ def fire_api_event(
             response_success=result.success,
             response_error=result.error,
             meta_response=getattr(result, "raw_response", None),
-            tenant_id=get_current_tenant_context() or "unknown",
-            owner_id=get_current_owner_context(),
+            inbox_id=get_current_inbox_context() or "unknown",
             platform=platform,
         )
         await dispatcher.dispatch(event, fastapi_request)

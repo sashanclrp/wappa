@@ -42,18 +42,18 @@ class WappaEventHandler(ABC):
     to define their application's behavior for different webhook events.
 
     Dependencies are injected PER-REQUEST via with_context() method:
-    - tenant_id: Tenant identifier for this request's context
+    - inbox_id: Inbox identifier for this request's context
     - user_id: User identifier for this request's context
-    - messenger: IMessenger created with correct tenant_id for each request
-    - cache_factory: Cache factory for tenant-specific data persistence
+    - messenger: IMessenger created with correct inbox_id for each request
+    - cache_factory: Cache factory for inbox-specific data persistence
     - db: Database session factory for write operations (PostgresDatabasePlugin)
     - db_read: Database session factory for read operations (uses replicas if configured)
 
     IMPORTANT: Each request gets a FRESH handler instance via with_context() to ensure
     thread safety. The base handler acts as a prototype that is cloned per-request.
 
-    This ensures proper multi-tenant support where each webhook is processed
-    with the correct tenant-specific context and dependencies.
+    This ensures proper multi-inbox support where each webhook is processed
+    with the correct inbox-specific context and dependencies.
 
     Database Availability Across Handler Methods:
         All handler methods have access to self.db when PostgresDatabasePlugin is configured:
@@ -101,7 +101,7 @@ class WappaEventHandler(ABC):
     def __init__(self):
         """Initialize event handler as a prototype (dependencies injected via with_context)."""
         # Per-request context (set via with_context() - NOT mutable on prototype)
-        self.tenant_id: str | None = None
+        self.inbox_id: str | None = None
         self.user_id: str | None = None
 
         # Per-request dependencies (set via with_context() - NOT mutable on prototype)
@@ -132,7 +132,7 @@ class WappaEventHandler(ABC):
 
     def with_context(
         self,
-        tenant_id: str,
+        inbox_id: str,
         user_id: str,
         messenger: "IMessenger",
         cache_factory: "ICacheFactory",
@@ -148,9 +148,9 @@ class WappaEventHandler(ABC):
         preventing race conditions when concurrent requests are processed.
 
         Args:
-            tenant_id: Tenant identifier for this request
+            inbox_id: Inbox identifier for this request
             user_id: User identifier for this request (sender for webhooks, recipient for API)
-            messenger: IMessenger instance for this request's tenant
+            messenger: IMessenger instance for this request's inbox
             cache_factory: Cache factory for this request's context
             db: Optional database write session factory
             db_read: Optional database read session factory
@@ -161,7 +161,7 @@ class WappaEventHandler(ABC):
         Example:
             # WebhookController creates cloned handler per request:
             request_handler = base_handler.with_context(
-                tenant_id="acme_corp",
+                inbox_id="acme_corp",
                 user_id="5551234567",
                 messenger=messenger,
                 cache_factory=cache_factory,
@@ -172,7 +172,7 @@ class WappaEventHandler(ABC):
         handler = copy.copy(self)
 
         # Bind per-request context
-        handler.tenant_id = tenant_id
+        handler.inbox_id = inbox_id
         handler.user_id = user_id
 
         # Bind per-request dependencies
@@ -374,7 +374,7 @@ class WappaEventHandler(ABC):
                     pass
 
         Args:
-            event: APIMessageEvent with full context (request, response, tenant)
+            event: APIMessageEvent with full context (request, response, inbox)
 
         Example:
             async def process_api_message(self, event: APIMessageEvent) -> None:
@@ -482,7 +482,7 @@ class WappaEventHandler(ABC):
         """Pre-processing hook for external events. Override to customize."""
         self.logger.debug(
             f"External event received: {event.source}/{event.event_type} "
-            f"(tenant={event.tenant_id}, user={event.user_id})"
+            f"(inbox={event.inbox_id}, user={event.user_id})"
         )
 
     async def _post_process_external_event(self, event: "ExternalEvent") -> None:
@@ -520,7 +520,7 @@ class WappaEventHandler(ABC):
 
         When this method is called, self.db is always available (if DB plugin
         configured). self.messenger and self.cache_factory are available when
-        the cron was registered with tenant_id and user_id.
+        the cron was registered with inbox_id and user_id.
 
         Default: no-op (does nothing unless overridden).
 
@@ -546,7 +546,7 @@ class WappaEventHandler(ABC):
         """Pre-processing hook for cron events. Override to customize."""
         self.logger.debug(
             f"Cron event fired: {event.cron_id} "
-            f"(tenant={event.tenant_id}, expr={event.cron_expr})"
+            f"(inbox={event.inbox_id}, expr={event.cron_expr})"
         )
 
     async def _post_process_cron_event(self, event: "CronEvent") -> None:
@@ -613,10 +613,10 @@ class WappaEventHandler(ABC):
         Returns:
             True if all required context and dependencies are available, False otherwise
         """
-        # Validate context (required for proper multi-tenant operation)
-        if self.tenant_id is None or self.user_id is None:
+        # Validate context (required for proper multi-inbox operation)
+        if self.inbox_id is None or self.user_id is None:
             self.logger.error(
-                f"Request context not set - tenant_id={self.tenant_id}, user_id={self.user_id}. "
+                f"Request context not set - inbox_id={self.inbox_id}, user_id={self.user_id}. "
                 "Ensure with_context() was called before processing."
             )
             return False
@@ -647,7 +647,7 @@ class WappaEventHandler(ABC):
 
         self.logger.debug(
             f"Per-request context validation passed - "
-            f"tenant: {self.tenant_id}, user: {self.user_id}, "
+            f"inbox: {self.inbox_id}, user: {self.user_id}, "
             f"messenger: {self.messenger.__class__.__name__} "
             f"(platform: {self.messenger.platform.value})"
         )
@@ -662,15 +662,15 @@ class WappaEventHandler(ABC):
         """
         return {
             "context": {
-                "tenant_id": self.tenant_id,
+                "inbox_id": self.inbox_id,
                 "user_id": self.user_id,
-                "bound": self.tenant_id is not None and self.user_id is not None,
+                "bound": self.inbox_id is not None and self.user_id is not None,
             },
             "messenger": {
                 "injected": self.messenger is not None,
                 "type": type(self.messenger).__name__ if self.messenger else None,
                 "platform": self.messenger.platform.value if self.messenger else None,
-                "tenant_id": self.messenger.tenant_id if self.messenger else None,
+                "inbox_id": self.messenger.inbox_id if self.messenger else None,
             },
             "cache_factory": {
                 "injected": self.cache_factory is not None,

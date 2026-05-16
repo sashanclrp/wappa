@@ -17,7 +17,7 @@ class SSESubscription:
 
     subscriber_id: str
     queue: asyncio.Queue[dict[str, Any]]
-    tenant_id: str | None
+    inbox_id: str | None
     user_id: str | None
     event_types: set[str] | None
 
@@ -36,7 +36,7 @@ class SSEEventHub:
     async def subscribe(
         self,
         *,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
         event_types: set[str] | None = None,
     ) -> SSESubscription:
@@ -50,7 +50,7 @@ class SSEEventHub:
         subscriber = SSESubscription(
             subscriber_id=str(uuid4()),
             queue=asyncio.Queue(maxsize=self._queue_size),
-            tenant_id=tenant_id,
+            inbox_id=inbox_id,
             user_id=user_id,
             event_types=normalized_events,
         )
@@ -74,7 +74,7 @@ class SSEEventHub:
     ) -> int:
         """Fan out one event to all matching subscribers.
 
-        Identity (tenant, user, BSUID, phone) and metadata are read from the
+        Identity (inbox, user, BSUID, phone) and metadata are read from the
         active ``SSEEventContext``. Callers set that context once per
         request at the framework entry point; publishers stay identity-free.
         """
@@ -94,7 +94,7 @@ class SSEEventHub:
             if not self._matches(
                 subscriber=subscriber,
                 event_type=event_type,
-                tenant_id=ctx.tenant_id,
+                inbox_id=ctx.inbox_id,
                 user_id=ctx.user_id,
             ):
                 continue
@@ -115,7 +115,7 @@ class SSEEventHub:
             source="wappa",
             payload={"reason": "shutdown"},
             context=SSEEventContext(
-                tenant_id="system", user_id="system", platform="system"
+                inbox_id="system", user_id="system", platform="system"
             ),
         )
 
@@ -125,13 +125,13 @@ class SSEEventHub:
     def get_stats(self) -> dict[str, int]:
         """Expose basic connection stats for health checks."""
         subscribers = tuple(self._subscribers.values())
-        tenant_filtered = sum(1 for item in subscribers if item.tenant_id is not None)
+        inbox_filtered = sum(1 for item in subscribers if item.inbox_id is not None)
         user_filtered = sum(1 for item in subscribers if item.user_id is not None)
         event_filtered = sum(1 for item in subscribers if item.event_types is not None)
 
         return {
             "active_subscribers": len(subscribers),
-            "tenant_filtered_subscribers": tenant_filtered,
+            "inbox_filtered_subscribers": inbox_filtered,
             "user_filtered_subscribers": user_filtered,
             "event_filtered_subscribers": event_filtered,
         }
@@ -149,7 +149,7 @@ class SSEEventHub:
             "event_id": str(uuid4()),
             "event_type": event_type,
             "timestamp": datetime.now(UTC).isoformat(),
-            "tenant_id": context.tenant_id,
+            "inbox_id": context.inbox_id,
             "user_id": context.user_id,
             "bsuid": context.bsuid,
             "phone_number": context.phone_number,
@@ -164,11 +164,11 @@ class SSEEventHub:
         *,
         subscriber: SSESubscription,
         event_type: str,
-        tenant_id: str,
+        inbox_id: str,
         user_id: str,
     ) -> bool:
         """Check whether an event should be delivered to a subscriber."""
-        if subscriber.tenant_id is not None and subscriber.tenant_id != tenant_id:
+        if subscriber.inbox_id is not None and subscriber.inbox_id != inbox_id:
             return False
 
         if subscriber.user_id is not None and subscriber.user_id != user_id:

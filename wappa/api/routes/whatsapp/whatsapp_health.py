@@ -52,7 +52,7 @@ async def whatsapp_health_check(
     return {
         "status": "healthy",
         "platform": messenger.platform.value,
-        "tenant_id": messenger.tenant_id,
+        "inbox_id": messenger.inbox_id,
         "api_version": settings.api_version,
         "timestamp": datetime.now(UTC).isoformat(),
         "services": {

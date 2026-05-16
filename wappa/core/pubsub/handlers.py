@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 async def publish_notification(
     event_type: PubSubEventType,
-    tenant: str,
+    inbox_id: str,
     user_id: str,
     platform: str,
     data: dict[str, Any],
@@ -51,7 +51,7 @@ async def publish_notification(
     """
     try:
         publisher = RedisPubSubPublisher(
-            tenant=tenant,
+            inbox=inbox_id,
             user_id=user_id,
             platform=platform,
         )
@@ -79,7 +79,7 @@ async def publish_api_notification(event: APIMessageEvent) -> int:
     """
     return await publish_notification(
         event_type="outgoing_message",
-        tenant=event.tenant_id or "unknown",
+        inbox_id=event.inbox_id or "unknown",
         user_id=event.user_id or event.recipient,
         platform="whatsapp",
         data={
@@ -122,13 +122,13 @@ class PubSubMessageHandler(DefaultMessageHandler):
         """Log message and publish incoming_message notification."""
         await super().log_incoming_message(webhook)
 
-        tenant = webhook.tenant.get_tenant_key() if webhook.tenant else "unknown"
+        inbox_id = webhook.inbox.get_inbox_key() if webhook.inbox else "unknown"
         user_id = webhook.user.user_id if webhook.user else "unknown"
         platform = webhook.platform.value if webhook.platform else "whatsapp"
 
         await publish_notification(
             event_type="incoming_message",
-            tenant=tenant,
+            inbox_id=inbox_id,
             user_id=user_id,
             platform=platform,
             data={
@@ -163,12 +163,12 @@ class PubSubStatusHandler(DefaultStatusHandler):
         """Handle status and publish status_change notification."""
         result = await super().handle_status(webhook)
 
-        tenant = webhook.tenant.get_tenant_key() if webhook.tenant else "unknown"
+        inbox_id = webhook.inbox.get_inbox_key() if webhook.inbox else "unknown"
         platform = webhook.platform.value if webhook.platform else "whatsapp"
 
         await publish_notification(
             event_type="status_change",
-            tenant=tenant,
+            inbox_id=inbox_id,
             user_id=webhook.recipient_id,
             platform=platform,
             data={

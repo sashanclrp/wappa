@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 class SSEMessengerWrapper(IMessenger):
     """Wrap ``IMessenger`` and publish outgoing bot payloads to SSE.
 
-    Identity (tenant, user_id, BSUID, phone) and metadata come from the
+    Identity (inbox, user_id, BSUID, phone) and metadata come from the
     active ``SSEEventContext`` at publish time, so a single wrapper can
     serve every request without per-construction plumbing.
     """
@@ -53,8 +53,8 @@ class SSEMessengerWrapper(IMessenger):
         return self._inner.platform
 
     @property
-    def tenant_id(self) -> str:
-        return self._inner.tenant_id
+    def inbox_id(self) -> str:
+        return self._inner.inbox_id
 
     async def _send_with_sse(
         self,

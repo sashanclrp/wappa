@@ -178,7 +178,7 @@ class JSONCacheExampleHandler(WappaEventHandler):
 
             # Create dependencies container with cache factory (Dependency Inversion)
             # The cache factory creates context-aware cache instances per-request
-            # with tenant and user identity already bound
+            # with inbox and user identity already bound
             dependencies = ScoreDependencies(
                 messenger=self.messenger,
                 cache_factory=self.cache_factory,

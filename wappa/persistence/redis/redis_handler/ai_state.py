@@ -9,17 +9,17 @@ from pydantic import BaseModel, Field
 from ....domain.interfaces.cache_interfaces import IAIStateCache
 from ..ops import hget, hincrby_with_expire, hset
 from .utils.serde import dumps, loads
-from .utils.tenant_cache import TenantCache
+from .utils.inbox_cache import InboxCache
 
 logger = logging.getLogger("RedisAIState")
 
 
-class RedisAIState(TenantCache, IAIStateCache):
+class RedisAIState(InboxCache, IAIStateCache):
     user_id: str = Field(..., min_length=1)
     redis_alias: str = "ai_state"  # Uses ai_state pool (db=4)
 
     def _key(self, agent_name: str) -> str:
-        return self.keys.aistate(self.tenant, agent_name, self.user_id)
+        return self.keys.aistate(self.inbox, agent_name, self.user_id)
 
     async def get(
         self, agent_name: str, models: type[BaseModel] | None = None
@@ -123,7 +123,7 @@ class RedisAIState(TenantCache, IAIStateCache):
         return await super().renew_ttl(self._key(agent_name), ttl)
 
     async def delete_all_for_user(self) -> int:
-        pattern = f"{self.tenant}:{self.keys.aistate_prefix}:*:{self.user_id}"
+        pattern = f"{self.inbox}:{self.keys.aistate_prefix}:*:{self.user_id}"
         logger.debug(
             f"Deleting all AI agent states for user '{self.user_id}' "
             f"(pattern: '{pattern}')"
@@ -141,7 +141,7 @@ class RedisAIState(TenantCache, IAIStateCache):
 
         safe_prefix = prefix.replace(":", "_")
         pattern = (
-            f"{self.tenant}:{self.keys.aistate_prefix}:{safe_prefix}*:{self.user_id}"
+            f"{self.inbox}:{self.keys.aistate_prefix}:{safe_prefix}*:{self.user_id}"
         )
 
         logger.debug(

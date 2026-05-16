@@ -102,9 +102,9 @@ class MessageLog(BaseModel):
         default_factory=list, description="List of all messages sent by this user"
     )
 
-    tenant_id: str | None = Field(
+    inbox_id: str | None = Field(
         None,
-        description="Tenant/business ID that received the messages",
+        description="Inbox/business ID that received the messages",
         max_length=100,
     )
 
@@ -123,7 +123,7 @@ class MessageLog(BaseModel):
         """Get the most recent messages from the user's history."""
         return self.text_message[-count:] if self.text_message else []
 
-    @field_validator("user_id", "tenant_id", mode="before")
+    @field_validator("user_id", "inbox_id", mode="before")
     @classmethod
     def validate_string_ids(cls, v) -> str:
         """Convert ID fields to string if they're integers."""

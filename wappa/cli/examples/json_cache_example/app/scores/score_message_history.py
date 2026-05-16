@@ -82,7 +82,7 @@ class MessageHistoryScore(ScoreBase):
         try:
             user_data = extract_user_data(webhook)
             user_id = user_data["user_id"]
-            tenant_id = user_data["tenant_id"]
+            inbox_id = user_data["inbox_id"]
 
             message_text = webhook.get_message_text()
             message_type = webhook.get_message_type_name()
@@ -100,7 +100,7 @@ class MessageHistoryScore(ScoreBase):
                 )
             else:
                 # Create new message history
-                message_log = MessageLog(user_id=user_id, tenant_id=tenant_id)
+                message_log = MessageLog(user_id=user_id, inbox_id=inbox_id)
                 self.logger.info(f"📝 Creating new message history for {user_id}")
 
             # Add the new message to history

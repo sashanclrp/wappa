@@ -101,7 +101,7 @@ class MessageResult(BaseModel):
     error: str | None = None
     error_code: str | None = None
     timestamp: datetime = Field(default_factory=_utc_now)
-    tenant_id: str | None = None  # phone_number_id in WhatsApp context
+    inbox_id: str | None = None
     api_response: WhatsAppAPIResponse | None = Field(
         None,
         description="Full API response (for advanced use cases)",
@@ -114,7 +114,7 @@ class MessageResult(BaseModel):
         response: WhatsAppAPIResponse,
         *,
         success: bool = True,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         error: str | None = None,
         error_code: str | None = None,
     ) -> "MessageResult":
@@ -125,7 +125,7 @@ class MessageResult(BaseModel):
             recipient=contact.recipient_id if contact else None,
             recipient_bsuid=contact.bsuid if contact else None,
             recipient_phone=contact.wa_id if contact and contact.wa_id else None,
-            tenant_id=tenant_id,
+            inbox_id=inbox_id,
             error=error,
             error_code=error_code,
             api_response=response,
@@ -136,11 +136,11 @@ class MessageResult(BaseModel):
         cls,
         response_payload: dict,
         *,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         fallback_recipient: str | None = None,
     ) -> "MessageResult":
         response = WhatsAppAPIResponse.model_validate(response_payload)
-        result = cls.from_api_response(response, tenant_id=tenant_id)
+        result = cls.from_api_response(response, inbox_id=inbox_id)
         if result.recipient is None:
             result.recipient = fallback_recipient
         return result

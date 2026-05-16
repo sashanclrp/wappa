@@ -24,26 +24,26 @@ class MemoryStateHandler(IStateCache):
     Maintains the same API for seamless cache backend switching.
     """
 
-    def __init__(self, tenant: str, user_id: str):
+    def __init__(self, inbox: str, user_id: str):
         """
         Initialize Memory state handler.
 
         Args:
-            tenant: Tenant identifier
+            inbox: Inbox identifier
             user_id: User identifier
         """
-        if not tenant or not user_id:
+        if not inbox or not user_id:
             raise ValueError(
-                f"Missing required parameters: tenant={tenant}, user_id={user_id}"
+                f"Missing required parameters: inbox={inbox}, user_id={user_id}"
             )
 
-        self.tenant = tenant
+        self.inbox = inbox
         self.user_id = user_id
         self.keys = default_key_factory
 
     def _key(self, handler_name: str) -> str:
         """Build handler key using KeyFactory (same as Redis)."""
-        return self.keys.handler(self.tenant, handler_name, self.user_id)
+        return self.keys.handler(self.inbox, handler_name, self.user_id)
 
     # ---- Public API matching RedisStateHandler ----
     async def get(
@@ -61,7 +61,7 @@ class MemoryStateHandler(IStateCache):
         """
         key = self._key(handler_name)
         return await storage_manager.get(
-            "states", self.tenant, self.user_id, key, models
+            "states", self.inbox, self.user_id, key, models
         )
 
     async def upsert(
@@ -83,7 +83,7 @@ class MemoryStateHandler(IStateCache):
         """
         key = self._key(handler_name)
         return await storage_manager.set(
-            "states", self.tenant, self.user_id, key, data, ttl
+            "states", self.inbox, self.user_id, key, data, ttl
         )
 
     async def delete(self, handler_name: str) -> int:
@@ -97,7 +97,7 @@ class MemoryStateHandler(IStateCache):
             1 if deleted, 0 if didn't exist
         """
         key = self._key(handler_name)
-        success = await storage_manager.delete("states", self.tenant, self.user_id, key)
+        success = await storage_manager.delete("states", self.inbox, self.user_id, key)
         return 1 if success else 0
 
     async def exists(self, handler_name: str) -> bool:
@@ -111,7 +111,7 @@ class MemoryStateHandler(IStateCache):
             True if exists, False otherwise
         """
         key = self._key(handler_name)
-        return await storage_manager.exists("states", self.tenant, self.user_id, key)
+        return await storage_manager.exists("states", self.inbox, self.user_id, key)
 
     async def get_field(self, handler_name: str, field: str) -> Any | None:
         """
@@ -248,7 +248,7 @@ class MemoryStateHandler(IStateCache):
             Remaining TTL in seconds, -1 if no expiry, -2 if doesn't exist
         """
         key = self._key(handler_name)
-        return await storage_manager.get_ttl("states", self.tenant, self.user_id, key)
+        return await storage_manager.get_ttl("states", self.inbox, self.user_id, key)
 
     async def renew_ttl(self, handler_name: str, ttl: int) -> bool:
         """
@@ -263,37 +263,37 @@ class MemoryStateHandler(IStateCache):
         """
         key = self._key(handler_name)
         return await storage_manager.set_ttl(
-            "states", self.tenant, self.user_id, key, ttl
+            "states", self.inbox, self.user_id, key, ttl
         )
 
     async def delete_all_for_user(self) -> int:
         all_keys = await storage_manager.get_all_keys(
-            "states", self.tenant, self.user_id
+            "states", self.inbox, self.user_id
         )
         for key in all_keys:
-            await storage_manager.delete("states", self.tenant, self.user_id, key)
+            await storage_manager.delete("states", self.inbox, self.user_id, key)
         return len(all_keys)
 
     async def delete_by_handler_prefix(self, prefix: str) -> int:
         if not prefix:
             raise ValueError("prefix must not be empty")
         all_keys = await storage_manager.get_all_keys(
-            "states", self.tenant, self.user_id
+            "states", self.inbox, self.user_id
         )
-        key_prefix = f"{self.tenant}:{self.keys.handler_prefix}:{prefix}"
+        key_prefix = f"{self.inbox}:{self.keys.handler_prefix}:{prefix}"
         key_suffix = f":{self.user_id}"
         count = 0
         for key in list(all_keys):
             if key.startswith(key_prefix) and key.endswith(key_suffix):
-                await storage_manager.delete("states", self.tenant, self.user_id, key)
+                await storage_manager.delete("states", self.inbox, self.user_id, key)
                 count += 1
         return count
 
     async def list_handlers(self, prefix: str | None = None) -> list[str]:
         all_keys = await storage_manager.get_all_keys(
-            "states", self.tenant, self.user_id
+            "states", self.inbox, self.user_id
         )
-        key_prefix = f"{self.tenant}:{self.keys.handler_prefix}:"
+        key_prefix = f"{self.inbox}:{self.keys.handler_prefix}:"
         key_suffix = f":{self.user_id}"
         safe_prefix = prefix or ""
         names = []
@@ -306,14 +306,14 @@ class MemoryStateHandler(IStateCache):
 
     @classmethod
     async def list_users_with_handler(
-        cls, tenant_id: str, handler_name: str
+        cls, inbox_id: str, handler_name: str
     ) -> list[str]:
         from .utils.memory_store import get_memory_store
         from ...redis.redis_handler.utils.key_factory import default_key_factory as kf
 
         store = get_memory_store()
-        key_prefix = f"{tenant_id}:{kf.handler_prefix}:{handler_name}:"
-        ctx_prefix = f"{tenant_id}_"
+        key_prefix = f"{inbox_id}:{kf.handler_prefix}:{handler_name}:"
+        ctx_prefix = f"{inbox_id}_"
         user_ids: list[str] = []
         async with store._locks["states"]:
             for context_key, context_store in store._store["states"].items():

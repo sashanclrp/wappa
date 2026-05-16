@@ -175,8 +175,8 @@ class RedisCacheExampleHandler(WappaEventHandler):
                 - request_payload: Original API request body
                 - response_success: Whether the send was successful
                 - response_error: Error message if failed
-                - tenant_id: Current tenant context
-                - owner_id: Current owner context
+                - inbox_id: Current inbox context
+                - inbox_id: Current inbox context
         """
         try:
             # Log the API message event
@@ -223,7 +223,7 @@ class RedisCacheExampleHandler(WappaEventHandler):
 
             # Create dependencies container with cache factory (Dependency Inversion)
             # The cache factory creates context-aware cache instances per-request
-            # with tenant and user identity already bound
+            # with inbox and user identity already bound
             dependencies = ScoreDependencies(
                 messenger=self.messenger,
                 cache_factory=self.cache_factory,

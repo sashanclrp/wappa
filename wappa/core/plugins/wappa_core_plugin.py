@@ -6,7 +6,7 @@ import httpx
 from fastapi import FastAPI
 
 from wappa.api.middleware.error_handler import ErrorHandlerMiddleware
-from wappa.api.middleware.owner import OwnerMiddleware
+from wappa.api.middleware.inbox import InboxMiddleware
 from wappa.api.middleware.request_logging import RequestLoggingMiddleware
 from wappa.api.routes.health import router as health_router
 from wappa.api.routes.whatsapp_combined import whatsapp_router
@@ -30,7 +30,7 @@ class WappaCorePlugin:
         logger.debug("🏗️ Configuring WappaCorePlugin...")
 
         # Higher priority numbers run closer to routes (inner middleware)
-        builder.add_middleware(OwnerMiddleware, priority=90)
+        builder.add_middleware(InboxMiddleware, priority=90)
         builder.add_middleware(ErrorHandlerMiddleware, priority=80)
         builder.add_middleware(RequestLoggingMiddleware, priority=70)
 
@@ -59,7 +59,7 @@ class WappaCorePlugin:
 
             logger.info(f"🚀 Starting Wappa Framework v{settings.version}")
             logger.info(f"📊 Environment: {settings.environment}")
-            logger.info(f"👤 Owner ID: {settings.owner_id}")
+            logger.info(f"📥 Inbox ID: {settings.inbox_id}")
             logger.info(f"📝 Log level: {settings.log_level}")
             logger.info(f"💾 Cache type: {self.cache_type.value}")
 

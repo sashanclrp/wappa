@@ -24,26 +24,26 @@ class JSONUser(IUserCache):
     Maintains the same API for seamless cache backend switching.
     """
 
-    def __init__(self, tenant: str, user_id: str):
+    def __init__(self, inbox: str, user_id: str):
         """
         Initialize JSON user handler.
 
         Args:
-            tenant: Tenant identifier
+            inbox: Inbox identifier
             user_id: User identifier
         """
-        if not tenant or not user_id:
+        if not inbox or not user_id:
             raise ValueError(
-                f"Missing required parameters: tenant={tenant}, user_id={user_id}"
+                f"Missing required parameters: inbox={inbox}, user_id={user_id}"
             )
 
-        self.tenant = tenant
+        self.inbox = inbox
         self.user_id = user_id
         self.keys = default_key_factory
 
     def _key(self) -> str:
         """Build user key using KeyFactory (same as Redis)."""
-        return self.keys.user(self.tenant, self.user_id)
+        return self.keys.user(self.inbox, self.user_id)
 
     # ---- Public API matching RedisUser ----
     async def get(self, models: type[BaseModel] | None = None) -> dict[str, Any] | None:
@@ -58,7 +58,7 @@ class JSONUser(IUserCache):
         """
         key = self._key()
         return await storage_manager.get(
-            "users", self.tenant, self.user_id, key, models
+            "users", self.inbox, self.user_id, key, models
         )
 
     async def upsert(
@@ -76,7 +76,7 @@ class JSONUser(IUserCache):
         """
         key = self._key()
         return await storage_manager.set(
-            "users", self.tenant, self.user_id, key, data, ttl
+            "users", self.inbox, self.user_id, key, data, ttl
         )
 
     async def delete(self) -> int:
@@ -87,7 +87,7 @@ class JSONUser(IUserCache):
             1 if deleted, 0 if didn't exist
         """
         key = self._key()
-        success = await storage_manager.delete("users", self.tenant, self.user_id, key)
+        success = await storage_manager.delete("users", self.inbox, self.user_id, key)
         return 1 if success else 0
 
     async def exists(self) -> bool:
@@ -98,7 +98,7 @@ class JSONUser(IUserCache):
             True if exists, False otherwise
         """
         key = self._key()
-        return await storage_manager.exists("users", self.tenant, self.user_id, key)
+        return await storage_manager.exists("users", self.inbox, self.user_id, key)
 
     async def get_field(self, field: str) -> Any | None:
         """
@@ -215,7 +215,7 @@ class JSONUser(IUserCache):
         Returns:
             Remaining TTL in seconds, -1 if no expiry, -2 if doesn't exist
         """
-        return await storage_manager.get_ttl("users", self.tenant, self.user_id)
+        return await storage_manager.get_ttl("users", self.inbox, self.user_id)
 
     async def renew_ttl(self, ttl: int) -> bool:
         """
@@ -227,4 +227,4 @@ class JSONUser(IUserCache):
         Returns:
             True if successful, False otherwise
         """
-        return await storage_manager.set_ttl("users", self.tenant, self.user_id, ttl)
+        return await storage_manager.set_ttl("users", self.inbox, self.user_id, ttl)

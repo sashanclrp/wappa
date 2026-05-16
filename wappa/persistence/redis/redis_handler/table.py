@@ -8,12 +8,12 @@ from pydantic import BaseModel
 from ....domain.interfaces.cache_interfaces import ITableCache
 from ..ops import hget, hincrby_with_expire
 from .utils.serde import loads
-from .utils.tenant_cache import TenantCache
+from .utils.inbox_cache import InboxCache
 
 logger = logging.getLogger("RedisTable")
 
 
-class RedisTable(TenantCache, ITableCache):
+class RedisTable(InboxCache, ITableCache):
     """
     Repository for table data management (generic DataFrames/rows).
 
@@ -36,7 +36,7 @@ class RedisTable(TenantCache, ITableCache):
 
     def _key(self, table_name: str, pkid: str) -> str:
         """Build table key using KeyFactory"""
-        return self.keys.table(self.tenant, table_name, pkid)
+        return self.keys.table(self.inbox, table_name, pkid)
 
     # ---- Public API extracted from RedisHandler Table methods ---------------
     async def get(
@@ -140,7 +140,7 @@ class RedisTable(TenantCache, ITableCache):
             value: Value to match
             models: Optional BaseModel class for full object reconstruction
         """
-        pattern = self.keys.table(self.tenant, table_name, "*")
+        pattern = self.keys.table(self.inbox, table_name, "*")
         return await self._find_by_field(pattern, field, value, models=models)
 
     async def delete_all_by_pkid(self, pkid: str) -> int:
@@ -148,10 +148,10 @@ class RedisTable(TenantCache, ITableCache):
         Delete all table rows across all tables with same pkid (was delete_all_tables_by_pkid)
 
         This creates a pattern that matches any table with the given pkid:
-        tenant:df:*:pkid:safe_pkid
+        inbox:df:*:pkid:safe_pkid
         """
         safe_pkid = pkid.replace(":", "_")
-        pattern = f"{self.tenant}:{self.keys.table_prefix}:*:{self.keys.pk_marker}:{safe_pkid}"
+        pattern = f"{self.inbox}:{self.keys.table_prefix}:*:{self.keys.pk_marker}:{safe_pkid}"
 
         logger.info(
             f"Deleting all table data with pkid '{pkid}' (pattern: '{pattern}')"
@@ -193,12 +193,12 @@ class RedisTable(TenantCache, ITableCache):
 
         safe_table = table_name.replace(":", "_")
         pattern = (
-            f"{self.tenant}:{self.keys.table_prefix}:{safe_table}"
+            f"{self.inbox}:{self.keys.table_prefix}:{safe_table}"
             f":{self.keys.pk_marker}:*"
         )
 
         logger.debug(
-            f"Deleting all rows in table '{table_name}' for tenant '{self.tenant}' "
+            f"Deleting all rows in table '{table_name}' for inbox '{self.inbox}' "
             f"(pattern: '{pattern}')"
         )
 
@@ -207,17 +207,17 @@ class RedisTable(TenantCache, ITableCache):
         if count > 0:
             logger.info(
                 f"Deleted {count} row(s) from table '{table_name}' "
-                f"for tenant '{self.tenant}'"
+                f"for inbox '{self.inbox}'"
             )
         else:
             logger.debug(
-                f"No rows found in table '{table_name}' for tenant '{self.tenant}'"
+                f"No rows found in table '{table_name}' for inbox '{self.inbox}'"
             )
 
         return count
 
     async def list_pkids(self, table_name: str) -> list[str]:
-        pattern = self.keys.table(self.tenant, table_name, "*")
+        pattern = self.keys.table(self.inbox, table_name, "*")
         pkid_marker = f":{self.keys.pk_marker}:"
 
         keys = await self._scan_keys_by_pattern(pattern)
@@ -246,7 +246,7 @@ class RedisTable(TenantCache, ITableCache):
         """
         from ..ops import scan_keys
 
-        pattern = self.keys.table(self.tenant, table_name, "*")
+        pattern = self.keys.table(self.inbox, table_name, "*")
         results = []
         cursor = "0"
 

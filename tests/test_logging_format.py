@@ -107,7 +107,7 @@ def test_json_formatter_parses_tenant_context_prefix() -> None:
     fmt = WappaJSONFormatter()
     record = _make_record("[T:15551234567] webhook failed")
     obj = json.loads(fmt.format(record))
-    assert obj["tenant"] == "15551234567"
+    assert obj["inbox"] == "15551234567"
     assert obj["msg"] == "webhook failed"
     assert "user" not in obj
 
@@ -116,7 +116,7 @@ def test_json_formatter_parses_tenant_and_user_prefix() -> None:
     fmt = WappaJSONFormatter()
     record = _make_record("[T:111][U:999] done")
     obj = json.loads(fmt.format(record))
-    assert obj["tenant"] == "111"
+    assert obj["inbox"] == "111"
     assert obj["user"] == "999"
     assert obj["msg"] == "done"
 
@@ -126,7 +126,7 @@ def test_json_formatter_no_context_prefix() -> None:
     record = _make_record("plain message without prefix")
     obj = json.loads(fmt.format(record))
     assert obj["msg"] == "plain message without prefix"
-    assert "tenant" not in obj
+    assert "inbox" not in obj
     assert "user" not in obj
 
 

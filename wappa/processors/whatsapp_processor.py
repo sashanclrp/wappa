@@ -32,7 +32,7 @@ if TYPE_CHECKING:
         IncomingMessageWebhook,
         StatusWebhook,
         SystemWebhook,
-        TenantBase,
+        InboxBase,
         UniversalWebhook,
         UserBase,
         WhatsAppIncomingWebhookData,
@@ -298,35 +298,35 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     # ===== Universal Webhook Interface Creation Methods =====
 
     async def create_universal_webhook(
-        self, payload: dict[str, Any], tenant_id: str | None = None, **kwargs
+        self, payload: dict[str, Any], inbox_id: str | None = None, **kwargs
     ) -> "UniversalWebhook":
         try:
             webhook = self.parse_webhook_container(payload)
             self.logger.debug(f"📨 Raw WhatsApp webhook received: {payload}")
 
-            tenant_base = self._create_tenant_base(webhook, tenant_id)
+            inbox_base = self._create_inbox_base(webhook, inbox_id)
 
             # System events are checked BEFORE incoming messages because system
             # messages (type=="system") arrive in the messages field.
             if webhook.is_system_event:
                 universal_webhook = await self._create_system_webhook(
-                    webhook, tenant_base, **kwargs
+                    webhook, inbox_base, **kwargs
                 )
             elif webhook.is_incoming_message:
                 universal_webhook = await self._create_incoming_message_webhook(
-                    webhook, tenant_base, **kwargs
+                    webhook, inbox_base, **kwargs
                 )
             elif webhook.is_status_update:
                 universal_webhook = await self._create_status_webhook(
-                    webhook, tenant_base, **kwargs
+                    webhook, inbox_base, **kwargs
                 )
             elif webhook.has_errors:
                 universal_webhook = await self._create_error_webhook(
-                    webhook, tenant_base, **kwargs
+                    webhook, inbox_base, **kwargs
                 )
             elif webhook.is_custom_field and self._field_registry is not None:
                 universal_webhook = await self._create_custom_webhook(
-                    webhook, tenant_base, payload, **kwargs
+                    webhook, inbox_base, payload, **kwargs
                 )
             else:
                 universal_webhook = None
@@ -347,7 +347,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 )
 
                 return ErrorWebhook(
-                    tenant=tenant_base,
+                    inbox=inbox_base,
                     errors=[error_detail],
                     timestamp=datetime.now(UTC),
                     error_level="webhook",
@@ -357,8 +357,8 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
             universal_webhook.set_raw_webhook_data(payload)
 
-            # 3-context system: owner_id (URL), tenant_id (JSON), user_id (JSON)
-            webhook_tenant_id = tenant_base.platform_tenant_id
+            # Context: inbox_id (from URL or JSON), user_id (from JSON)
+            webhook_inbox_id = inbox_base.platform_account_id
             webhook_user_id = None
             if getattr(universal_webhook, "user", None):
                 webhook_user_id = universal_webhook.user.user_id
@@ -367,12 +367,12 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             # ErrorWebhook has no user context (system-level errors)
 
             set_request_context(
-                tenant_id=webhook_tenant_id,
+                inbox_id=webhook_inbox_id,
                 user_id=webhook_user_id,
             )
 
             self.logger.debug(
-                f"✅ Set webhook context - tenant_id: {webhook_tenant_id}, user_id: {webhook_user_id}"
+                f"✅ Set webhook context - inbox_id: {webhook_inbox_id}, user_id: {webhook_user_id}"
             )
 
             return universal_webhook
@@ -385,32 +385,32 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 PlatformType.WHATSAPP,
             ) from e
 
-    def _create_tenant_base(
-        self, webhook: BaseWebhook, tenant_id: str | None = None
-    ) -> "TenantBase":
-        from wappa.webhooks.core.webhook_interfaces import TenantBase
+    def _create_inbox_base(
+        self, webhook: BaseWebhook, inbox_id: str | None = None
+    ) -> "InboxBase":
+        from wappa.webhooks.core.webhook_interfaces import InboxBase
 
         # Built-in field payloads carry value.metadata with phone number info.
         # Custom registered fields (e.g. message_template_status_update) do
-        # not — fall back to the WABA ID + URL-supplied tenant_id.
+        # not — fall back to the WABA ID + URL-supplied inbox_id.
         first_value = webhook.entry[0].changes[0].value
         metadata = getattr(first_value, "metadata", None)
         if metadata is not None:
-            return TenantBase(
-                business_phone_number_id=metadata.phone_number_id,
-                display_phone_number=metadata.display_phone_number,
-                platform_tenant_id=metadata.phone_number_id,
+            return InboxBase(
+                inbox_id=metadata.phone_number_id,
+                display_address=metadata.display_phone_number,
+                platform_account_id=metadata.phone_number_id,
             )
 
         waba_id = webhook.entry[0].id
-        return TenantBase(
-            business_phone_number_id="",
-            display_phone_number="",
-            platform_tenant_id=tenant_id or waba_id,
+        return InboxBase(
+            inbox_id="",
+            display_address="",
+            platform_account_id=inbox_id or waba_id,
         )
 
     async def _create_incoming_message_webhook(
-        self, webhook: BaseWebhook, tenant_base: "TenantBase", **kwargs
+        self, webhook: BaseWebhook, inbox_base: "InboxBase", **kwargs
     ) -> "IncomingMessageWebhook":
         from wappa.webhooks.core.webhook_interfaces import IncomingMessageWebhook
 
@@ -444,7 +444,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         ad_referral = self._extract_ad_referral(raw_message)
 
         return IncomingMessageWebhook(
-            tenant=tenant_base,
+            inbox=inbox_base,
             user=user_base,
             whatsapp=whatsapp_data,
             message=message,
@@ -457,7 +457,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         )
 
     async def _create_status_webhook(
-        self, webhook: BaseWebhook, tenant_base: "TenantBase", **kwargs
+        self, webhook: BaseWebhook, inbox_base: "InboxBase", **kwargs
     ) -> "StatusWebhook":
         from wappa.webhooks.core.webhook_interfaces import StatusWebhook
 
@@ -486,7 +486,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         canonical_user_id = bsuid_clean or recipient_phone_id or None
 
         return StatusWebhook(
-            tenant=tenant_base,
+            inbox=inbox_base,
             message_id=getattr(status, "message_id", ""),
             status=getattr(status, "status", "unknown"),
             recipient_phone_id=recipient_phone_id,
@@ -502,7 +502,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         )
 
     async def _create_error_webhook(
-        self, webhook: BaseWebhook, tenant_base: "TenantBase", **kwargs
+        self, webhook: BaseWebhook, inbox_base: "InboxBase", **kwargs
     ) -> "ErrorWebhook":
         from wappa.webhooks.core.webhook_interfaces import ErrorDetailBase, ErrorWebhook
 
@@ -540,7 +540,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             error_details.append(error_detail)
 
         return ErrorWebhook(
-            tenant=tenant_base,
+            inbox=inbox_base,
             errors=error_details,
             timestamp=datetime.now(UTC),
             error_level="system",
@@ -551,7 +551,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     async def _create_custom_webhook(
         self,
         webhook: BaseWebhook,
-        tenant_base: "TenantBase",
+        inbox_base: "InboxBase",
         payload: dict[str, Any],
         **kwargs,
     ) -> "CustomWebhook":
@@ -585,7 +585,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             ) from e
 
         return CustomWebhook(
-            tenant=tenant_base,
+            inbox=inbox_base,
             field_name=field_name,
             parsed=parsed,
             raw_value=raw_value,
@@ -595,7 +595,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         )
 
     async def _create_system_webhook(
-        self, webhook: BaseWebhook, tenant_base: "TenantBase", **kwargs
+        self, webhook: BaseWebhook, inbox_base: "InboxBase", **kwargs
     ) -> "SystemWebhook":
         # Handles three source types:
         # - field: "user_preferences"           → MARKETING_PREFERENCE
@@ -709,7 +709,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 )
 
         return SystemWebhook(
-            tenant=tenant_base,
+            inbox=inbox_base,
             system_event_type=system_event_type,
             event_detail=event_detail,
             user=user_base,

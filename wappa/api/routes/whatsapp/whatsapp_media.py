@@ -54,7 +54,7 @@ router = APIRouter(
     tags=["WhatsApp - Media"],
     responses={
         400: {"description": "Bad Request - Invalid media format or size"},
-        401: {"description": "Unauthorized - Invalid tenant credentials"},
+        401: {"description": "Unauthorized - Invalid inbox credentials"},
         404: {"description": "Not Found - Media not found"},
         413: {"description": "Payload Too Large - Media file too large"},
         415: {"description": "Unsupported Media Type - Invalid file type"},

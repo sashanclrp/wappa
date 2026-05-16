@@ -23,7 +23,7 @@ from .base_components import (
     ErrorDetailBase,
     ForwardContextBase,
     SystemEventDetail,
-    TenantBase,
+    InboxBase,
     UserBase,
 )
 from .universal_webhooks import (
@@ -39,7 +39,7 @@ from .universal_webhooks import (
 
 __all__ = [
     # Base components
-    "TenantBase",
+    "InboxBase",
     "UserBase",
     "BusinessContextBase",
     "ForwardContextBase",

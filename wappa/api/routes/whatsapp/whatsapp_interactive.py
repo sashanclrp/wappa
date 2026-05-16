@@ -67,7 +67,7 @@ router = APIRouter(
     tags=["WhatsApp - Interactive"],
     responses={
         400: {"description": "Bad Request - Invalid interactive message format"},
-        401: {"description": "Unauthorized - Invalid tenant credentials"},
+        401: {"description": "Unauthorized - Invalid inbox credentials"},
         404: {"description": "Not Found - Recipient or resource not found"},
         413: {"description": "Payload Too Large - Interactive content too large"},
         429: {"description": "Rate Limited - Too many requests"},

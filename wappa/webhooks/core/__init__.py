@@ -32,7 +32,7 @@ from .webhook_interfaces import (
     IncomingMessageWebhook,
     StatusWebhook,
     # Base components
-    TenantBase,
+    InboxBase,
     UniversalWebhook,
     UserBase,
 )
@@ -46,7 +46,7 @@ __all__ = [
     "ErrorWebhook",
     "UniversalWebhook",
     # Base components
-    "TenantBase",
+    "InboxBase",
     "UserBase",
     "BusinessContextBase",
     "ForwardContextBase",

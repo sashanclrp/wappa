@@ -23,12 +23,12 @@ logger = logging.getLogger(__name__)
 
 class PubSubMessengerWrapper(IMessenger):
     # Wraps IMessenger and publishes bot_reply notifications on send.
-    # Channel: wappa:notify:{tenant}:{user_id}:bot_reply
+    # Channel: wappa:notify:{inbox_id}:{user_id}:bot_reply
 
     def __init__(
         self,
         inner: IMessenger,
-        tenant: str,
+        inbox_id: str,
         user_id: str,
     ):
         warnings.warn(
@@ -39,7 +39,7 @@ class PubSubMessengerWrapper(IMessenger):
             stacklevel=2,
         )
         self._inner = inner
-        self._tenant = tenant
+        self._inbox_id = inbox_id
         self._user_id = user_id
 
     async def _publish_bot_reply(
@@ -52,7 +52,7 @@ class PubSubMessengerWrapper(IMessenger):
 
         await publish_notification(
             event_type="bot_reply",
-            tenant=self._tenant,
+            inbox_id=self._inbox_id,
             user_id=self._user_id,
             platform=self._inner.platform.value,
             data={
@@ -76,8 +76,8 @@ class PubSubMessengerWrapper(IMessenger):
         return self._inner.platform
 
     @property
-    def tenant_id(self) -> str:
-        return self._inner.tenant_id
+    def inbox_id(self) -> str:
+        return self._inner.inbox_id
 
     # Basic messaging
     async def send_text(

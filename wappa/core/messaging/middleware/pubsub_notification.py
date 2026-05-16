@@ -2,7 +2,7 @@
 
 Replaces the legacy ``PubSubMessengerWrapper``. Publishes a compact
 notification (message_id + message_type) on the
-``wappa:notify:{tenant}:{user_id}:bot_reply`` channel after every
+``wappa:notify:{inbox_id}:{user_id}:bot_reply`` channel after every
 successful outgoing send. Identity comes from the active
 ``SSEEventContext`` (set once per request at the framework entry point)
 so the middleware is constructed once at app startup and shared across
@@ -52,7 +52,7 @@ class PubSubNotificationMiddleware(MessengerMiddleware):
 
         await publish_notification(
             event_type="bot_reply",
-            tenant=ctx.tenant_id,
+            inbox_id=ctx.inbox_id,
             user_id=ctx.user_id,
             platform=ctx.platform,
             data={

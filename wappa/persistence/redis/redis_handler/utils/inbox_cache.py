@@ -19,21 +19,21 @@ from ...redis_client import PoolAlias
 from .key_factory import KeyFactory
 from .serde import dumps, dumps_hash, loads, loads_hash
 
-logger = logging.getLogger("TenantCache")
+logger = logging.getLogger("InboxCache")
 
 
-class TenantCache(BaseModel):
+class InboxCache(BaseModel):
     """
     Base class shared by all Wappa cache repositories.
-    Handles tenant context, TTL management, and common Redis operations.
+    Handles inbox context, TTL management, and common Redis operations.
 
     Provides common functionality for cache repositories:
-    - Tenant key building and namespace management
+    - Inbox key building and namespace management
     - TTL management and automatic expiration
     - Common serialization patterns for cache data
     """
 
-    tenant: str = Field(..., min_length=1)
+    inbox: str = Field(..., min_length=1)
     ttl_default: int = 86400  # 24 hours
     redis_alias: PoolAlias = "state_handler"  # Default pool
     keys: KeyFactory = Field(default_factory=KeyFactory)

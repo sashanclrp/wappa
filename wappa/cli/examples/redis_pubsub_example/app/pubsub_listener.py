@@ -31,27 +31,27 @@ async def start_pubsub_listener(http_session) -> None:
     """
     Start Redis PubSub subscriber in background with MULTI-TENANT support.
 
-    This subscriber dynamically creates messengers per tenant as notifications
-    arrive, supporting unlimited WhatsApp accounts/tenants.
+    This subscriber dynamically creates messengers per inbox as notifications
+    arrive, supporting unlimited WhatsApp accounts/inboxes.
 
     Architecture:
-    - Subscribes to ALL tenants: wappa:notify:*:*:*
-    - Creates messenger per tenant on-demand (cached)
-    - Each tenant uses its own WhatsApp credentials
+    - Subscribes to ALL inboxes: wappa:notify:*:*:*
+    - Creates messenger per inbox on-demand (cached)
+    - Each inbox uses its own WhatsApp credentials
 
     Args:
         http_session: HTTP session for creating messenger (from app.state)
     """
     redis = None
-    messenger_cache = {}  # Cache messengers by tenant {tenant_id: IMessenger}
+    messenger_cache = {}  # Cache messengers by inbox {inbox_id: IMessenger}
 
     try:
         logger.info("🔄 Creating messenger factory for MULTI-TENANT subscriber...")
 
-        # Create messenger factory (creates messengers dynamically per tenant)
+        # Create messenger factory (creates messengers dynamically per inbox)
         messenger_factory = MessengerFactory(http_session)
 
-        logger.info("✅ Messenger factory ready for multi-tenant support")
+        logger.info("✅ Messenger factory ready for multi-inbox support")
         logger.info("🔄 Connecting to Redis for PubSub subscription...")
 
         # Get Redis URL from settings
@@ -62,47 +62,47 @@ async def start_pubsub_listener(http_session) -> None:
         # Create Redis connection
         redis = Redis.from_url(redis_url, decode_responses=True)
 
-        # MULTI-TENANT: Subscribe to ALL tenants, ALL users, ALL event types
+        # MULTI-INBOX: Subscribe to ALL inboxes, ALL users, ALL event types
         # Pattern: wappa:notify:*:*:*
         pattern = "wappa:notify:*:*:*"
 
         logger.info(f"📡 Subscribing to MULTI-TENANT pattern: {pattern}")
-        logger.info("🌐 Will create messengers dynamically per tenant")
+        logger.info("🌐 Will create messengers dynamically per inbox")
 
         # Subscribe and listen for notifications
         async for notification in subscribe(redis, patterns=[pattern]):
             try:
                 # Extract notification details
                 event_type = notification.event
-                tenant = notification.tenant  # ← Tenant from notification
+                inbox = notification.inbox  # ← Inbox from notification
                 user_id = notification.user_id  # ← User from notification
                 platform = notification.platform  # ← Platform from notification
                 data = notification.data
 
                 logger.info(
-                    f"📩 Received {event_type} event for tenant={tenant}, user={user_id}: {data}"
+                    f"📩 Received {event_type} event for inbox={inbox}, user={user_id}: {data}"
                 )
 
-                # MULTI-TENANT: Get or create messenger for this tenant
-                if tenant not in messenger_cache:
-                    logger.info(f"🔨 Creating new messenger for tenant: {tenant}")
+                # MULTI-INBOX: Get or create messenger for this inbox
+                if inbox not in messenger_cache:
+                    logger.info(f"🔨 Creating new messenger for inbox: {inbox}")
                     try:
                         messenger_cache[
-                            tenant
+                            inbox
                         ] = await messenger_factory.create_messenger(
                             platform=PlatformType(platform),
-                            tenant_id=tenant,
+                            inbox_id=inbox,
                         )
-                        logger.info(f"✅ Messenger created for tenant: {tenant}")
+                        logger.info(f"✅ Messenger created for inbox: {inbox}")
                     except Exception as e:
                         logger.error(
-                            f"❌ Failed to create messenger for tenant {tenant}: {e}",
+                            f"❌ Failed to create messenger for inbox {inbox}: {e}",
                             exc_info=True,
                         )
                         continue  # Skip this notification
 
-                # Get the tenant-specific messenger
-                active_messenger = messenger_cache[tenant]
+                # Get the inbox-specific messenger
+                active_messenger = messenger_cache[inbox]
 
                 # Send WhatsApp message to user about the event
                 await send_event_notification(

@@ -15,10 +15,7 @@ from fastapi import Request
 
 from wappa.api.utils.event_decorators import resolve_event_user_id
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
-from wappa.core.logging.context import (
-    get_current_owner_context,
-    get_current_tenant_context,
-)
+from wappa.core.logging.context import get_current_inbox_context
 from wappa.domain.events.api_message_event import APIMessageEvent
 
 if TYPE_CHECKING:
@@ -86,8 +83,7 @@ async def dispatch_api_message_event(
         response_success=result.success,
         response_error=result.error,
         meta_response=getattr(result, "raw_response", None),
-        tenant_id=get_current_tenant_context() or "unknown",
-        owner_id=get_current_owner_context(),
+        inbox_id=get_current_inbox_context() or "unknown",
         platform=platform,
     )
 

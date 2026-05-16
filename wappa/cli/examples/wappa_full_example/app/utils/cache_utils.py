@@ -60,7 +60,7 @@ class CacheHelper:
 
     @property
     def table_cache(self):
-        """Get table cache instance (ITableCache - pre-bound to tenant context)."""
+        """Get table cache instance (ITableCache - pre-bound to inbox context)."""
         if not self._table_cache:
             self._table_cache = self.cache_factory.create_table_cache()
         return self._table_cache

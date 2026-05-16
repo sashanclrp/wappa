@@ -6,7 +6,7 @@
 
 ## Why This Matters
 
-We're about to execute a full rename refactor (`tenant_id` → `inbox_id`) across Wappa. The root documentation foundation is already in place:
+A full rename refactor was executed (`tenant_id` → `inbox_id`) across Wappa. The root documentation foundation is already in place:
 
 - `CONTEXT-MAP.md` — maps all bounded contexts and their relationships
 - `CONTEXT.md` — shared kernel glossary with canonical terms
@@ -35,7 +35,7 @@ For each context listed in `CONTEXT-MAP.md`, create two files:
 
 - Only terms specific to that context. Don't repeat the shared kernel — reference it.
 - Format: term table like the root `CONTEXT.md`.
-- Must use the **new canonical language** (`inbox_id`, `platform`, `InboxBase`, etc.) even though the code still says `tenant_id`. The docs describe the target state.
+- Must use the **new canonical language** (`inbox_id`, `platform`, `InboxBase`, etc.) even though historical docs may still reference `tenant_id`. The docs describe the target state.
 - Keep it a glossary. No implementation details, no architecture, no plans.
 
 ### ARCHITECTURE.md (per-context internals)
@@ -52,7 +52,7 @@ For each context listed in `CONTEXT-MAP.md`, create two files:
 ## Rules
 
 1. **Read the code** in each context before writing. Describe what actually exists, not what might exist.
-2. **Use canonical Inbox language** from root `CONTEXT.md` even when the code still says `tenant`. The rename is coming; docs should already reflect the target.
+2. **Use canonical Inbox language** from root `CONTEXT.md` even if historical docs reference `tenant`. The rename is complete; docs must reflect the current state.
 3. **Do NOT modify any code.** This is a documentation-only task.
 4. **Do NOT create ADRs** unless you discover a decision that is hard to reverse, surprising without context, and the result of a real trade-off. Most contexts won't need one.
 5. **Keep docs concise.** A 40-line ARCHITECTURE.md that captures the real structure beats a 200-line one padded with obvious statements.

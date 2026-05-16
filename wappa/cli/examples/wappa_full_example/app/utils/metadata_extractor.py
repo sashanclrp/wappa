@@ -110,7 +110,7 @@ class MetadataExtractor:
         lines.append(
             f"🕐 Timestamp: {metadata.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
         )
-        lines.append(f"🏢 Tenant: `{metadata.tenant_id}`")
+        lines.append(f"🏢 Inbox: `{metadata.inbox_id}`")
         lines.append(f"🌐 Platform: `{metadata.platform}`")
 
         # Processing metadata

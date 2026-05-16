@@ -61,14 +61,14 @@ async def handle_user_inactivity(identifier: str, full_key: str) -> None:
          [10:30:50] See you later!"
     """
     user_id = identifier
-    tenant_id = parse_tenant_from_expired_key(full_key)
+    inbox_id = parse_tenant_from_expired_key(full_key)
 
     logger.info(
         f"User inactivity detected for {user_id} - processing accumulated messages"
     )
 
     # 1. Create cache factory and retrieve messages
-    messages = await _retrieve_user_messages(tenant_id, user_id)
+    messages = await _retrieve_user_messages(inbox_id, user_id)
     if messages is None:
         return
 
@@ -83,27 +83,27 @@ async def handle_user_inactivity(identifier: str, full_key: str) -> None:
     echo_text = format_inactivity_message_history(messages, message_count)
 
     # 3. Send echo message via WhatsApp
-    send_success = await _send_echo_message(tenant_id, user_id, echo_text)
+    send_success = await _send_echo_message(inbox_id, user_id, echo_text)
     if not send_success:
         return
 
     # 4. Clean up user cache
-    await _cleanup_user_cache(tenant_id, user_id)
+    await _cleanup_user_cache(inbox_id, user_id)
 
 
-async def _retrieve_user_messages(tenant_id: str, user_id: str) -> list[dict] | None:
+async def _retrieve_user_messages(inbox_id: str, user_id: str) -> list[dict] | None:
     """
     Retrieve accumulated messages from user cache.
 
     Args:
-        tenant_id: Tenant identifier
+        inbox_id: Inbox identifier
         user_id: User identifier
 
     Returns:
         List of message dictionaries, or None if retrieval failed
     """
     try:
-        cache_factory = create_expiry_cache_factory(tenant_id, user_id)
+        cache_factory = create_expiry_cache_factory(inbox_id, user_id)
         user_cache = cache_factory.create_user_cache()
         user_data = await user_cache.get()
 
@@ -124,12 +124,12 @@ async def _retrieve_user_messages(tenant_id: str, user_id: str) -> list[dict] | 
     return user_data.get("messages", [])
 
 
-async def _send_echo_message(tenant_id: str, user_id: str, echo_text: str) -> bool:
+async def _send_echo_message(inbox_id: str, user_id: str, echo_text: str) -> bool:
     """
     Send formatted echo message to user via WhatsApp.
 
     Args:
-        tenant_id: Tenant identifier for messenger creation
+        inbox_id: Inbox identifier for messenger creation
         user_id: Recipient user ID
         echo_text: Formatted message text to send
 
@@ -137,7 +137,7 @@ async def _send_echo_message(tenant_id: str, user_id: str, echo_text: str) -> bo
         True if message sent successfully, False otherwise
     """
     try:
-        messenger = await create_expiry_messenger(tenant_id)
+        messenger = await create_expiry_messenger(inbox_id)
 
     except FastAPIAppNotAvailableError as e:
         logger.error(f"FastAPI app not available: {e}")
@@ -166,16 +166,16 @@ async def _send_echo_message(tenant_id: str, user_id: str, echo_text: str) -> bo
         return False
 
 
-async def _cleanup_user_cache(tenant_id: str, user_id: str) -> None:
+async def _cleanup_user_cache(inbox_id: str, user_id: str) -> None:
     """
     Clean up user cache after processing.
 
     Args:
-        tenant_id: Tenant identifier
+        inbox_id: Inbox identifier
         user_id: User identifier
     """
     try:
-        cache_factory = create_expiry_cache_factory(tenant_id, user_id)
+        cache_factory = create_expiry_cache_factory(inbox_id, user_id)
         user_cache = cache_factory.create_user_cache()
         deleted = await user_cache.delete()
 

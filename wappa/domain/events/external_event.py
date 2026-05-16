@@ -19,7 +19,7 @@ class ExternalEvent(BaseModel):
         event = ExternalEvent(
             source="mercadopago",
             event_type="payment.approved",
-            tenant_id="acme_corp",
+            inbox_id="acme_corp",
             payload={"payment_id": "12345", "amount": 99.99},
         )
     """
@@ -34,10 +34,10 @@ class ExternalEvent(BaseModel):
         description="Dot-notation event type (e.g., 'payment.approved')",
     )
 
-    # Tenant and user context
-    tenant_id: str = Field(
+    # Inbox and user context
+    inbox_id: str = Field(
         ...,
-        description="Tenant identifier extracted from URL path",
+        description="Inbox identifier extracted from URL path",
     )
     user_id: str | None = Field(
         default=None,

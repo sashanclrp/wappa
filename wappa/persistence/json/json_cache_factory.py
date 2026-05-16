@@ -31,7 +31,7 @@ class JSONCacheFactory(ICacheFactory):
 
     All instances implement the type-specific cache interfaces directly.
 
-    HYBRID PATTERN: Context (tenant_id, user_id) can be:
+    HYBRID PATTERN: Context (inbox_id, user_id) can be:
     1. Used from defaults set at construction (most common - webhook flow)
     2. Overridden per-call (for API events with different user context)
 
@@ -40,59 +40,59 @@ class JSONCacheFactory(ICacheFactory):
 
     def create_state_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IStateCache:
         """
         Create JSON state cache instance.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Returns:
             JSONStateHandler implementing IStateCache
         """
-        effective_tenant, effective_user = self._resolve_context(tenant_id, user_id)
-        return JSONStateHandler(tenant=effective_tenant, user_id=effective_user)
+        effective_inbox, effective_user = self._resolve_context(inbox_id, user_id)
+        return JSONStateHandler(inbox=effective_inbox, user_id=effective_user)
 
     def create_user_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IUserCache:
         """
         Create JSON user cache instance.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Returns:
             JSONUser implementing IUserCache
         """
-        effective_tenant, effective_user = self._resolve_context(tenant_id, user_id)
-        return JSONUser(tenant=effective_tenant, user_id=effective_user)
+        effective_inbox, effective_user = self._resolve_context(inbox_id, user_id)
+        return JSONUser(inbox=effective_inbox, user_id=effective_user)
 
     def create_table_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
     ) -> ITableCache:
         """
         Create JSON table cache instance.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
 
         Returns:
             JSONTable implementing ITableCache
         """
-        effective_tenant, _ = self._resolve_context(tenant_id, None)
-        return JSONTable(tenant=effective_tenant)
+        effective_inbox, _ = self._resolve_context(inbox_id, None)
+        return JSONTable(inbox=effective_inbox)
 
     def create_expiry_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IExpiryCache:
         """
@@ -102,7 +102,7 @@ class JSONCacheFactory(ICacheFactory):
         Use Redis backend for time-based automation features.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Raises:
@@ -115,18 +115,18 @@ class JSONCacheFactory(ICacheFactory):
 
     def create_ai_state_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IAIStateCache:
         """
         Create JSON AI state cache instance.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Returns:
             JSONAIState implementing IAIStateCache
         """
-        effective_tenant, effective_user = self._resolve_context(tenant_id, user_id)
-        return JSONAIState(tenant=effective_tenant, user_id=effective_user)
+        effective_inbox, effective_user = self._resolve_context(inbox_id, user_id)
+        return JSONAIState(inbox=effective_inbox, user_id=effective_user)

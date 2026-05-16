@@ -28,7 +28,7 @@ from wappa.webhooks.core.webhook_interfaces.base_components import (
     ErrorDetailBase,
     ForwardContextBase,
     SystemEventDetail,
-    TenantBase,
+    InboxBase,
     UserBase,
 )
 
@@ -82,7 +82,7 @@ class IncomingMessageWebhook(BaseModel):
     )
 
     # Core identification
-    tenant: TenantBase = Field(description="Business/tenant identification")
+    inbox: InboxBase = Field(description="Business inbox identification")
     user: UserBase = Field(description="User/sender identification")
     whatsapp: WhatsAppIncomingWebhookData | None = Field(
         default=None,
@@ -238,7 +238,7 @@ class IncomingMessageWebhook(BaseModel):
             "platform": self.platform.value,
             "message_type": self.get_message_type_name(),
             "sender": self.user.user_id,
-            "tenant": self.tenant.get_tenant_key(),
+            "inbox": self.inbox.get_inbox_key(),
             "has_business_context": self.has_business_context(),
             "has_ad_referral": self.has_ad_referral(),
             "was_forwarded": self.was_forwarded(),
@@ -267,7 +267,7 @@ class StatusWebhook(BaseModel):
     )
 
     # Core identification
-    tenant: TenantBase = Field(description="Business/tenant identification")
+    inbox: InboxBase = Field(description="Business inbox identification")
 
     # Status information
     message_id: str = Field(description="ID of the message this status refers to")
@@ -385,7 +385,7 @@ class StatusWebhook(BaseModel):
             "recipient": self.recipient_id,
             "recipient_bsuid": self.recipient_bsuid,
             "has_recipient_bsuid": self.has_recipient_bsuid,
-            "tenant": self.tenant.get_tenant_key(),
+            "inbox": self.inbox.get_inbox_key(),
             "is_billable": self.is_billable_message(),
             "has_errors": self.has_errors(),
             "timestamp": self.timestamp.isoformat(),
@@ -431,7 +431,7 @@ class ErrorWebhook(BaseModel):
     )
 
     # Core identification
-    tenant: TenantBase = Field(description="Business/tenant identification")
+    inbox: InboxBase = Field(description="Business inbox identification")
 
     # Error information
     errors: list[ErrorDetailBase] = Field(description="Detailed error information")
@@ -486,7 +486,7 @@ class ErrorWebhook(BaseModel):
             "error_level": self.error_level,
             "error_count": self.get_error_count(),
             "error_codes": self.get_error_codes(),
-            "tenant": self.tenant.get_tenant_key(),
+            "inbox": self.inbox.get_inbox_key(),
             "has_critical_errors": self.has_critical_errors(),
             "has_retryable_errors": self.has_retryable_errors(),
             "timestamp": self.timestamp.isoformat(),
@@ -534,7 +534,7 @@ class SystemWebhook(BaseModel):
     )
 
     # Core identification
-    tenant: TenantBase = Field(description="Business/tenant identification")
+    inbox: InboxBase = Field(description="Business inbox identification")
 
     # System event information
     system_event_type: SystemEventType = Field(description="Type of system event")
@@ -583,7 +583,7 @@ class SystemWebhook(BaseModel):
             "system_event_type": self.system_event_type.value,
             "wa_id": self.event_detail.wa_id,
             "user_id": self.event_detail.user_id,
-            "tenant": self.tenant.get_tenant_key(),
+            "inbox": self.inbox.get_inbox_key(),
             "timestamp": self.timestamp.isoformat(),
         }
 
@@ -618,7 +618,7 @@ class CustomWebhook(BaseModel):
         arbitrary_types_allowed=True,
     )
 
-    tenant: TenantBase = Field(description="Business/tenant identification")
+    inbox: InboxBase = Field(description="Business inbox identification")
 
     field_name: str = Field(
         description="The Meta webhook field value (e.g. 'message_template_status_update')"
@@ -646,7 +646,7 @@ class CustomWebhook(BaseModel):
             "webhook_type": "custom",
             "platform": self.platform.value,
             "field_name": self.field_name,
-            "tenant": self.tenant.get_tenant_key(),
+            "inbox": self.inbox.get_inbox_key(),
             "timestamp": self.timestamp.isoformat(),
         }
 

@@ -146,9 +146,9 @@ class Settings:
             )
 
     @property
-    def owner_id(self) -> str:
+    def inbox_id(self) -> str:
         if not self.wp_phone_id:
-            raise ValueError("WP_PHONE_ID is required for owner_id")
+            raise ValueError("WP_PHONE_ID is required for inbox_id")
         return self.wp_phone_id
 
     @property

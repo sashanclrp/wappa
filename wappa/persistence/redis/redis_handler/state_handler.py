@@ -10,17 +10,17 @@ from ....domain.interfaces.cache_interfaces import IStateCache
 from ..ops import hget, hincrby_with_expire, hset, scan_keys
 from .utils.key_factory import default_key_factory
 from .utils.serde import dumps, loads
-from .utils.tenant_cache import TenantCache
+from .utils.inbox_cache import InboxCache
 
 logger = logging.getLogger("RedisStateHandler")
 
 
-class RedisStateHandler(TenantCache, IStateCache):
+class RedisStateHandler(InboxCache, IStateCache):
     user_id: str = Field(..., min_length=1)
     redis_alias: str = "state_handler"
 
     def _key(self, handler_name: str) -> str:
-        return self.keys.handler(self.tenant, handler_name, self.user_id)
+        return self.keys.handler(self.inbox, handler_name, self.user_id)
 
     async def get(
         self, handler_name: str, models: type[BaseModel] | None = None
@@ -121,7 +121,7 @@ class RedisStateHandler(TenantCache, IStateCache):
         return await super().renew_ttl(self._key(handler_name), ttl)
 
     async def delete_all_for_user(self) -> int:
-        pattern = f"{self.tenant}:{self.keys.handler_prefix}:*:{self.user_id}"
+        pattern = f"{self.inbox}:{self.keys.handler_prefix}:*:{self.user_id}"
         logger.debug(
             f"Deleting all handler states for user '{self.user_id}' "
             f"(pattern: '{pattern}')"
@@ -137,7 +137,7 @@ class RedisStateHandler(TenantCache, IStateCache):
         if not prefix:
             raise ValueError("prefix must not be empty")
 
-        pattern = f"{self.tenant}:{self.keys.handler_prefix}:{prefix}*:{self.user_id}"
+        pattern = f"{self.inbox}:{self.keys.handler_prefix}:{prefix}*:{self.user_id}"
 
         logger.debug(
             f"Deleting state handlers with prefix '{prefix}' for user '{self.user_id}' "
@@ -161,10 +161,10 @@ class RedisStateHandler(TenantCache, IStateCache):
     async def list_handlers(self, prefix: str | None = None) -> list[str]:
         safe_prefix = prefix or ""
         pattern = (
-            f"{self.tenant}:{self.keys.handler_prefix}:{safe_prefix}*:{self.user_id}"
+            f"{self.inbox}:{self.keys.handler_prefix}:{safe_prefix}*:{self.user_id}"
         )
 
-        key_prefix = f"{self.tenant}:{self.keys.handler_prefix}:"
+        key_prefix = f"{self.inbox}:{self.keys.handler_prefix}:"
         key_suffix = f":{self.user_id}"
 
         keys = await self._scan_keys_by_pattern(pattern)
@@ -178,10 +178,10 @@ class RedisStateHandler(TenantCache, IStateCache):
 
     @classmethod
     async def list_users_with_handler(
-        cls, tenant_id: str, handler_name: str
+        cls, inbox_id: str, handler_name: str
     ) -> list[str]:
-        pattern = f"{tenant_id}:{default_key_factory.handler_prefix}:{handler_name}:*"
-        key_prefix = f"{tenant_id}:{default_key_factory.handler_prefix}:{handler_name}:"
+        pattern = f"{inbox_id}:{default_key_factory.handler_prefix}:{handler_name}:*"
+        key_prefix = f"{inbox_id}:{default_key_factory.handler_prefix}:{handler_name}:"
 
         user_ids: list[str] = []
         cursor = "0"
@@ -203,7 +203,7 @@ class RedisStateHandler(TenantCache, IStateCache):
         except Exception as e:
             logger.error(
                 f"Error listing users for handler '{handler_name}' "
-                f"(tenant: '{tenant_id}'): {e}",
+                f"(inbox: '{inbox_id}'): {e}",
                 exc_info=True,
             )
 

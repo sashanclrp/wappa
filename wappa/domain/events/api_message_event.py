@@ -75,14 +75,10 @@ class APIMessageEvent(BaseModel):
         description="Raw Meta API response (if available)",
     )
 
-    # Tenant context
-    tenant_id: str = Field(
+    # Inbox context
+    inbox_id: str = Field(
         ...,
-        description="Tenant identifier for multi-tenant support",
-    )
-    owner_id: str | None = Field(
-        default=None,
-        description="Owner identifier (if available)",
+        description="Inbox identifier for message routing and scoping",
     )
 
     # Platform context (future-proof for Instagram, Telegram, etc.)

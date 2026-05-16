@@ -122,7 +122,7 @@ class ExpiryEventParser:
         """
         Extract action name from trigger key.
 
-        Pattern: {tenant}:EXPTRIGGER:{action}:{identifier}
+        Pattern: {inbox}:EXPTRIGGER:{action}:{identifier}
 
         Args:
             key: Full Redis key

@@ -33,7 +33,7 @@ class RedisCacheFactory(ICacheFactory):
 
     All instances implement the type-specific cache interfaces directly.
 
-    HYBRID PATTERN: Context (tenant_id, user_id) can be:
+    HYBRID PATTERN: Context (inbox_id, user_id) can be:
     1. Used from defaults set at construction (most common - webhook flow)
     2. Overridden per-call (for API events with different user context)
 
@@ -49,70 +49,70 @@ class RedisCacheFactory(ICacheFactory):
 
     def create_state_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IStateCache:
         """
         Create Redis state cache instance.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Returns:
             RedisStateHandler implementing IStateCache configured for state_handler pool
         """
-        effective_tenant, effective_user = self._resolve_context(tenant_id, user_id)
+        effective_inbox, effective_user = self._resolve_context(inbox_id, user_id)
         return RedisStateHandler(
-            tenant=effective_tenant, user_id=effective_user, redis_alias="state_handler"
+            inbox=effective_inbox, user_id=effective_user, redis_alias="state_handler"
         )
 
     def create_user_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IUserCache:
         """
         Create Redis user cache instance.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Returns:
             RedisUser implementing IUserCache configured for users pool
         """
-        effective_tenant, effective_user = self._resolve_context(tenant_id, user_id)
+        effective_inbox, effective_user = self._resolve_context(inbox_id, user_id)
         return RedisUser(
-            tenant=effective_tenant, user_id=effective_user, redis_alias="users"
+            inbox=effective_inbox, user_id=effective_user, redis_alias="users"
         )
 
     def create_table_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
     ) -> ITableCache:
         """
         Create Redis table cache instance.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
 
         Returns:
             RedisTable implementing ITableCache configured for table pool
         """
-        effective_tenant, _ = self._resolve_context(tenant_id, None)
-        return RedisTable(tenant=effective_tenant, redis_alias="table")
+        effective_inbox, _ = self._resolve_context(inbox_id, None)
+        return RedisTable(inbox=effective_inbox, redis_alias="table")
 
     def create_expiry_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IExpiryCache:
         """
         Create Redis expiry trigger cache instance.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Returns:
@@ -126,21 +126,21 @@ class RedisCacheFactory(ICacheFactory):
             # Override for specific user
             expiry_cache = factory.create_expiry_cache(user_id=recipient_id)
         """
-        effective_tenant, effective_user = self._resolve_context(tenant_id, user_id)
+        effective_inbox, effective_user = self._resolve_context(inbox_id, user_id)
         return RedisExpiry(
-            tenant=effective_tenant, user_id=effective_user, redis_alias="expiry"
+            inbox=effective_inbox, user_id=effective_user, redis_alias="expiry"
         )
 
     def create_ai_state_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IAIStateCache:
         """
         Create Redis AI state cache instance.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Returns:
@@ -154,7 +154,7 @@ class RedisCacheFactory(ICacheFactory):
             # Override for specific user
             ai_state = factory.create_ai_state_cache(user_id=recipient_id)
         """
-        effective_tenant, effective_user = self._resolve_context(tenant_id, user_id)
+        effective_inbox, effective_user = self._resolve_context(inbox_id, user_id)
         return RedisAIState(
-            tenant=effective_tenant, user_id=effective_user, redis_alias="ai_state"
+            inbox=effective_inbox, user_id=effective_user, redis_alias="ai_state"
         )

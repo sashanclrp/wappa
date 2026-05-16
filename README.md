@@ -43,7 +43,7 @@ app.run()
 ### 🏗️ **Production-Ready Architecture**
 - **Clean Architecture** - Domain-driven design with dependency injection
 - **Type-Safe** - Full Pydantic models for all WhatsApp data structures
-- **Multi-Tenant** - Built for scaling across multiple business numbers
+- **Multi-Inbox** - Built for scaling across multiple business numbers
 - **Plugin System** - Extensible with Redis, CORS, rate limiting, and custom plugins
 
 ### 📱 **Complete WhatsApp Support**
@@ -107,14 +107,14 @@ messenger = WhatsAppMessenger(
     interactive_handler=interactive_handler,
     template_handler=template_handler,
     specialized_handler=specialized_handler,
-    tenant_id=tenant_id,
+    inbox_id=inbox_id,
 )
 
-# Or inject custom factories for advanced use cases (testing, multi-tenant extensions):
+# Or inject custom factories for advanced use cases (testing, multi-inbox extensions):
 messenger = WhatsAppMessenger(
     client=client,
     # ... handlers ...
-    tenant_id=tenant_id,
+    inbox_id=inbox_id,
     message_factory=MyCustomMessageFactory(),
     media_factory=MyCustomMediaFactory(),
 )

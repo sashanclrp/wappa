@@ -200,7 +200,7 @@ class BaseWebhook(BaseModel, ABC):
         """
         Get context information needed for message processing.
 
-        This includes tenant information, routing data, and other
+        This includes inbox information, routing data, and other
         metadata required for Symphony AI integration.
 
         Returns:

@@ -30,13 +30,13 @@ class IWebhookProcessor(Protocol):
             def get_provider_name(self) -> str:
                 return "mercadopago"
 
-            async def parse_event(self, request, tenant_id):
+            async def parse_event(self, request, inbox_id):
                 body = await request.json()
                 validated = MPWebhookSchema.model_validate(body)
                 return ExternalEvent(
                     source="mercadopago",
                     event_type=f"{validated.type}.{validated.action}",
-                    tenant_id=tenant_id,
+                    inbox_id=inbox_id,
                     payload=validated.model_dump(),
                     raw_data=body,
                 )
@@ -56,14 +56,14 @@ class IWebhookProcessor(Protocol):
     async def parse_event(
         self,
         request: "Request",
-        tenant_id: str,
+        inbox_id: str,
     ) -> "ExternalEvent":
         """
         Parse raw HTTP request into a typed ExternalEvent.
 
         Args:
             request: FastAPI Request object with raw webhook body
-            tenant_id: Tenant identifier from URL path
+            inbox_id: Inbox identifier from URL path
 
         Returns:
             Validated ExternalEvent instance

@@ -39,7 +39,7 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         tags=["Webhooks"],
         responses={
             400: {"description": "Bad Request - Invalid webhook payload"},
-            401: {"description": "Unauthorized - Invalid tenant credentials"},
+            401: {"description": "Unauthorized - Invalid inbox credentials"},
             403: {"description": "Forbidden - Webhook verification failed"},
             500: {"description": "Internal Server Error"},
         },
@@ -68,7 +68,7 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         Returns:
             PlainTextResponse with challenge string if verification succeeds
         """
-        # Delegate to controller (handles business logic and tenant extraction)
+        # Delegate to controller (handles business logic and inbox extraction)
         return await webhook_controller.verify_webhook(
             request=request,
             platform=platform,
@@ -77,10 +77,10 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
             hub_challenge=hub_challenge,
         )
 
-    @router.get("/messenger/{tenant_id}/{platform}")
-    async def verify_webhook_at_tenant_url(
+    @router.get("/inboxes/{inbox_id}/{platform}")
+    async def verify_webhook_at_inbox_url(
         request: Request,
-        tenant_id: str,
+        inbox_id: str,
         platform: str,
         hub_mode: str = Query(None, alias="hub.mode"),
         hub_verify_token: str = Query(None, alias="hub.verify_token"),
@@ -92,7 +92,7 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         WhatsApp and other platforms send verification requests to the same URL
         they use for webhook processing. This handles GET requests with verification.
         """
-        # Delegate to controller (tenant_id will be extracted from URL by middleware)
+        # Delegate to controller (inbox_id will be extracted from URL by middleware)
         return await webhook_controller.verify_webhook(
             request=request,
             platform=platform,
@@ -101,27 +101,26 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
             hub_challenge=hub_challenge,
         )
 
-    @router.post("/messenger/{tenant_id}/{platform}")
+    @router.post("/inboxes/{inbox_id}/{platform}")
     async def process_webhook(
         request: Request,
-        tenant_id: str,
+        inbox_id: str,
         platform: str,
     ):
         """
         Process incoming webhook payload from a messaging platform.
 
         Delegates business logic to WebhookController while handling HTTP concerns.
-        The controller creates per-request dependencies with correct tenant isolation.
+        The controller creates per-request dependencies with correct inbox isolation.
 
         Args:
             request: FastAPI request object
-            tenant_id: Tenant identifier for multi-tenant support (extracted by middleware)
+            inbox_id: Inbox identifier (extracted by middleware)
             platform: The messaging platform (whatsapp, telegram, teams, instagram)
 
         Returns:
             Dict with status confirmation
         """
-        # Parse JSON payload (HTTP concern - handled in route)
         try:
             payload = await request.json()
         except Exception as e:
@@ -129,17 +128,16 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
             logger.error(f"Failed to parse webhook payload: {e}")
             raise HTTPException(status_code=400, detail="Invalid JSON payload") from e
 
-        # Delegate to controller (handles all business logic and dependency injection)
         return await webhook_controller.process_webhook(
             request=request,
             platform=platform,
             payload=payload,
         )
 
-    @router.get("/messenger/{tenant_id}/{platform}/status")
+    @router.get("/inboxes/{inbox_id}/{platform}/status")
     async def webhook_status(
         request: Request,
-        tenant_id: str,
+        inbox_id: str,
         platform: str,
     ):
         """
@@ -149,16 +147,15 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
 
         Args:
             request: FastAPI request object
-            tenant_id: Tenant identifier
+            inbox_id: Inbox identifier
             platform: The messaging platform
 
         Returns:
             Dict with webhook status information
         """
         logger = get_logger(__name__)
-        logger.info(f"Status check for {platform} webhook - tenant: {tenant_id}")
+        logger.info(f"Status check for {platform} webhook - inbox: {inbox_id}")
 
-        # Generate webhook URLs for this platform and tenant
         try:
             platform_type = PlatformType(platform.lower())
         except ValueError as e:
@@ -166,18 +163,17 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
                 status_code=400, detail=f"Unsupported platform: {platform}"
             ) from e
 
-        webhook_url = webhook_url_factory.generate_webhook_url(platform_type, tenant_id)
+        webhook_url = webhook_url_factory.generate_webhook_url(platform_type, inbox_id)
         verify_url = webhook_url_factory.generate_webhook_url(
             platform_type, "", WebhookEndpointType.VERIFY
         )
 
-        # Get controller health status
         controller_status = webhook_controller.get_health_status()
 
         return {
             "status": "active",
             "platform": platform,
-            "tenant_id": tenant_id,
+            "inbox_id": inbox_id,
             "webhook_url": webhook_url,
             "verify_url": verify_url,
             "controller_status": controller_status,
@@ -197,12 +193,12 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         return {
             "supported_platforms": list(patterns.keys()),
             "platform_details": patterns,
-            "webhook_pattern": "/webhook/messenger/{tenant_id}/{platform}",
+            "webhook_pattern": "/webhook/inboxes/{inbox_id}/{platform}",
             "verify_pattern": "/webhook/messenger/{platform}/verify",
             "features": [
                 "Challenge-response verification",
                 "Multi-platform support",
-                "Multi-tenant support",
+                "Multi-inbox support",
                 "Event dispatcher routing",
                 "Default status/error handling",
             ],

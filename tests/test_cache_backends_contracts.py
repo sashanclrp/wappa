@@ -17,7 +17,7 @@ def test_create_cache_factory_normalizes_cache_type() -> None:
 
 @pytest.mark.asyncio
 async def test_memory_ai_state_namespace_is_supported() -> None:
-    handler = MemoryAIState(tenant="tenant-memory", user_id="user-1")
+    handler = MemoryAIState(inbox="inbox-memory", user_id="user-1")
 
     assert await handler.upsert("assistant", {"count": 1}, ttl=60) is True
     assert await handler.get("assistant") == {"count": 1}
@@ -30,8 +30,8 @@ async def test_json_state_and_ai_state_ttl_calls_accept_key_argument(
     file_manager._cache_root = tmp_path / "cache"
     file_manager.ensure_cache_directories()
 
-    state_handler = JSONStateHandler(tenant="tenant-json", user_id="user-1")
-    ai_handler = JSONAIState(tenant="tenant-json", user_id="user-1")
+    state_handler = JSONStateHandler(inbox="inbox-json", user_id="user-1")
+    ai_handler = JSONAIState(inbox="inbox-json", user_id="user-1")
 
     assert await state_handler.upsert("flow", {"step": 1}, ttl=60) is True
     assert await ai_handler.upsert("assistant", {"count": 2}, ttl=60) is True
@@ -45,8 +45,8 @@ async def test_json_state_and_ai_state_ttl_calls_accept_key_argument(
 
 @pytest.mark.asyncio
 async def test_memory_delete_all_for_user_removes_all_agents() -> None:
-    handler = MemoryAIState(tenant="t", user_id="user-target")
-    other = MemoryAIState(tenant="t", user_id="user-other")
+    handler = MemoryAIState(inbox="t", user_id="user-target")
+    other = MemoryAIState(inbox="t", user_id="user-other")
 
     await handler.upsert("agent-a", {"x": 1})
     await handler.upsert("agent-b", {"x": 2})
@@ -64,7 +64,7 @@ async def test_memory_delete_all_for_user_removes_all_agents() -> None:
 
 @pytest.mark.asyncio
 async def test_memory_delete_all_for_user_returns_zero_when_empty() -> None:
-    handler = MemoryAIState(tenant="t", user_id="user-empty")
+    handler = MemoryAIState(inbox="t", user_id="user-empty")
     assert await handler.delete_all_for_user() == 0
 
 
@@ -73,8 +73,8 @@ async def test_json_delete_all_for_user_removes_all_agents(tmp_path: Path) -> No
     file_manager._cache_root = tmp_path / "cache"
     file_manager.ensure_cache_directories()
 
-    handler = JSONAIState(tenant="t", user_id="user-target")
-    other = JSONAIState(tenant="t", user_id="user-other")
+    handler = JSONAIState(inbox="t", user_id="user-target")
+    other = JSONAIState(inbox="t", user_id="user-other")
 
     await handler.upsert("agent-a", {"x": 1})
     await handler.upsert("agent-b", {"x": 2})
@@ -95,7 +95,7 @@ async def test_json_delete_all_for_user_returns_zero_when_empty(
     file_manager._cache_root = tmp_path / "cache"
     file_manager.ensure_cache_directories()
 
-    handler = JSONAIState(tenant="t", user_id="user-empty")
+    handler = JSONAIState(inbox="t", user_id="user-empty")
     assert await handler.delete_all_for_user() == 0
 
 
@@ -104,8 +104,8 @@ async def test_json_delete_all_for_user_returns_zero_when_empty(
 
 @pytest.mark.asyncio
 async def test_memory_state_delete_all_for_user_removes_all_handlers() -> None:
-    handler = MemoryStateHandler(tenant="t", user_id="user-target")
-    other = MemoryStateHandler(tenant="t", user_id="user-other")
+    handler = MemoryStateHandler(inbox="t", user_id="user-target")
+    other = MemoryStateHandler(inbox="t", user_id="user-other")
 
     await handler.upsert("flow-a", {"step": 1})
     await handler.upsert("flow-b", {"step": 2})
@@ -123,7 +123,7 @@ async def test_memory_state_delete_all_for_user_removes_all_handlers() -> None:
 
 @pytest.mark.asyncio
 async def test_memory_state_delete_all_for_user_returns_zero_when_empty() -> None:
-    handler = MemoryStateHandler(tenant="t", user_id="user-empty-state")
+    handler = MemoryStateHandler(inbox="t", user_id="user-empty-state")
     assert await handler.delete_all_for_user() == 0
 
 
@@ -134,8 +134,8 @@ async def test_json_state_delete_all_for_user_removes_all_handlers(
     file_manager._cache_root = tmp_path / "cache"
     file_manager.ensure_cache_directories()
 
-    handler = JSONStateHandler(tenant="t", user_id="user-target")
-    other = JSONStateHandler(tenant="t", user_id="user-other")
+    handler = JSONStateHandler(inbox="t", user_id="user-target")
+    other = JSONStateHandler(inbox="t", user_id="user-other")
 
     await handler.upsert("flow-a", {"step": 1})
     await handler.upsert("flow-b", {"step": 2})
@@ -156,5 +156,5 @@ async def test_json_state_delete_all_for_user_returns_zero_when_empty(
     file_manager._cache_root = tmp_path / "cache"
     file_manager.ensure_cache_directories()
 
-    handler = JSONStateHandler(tenant="t", user_id="user-empty-state")
+    handler = JSONStateHandler(inbox="t", user_id="user-empty-state")
     assert await handler.delete_all_for_user() == 0

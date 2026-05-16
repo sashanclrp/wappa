@@ -13,7 +13,7 @@ def _make_handler() -> WhatsAppMediaHandler:
         "https://graph.facebook.com/v25.0/123/media"
     )
     client.post_request = AsyncMock(return_value={"id": "media_id_abc"})
-    return WhatsAppMediaHandler(client=client, tenant_id="phone_123")
+    return WhatsAppMediaHandler(client=client, inbox_id="phone_123")
 
 
 class _FakeAsyncByteStream:

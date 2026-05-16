@@ -39,7 +39,7 @@ from .context_helpers import (
     MessengerCreationError,
     create_expiry_cache_factory,
     create_expiry_messenger,
-    parse_tenant_from_expired_key,
+    parse_inbox_from_expired_key,
 )
 
 # Handler dispatch (Issue 2 fix - extracted class)
@@ -81,7 +81,7 @@ __all__ = [
     # Context helpers for expiry handlers
     "create_expiry_messenger",
     "create_expiry_cache_factory",
-    "parse_tenant_from_expired_key",
+    "parse_inbox_from_expired_key",
     # Context helper exceptions
     "ExpiryContextError",
     "FastAPIAppNotAvailableError",

@@ -11,11 +11,11 @@ from datetime import UTC, datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class TenantBase(BaseModel):
+class InboxBase(BaseModel):
     """
-    Universal business/tenant identification component.
+    Universal inbox identification component.
 
-    Represents the business account that messages are sent to/from.
+    Represents the business inbox that messages are sent to/from.
     Based on WhatsApp's metadata structure but platform-agnostic.
     """
 
@@ -23,19 +23,19 @@ class TenantBase(BaseModel):
         extra="forbid", str_strip_whitespace=True, validate_assignment=True
     )
 
-    # Core tenant identification
-    business_phone_number_id: str = Field(description="Unique business phone number ID")
-    display_phone_number: str = Field(description="Business display phone number")
+    # Core inbox identification
+    inbox_id: str = Field(description="Unique inbox ID (e.g. business phone number ID)")
+    display_address: str = Field(description="Business display address (e.g. phone number)")
 
-    # Platform-specific tenant ID (WhatsApp Business Account ID, Teams tenant ID, etc.)
-    platform_tenant_id: str = Field(description="Platform-specific tenant identifier")
+    # Platform-specific account ID (WhatsApp Business Account ID, Teams tenant ID, etc.)
+    platform_account_id: str = Field(description="Platform-specific account identifier")
 
-    def get_tenant_key(self) -> str:
-        """Get unique tenant key for this business account."""
-        # For WhatsApp, the business_phone_number_id IS the tenant identifier
-        # For other platforms, they might use platform_tenant_id, but for consistency
-        # we use business_phone_number_id as the primary tenant key
-        return self.business_phone_number_id
+    def get_inbox_key(self) -> str:
+        """Get unique inbox key for this business account."""
+        # For WhatsApp, the inbox_id IS the inbox identifier
+        # For other platforms, they might use platform_account_id, but for consistency
+        # we use inbox_id as the primary inbox key
+        return self.inbox_id
 
 
 class UserBase(BaseModel):

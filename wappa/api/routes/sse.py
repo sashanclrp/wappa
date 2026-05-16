@@ -72,15 +72,15 @@ def _format_sse_event(
     "/events",
     summary="Stream Wappa events via SSE",
     description=(
-        "Subscribe to real-time Wappa events. Optionally filter by tenant, user, "
+        "Subscribe to real-time Wappa events. Optionally filter by inbox, user, "
         "and event types."
     ),
 )
 async def stream_events(
     request: Request,
-    tenant_id: str | None = Query(
+    inbox_id: str | None = Query(
         default=None,
-        description="Optional tenant filter (only events for this tenant).",
+        description="Optional inbox filter (only events for this inbox).",
     ),
     user_id: str | None = Query(
         default=None,
@@ -98,7 +98,7 @@ async def stream_events(
     event_hub = _get_event_hub(request)
     selected_events = _parse_event_filters(event_types)
     subscription = await event_hub.subscribe(
-        tenant_id=tenant_id,
+        inbox_id=inbox_id,
         user_id=user_id,
         event_types=selected_events,
     )

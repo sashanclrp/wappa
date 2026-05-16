@@ -24,22 +24,22 @@ class JSONTable(ITableCache):
     Maintains the same API for seamless cache backend switching.
     """
 
-    def __init__(self, tenant: str):
+    def __init__(self, inbox: str):
         """
         Initialize JSON table handler.
 
         Args:
-            tenant: Tenant identifier
+            inbox: Inbox identifier
         """
-        if not tenant:
-            raise ValueError(f"Missing required parameter: tenant={tenant}")
+        if not inbox:
+            raise ValueError(f"Missing required parameter: inbox={inbox}")
 
-        self.tenant = tenant
+        self.inbox = inbox
         self.keys = default_key_factory
 
     def _key(self, table_name: str, pkid: str) -> str:
         """Build table key using KeyFactory (same as Redis)."""
-        return self.keys.table(self.tenant, table_name, pkid)
+        return self.keys.table(self.inbox, table_name, pkid)
 
     # ---- Public API matching RedisTable ----
     async def get(
@@ -60,7 +60,7 @@ class JSONTable(ITableCache):
             Table row data or None if not found
         """
         key = self._key(table_name, pkid)
-        return await storage_manager.get("tables", self.tenant, None, key, models)
+        return await storage_manager.get("tables", self.inbox, None, key, models)
 
     async def upsert(
         self,
@@ -82,7 +82,7 @@ class JSONTable(ITableCache):
             True if successful, False otherwise
         """
         key = self._key(table_name, pkid)
-        return await storage_manager.set("tables", self.tenant, None, key, data, ttl)
+        return await storage_manager.set("tables", self.inbox, None, key, data, ttl)
 
     async def delete(self, table_name: str, pkid: str) -> int:
         """
@@ -96,7 +96,7 @@ class JSONTable(ITableCache):
             1 if deleted, 0 if didn't exist
         """
         key = self._key(table_name, pkid)
-        success = await storage_manager.delete("tables", self.tenant, None, key)
+        success = await storage_manager.delete("tables", self.inbox, None, key)
         return 1 if success else 0
 
     async def exists(self, table_name: str, pkid: str) -> bool:
@@ -111,7 +111,7 @@ class JSONTable(ITableCache):
             True if exists, False otherwise
         """
         key = self._key(table_name, pkid)
-        return await storage_manager.exists("tables", self.tenant, None, key)
+        return await storage_manager.exists("tables", self.inbox, None, key)
 
     async def get_field(self, table_name: str, pkid: str, field: str) -> Any | None:
         """
@@ -255,7 +255,7 @@ class JSONTable(ITableCache):
         Returns:
             Remaining TTL in seconds, -1 if no expiry, -2 if doesn't exist
         """
-        return await storage_manager.get_ttl("tables", self.tenant, None)
+        return await storage_manager.get_ttl("tables", self.inbox, None)
 
     async def renew_ttl(self, table_name: str, pkid: str, ttl: int) -> bool:
         """
@@ -269,7 +269,7 @@ class JSONTable(ITableCache):
         Returns:
             True if successful, False otherwise
         """
-        return await storage_manager.set_ttl("tables", self.tenant, None, ttl)
+        return await storage_manager.set_ttl("tables", self.inbox, None, ttl)
 
     async def get_all(
         self,
@@ -287,10 +287,10 @@ class JSONTable(ITableCache):
             List of table row data dictionaries
         """
         results: list[dict[str, Any]] = []
-        key_prefix = self.keys.table(self.tenant, table_name, "")
+        key_prefix = self.keys.table(self.inbox, table_name, "")
 
         try:
-            all_keys = await storage_manager.get_all_keys("tables", self.tenant, None)
+            all_keys = await storage_manager.get_all_keys("tables", self.inbox, None)
 
             for key, value in all_keys.items():
                 if key.startswith(key_prefix):

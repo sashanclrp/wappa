@@ -58,7 +58,7 @@ class WappaEventDispatcher:
     async def dispatch_universal_webhook(
         self,
         universal_webhook: "UniversalWebhook",
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         request_handler: "WappaEventHandler | None" = None,
         **kwargs,
     ) -> dict[str, Any]:
@@ -135,7 +135,7 @@ class WappaEventDispatcher:
             handler_name = handler.__class__.__name__.replace("EventHandler", "")
             self.logger.info(
                 f"💬 {webhook.get_message_type_name()} message → {handler_name} "
-                f"(from: {webhook.user.user_id}, tenant: {handler.tenant_id})"
+                f"(from: {webhook.user.user_id}, inbox: {handler.inbox_id})"
             )
 
             await handler.handle_message(webhook)
@@ -145,7 +145,7 @@ class WappaEventDispatcher:
                 "action": "message_processed",
                 "dispatcher": "WappaEventDispatcher",
                 "handler": handler.__class__.__name__,
-                "tenant_id": handler.tenant_id,
+                "inbox_id": handler.inbox_id,
                 "user_id": handler.user_id,
             }
 
@@ -170,7 +170,7 @@ class WappaEventDispatcher:
 
             self.logger.info(
                 f"{emoji} Status Update: {status_value.upper()} "
-                f"(user: {webhook.user_id or webhook.recipient_id}, tenant: {handler.tenant_id})"
+                f"(user: {webhook.user_id or webhook.recipient_id}, inbox: {handler.inbox_id})"
             )
 
             await handler.handle_status(webhook)
@@ -181,7 +181,7 @@ class WappaEventDispatcher:
                 "message_id": webhook.message_id,
                 "status": status_value,
                 "recipient": webhook.recipient_id,
-                "tenant_id": handler.tenant_id,
+                "inbox_id": handler.inbox_id,
             }
 
         except Exception as e:
@@ -204,7 +204,7 @@ class WappaEventDispatcher:
             self.logger.error(
                 f"Platform error webhook: {error_count} errors, "
                 f"primary: {primary_error.error_code} - {primary_error.error_title} "
-                f"(tenant: {handler.tenant_id})"
+                f"(inbox: {handler.inbox_id})"
             )
 
             await handler.handle_error(webhook)
@@ -215,7 +215,7 @@ class WappaEventDispatcher:
                 "error_count": error_count,
                 "primary_error_code": primary_error.error_code,
                 "primary_error_title": primary_error.error_title,
-                "tenant_id": handler.tenant_id,
+                "inbox_id": handler.inbox_id,
             }
 
         except Exception as e:
@@ -234,7 +234,7 @@ class WappaEventDispatcher:
         try:
             self.logger.info(
                 f"⚙️ System event: {webhook.system_event_type.value} "
-                f"(tenant: {handler.tenant_id})"
+                f"(inbox: {handler.inbox_id})"
             )
 
             await handler.handle_system(webhook)
@@ -243,7 +243,7 @@ class WappaEventDispatcher:
                 "success": True,
                 "action": "system_event_processed",
                 "system_event_type": webhook.system_event_type.value,
-                "tenant_id": handler.tenant_id,
+                "inbox_id": handler.inbox_id,
             }
 
         except Exception as e:
@@ -266,7 +266,7 @@ class WappaEventDispatcher:
         field_name = webhook.field_name
         try:
             self.logger.info(
-                f"🧩 Custom webhook field: {field_name} (tenant: {handler.tenant_id})"
+                f"🧩 Custom webhook field: {field_name} (inbox: {handler.inbox_id})"
             )
 
             spec = (
@@ -283,7 +283,7 @@ class WappaEventDispatcher:
                     "success": False,
                     "action": "handler_missing",
                     "field_name": field_name,
-                    "tenant_id": handler.tenant_id,
+                    "inbox_id": handler.inbox_id,
                 }
 
             await spec.handler(webhook)
@@ -292,7 +292,7 @@ class WappaEventDispatcher:
                 "success": True,
                 "action": "custom_webhook_processed",
                 "field_name": field_name,
-                "tenant_id": handler.tenant_id,
+                "inbox_id": handler.inbox_id,
             }
 
         except Exception as e:

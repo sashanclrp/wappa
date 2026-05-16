@@ -37,7 +37,7 @@ class BaseMessageMetadata(BaseModel):
     timestamp: datetime
     user_id: str
     user_name: str | None = None
-    tenant_id: str
+    inbox_id: str
     platform: str
 
     # Processing metadata
@@ -68,7 +68,7 @@ class TextMessageMetadata(BaseMessageMetadata):
             timestamp=webhook.timestamp,
             user_id=webhook.user.user_id,
             user_name=webhook.user.profile_name,
-            tenant_id=webhook.tenant.get_tenant_key(),
+            inbox_id=webhook.inbox.get_inbox_key(),
             platform=webhook.platform.value,
             text_content=text_content,
             text_length=len(text_content),
@@ -123,7 +123,7 @@ class MediaMessageMetadata(BaseMessageMetadata):
             timestamp=webhook.timestamp,
             user_id=webhook.user.user_id,
             user_name=webhook.user.profile_name,
-            tenant_id=webhook.tenant.get_tenant_key(),
+            inbox_id=webhook.inbox.get_inbox_key(),
             platform=webhook.platform.value,
             media_id=media_id,
             media_type=message_type.value,
@@ -166,7 +166,7 @@ class LocationMessageMetadata(BaseMessageMetadata):
             timestamp=webhook.timestamp,
             user_id=webhook.user.user_id,
             user_name=webhook.user.profile_name,
-            tenant_id=webhook.tenant.get_tenant_key(),
+            inbox_id=webhook.inbox.get_inbox_key(),
             platform=webhook.platform.value,
             latitude=latitude,
             longitude=longitude,
@@ -222,7 +222,7 @@ class ContactMessageMetadata(BaseMessageMetadata):
             timestamp=webhook.timestamp,
             user_id=webhook.user.user_id,
             user_name=webhook.user.profile_name,
-            tenant_id=webhook.tenant.get_tenant_key(),
+            inbox_id=webhook.inbox.get_inbox_key(),
             platform=webhook.platform.value,
             contacts_count=len(contacts),
             contact_names=contact_names,
@@ -278,7 +278,7 @@ class InteractiveMessageMetadata(BaseMessageMetadata):
             timestamp=webhook.timestamp,
             user_id=webhook.user.user_id,
             user_name=webhook.user.profile_name,
-            tenant_id=webhook.tenant.get_tenant_key(),
+            inbox_id=webhook.inbox.get_inbox_key(),
             platform=webhook.platform.value,
             interaction_type=interaction_type,
             selection_id=selection_id,
@@ -308,7 +308,7 @@ class UnknownMessageMetadata(BaseMessageMetadata):
             timestamp=webhook.timestamp,
             user_id=webhook.user.user_id,
             user_name=webhook.user.profile_name,
-            tenant_id=webhook.tenant.get_tenant_key(),
+            inbox_id=webhook.inbox.get_inbox_key(),
             platform=webhook.platform.value,
             raw_message_data=raw_data,
             processing_time_ms=processing_time_ms,

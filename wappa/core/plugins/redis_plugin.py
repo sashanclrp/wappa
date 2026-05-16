@@ -34,7 +34,7 @@ class RedisPlugin:
         builder.add_plugin(redis_plugin)
 
         # Access in event handlers through ICacheFactory
-        user_cache = self.cache_factory.create_user_cache(tenant_id, user_id)
+        user_cache = self.cache_factory.create_user_cache(inbox_id, user_id)
         await user_cache.set('key', 'value')
     """
 

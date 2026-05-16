@@ -17,7 +17,7 @@ class IUserRepository(IBaseRepository):
     """
     Interface for user state management.
 
-    Handles user-specific data with context binding (tenant_id + user_id).
+    Handles user-specific data with context binding (inbox_id + user_id).
     Uses the 'user' Redis pool (database 1).
     """
 

@@ -63,10 +63,10 @@ EXAMPLES = {
     },
     "redis_pubsub_example": {
         "name": "Redis PubSub Plugin",
-        "description": "Multi-tenant Redis PubSub with self-subscribing pattern",
+        "description": "Multi-inbox Redis PubSub with self-subscribing pattern",
         "features": [
             "Redis PubSub",
-            "Multi-tenant messaging",
+            "Multi-inbox messaging",
             "Self-subscribing pattern",
             "Channel management",
         ],

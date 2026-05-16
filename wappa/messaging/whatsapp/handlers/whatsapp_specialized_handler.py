@@ -21,9 +21,9 @@ def _copy_optional(src: Any, dst: dict[str, Any], fields: tuple[str, ...]) -> No
 class WhatsAppSpecializedHandler:
     """Contact cards, locations, and location-request messaging for WhatsAppMessenger."""
 
-    def __init__(self, client: WhatsAppClient, tenant_id: str):
+    def __init__(self, client: WhatsAppClient, inbox_id: str):
         self.client = client
-        self._tenant_id = tenant_id
+        self._inbox_id = inbox_id
         self.logger = get_logger(__name__)
 
     def _build_payload(
@@ -53,7 +53,7 @@ class WhatsAppSpecializedHandler:
         response = await self.client.post_request(payload)
         return MessageResult.from_response_payload(
             response,
-            tenant_id=self._tenant_id,
+            inbox_id=self._inbox_id,
             fallback_recipient=recipient,
         )
 
@@ -92,7 +92,7 @@ class WhatsAppSpecializedHandler:
                 error=e,
                 operation="send contact card",
                 recipient=recipient,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 logger=self.logger,
             )
 
@@ -145,7 +145,7 @@ class WhatsAppSpecializedHandler:
                 error=e,
                 operation="send location message",
                 recipient=recipient,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 logger=self.logger,
             )
 
@@ -181,7 +181,7 @@ class WhatsAppSpecializedHandler:
                 error=e,
                 operation="send location request",
                 recipient=recipient,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 logger=self.logger,
             )
 

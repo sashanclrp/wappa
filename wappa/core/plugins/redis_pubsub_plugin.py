@@ -1,7 +1,7 @@
 """
 RedisPubSubPlugin - Automatic event notifications via Redis PubSub.
 
-Channel Pattern: wappa:notify:{tenant}:{user_id}:{event_type}
+Channel Pattern: wappa:notify:{inbox}:{user_id}:{event_type}
 
 Event Types:
 - incoming_message: User messages received via webhook
@@ -59,7 +59,7 @@ class RedisPubSubPlugin:
         # All events for a user
         PSUBSCRIBE wappa:notify:mimeia:5511999887766:*
 
-        # All bot replies for a tenant
+        # All bot replies for an inbox
         PSUBSCRIBE wappa:notify:mimeia:*:bot_reply
     """
 
@@ -211,9 +211,9 @@ class RedisPubSubPlugin:
         }
 
     def get_channel_pattern(
-        self, tenant: str, user_id: str = "*", event_type: str = "*"
+        self, inbox: str, user_id: str = "*", event_type: str = "*"
     ) -> str:
         """Build channel pattern for subscriptions."""
         from ...persistence.redis.redis_handler.utils.key_factory import KeyFactory
 
-        return KeyFactory().channel_pattern(tenant, user_id, event_type)
+        return KeyFactory().channel_pattern(inbox, user_id, event_type)

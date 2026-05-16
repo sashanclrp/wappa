@@ -23,13 +23,13 @@ class IUserCache(ABC):
     Interface for user-scoped cache operations.
 
     User identity is implicit - established via constructor parameters
-    (tenant and user_id). All methods operate on the single user record.
+    (inbox and user_id). All methods operate on the single user record.
 
     This interface eliminates the need for key parameters in basic operations
     since the user is identified at construction time.
 
     Example:
-        user = RedisUser(tenant="myapp", user_id="user123")
+        user = RedisUser(inbox="myapp", user_id="user123")
         await user.upsert({"name": "Alice", "score": 100})
         data = await user.get()
         name = await user.get_field("name")
@@ -180,7 +180,7 @@ class IStateCache(ABC):
     User identity is established via constructor parameters.
 
     Example:
-        state = RedisStateHandler(tenant="myapp", user_id="user123")
+        state = RedisStateHandler(inbox="myapp", user_id="user123")
         await state.upsert("chat_handler", {"step": 1, "context": "greeting"})
         data = await state.get("chat_handler")
     """
@@ -360,7 +360,7 @@ class IStateCache(ABC):
         Delete every handler state entry for this cache's user_id,
         regardless of handler name.
 
-        Pattern matched: {tenant}:state:*:{user_id}
+        Pattern matched: {inbox}:state:*:{user_id}
 
         Returns:
             Count of deleted entries
@@ -373,7 +373,7 @@ class IStateCache(ABC):
         Delete every handler entry whose name starts with prefix, scoped to
         this cache's user_id.
 
-        Pattern matched: {tenant}:state:{prefix}*:{user_id}
+        Pattern matched: {inbox}:state:{prefix}*:{user_id}
 
         Args:
             prefix: Handler name prefix (must be non-empty)
@@ -410,19 +410,19 @@ class IStateCache(ABC):
     @classmethod
     @abstractmethod
     async def list_users_with_handler(
-        cls, tenant_id: str, handler_name: str
+        cls, inbox_id: str, handler_name: str
     ) -> list[str]:
         """
         Return every user_id that has a state entry for handler_name under
-        tenant_id. Tenant-scoped inverse of list_handlers().
+        inbox_id. Inbox-scoped inverse of list_handlers().
 
         This is a classmethod so it can be called without binding to a specific
-        user — it intentionally scans across all users for the tenant.
+        user — it intentionally scans across all users for the inbox.
 
-        Pattern matched: {tenant}:state:{handler_name}:*
+        Pattern matched: {inbox}:state:{handler_name}:*
 
         Args:
-            tenant_id: Tenant identifier
+            inbox_id: Inbox identifier
             handler_name: Exact handler name to look up
 
         Returns:
@@ -430,7 +430,7 @@ class IStateCache(ABC):
 
         Example:
             active = await RedisStateHandler.list_users_with_handler(
-                tenant_id="myapp", handler_name="human_takeover"
+                inbox_id="myapp", handler_name="human_takeover"
             )
         """
         pass
@@ -441,10 +441,10 @@ class ITableCache(ABC):
     Interface for table/row cache operations.
 
     Data is keyed by composite key (table_name + pkid).
-    Tenant identity is established via constructor parameters.
+    Inbox identity is established via constructor parameters.
 
     Example:
-        table = RedisTable(tenant="myapp")
+        table = RedisTable(inbox="myapp")
         await table.upsert("products", "sku123", {"name": "Widget", "price": 99})
         data = await table.get("products", "sku123")
     """
@@ -656,9 +656,9 @@ class ITableCache(ABC):
     @abstractmethod
     async def delete_table(self, table_name: str) -> int:
         """
-        Delete every row in table_name for this tenant.
+        Delete every row in table_name for this inbox.
 
-        Pattern matched: {tenant}:df:{table_name}:pkid:*
+        Pattern matched: {inbox}:df:{table_name}:pkid:*
 
         Args:
             table_name: Name of the table to wipe (must be non-empty)
@@ -677,7 +677,7 @@ class ITableCache(ABC):
     @abstractmethod
     async def list_pkids(self, table_name: str) -> list[str]:
         """
-        Return all pkids stored for this table under this tenant.
+        Return all pkids stored for this table under this inbox.
 
         Args:
             table_name: Name of the table
@@ -706,7 +706,7 @@ class IExpiryCache(ABC):
     expires, a registered handler is called with the identifier.
 
     Example:
-        expiry = RedisExpiry(tenant="myapp", user_id="user123")
+        expiry = RedisExpiry(inbox="myapp", user_id="user123")
         await expiry.set("payment_reminder", "TXN_123", ttl_seconds=1800)
         # After 30 minutes, handler for "payment_reminder" is called
         # with identifier="TXN_123"
@@ -776,7 +776,7 @@ class IExpiryCache(ABC):
         Delete every expiry trigger whose identifier matches this cache's
         user_id, regardless of action.
 
-        Pattern matched: {tenant}:EXPTRIGGER:*:{user_id}
+        Pattern matched: {inbox}:EXPTRIGGER:*:{user_id}
 
         Returns:
             Count of deleted triggers
@@ -830,7 +830,7 @@ class IAIStateCache(ABC):
     State shared among AI agents for context and coordination.
     Agent identity is established via agent_name parameter.
 
-    Key pattern: {tenant}:aistate:{agent_name}:{user_id}
+    Key pattern: {inbox}:aistate:{agent_name}:{user_id}
     Example: "wappa:aistate:summarizer:user123"
     """
 
@@ -1016,7 +1016,7 @@ class IAIStateCache(ABC):
         Delete every AI agent state entry for this cache's user_id,
         regardless of agent name.
 
-        Pattern matched: {tenant}:aistate:*:{user_id}
+        Pattern matched: {inbox}:aistate:*:{user_id}
 
         Returns:
             Count of deleted entries
@@ -1029,7 +1029,7 @@ class IAIStateCache(ABC):
         Delete every agent entry whose name starts with prefix, scoped to
         this cache's user_id.
 
-        Pattern matched: {tenant}:aistate:{prefix}*:{user_id}
+        Pattern matched: {inbox}:aistate:{prefix}*:{user_id}
 
         Args:
             prefix: Agent name prefix (must be non-empty)

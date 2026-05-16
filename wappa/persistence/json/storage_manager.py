@@ -36,13 +36,13 @@ class JSONStorageManager:
     async def get(
         self,
         cache_type: str,
-        tenant_id: str,
+        inbox_id: str,
         user_id: str | None,
         key: str,
         model: type[BaseModel] | None = None,
     ) -> Any:
         try:
-            file_path = file_manager.get_cache_file_path(cache_type, tenant_id, user_id)
+            file_path = file_manager.get_cache_file_path(cache_type, inbox_id, user_id)
             cache_data = await self._load_cache_data(file_path)
             if cache_data is None or key not in cache_data:
                 return None
@@ -54,14 +54,14 @@ class JSONStorageManager:
     async def set(
         self,
         cache_type: str,
-        tenant_id: str,
+        inbox_id: str,
         user_id: str | None,
         key: str,
         value: Any,
         ttl: int | None = None,
     ) -> bool:
         try:
-            file_path = file_manager.get_cache_file_path(cache_type, tenant_id, user_id)
+            file_path = file_manager.get_cache_file_path(cache_type, inbox_id, user_id)
             file_data = await file_manager.read_file(file_path)
             cache_data = extract_cache_file_data(file_data) if file_data else {}
             if cache_data is None:
@@ -76,10 +76,10 @@ class JSONStorageManager:
             return False
 
     async def delete(
-        self, cache_type: str, tenant_id: str, user_id: str | None, key: str
+        self, cache_type: str, inbox_id: str, user_id: str | None, key: str
     ) -> bool:
         try:
-            file_path = file_manager.get_cache_file_path(cache_type, tenant_id, user_id)
+            file_path = file_manager.get_cache_file_path(cache_type, inbox_id, user_id)
             file_data = await file_manager.read_file(file_path)
             if not file_data:
                 return True
@@ -101,10 +101,10 @@ class JSONStorageManager:
             return False
 
     async def exists(
-        self, cache_type: str, tenant_id: str, user_id: str | None, key: str
+        self, cache_type: str, inbox_id: str, user_id: str | None, key: str
     ) -> bool:
         try:
-            file_path = file_manager.get_cache_file_path(cache_type, tenant_id, user_id)
+            file_path = file_manager.get_cache_file_path(cache_type, inbox_id, user_id)
             cache_data = await self._load_cache_data(file_path)
             return cache_data is not None and key in cache_data
         except Exception as e:
@@ -116,12 +116,12 @@ class JSONStorageManager:
     async def get_ttl(
         self,
         cache_type: str,
-        tenant_id: str,
+        inbox_id: str,
         user_id: str | None,
         key: str | None = None,
     ) -> int:
         try:
-            file_path = file_manager.get_cache_file_path(cache_type, tenant_id, user_id)
+            file_path = file_manager.get_cache_file_path(cache_type, inbox_id, user_id)
             file_data = await file_manager.read_file(file_path)
 
             if not file_data:
@@ -147,7 +147,7 @@ class JSONStorageManager:
     async def set_ttl(
         self,
         cache_type: str,
-        tenant_id: str,
+        inbox_id: str,
         user_id: str | None,
         key_or_ttl: str | int,
         ttl: int | None = None,
@@ -157,7 +157,7 @@ class JSONStorageManager:
             if effective_ttl is None:
                 raise ValueError("ttl is required for set_ttl")
 
-            file_path = file_manager.get_cache_file_path(cache_type, tenant_id, user_id)
+            file_path = file_manager.get_cache_file_path(cache_type, inbox_id, user_id)
             cache_data = await self._load_cache_data(file_path, delete_if_expired=False)
             if cache_data is None:
                 return False
@@ -170,10 +170,10 @@ class JSONStorageManager:
             return False
 
     async def get_all_keys(
-        self, cache_type: str, tenant_id: str, user_id: str | None
+        self, cache_type: str, inbox_id: str, user_id: str | None
     ) -> dict[str, Any]:
         try:
-            file_path = file_manager.get_cache_file_path(cache_type, tenant_id, user_id)
+            file_path = file_manager.get_cache_file_path(cache_type, inbox_id, user_id)
             cache_data = await self._load_cache_data(file_path)
             return cache_data or {}
         except Exception as e:

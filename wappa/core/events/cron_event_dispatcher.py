@@ -48,7 +48,7 @@ class CronEventDispatcher:
         try:
             self.logger.info(
                 f"Dispatching cron event: {event.cron_id} "
-                f"(tenant={event.tenant_id}, expr={event.cron_expr})"
+                f"(inbox={event.inbox_id}, expr={event.cron_expr})"
             )
 
             await request_handler.handle_cron_event(event)
@@ -60,7 +60,7 @@ class CronEventDispatcher:
                 "success": True,
                 "action": "cron_event_processed",
                 "cron_id": event.cron_id,
-                "tenant_id": event.tenant_id,
+                "inbox_id": event.inbox_id,
                 "dispatch_time": dispatch_time,
             }
 

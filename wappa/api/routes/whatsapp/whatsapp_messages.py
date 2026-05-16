@@ -35,7 +35,7 @@ router = APIRouter(
     tags=["WhatsApp - Messages"],
     responses={
         400: {"description": "Bad Request - Invalid message format"},
-        401: {"description": "Unauthorized - Invalid tenant credentials"},
+        401: {"description": "Unauthorized - Invalid inbox credentials"},
         429: {"description": "Rate Limited - Too many requests"},
         500: {"description": "Internal Server Error"},
     },
@@ -72,7 +72,7 @@ async def send_text_message(
 
     Raises:
         HTTPException 400: If message validation fails
-        HTTPException 401: If tenant credentials are invalid
+        HTTPException 401: If inbox credentials are invalid
         HTTPException 500: If WhatsApp API call fails
     """
     logger = get_logger(__name__)
@@ -126,7 +126,7 @@ async def mark_message_as_read(
 
     Raises:
         HTTPException 400: If message ID is invalid
-        HTTPException 401: If tenant credentials are invalid
+        HTTPException 401: If inbox credentials are invalid
         HTTPException 500: If WhatsApp API call fails
     """
     logger = get_logger(__name__)

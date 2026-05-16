@@ -30,7 +30,7 @@ class MediaUploadResult(BaseModel):
     error: str | None = None
     error_code: str | None = None
     uploaded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    tenant_id: str | None = None  # phone_number_id in WhatsApp context
+    inbox_id: str | None = None  # phone_number_id in WhatsApp context
 
     model_config = ConfigDict(use_enum_values=True)
 
@@ -60,7 +60,7 @@ class MediaInfoResult(BaseModel):
     error: str | None = None
     error_code: str | None = None
     retrieved_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    tenant_id: str | None = None
+    inbox_id: str | None = None
 
     model_config = ConfigDict(use_enum_values=True)
 
@@ -83,7 +83,7 @@ class MediaDownloadResult(BaseModel):
     error: str | None = None
     error_code: str | None = None
     downloaded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    tenant_id: str | None = None
+    inbox_id: str | None = None
     _is_temp_file: bool = False
     _cleanup_on_exit: bool = False
 
@@ -140,6 +140,6 @@ class MediaDeleteResult(BaseModel):
     error: str | None = None
     error_code: str | None = None
     deleted_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    tenant_id: str | None = None
+    inbox_id: str | None = None
 
     model_config = ConfigDict(use_enum_values=True)

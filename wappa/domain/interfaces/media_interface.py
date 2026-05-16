@@ -49,11 +49,11 @@ class IMediaHandler(ABC):
 
     @property
     @abstractmethod
-    def tenant_id(self) -> str:
-        """Get the tenant ID this handler serves.
+    def inbox_id(self) -> str:
+        """Get the inbox ID this handler serves.
 
         Note: In WhatsApp context, this is the phone_number_id.
-        Different platforms may use different tenant identifiers.
+        Different platforms may use different inbox identifiers.
         """
         pass
 

@@ -100,7 +100,7 @@ class DefaultMessageHandler:
             "total_messages": 0,
             "by_type": {},
             "by_user": {},
-            "by_tenant": {},
+            "by_inbox": {},
             "sensitive_content_detected": 0,
             "last_reset": datetime.now(),
         }
@@ -120,8 +120,8 @@ class DefaultMessageHandler:
         # Update statistics
         self._update_stats(webhook)
 
-        # Get logger with tenant context
-        webhook.tenant.get_tenant_key() if webhook.tenant else "unknown"
+        # Get logger with inbox context
+        webhook.inbox.get_inbox_key() if webhook.inbox else "unknown"
         logger = get_logger(__name__)
 
         # Log based on strategy
@@ -159,10 +159,10 @@ class DefaultMessageHandler:
         user_id = webhook.user.user_id if webhook.user else "unknown"
         self._stats["by_user"][user_id] = self._stats["by_user"].get(user_id, 0) + 1
 
-        # Track by tenant
-        tenant_id = webhook.tenant.get_tenant_key() if webhook.tenant else "unknown"
-        self._stats["by_tenant"][tenant_id] = (
-            self._stats["by_tenant"].get(tenant_id, 0) + 1
+        # Track by inbox
+        inbox_id = webhook.inbox.get_inbox_key() if webhook.inbox else "unknown"
+        self._stats["by_inbox"][inbox_id] = (
+            self._stats["by_inbox"].get(inbox_id, 0) + 1
         )
 
         # Check for sensitive content
@@ -218,12 +218,12 @@ class DefaultMessageHandler:
     async def _log_full_detail(self, logger, webhook: IncomingMessageWebhook) -> None:
         """Log full message details."""
         user_id = webhook.user.user_id if webhook.user else "unknown"
-        tenant_id = webhook.tenant.get_tenant_key() if webhook.tenant else "unknown"
+        inbox_id = webhook.inbox.get_inbox_key() if webhook.inbox else "unknown"
         message_type = webhook.get_message_type_name()
         content_preview = self._get_content_preview(webhook)
 
         logger.info(
-            f"📥 Full Message Details: User={user_id}, Tenant={tenant_id}, "
+            f"📥 Full Message Details: User={user_id}, Inbox={inbox_id}, "
             f"Type={message_type}, Content='{content_preview}'"
         )
 
@@ -250,7 +250,7 @@ class DefaultMessageHandler:
             "total_messages": 0,
             "by_type": {},
             "by_user": {},
-            "by_tenant": {},
+            "by_inbox": {},
             "sensitive_content_detected": 0,
             "last_reset": datetime.now(),
         }

@@ -1,10 +1,10 @@
 """
-Redis PubSub Example - MULTI-TENANT Self-Subscribing App
+Redis PubSub Example - MULTI-INBOX Self-Subscribing App
 
-This example demonstrates MULTI-TENANT SELF-SUBSCRIBING to PubSub events:
+This example demonstrates MULTI-INBOX SELF-SUBSCRIBING to PubSub events:
 - App PUBLISHES events via RedisPubSubPlugin
-- App SUBSCRIBES to ALL tenants via background task
-- App CREATES messengers dynamically per tenant
+- App SUBSCRIBES to ALL inboxes via background task
+- App CREATES messengers dynamically per inbox
 - App REACTS to events by sending WhatsApp messages
 
 Event types demonstrated:
@@ -14,10 +14,10 @@ Event types demonstrated:
 
 NOTE: bot_reply is DISABLED to prevent infinite loops (subscriber sends message → bot_reply → subscriber sends message...)
 
-MULTI-TENANT SUPPORT:
+MULTI-INBOX SUPPORT:
 - Subscribes to pattern: wappa:notify:*:*:*
-- Creates messenger per tenant dynamically
-- Each tenant uses its own WhatsApp credentials
+- Creates messenger per inbox dynamically
+- Each inbox uses its own WhatsApp credentials
 
 SETUP REQUIRED:
 1. Create a .env file with your WhatsApp Business API credentials:
@@ -95,7 +95,7 @@ def display_startup_information() -> None:
     print()
 
     print("CHANNEL PATTERN:")
-    print("  wappa:notify:{tenant}:{user_id}:{event_type}")
+    print("  wappa:notify:{inbox}:{user_id}:{event_type}")
     print()
 
     print("HOW IT WORKS:")

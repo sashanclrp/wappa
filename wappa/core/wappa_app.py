@@ -123,7 +123,7 @@ class Wappa:
         Set the event handler for this application.
 
         Dependencies are now injected per-request by the WebhookController,
-        ensuring proper multi-tenant support and correct tenant isolation.
+        ensuring proper multi-inbox support and correct inbox isolation.
 
         Args:
             handler: WappaEventHandler instance to handle webhooks

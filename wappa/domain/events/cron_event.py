@@ -19,7 +19,7 @@ class CronEvent(BaseModel):
         event = CronEvent(
             cron_id="send_daily_report",
             cron_expr="0 9 * * *",
-            tenant_id="acme",
+            inbox_id="acme",
             user_id="5551234567",
             payload={"report_type": "summary"},
         )
@@ -39,10 +39,10 @@ class CronEvent(BaseModel):
         description="Tags assigned at registration for secondary filtering",
     )
 
-    # Tenant and user context (optional — crons can be system-wide)
-    tenant_id: str | None = Field(
+    # Inbox and user context (optional — crons can be system-wide)
+    inbox_id: str | None = Field(
         default=None,
-        description="Tenant identifier — if set, full context (messenger, cache, db) available",
+        description="Inbox identifier — if set, full context (messenger, cache, db) available",
     )
     user_id: str | None = Field(
         default=None,

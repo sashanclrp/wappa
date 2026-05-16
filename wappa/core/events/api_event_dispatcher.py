@@ -42,7 +42,7 @@ class APIEventDispatcher:
             request_payload={...},
             response_success=True,
             message_id="wamid.xxx",
-            tenant_id="tenant-123",
+            inbox_id="inbox-123",
         )
         await dispatcher.dispatch(event, request)  # Pass request for DB access
     """
@@ -94,7 +94,7 @@ class APIEventDispatcher:
                 bsuid, _ = classify_meta_identifier(canonical_user_id)
 
             async with sse_event_scope(
-                tenant_id=event.tenant_id or "unknown",
+                inbox_id=event.inbox_id or "unknown",
                 user_id=canonical_user_id,
                 bsuid=bsuid,
                 phone_number=phone,
@@ -129,7 +129,7 @@ class APIEventDispatcher:
         API routes have their own messenger dependency injection.
 
         Args:
-            event: APIMessageEvent containing tenant_id and recipient
+            event: APIMessageEvent containing inbox_id and recipient
             request: FastAPI Request for accessing app.state
 
         Returns:
@@ -148,7 +148,7 @@ class APIEventDispatcher:
                 db_read = session_manager.get_read_session
 
         self.logger.debug(
-            f"API handler context: tenant={event.tenant_id}, db_available={db is not None}"
+            f"API handler context: inbox={event.inbox_id}, db_available={db is not None}"
         )
 
         # Clone handler with context for this API event.
@@ -157,7 +157,7 @@ class APIEventDispatcher:
         # for state/cache lookups, not the Meta transport value. Defaults to
         # recipient when the caller did not provide a distinct user_id.
         return self._event_handler.with_context(
-            tenant_id=event.tenant_id,
+            inbox_id=event.inbox_id,
             user_id=event.user_id or event.recipient,
             messenger=None,  # API routes use their own messenger dependency
             cache_factory=None,  # API routes can inject cache if needed

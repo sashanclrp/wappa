@@ -8,19 +8,19 @@ from pydantic import Field
 from ....domain.interfaces.cache_interfaces import IExpiryCache
 from ..ops import delete, exists, get_ttl, setex
 from .utils.serde import dumps
-from .utils.tenant_cache import TenantCache
+from .utils.inbox_cache import InboxCache
 
 logger = logging.getLogger("RedisExpiry")
 
 
-class RedisExpiry(TenantCache, IExpiryCache):
+class RedisExpiry(InboxCache, IExpiryCache):
     """
     Repository for expiry trigger operations.
 
     Expiry triggers are time-based automation keys that fire notifications
     when they expire. Used for reminders, timeouts, and scheduled actions.
 
-    Key pattern: {tenant}:EXPTRIGGER:{action}:{identifier}
+    Key pattern: {inbox}:EXPTRIGGER:{action}:{identifier}
     Example: "wappa:EXPTRIGGER:payment_reminder:TXN_12345"
 
     When a trigger expires, Redis publishes to __keyevent@{db}__:expired,
@@ -29,7 +29,7 @@ class RedisExpiry(TenantCache, IExpiryCache):
     Single Responsibility: Expiry trigger lifecycle management only
 
     Example usage:
-        expiry = RedisExpiry(tenant="wappa", user_id="user123")
+        expiry = RedisExpiry(inbox="wappa", user_id="user123")
         # Set trigger that fires in 30 minutes
         await expiry.set("payment_reminder", "TXN_123", ttl_seconds=1800)
         # Check if trigger exists
@@ -44,7 +44,7 @@ class RedisExpiry(TenantCache, IExpiryCache):
 
     def _key(self, action: str, identifier: str) -> str:
         """Build trigger key using KeyFactory"""
-        return self.keys.trigger(self.tenant, action, identifier)
+        return self.keys.trigger(self.inbox, action, identifier)
 
     # ---- Public API implementing IExpiryCache ------------------------------
 
@@ -136,7 +136,7 @@ class RedisExpiry(TenantCache, IExpiryCache):
         """
         Delete all triggers for an identifier using pattern match.
 
-        Pattern: {tenant}:EXPTRIGGER:*:{safe_identifier}
+        Pattern: {inbox}:EXPTRIGGER:*:{safe_identifier}
 
         This is useful for cleaning up all triggers related to a transaction
         when it's cancelled or completed.
@@ -152,7 +152,7 @@ class RedisExpiry(TenantCache, IExpiryCache):
             count = await expiry.delete_all_by_identifier("TXN_123")
         """
         safe_ident = identifier.replace(":", "_")
-        pattern = f"{self.tenant}:{self.keys.trigger_prefix}:*:{safe_ident}"
+        pattern = f"{self.inbox}:{self.keys.trigger_prefix}:*:{safe_ident}"
 
         logger.debug(
             f"Deleting all expiry triggers for identifier '{identifier}' "
@@ -172,7 +172,7 @@ class RedisExpiry(TenantCache, IExpiryCache):
 
     async def delete_all_for_user(self) -> int:
         safe_user = self.user_id.replace(":", "_")
-        pattern = f"{self.tenant}:{self.keys.trigger_prefix}:*:{safe_user}"
+        pattern = f"{self.inbox}:{self.keys.trigger_prefix}:*:{safe_user}"
         logger.debug(
             f"Deleting all expiry triggers for user '{self.user_id}' "
             f"(pattern: '{pattern}')"

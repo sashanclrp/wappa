@@ -3,7 +3,7 @@ Webhook Plugin v2
 
 Specialized plugin for adding webhook endpoints to Wappa applications.
 Supports two modes:
-1. Raw handler (v1 backwards compat): handler(request, tenant_id, provider) -> dict
+1. Raw handler (v1 backwards compat): handler(request, inbox_id, provider) -> dict
 2. Processor mode (v2): IWebhookProcessor with full Wappa infrastructure access
 """
 
@@ -52,7 +52,7 @@ class WebhookPlugin:
         event_handler: "WappaEventHandler | None" = None,
         prefix: str | None = None,
         methods: list[str] | None = None,
-        include_tenant_id: bool = True,
+        include_inbox_id: bool = True,
         **route_kwargs: Any,
     ):
         """
@@ -65,7 +65,7 @@ class WebhookPlugin:
             event_handler: WappaEventHandler prototype for cloning (v2 mode)
             prefix: URL prefix (defaults to /webhook/{provider})
             methods: HTTP methods to accept (defaults to ['POST'])
-            include_tenant_id: Whether to include tenant_id in the URL path
+            include_inbox_id: Whether to include inbox_id in the URL path
             **route_kwargs: Additional arguments for FastAPI route decorator
 
         Raises:
@@ -83,7 +83,7 @@ class WebhookPlugin:
         self.event_handler = event_handler
         self.prefix = prefix or f"/webhook/{provider}"
         self.methods = methods or ["POST"]
-        self.include_tenant_id = include_tenant_id
+        self.include_inbox_id = include_inbox_id
         self.route_kwargs = route_kwargs
 
         self.router = APIRouter()
@@ -107,19 +107,19 @@ class WebhookPlugin:
         logger = get_app_logger()
         tags = [f"{self.provider.title()} Webhooks"]
 
-        # Create webhook endpoint based on tenant_id inclusion
-        if self.include_tenant_id:
+        # Create webhook endpoint based on inbox_id inclusion
+        if self.include_inbox_id:
 
             @self.router.api_route(
-                "/{tenant_id}",
+                "/{inbox_id}",
                 methods=self.methods,
                 tags=tags,
                 **self.route_kwargs,
             )
-            async def webhook_endpoint(request: Request, tenant_id: str):
+            async def webhook_endpoint(request: Request, inbox_id: str):
                 if self.is_processor_mode:
-                    return await self._handle_processor_webhook(request, tenant_id)
-                return await self.handler(request, tenant_id, self.provider)
+                    return await self._handle_processor_webhook(request, inbox_id)
+                return await self.handler(request, inbox_id, self.provider)
 
         else:
 
@@ -135,18 +135,18 @@ class WebhookPlugin:
                 return await self.handler(request, None, self.provider)
 
         # Status endpoint for webhook health checks
-        status_path = "/{tenant_id}/status" if self.include_tenant_id else "/status"
+        status_path = "/{inbox_id}/status" if self.include_inbox_id else "/status"
 
         @self.router.get(status_path, tags=tags)
-        async def webhook_status(request: Request, tenant_id: str = None):
+        async def webhook_status(request: Request, inbox_id: str = None):
             base_url = str(request.base_url).rstrip("/")
             webhook_url = f"{base_url}{self.prefix}"
-            if tenant_id:
-                webhook_url = f"{webhook_url}/{tenant_id}"
+            if inbox_id:
+                webhook_url = f"{webhook_url}/{inbox_id}"
             return {
                 "status": "active",
                 "provider": self.provider,
-                "tenant_id": tenant_id,
+                "inbox_id": inbox_id,
                 "webhook_url": webhook_url,
                 "methods": self.methods,
                 "mode": "processor" if self.is_processor_mode else "raw",
@@ -184,7 +184,7 @@ class WebhookPlugin:
     async def _handle_processor_webhook(
         self,
         request: Request,
-        tenant_id: str | None,
+        inbox_id: str | None,
     ) -> dict:
         """
         Handle webhook using processor mode (v2).
@@ -192,44 +192,44 @@ class WebhookPlugin:
         Caches the request body (Starlette streams are read-once), then
         returns 200 immediately and processes in a background task.
         """
-        if not tenant_id:
+        if not inbox_id:
             return {
                 "status": "error",
-                "detail": "tenant_id is required for processor mode",
+                "detail": "inbox_id is required for processor mode",
             }
 
         # Cache request body before background task (Starlette caches
         # internally after first read, so request.json() works in the task)
         await request.body()
 
-        asyncio.create_task(self._process_webhook_async(request, tenant_id))
+        asyncio.create_task(self._process_webhook_async(request, inbox_id))
         return {"status": "accepted"}
 
     async def _process_webhook_async(
         self,
         request: Request,
-        tenant_id: str,
+        inbox_id: str,
     ) -> None:
         """
         Background webhook processing pipeline:
         1. processor.parse_event() -> ExternalEvent
-        2. context_factory.create_context(tenant_id) -> WappaContext (DB only)
+        2. context_factory.create_context(inbox_id) -> WappaContext (DB only)
         3. processor.resolve_user_id(event, db) -> user_id
-        4. context_factory.create_context(tenant_id, user_id) -> full context
+        4. context_factory.create_context(inbox_id, user_id) -> full context
         5. event_handler.with_context() -> cloned handler
         6. external_dispatcher.dispatch(event, handler) -> result
         """
         logger = get_app_logger()
 
         try:
-            event = await self.processor.parse_event(request, tenant_id)
+            event = await self.processor.parse_event(request, inbox_id)
             logger.info(
                 f"Parsed external event: {event.source}/{event.event_type} "
-                f"(tenant={tenant_id})"
+                f"(inbox={inbox_id})"
             )
 
-            # Create initial context (tenant-only, for DB access during user resolution)
-            ctx = await self._context_factory.create_context(tenant_id)
+            # Create initial context (inbox-only, for DB access during user resolution)
+            ctx = await self._context_factory.create_context(inbox_id)
 
             # Resolve user_id from event payload (may require DB lookup)
             user_id = await self.processor.resolve_user_id(event, ctx.db)
@@ -238,14 +238,14 @@ class WebhookPlugin:
             # Upgrade context with user_id for cache + messenger
             if user_id:
                 ctx = await self._context_factory.create_context(
-                    tenant_id=tenant_id,
+                    inbox_id=inbox_id,
                     user_id=user_id,
                     include_messenger=True,
                 )
 
             # Clone handler with full context (same pattern as WebhookController)
             request_handler = self.event_handler.with_context(
-                tenant_id=tenant_id,
+                inbox_id=inbox_id,
                 user_id=user_id or "",
                 messenger=ctx.messenger,
                 cache_factory=ctx.cache_factory,
@@ -264,7 +264,7 @@ class WebhookPlugin:
         except Exception as e:
             logger.error(
                 f"Error processing external webhook for {self.provider}, "
-                f"tenant={tenant_id}: {e}",
+                f"inbox={inbox_id}: {e}",
                 exc_info=True,
             )
 
@@ -272,8 +272,8 @@ class WebhookPlugin:
         """Execute webhook plugin startup logic."""
         logger = get_app_logger()
         url_pattern = (
-            f"{self.prefix}/{{tenant_id}}"
-            if self.include_tenant_id
+            f"{self.prefix}/{{inbox_id}}"
+            if self.include_inbox_id
             else f"{self.prefix}/"
         )
         mode = "processor" if self.is_processor_mode else "raw"

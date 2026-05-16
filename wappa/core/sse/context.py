@@ -1,6 +1,6 @@
 """Request-scoped SSE event context.
 
-Every SSE event needs the same identity signals — tenant, canonical user id,
+Every SSE event needs the same identity signals — inbox, canonical user id,
 BSUID, phone number, platform — plus optional per-request metadata like
 conversation_id, chat_id, run_id, etc. Rather than thread those through every
 call site (which produced v0.3.4's null-identity bugs), the framework
@@ -49,7 +49,7 @@ class SSEEventContext:
     ``post_process_message`` wins and emits.
     """
 
-    tenant_id: str = "unknown"
+    inbox_id: str = "unknown"
     user_id: str = "unknown"
     bsuid: str | None = None
     phone_number: str | None = None
@@ -157,7 +157,7 @@ def derive_identifiers(user_obj: Any) -> tuple[str | None, str | None]:
 @asynccontextmanager
 async def sse_event_scope(
     *,
-    tenant_id: str = "unknown",
+    inbox_id: str = "unknown",
     user_id: str = "unknown",
     bsuid: str | None = None,
     phone_number: str | None = None,
@@ -172,7 +172,7 @@ async def sse_event_scope(
     is cleared when the scope exits — even on exceptions.
     """
     ctx = SSEEventContext(
-        tenant_id=tenant_id,
+        inbox_id=inbox_id,
         user_id=user_id,
         bsuid=bsuid,
         phone_number=phone_number,

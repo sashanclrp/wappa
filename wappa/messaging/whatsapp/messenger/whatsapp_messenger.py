@@ -43,7 +43,7 @@ class WhatsAppMessenger(IMessenger):
         interactive_handler: WhatsAppInteractiveHandler,
         template_handler: WhatsAppTemplateHandler,
         specialized_handler: WhatsAppSpecializedHandler,
-        tenant_id: str,
+        inbox_id: str,
         message_factory: WhatsAppMessageFactory | None = None,
         media_factory: WhatsAppMediaFactory | None = None,
     ):
@@ -52,7 +52,7 @@ class WhatsAppMessenger(IMessenger):
         self.interactive_handler = interactive_handler
         self.template_handler = template_handler
         self.specialized_handler = specialized_handler
-        self._tenant_id = tenant_id
+        self._inbox_id = inbox_id
         # Factories default to new instances so the constructor stays ergonomic
         # for library users while still allowing DI in FastAPI routes.
         self._message_factory = message_factory or WhatsAppMessageFactory()
@@ -64,8 +64,8 @@ class WhatsAppMessenger(IMessenger):
         return PlatformType.WHATSAPP
 
     @property
-    def tenant_id(self) -> str:
-        return self._tenant_id
+    def inbox_id(self) -> str:
+        return self._inbox_id
 
     def _error_result(
         self, error: str, error_code: str, recipient: str | None = None
@@ -78,7 +78,7 @@ class WhatsAppMessenger(IMessenger):
             recipient_phone=None,
             error=error,
             error_code=error_code,
-            tenant_id=self._tenant_id,
+            inbox_id=self._inbox_id,
             api_response=None,
         )
 
@@ -152,7 +152,7 @@ class WhatsAppMessenger(IMessenger):
             response = await self.client.post_request(payload)
             result = MessageResult.from_response_payload(
                 response,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 fallback_recipient=recipient,
             )
             self.logger.info(
@@ -165,7 +165,7 @@ class WhatsAppMessenger(IMessenger):
                 error=e,
                 operation="send text message",
                 recipient=recipient,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 logger=self.logger,
             )
 
@@ -199,7 +199,7 @@ class WhatsAppMessenger(IMessenger):
                 recipient_bsuid=None,
                 recipient_phone=None,
                 platform=PlatformType.WHATSAPP,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 api_response=None,
             )
 
@@ -210,7 +210,7 @@ class WhatsAppMessenger(IMessenger):
                     "mark as read with typing indicator" if typing else "mark as read"
                 ),
                 recipient=message_id,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 logger=self.logger,
             )
 
@@ -427,7 +427,7 @@ class WhatsAppMessenger(IMessenger):
             response = await self.client.post_request(payload)
             result = MessageResult.from_response_payload(
                 response,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 fallback_recipient=recipient,
             )
             self.logger.info(
@@ -441,7 +441,7 @@ class WhatsAppMessenger(IMessenger):
                 error=e,
                 operation=f"send {media_type.value}",
                 recipient=recipient,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 logger=self.logger,
             )
 

@@ -11,16 +11,16 @@ Example:
     from wappa.core.expiry import (
         create_expiry_messenger,
         create_expiry_cache_factory,
-        parse_tenant_from_expired_key,
+        parse_inbox_from_expired_key,
     )
 
     @expiry_registry.on_expire_action("user_inactivity")
     async def handle_user_inactivity(identifier: str, full_key: str) -> None:
-        tenant_id = parse_tenant_from_expired_key(full_key)
+        inbox_id = parse_inbox_from_expired_key(full_key)
         user_id = identifier
 
-        messenger = await create_expiry_messenger(tenant_id)
-        cache_factory = create_expiry_cache_factory(tenant_id, user_id)
+        messenger = await create_expiry_messenger(inbox_id)
+        cache_factory = create_expiry_cache_factory(inbox_id, user_id)
         user_cache = cache_factory.create_user_cache()
 
         # Business logic here...
@@ -67,7 +67,7 @@ class CacheFactoryCreationError(ExpiryContextError):
     pass
 
 
-async def create_expiry_messenger(tenant_id: str) -> IMessenger:
+async def create_expiry_messenger(inbox_id: str) -> IMessenger:
     """
     Bootstrap messenger for expiry handler context.
 
@@ -78,7 +78,7 @@ async def create_expiry_messenger(tenant_id: str) -> IMessenger:
     providing production-ready error handling with specific error types.
 
     Args:
-        tenant_id: Tenant identifier (WhatsApp phone_number_id)
+        inbox_id: Inbox identifier (WhatsApp phone_number_id)
 
     Returns:
         Configured IMessenger instance ready for sending messages
@@ -120,27 +120,27 @@ async def create_expiry_messenger(tenant_id: str) -> IMessenger:
         messenger_factory = MessengerFactory(http_session)
         messenger = await messenger_factory.create_messenger(
             platform=PlatformType.WHATSAPP,
-            tenant_id=tenant_id,
+            inbox_id=inbox_id,
         )
-        logger.debug(f"Created expiry messenger for tenant: {tenant_id}")
+        logger.debug(f"Created expiry messenger for inbox: {inbox_id}")
         return messenger
 
     except Exception as e:
-        logger.error(f"Failed to create messenger for tenant {tenant_id}: {e}")
+        logger.error(f"Failed to create messenger for inbox {inbox_id}: {e}")
         raise MessengerCreationError(
-            f"Messenger creation failed for tenant {tenant_id}: {e}"
+            f"Messenger creation failed for inbox {inbox_id}: {e}"
         ) from e
 
 
-def create_expiry_cache_factory(tenant_id: str, user_id: str) -> ICacheFactory:
+def create_expiry_cache_factory(inbox_id: str, user_id: str) -> ICacheFactory:
     """
     Bootstrap cache factory for expiry handler context.
 
-    Creates a Redis cache factory instance with the specified tenant and user context,
+    Creates a Redis cache factory instance with the specified inbox and user context,
     following the framework's context-aware cache factory pattern.
 
     Args:
-        tenant_id: Tenant identifier for namespace isolation
+        inbox_id: Inbox identifier for namespace isolation
         user_id: User identifier for user-specific caches
 
     Returns:
@@ -148,23 +148,23 @@ def create_expiry_cache_factory(tenant_id: str, user_id: str) -> ICacheFactory:
 
     Raises:
         CacheFactoryCreationError: If cache factory creation fails
-        ValueError: If tenant_id or user_id is empty
+        ValueError: If inbox_id or user_id is empty
 
     Example:
         cache_factory = create_expiry_cache_factory("wappa", "+1234567890")
         user_cache = cache_factory.create_user_cache()
         data = await user_cache.get()
     """
-    if not tenant_id:
-        raise ValueError("tenant_id is required for cache factory creation")
+    if not inbox_id:
+        raise ValueError("inbox_id is required for cache factory creation")
     if not user_id:
         raise ValueError("user_id is required for cache factory creation")
 
     try:
         cache_factory_class = create_cache_factory("redis")
-        cache_factory = cache_factory_class(tenant_id=tenant_id, user_id=user_id)
+        cache_factory = cache_factory_class(inbox_id=inbox_id, user_id=user_id)
         logger.debug(
-            f"Created expiry cache factory for tenant: {tenant_id}, user: {user_id}"
+            f"Created expiry cache factory for inbox: {inbox_id}, user: {user_id}"
         )
         return cache_factory
 
@@ -177,28 +177,28 @@ def create_expiry_cache_factory(tenant_id: str, user_id: str) -> ICacheFactory:
     except Exception as e:
         logger.error(f"Failed to create cache factory: {e}")
         raise CacheFactoryCreationError(
-            f"Cache factory creation failed for tenant {tenant_id}, user {user_id}: {e}"
+            f"Cache factory creation failed for inbox {inbox_id}, user {user_id}: {e}"
         ) from e
 
 
-def parse_tenant_from_expired_key(full_key: str) -> str:
+def parse_inbox_from_expired_key(full_key: str) -> str:
     """
-    Parse tenant ID from a Redis expiry trigger key.
+    Parse inbox ID from a Redis expiry trigger key.
 
-    Expiry trigger keys follow the pattern: {tenant}:EXPTRIGGER:{action}:{identifier}
-    This function extracts the tenant portion from the full key.
+    Expiry trigger keys follow the pattern: {inbox}:EXPTRIGGER:{action}:{identifier}
+    This function extracts the inbox portion from the full key.
 
     Args:
         full_key: Complete Redis key that expired
                  (e.g., "wappa:EXPTRIGGER:user_inactivity:+1234567890")
 
     Returns:
-        Tenant ID extracted from the key, or "wappa" as default fallback
+        Inbox ID extracted from the key, or "wappa" as default fallback
 
     Example:
-        >>> parse_tenant_from_expired_key("acme:EXPTRIGGER:reminder:USER123")
+        >>> parse_inbox_from_expired_key("acme:EXPTRIGGER:reminder:USER123")
         "acme"
-        >>> parse_tenant_from_expired_key("simple_key")
+        >>> parse_inbox_from_expired_key("simple_key")
         "wappa"
     """
     if ":" in full_key:

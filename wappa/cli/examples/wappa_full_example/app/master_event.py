@@ -276,8 +276,7 @@ class WappaFullExampleHandler(WappaEventHandler):
                 success=event.response_success,
                 error=event.response_error,
                 request_payload=event.request_payload,
-                tenant_id=event.tenant_id,
-                owner_id=event.owner_id,
+                inbox_id=event.inbox_id,
             )
             await cache_helper.save_api_message_history(history_entry)
             self.logger.debug(f"📝 Saved API message history: {history_entry.entry_id}")

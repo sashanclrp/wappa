@@ -25,25 +25,25 @@ class MemoryStorageManager:
         return data
 
     @staticmethod
-    def _build_context_key(cache_type: str, tenant_id: str, user_id: str | None) -> str:
+    def _build_context_key(cache_type: str, inbox_id: str, user_id: str | None) -> str:
         if cache_type == "tables":
-            return tenant_id
+            return inbox_id
         if cache_type in {"users", "states", "ai_states"}:
             if not user_id:
                 raise ValueError(f"user_id is required for {cache_type} cache")
-            return f"{tenant_id}_{user_id}"
+            return f"{inbox_id}_{user_id}"
         raise ValueError(f"Invalid cache_type: {cache_type}")
 
     async def get(
         self,
         cache_type: str,
-        tenant_id: str,
+        inbox_id: str,
         user_id: str | None,
         key: str,
         model: type[BaseModel] | None = None,
     ) -> Any:
         try:
-            context_key = self._build_context_key(cache_type, tenant_id, user_id)
+            context_key = self._build_context_key(cache_type, inbox_id, user_id)
             data = await self.memory_store.get(cache_type, context_key, key)
             return self._deserialize_data(data, model)
         except Exception as e:
@@ -53,14 +53,14 @@ class MemoryStorageManager:
     async def set(
         self,
         cache_type: str,
-        tenant_id: str,
+        inbox_id: str,
         user_id: str | None,
         key: str,
         value: Any,
         ttl: int | None = None,
     ) -> bool:
         try:
-            context_key = self._build_context_key(cache_type, tenant_id, user_id)
+            context_key = self._build_context_key(cache_type, inbox_id, user_id)
             return await self.memory_store.set(
                 cache_type, context_key, key, self._serialize_data(value), ttl
             )
@@ -69,20 +69,20 @@ class MemoryStorageManager:
             return False
 
     async def delete(
-        self, cache_type: str, tenant_id: str, user_id: str | None, key: str
+        self, cache_type: str, inbox_id: str, user_id: str | None, key: str
     ) -> bool:
         try:
-            context_key = self._build_context_key(cache_type, tenant_id, user_id)
+            context_key = self._build_context_key(cache_type, inbox_id, user_id)
             return await self.memory_store.delete(cache_type, context_key, key)
         except Exception as e:
             logger.error(f"Failed to delete key '{key}' from {cache_type} cache: {e}")
             return False
 
     async def exists(
-        self, cache_type: str, tenant_id: str, user_id: str | None, key: str
+        self, cache_type: str, inbox_id: str, user_id: str | None, key: str
     ) -> bool:
         try:
-            context_key = self._build_context_key(cache_type, tenant_id, user_id)
+            context_key = self._build_context_key(cache_type, inbox_id, user_id)
             return await self.memory_store.exists(cache_type, context_key, key)
         except Exception as e:
             logger.error(
@@ -91,10 +91,10 @@ class MemoryStorageManager:
             return False
 
     async def get_ttl(
-        self, cache_type: str, tenant_id: str, user_id: str | None, key: str
+        self, cache_type: str, inbox_id: str, user_id: str | None, key: str
     ) -> int:
         try:
-            context_key = self._build_context_key(cache_type, tenant_id, user_id)
+            context_key = self._build_context_key(cache_type, inbox_id, user_id)
             return await self.memory_store.get_ttl(cache_type, context_key, key)
         except Exception as e:
             logger.error(
@@ -103,10 +103,10 @@ class MemoryStorageManager:
             return -2
 
     async def set_ttl(
-        self, cache_type: str, tenant_id: str, user_id: str | None, key: str, ttl: int
+        self, cache_type: str, inbox_id: str, user_id: str | None, key: str, ttl: int
     ) -> bool:
         try:
-            context_key = self._build_context_key(cache_type, tenant_id, user_id)
+            context_key = self._build_context_key(cache_type, inbox_id, user_id)
             return await self.memory_store.set_ttl(cache_type, context_key, key, ttl)
         except Exception as e:
             logger.error(
@@ -115,10 +115,10 @@ class MemoryStorageManager:
             return False
 
     async def get_all_keys(
-        self, cache_type: str, tenant_id: str, user_id: str | None
+        self, cache_type: str, inbox_id: str, user_id: str | None
     ) -> dict[str, Any]:
         try:
-            context_key = self._build_context_key(cache_type, tenant_id, user_id)
+            context_key = self._build_context_key(cache_type, inbox_id, user_id)
             return await self.memory_store.get_all_keys(cache_type, context_key)
         except Exception as e:
             logger.error(f"Failed to get all keys from {cache_type} cache: {e}")

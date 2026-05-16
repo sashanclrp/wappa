@@ -82,10 +82,7 @@ class WhatsAppFormDataBuilder:
 
 
 class WhatsAppClient:
-    """WhatsApp Business API client with dependency-injected httpx session.
-
-    phone_number_id serves as the tenant identifier.
-    """
+    """WhatsApp Business API client with dependency-injected httpx session."""
 
     def __init__(
         self,
@@ -106,12 +103,12 @@ class WhatsAppClient:
         self.form_builder = WhatsAppFormDataBuilder()
 
         self.logger.info(
-            f"WhatsApp client initialized for tenant/phone_id: {self.phone_number_id}, "
+            f"WhatsApp client initialized for inbox/phone_id: {self.phone_number_id}, "
             f"api_version: {api_version}"
         )
 
     @property
-    def tenant_id(self) -> str:
+    def inbox_id(self) -> str:
         return self.phone_number_id
 
     def _get_headers(self, include_content_type: bool = True) -> dict[str, str]:
@@ -176,7 +173,7 @@ class WhatsAppClient:
         payload: dict[str, Any] | None = None,
         files: dict[str, Any] | None = None,
     ) -> None:
-        self.logger.debug("%s request to %s for tenant %s", method, url, self.tenant_id)
+        self.logger.debug("%s request to %s for inbox %s", method, url, self.inbox_id)
         self.logger.debug("Headers: %s", self._mask_headers(headers))
 
         if payload is not None:
@@ -205,9 +202,9 @@ class WhatsAppClient:
         meta_error = self._extract_meta_error_summary(response_payload)
 
         self.logger.error(
-            "HTTP %s error for tenant %s: status=%s url=%s",
+            "HTTP %s error for inbox %s: status=%s url=%s",
             method,
-            self.tenant_id,
+            self.inbox_id,
             status,
             url,
         )
@@ -265,10 +262,10 @@ class WhatsAppClient:
         except httpx.HTTPStatusError as http_err:
             if http_err.response.status_code == 401:
                 self.logger.error(
-                    "CRITICAL: WhatsApp access token expired or invalid for tenant %s "
+                    "CRITICAL: WhatsApp access token expired or invalid for inbox %s "
                     "(401 Unauthorized). Token starts with: %s... URL: %s. "
                     "ACTION REQUIRED: Update the WhatsApp access token in environment variables.",
-                    self.tenant_id,
+                    self.inbox_id,
                     self.access_token[:20],
                     url,
                 )
@@ -282,7 +279,7 @@ class WhatsAppClient:
             )
             raise
         except Exception as err:
-            self.logger.error("Unexpected error for tenant %s: %s", self.tenant_id, err)
+            self.logger.error("Unexpected error for inbox %s: %s", self.inbox_id, err)
             raise
 
     async def get_request(
@@ -306,15 +303,15 @@ class WhatsAppClient:
             return response_data
         except httpx.HTTPStatusError as http_err:
             self.logger.error(
-                "HTTP GET error for tenant %s: %s - %s",
-                self.tenant_id,
+                "HTTP GET error for inbox %s: %s - %s",
+                self.inbox_id,
                 http_err,
                 http_err.response.text,
             )
             raise
         except Exception as err:
             self.logger.error(
-                "Unexpected GET error for tenant %s: %s", self.tenant_id, err
+                "Unexpected GET error for inbox %s: %s", self.inbox_id, err
             )
             raise
 
@@ -339,15 +336,15 @@ class WhatsAppClient:
             return response_data
         except httpx.HTTPStatusError as http_err:
             self.logger.error(
-                "HTTP DELETE error for tenant %s: %s - %s",
-                self.tenant_id,
+                "HTTP DELETE error for inbox %s: %s - %s",
+                self.inbox_id,
                 http_err,
                 http_err.response.text,
             )
             raise
         except Exception as err:
             self.logger.error(
-                "Unexpected DELETE error for tenant %s: %s", self.tenant_id, err
+                "Unexpected DELETE error for inbox %s: %s", self.inbox_id, err
             )
             raise
 
@@ -364,6 +361,6 @@ class WhatsAppClient:
                 yield response
         except httpx.HTTPError as e:
             self.logger.error(
-                "Streaming GET failed for tenant %s: %s", self.tenant_id, e
+                "Streaming GET failed for inbox %s: %s", self.inbox_id, e
             )
             raise

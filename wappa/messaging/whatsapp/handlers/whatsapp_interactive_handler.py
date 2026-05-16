@@ -28,9 +28,9 @@ _VALID_HEADER_TYPES = {
 class WhatsAppInteractiveHandler:
     """WhatsApp interactive messaging via composition in WhatsAppMessenger."""
 
-    def __init__(self, client: WhatsAppClient, tenant_id: str):
+    def __init__(self, client: WhatsAppClient, inbox_id: str):
         self.client = client
-        self._tenant_id = tenant_id
+        self._inbox_id = inbox_id
         self.logger = get_logger(__name__)
 
     def _validation_error(
@@ -44,7 +44,7 @@ class WhatsAppInteractiveHandler:
             recipient_bsuid=None,
             recipient_phone=None,
             platform=PlatformType.WHATSAPP,
-            tenant_id=self._tenant_id,
+            inbox_id=self._inbox_id,
             api_response=None,
         )
 
@@ -103,7 +103,7 @@ class WhatsAppInteractiveHandler:
         response = await self.client.post_request(payload)
         return MessageResult.from_response_payload(
             response,
-            tenant_id=self._tenant_id,
+            inbox_id=self._inbox_id,
             fallback_recipient=recipient,
         )
 
@@ -125,8 +125,8 @@ class WhatsAppInteractiveHandler:
         return PlatformType.WHATSAPP
 
     @property
-    def tenant_id(self) -> str:
-        return self._tenant_id
+    def inbox_id(self) -> str:
+        return self._inbox_id
 
     async def send_buttons_menu(
         self,
@@ -225,7 +225,7 @@ class WhatsAppInteractiveHandler:
                 error=e,
                 operation="send interactive button menu",
                 recipient=recipient,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 logger=self.logger,
             )
 
@@ -364,7 +364,7 @@ class WhatsAppInteractiveHandler:
                 error=e,
                 operation="send list menu",
                 recipient=recipient,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 logger=self.logger,
                 extra_context=f"button_text: '{button_text}', sections_count: {len(sections)}, body_length: {len(body)}",
                 include_traceback=True,
@@ -429,6 +429,6 @@ class WhatsAppInteractiveHandler:
                 error=e,
                 operation="send CTA button message",
                 recipient=recipient,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 logger=self.logger,
             )

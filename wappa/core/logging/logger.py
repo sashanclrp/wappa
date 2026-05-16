@@ -1,8 +1,8 @@
 """
-Custom Rich-based logger with tenant and user context support for Wappa framework.
+Custom Rich-based logger with inbox and user context support for Wappa framework.
 
-Based on mimeiapify.utils.logger but customized for multi-tenant webhook processing.
-Provides context-aware logging with tenant and user information.
+Based on mimeiapify.utils.logger but customized for multi-inbox webhook processing.
+Provides context-aware logging with inbox and user information.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from wappa.core.config.settings import settings
 
 # Regex to parse [T:...][U:...] context prefixes injected by ContextLogger
 _CTX_PREFIX_RE = re.compile(
-    r"^(?:\[T:(?P<tenant>[^\]]*)\])?(?:\[U:(?P<user>[^\]]*)\])?\s*(?P<rest>.*)",
+    r"^(?:\[T:(?P<inbox>[^\]]*)\])?(?:\[U:(?P<user>[^\]]*)\])?\s*(?P<rest>.*)",
     re.DOTALL,
 )
 
@@ -40,7 +40,7 @@ class WappaJSONFormatter(logging.Formatter):
     - ``level``  – log level name
     - ``logger`` – logger name
     - ``msg``    – message text (context prefix stripped)
-    - ``tenant`` – tenant ID when present in the message prefix
+    - ``inbox`` – inbox ID when present in the message prefix
     - ``user``   – user ID when present in the message prefix
     - ``exc``    – single-line traceback string (only when exception info is present)
     """
@@ -49,7 +49,7 @@ class WappaJSONFormatter(logging.Formatter):
         # Parse context prefix out of the message so it becomes structured fields
         raw_msg = record.getMessage()
         m = _CTX_PREFIX_RE.match(raw_msg)
-        tenant = m.group("tenant") if m else None
+        inbox = m.group("inbox") if m else None
         user = m.group("user") if m else None
         clean_msg = m.group("rest") if m else raw_msg
 
@@ -61,8 +61,8 @@ class WappaJSONFormatter(logging.Formatter):
             "logger": record.name,
             "msg": clean_msg,
         }
-        if tenant:
-            obj["tenant"] = tenant
+        if inbox:
+            obj["inbox"] = inbox
         if user:
             obj["user"] = user
         if record.exc_info:
@@ -124,7 +124,7 @@ _console = Console(theme=_theme)
 
 class ContextLogger:
     """
-    Logger wrapper that adds tenant and user context to messages.
+    Logger wrapper that adds inbox and user context to messages.
 
     Following the old app's successful pattern - adds context as message prefixes
     instead of trying to modify the format string.
@@ -133,19 +133,19 @@ class ContextLogger:
     def __init__(
         self,
         logger: logging.Logger,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ):
         self.logger = logger
-        self.tenant_id = tenant_id or "---"
+        self.inbox_id = inbox_id or "---"
         self.user_id = user_id or "---"
 
     def _format_message(self, message: str) -> str:
         """Add context prefix to message."""
         # Get fresh context variables on each log call for dynamic context
-        from .context import get_current_tenant_context, get_current_user_context
+        from .context import get_current_inbox_context, get_current_user_context
 
-        current_tenant = get_current_tenant_context() or self.tenant_id
+        current_tenant = get_current_inbox_context() or self.inbox_id
         current_user = get_current_user_context() or self.user_id
 
         if current_tenant and current_tenant != "---":
@@ -190,44 +190,44 @@ class ContextLogger:
 
         Args:
             **kwargs: Context fields to bind. Common fields:
-                - tenant_id: Override or set tenant identifier
+                - inbox_id: Override or set inbox identifier
                 - user_id: Override or set user identifier
 
         Returns:
             New ContextLogger instance with updated context
 
         Example:
-            # Add tenant context to existing logger
-            new_logger = logger.bind(tenant_id="12345")
+            # Add inbox context to existing logger
+            new_logger = logger.bind(inbox_id="12345")
 
-            # Update both tenant and user context
-            contextual_logger = logger.bind(tenant_id="12345", user_id="user_67890")
+            # Update both inbox and user context
+            contextual_logger = logger.bind(inbox_id="12345", user_id="user_67890")
         """
         # Extract context fields, using current values as defaults
-        new_tenant_id = kwargs.get("tenant_id", self.tenant_id)
+        new_inbox_id = kwargs.get("inbox_id", self.inbox_id)
         new_user_id = kwargs.get("user_id", self.user_id)
 
         # Return new ContextLogger instance with updated context
-        return ContextLogger(self.logger, tenant_id=new_tenant_id, user_id=new_user_id)
+        return ContextLogger(self.logger, inbox_id=new_inbox_id, user_id=new_user_id)
 
 
 class ContextFilter(logging.Filter):
     """
-    Logging filter that adds tenant and user context to log records.
+    Logging filter that adds inbox and user context to log records.
 
     NOTE: This is kept for potential future use but not used in the current
     implementation to avoid the format string dependency issue.
     """
 
-    def __init__(self, tenant_id: str | None = None, user_id: str | None = None):
+    def __init__(self, inbox_id: str | None = None, user_id: str | None = None):
         super().__init__()
-        self.tenant_id = tenant_id or "---"
+        self.inbox_id = inbox_id or "---"
         self.user_id = user_id or "---"
 
     def filter(self, record: logging.LogRecord) -> bool:
         # Add context fields to record if not already present
-        if not hasattr(record, "tenant_id"):
-            record.tenant_id = self.tenant_id
+        if not hasattr(record, "inbox_id"):
+            record.inbox_id = self.inbox_id
         if not hasattr(record, "user_id"):
             record.user_id = self.user_id
         return True
@@ -332,7 +332,7 @@ def get_logger(name: str) -> ContextLogger:
     Get a logger that automatically uses request context variables.
 
     This is the recommended way to get loggers in most components as it
-    automatically picks up tenant_id and user_id from the current request context
+    automatically picks up inbox_id and user_id from the current request context
     without requiring manual parameter passing.
 
     Args:
@@ -342,15 +342,15 @@ def get_logger(name: str) -> ContextLogger:
         ContextLogger instance with automatic context from context variables
     """
     # Import here to avoid circular imports
-    from .context import get_current_tenant_context, get_current_user_context
+    from .context import get_current_inbox_context, get_current_user_context
 
     # Use context variables for automatic context propagation
-    effective_tenant_id = get_current_tenant_context()
+    effective_inbox_id = get_current_inbox_context()
     effective_user_id = get_current_user_context()
 
     base_logger = logging.getLogger(name)
     return ContextLogger(
-        base_logger, tenant_id=effective_tenant_id, user_id=effective_user_id
+        base_logger, inbox_id=effective_inbox_id, user_id=effective_user_id
     )
 
 
@@ -379,38 +379,38 @@ def get_api_logger(name: str | None = None) -> ContextLogger:
     return get_logger(name or "wappa.api")
 
 
-def get_webhook_logger(name: str, tenant_id: str, user_id: str) -> ContextLogger:
+def get_webhook_logger(name: str, inbox_id: str, user_id: str) -> ContextLogger:
     """
     Get a logger specifically configured for webhook processing.
 
     Args:
         name: Logger name (usually __name__)
-        tenant_id: Tenant ID from webhook path
+        inbox_id: Inbox ID from webhook path
         user_id: User ID from webhook payload (WAID, etc.)
 
     Returns:
         ContextLogger with webhook context
     """
     base_logger = logging.getLogger(name)
-    return ContextLogger(base_logger, tenant_id=tenant_id, user_id=user_id)
+    return ContextLogger(base_logger, inbox_id=inbox_id, user_id=user_id)
 
 
 def update_logger_context(
     context_logger: ContextLogger,
-    tenant_id: str | None = None,
+    inbox_id: str | None = None,
     user_id: str | None = None,
 ) -> None:
     """
     Update the context of an existing ContextLogger.
 
-    Useful when tenant/user context becomes available during request processing.
+    Useful when inbox/user context becomes available during request processing.
 
     Args:
         context_logger: ContextLogger instance to update
-        tenant_id: New tenant ID
+        inbox_id: New inbox ID
         user_id: New user ID
     """
-    if tenant_id is not None:
-        context_logger.tenant_id = tenant_id
+    if inbox_id is not None:
+        context_logger.inbox_id = inbox_id
     if user_id is not None:
         context_logger.user_id = user_id

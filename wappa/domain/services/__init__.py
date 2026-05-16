@@ -4,8 +4,8 @@ Domain services.
 Contains business logic that doesn't belong to a specific entity.
 """
 
-from .tenant_credentials_service import TenantCredentialsService
+from .inbox_credentials_service import SettingsInboxCredentialStore
 
 __all__ = [
-    "TenantCredentialsService",
+    "SettingsInboxCredentialStore",
 ]

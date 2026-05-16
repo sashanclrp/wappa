@@ -17,12 +17,11 @@ class APIMessageHistoryEntry(BaseModel):
     success: bool
     error: str | None = None
     request_payload: dict[str, Any]
-    tenant_id: str
-    owner_id: str | None = None
+    inbox_id: str
 
     model_config = {"extra": "forbid"}
 
-    @field_validator("recipient", "tenant_id", "owner_id", mode="before")
+    @field_validator("recipient", "inbox_id", mode="before")
     @classmethod
     def convert_int_to_str(cls, v):
         """Convert int to str for ID fields (Redis numeric string issue)."""

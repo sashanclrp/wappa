@@ -193,8 +193,8 @@ class MessengerPipeline(IMessenger):
         return self._raw.platform
 
     @property
-    def tenant_id(self) -> str:
-        return self._raw.tenant_id
+    def inbox_id(self) -> str:
+        return self._raw.inbox_id
 
     # ------------------------------------------------------------------ #
     # Dispatch core.

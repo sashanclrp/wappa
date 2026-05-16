@@ -27,26 +27,26 @@ class JSONAIState(IAIStateCache):
     Stores data in {project_root}/cache/ai_states/ directory.
     """
 
-    def __init__(self, tenant: str, user_id: str):
+    def __init__(self, inbox: str, user_id: str):
         """
         Initialize JSON AI state handler.
 
         Args:
-            tenant: Tenant identifier
+            inbox: Inbox identifier
             user_id: User identifier
         """
-        if not tenant or not user_id:
+        if not inbox or not user_id:
             raise ValueError(
-                f"Missing required parameters: tenant={tenant}, user_id={user_id}"
+                f"Missing required parameters: inbox={inbox}, user_id={user_id}"
             )
 
-        self.tenant = tenant
+        self.inbox = inbox
         self.user_id = user_id
         self.keys = default_key_factory
 
     def _key(self, agent_name: str) -> str:
         """Build AI state key using KeyFactory (same as Redis)."""
-        return self.keys.aistate(self.tenant, agent_name, self.user_id)
+        return self.keys.aistate(self.inbox, agent_name, self.user_id)
 
     # ---- Public API matching RedisAIState ----
     async def get(
@@ -64,7 +64,7 @@ class JSONAIState(IAIStateCache):
         """
         key = self._key(agent_name)
         return await storage_manager.get(
-            "ai_states", self.tenant, self.user_id, key, models
+            "ai_states", self.inbox, self.user_id, key, models
         )
 
     async def upsert(
@@ -86,7 +86,7 @@ class JSONAIState(IAIStateCache):
         """
         key = self._key(agent_name)
         return await storage_manager.set(
-            "ai_states", self.tenant, self.user_id, key, data, ttl
+            "ai_states", self.inbox, self.user_id, key, data, ttl
         )
 
     async def delete(self, agent_name: str) -> int:
@@ -101,7 +101,7 @@ class JSONAIState(IAIStateCache):
         """
         key = self._key(agent_name)
         success = await storage_manager.delete(
-            "ai_states", self.tenant, self.user_id, key
+            "ai_states", self.inbox, self.user_id, key
         )
         return 1 if success else 0
 
@@ -116,7 +116,7 @@ class JSONAIState(IAIStateCache):
             True if exists, False otherwise
         """
         key = self._key(agent_name)
-        return await storage_manager.exists("ai_states", self.tenant, self.user_id, key)
+        return await storage_manager.exists("ai_states", self.inbox, self.user_id, key)
 
     async def get_field(self, agent_name: str, field: str) -> Any | None:
         """
@@ -254,7 +254,7 @@ class JSONAIState(IAIStateCache):
         """
         key = self._key(agent_name)
         return await storage_manager.get_ttl(
-            "ai_states", self.tenant, self.user_id, key
+            "ai_states", self.inbox, self.user_id, key
         )
 
     async def renew_ttl(self, agent_name: str, ttl: int) -> bool:
@@ -270,30 +270,30 @@ class JSONAIState(IAIStateCache):
         """
         key = self._key(agent_name)
         return await storage_manager.set_ttl(
-            "ai_states", self.tenant, self.user_id, key, ttl
+            "ai_states", self.inbox, self.user_id, key, ttl
         )
 
     async def delete_all_for_user(self) -> int:
         all_keys = await storage_manager.get_all_keys(
-            "ai_states", self.tenant, self.user_id
+            "ai_states", self.inbox, self.user_id
         )
         for key in all_keys:
-            await storage_manager.delete("ai_states", self.tenant, self.user_id, key)
+            await storage_manager.delete("ai_states", self.inbox, self.user_id, key)
         return len(all_keys)
 
     async def delete_by_agent_prefix(self, prefix: str) -> int:
         if not prefix:
             raise ValueError("prefix must not be empty")
         all_keys = await storage_manager.get_all_keys(
-            "ai_states", self.tenant, self.user_id
+            "ai_states", self.inbox, self.user_id
         )
-        key_prefix = f"{self.tenant}:{self.keys.aistate_prefix}:{prefix}"
+        key_prefix = f"{self.inbox}:{self.keys.aistate_prefix}:{prefix}"
         key_suffix = f":{self.user_id}"
         count = 0
         for key in list(all_keys):
             if key.startswith(key_prefix) and key.endswith(key_suffix):
                 await storage_manager.delete(
-                    "ai_states", self.tenant, self.user_id, key
+                    "ai_states", self.inbox, self.user_id, key
                 )
                 count += 1
         return count

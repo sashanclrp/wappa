@@ -8,8 +8,7 @@ from wappa.core.config.settings import settings
 from wappa.core.events import WappaEventDispatcher
 from wappa.core.logging.context import (
     get_context_info,
-    get_current_owner_context,
-    get_current_tenant_context,
+    get_current_inbox_context,
     get_current_user_context,
     set_request_context,
 )
@@ -51,10 +50,10 @@ class WebhookController:
         hub_verify_token: str = None,
         hub_challenge: str = None,
     ):
-        owner_id = get_current_owner_context()
+        inbox_id = get_current_inbox_context()
 
         self.logger.info(
-            f"Webhook verification request for platform: {platform}, owner: {owner_id}"
+            f"Webhook verification request for platform: {platform}, inbox: {inbox_id}"
         )
 
         if not self._is_supported_platform(platform):
@@ -80,7 +79,7 @@ class WebhookController:
                 )
 
             self.logger.info(
-                f"✅ Webhook verification successful for {platform}, owner: {owner_id}"
+                f"✅ Webhook verification successful for {platform}, inbox: {inbox_id}"
             )
             return PlainTextResponse(content=hub_challenge)
 
@@ -95,10 +94,10 @@ class WebhookController:
         platform: str,
         payload: dict[str, Any],
     ) -> dict[str, str]:
-        owner_id = get_current_owner_context()
+        inbox_id = get_current_inbox_context()
 
         self.logger.debug(
-            f"Processing webhook for platform: {platform}, owner: {owner_id}"
+            f"Processing webhook for platform: {platform}, inbox: {inbox_id}"
         )
         self.logger.debug(f"🔍 Full context info: {get_context_info()}")
         self.logger.debug(f"🌐 Request URL: {request.url.path}")
@@ -112,9 +111,9 @@ class WebhookController:
                 status_code=400, detail=f"Unsupported platform: {platform}"
             )
 
-        if not owner_id:
-            self.logger.error("Missing owner ID for webhook processing")
-            raise HTTPException(status_code=400, detail="Owner ID is required")
+        if not inbox_id:
+            self.logger.error("Missing inbox ID for webhook processing")
+            raise HTTPException(status_code=400, detail="Inbox ID is required")
 
         try:
             platform_type = PlatformType(platform.lower())
@@ -129,7 +128,7 @@ class WebhookController:
             self._process_webhook_async(
                 request=request,
                 platform_type=platform_type,
-                owner_id=owner_id,
+                inbox_id=inbox_id,
                 payload=payload,
             )
         )
@@ -141,12 +140,12 @@ class WebhookController:
         self,
         request: Request,
         platform_type: PlatformType,
-        owner_id: str,
+        inbox_id: str,
         payload: dict[str, Any],
     ) -> None:
         try:
             self.logger.debug(
-                f"🚀 Starting async webhook processing for {platform_type.value}, owner: {owner_id}"
+                f"🚀 Starting async webhook processing for {platform_type.value}, inbox: {inbox_id}"
             )
 
             processor = processor_factory.get_processor(platform_type)
@@ -158,12 +157,12 @@ class WebhookController:
                 return
 
             universal_webhook = await processor.create_universal_webhook(
-                payload=payload, tenant_id=owner_id
+                payload=payload, inbox_id=inbox_id
             )
 
-            # webhook_tenant_id comes from JSON metadata; fall back to URL owner_id.
-            webhook_tenant_id = get_current_tenant_context()
-            effective_tenant_id = webhook_tenant_id or owner_id
+            # effective_inbox_id: use what the processor resolved (from JSON metadata),
+            # falling back to the URL inbox_id.
+            effective_inbox_id = get_current_inbox_context() or inbox_id
 
             # For status webhooks, attempt a best-effort phone → BSUID enrichment
             # when Meta only provides a wa_id (BSUID absent). Uses Redis scan when
@@ -175,11 +174,11 @@ class WebhookController:
                 and not universal_webhook.has_recipient_bsuid
             ):
                 enriched = await self._enrich_status_user_id(
-                    universal_webhook, effective_tenant_id, request
+                    universal_webhook, effective_inbox_id, request
                 )
                 if enriched:
                     universal_webhook.user_id = enriched
-                    set_request_context(tenant_id=effective_tenant_id, user_id=enriched)
+                    set_request_context(inbox_id=effective_inbox_id, user_id=enriched)
 
             # System-level webhooks may not carry user identity; use internal fallback.
             user_id = self._resolve_handler_user_id(get_current_user_context())
@@ -197,24 +196,23 @@ class WebhookController:
             )
 
             self.logger.debug(
-                f"🎯 Using tenant_id: {effective_tenant_id}, user_id: {user_id} "
-                f"(webhook_tenant: {webhook_tenant_id}, owner: {owner_id})"
+                f"🎯 Using inbox_id: {effective_inbox_id}, user_id: {user_id}"
             )
 
             request_handler = await self._create_request_handler(
                 request=request,
                 platform_type=platform_type,
-                tenant_id=effective_tenant_id,
+                inbox_id=effective_inbox_id,
                 user_id=user_id,
             )
 
             self.logger.info(
                 f"✨ Created {type(universal_webhook).__name__} from {platform_type.value} "
-                f"(tenant: {effective_tenant_id}, user: {user_id})"
+                f"(inbox: {effective_inbox_id}, user: {user_id})"
             )
 
             async with sse_event_scope(
-                tenant_id=effective_tenant_id,
+                inbox_id=effective_inbox_id,
                 user_id=sse_user_id,
                 bsuid=sse_bsuid,
                 phone_number=sse_phone,
@@ -223,23 +221,23 @@ class WebhookController:
                 dispatch_result = (
                     await self.event_dispatcher.dispatch_universal_webhook(
                         universal_webhook=universal_webhook,
-                        tenant_id=effective_tenant_id,
+                        inbox_id=effective_inbox_id,
                         request_handler=request_handler,
                     )
                 )
 
                 if dispatch_result.get("success", False):
                     self.logger.debug(
-                        f"✅ Webhook processing completed successfully for tenant: {effective_tenant_id}"
+                        f"✅ Webhook processing completed successfully for inbox: {effective_inbox_id}"
                     )
                 else:
                     self.logger.error(
-                        f"❌ Webhook dispatch failed for tenant {effective_tenant_id}: {dispatch_result.get('error')}"
+                        f"❌ Webhook dispatch failed for inbox {effective_inbox_id}: {dispatch_result.get('error')}"
                     )
 
         except Exception as e:
             self.logger.error(
-                f"❌ Error in async webhook processing for owner {owner_id}: {e}",
+                f"❌ Error in async webhook processing for inbox {inbox_id}: {e}",
                 exc_info=True,
             )
 
@@ -247,7 +245,7 @@ class WebhookController:
         self,
         request: Request,
         platform_type: PlatformType,
-        tenant_id: str,
+        inbox_id: str,
         user_id: str,
     ) -> "WappaEventHandler":
         try:
@@ -258,7 +256,7 @@ class WebhookController:
             messenger_factory = MessengerFactory(http_session)
             raw_messenger = await messenger_factory.create_messenger(
                 platform=platform_type,
-                tenant_id=tenant_id,
+                inbox_id=inbox_id,
             )
 
             # Compose cross-cutting concerns (SSE lifecycle, pub/sub
@@ -275,7 +273,7 @@ class WebhookController:
                 middleware=messenger_middleware,
             )
 
-            cache_factory = self._create_cache_factory(request, tenant_id, user_id)
+            cache_factory = self._create_cache_factory(request, inbox_id, user_id)
 
             session_manager = getattr(
                 request.app.state, "postgres_session_manager", None
@@ -288,7 +286,7 @@ class WebhookController:
                 raise RuntimeError("No event handler registered with dispatcher")
 
             request_handler = base_handler.with_context(
-                tenant_id=tenant_id,
+                inbox_id=inbox_id,
                 user_id=user_id,
                 messenger=messenger,
                 cache_factory=cache_factory,
@@ -297,7 +295,7 @@ class WebhookController:
             )
 
             self.logger.debug(
-                f"✅ Created request handler for tenant={tenant_id}, user={user_id}: "
+                f"✅ Created request handler for inbox={inbox_id}, user={user_id}: "
                 f"messenger={messenger.__class__.__name__}, platform={platform_type.value}"
             )
 
@@ -305,7 +303,7 @@ class WebhookController:
 
         except Exception as e:
             self.logger.error(
-                f"❌ Failed to create request handler for tenant {tenant_id}: {e}",
+                f"❌ Failed to create request handler for inbox {inbox_id}: {e}",
                 exc_info=True,
             )
             raise RuntimeError(f"Handler creation failed: {e}") from e
@@ -353,12 +351,12 @@ class WebhookController:
         )
         return self._system_user_fallback
 
-    def _create_cache_factory(self, request: Request, tenant_id: str, user_id: str):
+    def _create_cache_factory(self, request: Request, inbox_id: str, user_id: str):
         try:
             cache_type = getattr(request.app.state, "wappa_cache_type", "memory")
 
             self.logger.debug(
-                f"Creating {cache_type} cache factory for tenant: {tenant_id}, user: {user_id}"
+                f"Creating {cache_type} cache factory for inbox: {inbox_id}, user: {user_id}"
             )
 
             if cache_type == "redis":
@@ -376,7 +374,7 @@ class WebhookController:
                     )
 
             factory_class = create_cache_factory(cache_type)
-            cache_factory = factory_class(tenant_id=tenant_id, user_id=user_id)
+            cache_factory = factory_class(inbox_id=inbox_id, user_id=user_id)
 
             self.logger.debug(
                 f"✅ Created {cache_factory.__class__.__name__} successfully"
@@ -385,7 +383,7 @@ class WebhookController:
 
         except Exception as e:
             self.logger.error(
-                f"❌ Failed to create cache factory for tenant {tenant_id}: {e}",
+                f"❌ Failed to create cache factory for inbox {inbox_id}: {e}",
                 exc_info=True,
             )
             raise RuntimeError(f"Cache factory creation failed: {e}") from e
@@ -393,7 +391,7 @@ class WebhookController:
     async def _enrich_status_user_id(
         self,
         status: "StatusWebhook",
-        tenant_id: str,
+        inbox_id: str,
         request: Request,
     ) -> str | None:
         """
@@ -418,7 +416,7 @@ class WebhookController:
 
             factory_class = create_cache_factory("redis")
             # user_id placeholder is irrelevant — find_by_field scans all users
-            cache_factory = factory_class(tenant_id=tenant_id, user_id="__scan__")
+            cache_factory = factory_class(inbox_id=inbox_id, user_id="__scan__")
             user_cache = cache_factory.create_user_cache()
             result = await user_cache.find_by_field("phone_number", phone)
             if result:
@@ -441,5 +439,5 @@ class WebhookController:
                 "event_handler": handler.__class__.__name__ if handler else None,
             },
             "dependency_injection": "per_request",
-            "multi_tenant_support": True,
+            "multi_inbox_support": True,
         }

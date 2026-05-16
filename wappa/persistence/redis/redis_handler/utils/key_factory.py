@@ -19,25 +19,25 @@ class KeyFactory(BaseModel):
     pk_marker: str = Field(default="pkid")
 
     # ---- builders ---------------------------------------------------------
-    def user(self, tenant: str, user_id: str) -> str:
-        return f"{tenant}:{self.user_prefix}:{user_id}"
+    def user(self, inbox: str, user_id: str) -> str:
+        return f"{inbox}:{self.user_prefix}:{user_id}"
 
-    def handler(self, tenant: str, name: str, user_id: str) -> str:
-        return f"{tenant}:{self.handler_prefix}:{name}:{user_id}"
+    def handler(self, inbox: str, name: str, user_id: str) -> str:
+        return f"{inbox}:{self.handler_prefix}:{name}:{user_id}"
 
-    def table(self, tenant: str, table: str, pkid: str) -> str:
+    def table(self, inbox: str, table: str, pkid: str) -> str:
         safe_tbl = table.replace(":", "_")
         safe_pk = pkid.replace(":", "_")
-        return f"{tenant}:{self.table_prefix}:{safe_tbl}:{self.pk_marker}:{safe_pk}"
+        return f"{inbox}:{self.table_prefix}:{safe_tbl}:{self.pk_marker}:{safe_pk}"
 
-    def trigger(self, tenant: str, action: str, ident: str) -> str:
+    def trigger(self, inbox: str, action: str, ident: str) -> str:
         """
         Build trigger key for expiry actions.
 
-        Pattern: {tenant}:EXPTRIGGER:{safe_action}:{safe_identifier}
+        Pattern: {inbox}:EXPTRIGGER:{safe_action}:{safe_identifier}
 
         Args:
-            tenant: Tenant identifier
+            inbox: Inbox identifier
             action: Action name (e.g., "payment_reminder")
             ident: Unique identifier (e.g., "TXN_12345")
 
@@ -53,16 +53,16 @@ class KeyFactory(BaseModel):
         """
         safe_action = action.replace(":", "_")
         safe_ident = ident.replace(":", "_")
-        return f"{tenant}:{self.trigger_prefix}:{safe_action}:{safe_ident}"
+        return f"{inbox}:{self.trigger_prefix}:{safe_action}:{safe_ident}"
 
-    def aistate(self, tenant: str, agent_name: str, user_id: str) -> str:
+    def aistate(self, inbox: str, agent_name: str, user_id: str) -> str:
         """
         Build AI state key for agent state management.
 
-        Pattern: {tenant}:aistate:{agent_name}:{user_id}
+        Pattern: {inbox}:aistate:{agent_name}:{user_id}
 
         Args:
-            tenant: Tenant identifier
+            inbox: Inbox identifier
             agent_name: AI agent name (e.g., "summarizer", "analyzer")
             user_id: User identifier
 
@@ -77,16 +77,16 @@ class KeyFactory(BaseModel):
             Colons in agent_name are replaced with underscores for safety.
         """
         safe_agent = agent_name.replace(":", "_")
-        return f"{tenant}:{self.aistate_prefix}:{safe_agent}:{user_id}"
+        return f"{inbox}:{self.aistate_prefix}:{safe_agent}:{user_id}"
 
-    def channel(self, tenant: str, user_id: str, event_type: str) -> str:
+    def channel(self, inbox: str, user_id: str, event_type: str) -> str:
         """
         Build PubSub channel name for real-time notifications.
 
-        Pattern: wappa:notify:{tenant}:{user_id}:{event_type}
+        Pattern: wappa:notify:{inbox}:{user_id}:{event_type}
 
         Args:
-            tenant: Tenant identifier
+            inbox: Inbox identifier
             user_id: User/phone identifier
             event_type: Event type (incoming_message, outgoing_message, status_change)
 
@@ -102,10 +102,10 @@ class KeyFactory(BaseModel):
         """
         safe_user = user_id.replace(":", "_")
         safe_event = event_type.replace(":", "_").lower()
-        return f"wappa:{self.pubsub_prefix}:{tenant}:{safe_user}:{safe_event}"
+        return f"wappa:{self.pubsub_prefix}:{inbox}:{safe_user}:{safe_event}"
 
     def channel_pattern(
-        self, tenant: str, user_id: str = "*", event_type: str = "*"
+        self, inbox: str, user_id: str = "*", event_type: str = "*"
     ) -> str:
         """
         Build PubSub channel pattern for PSUBSCRIBE.
@@ -113,7 +113,7 @@ class KeyFactory(BaseModel):
         Supports wildcard (*) for flexible subscription patterns.
 
         Args:
-            tenant: Tenant identifier (required)
+            inbox: Inbox identifier (required)
             user_id: User/phone identifier (default "*" for all users)
             event_type: Event type (default "*" for all events)
 
@@ -121,7 +121,7 @@ class KeyFactory(BaseModel):
             Channel pattern string
 
         Example:
-            >>> keys.channel_pattern("mimeia")  # All events for tenant
+            >>> keys.channel_pattern("mimeia")  # All events for inbox
             "wappa:notify:mimeia:*:*"
 
             >>> keys.channel_pattern("mimeia", "5511999887766")  # All events for user
@@ -132,7 +132,7 @@ class KeyFactory(BaseModel):
         """
         safe_user = user_id.replace(":", "_") if user_id != "*" else "*"
         safe_event = event_type.replace(":", "_").lower() if event_type != "*" else "*"
-        return f"wappa:{self.pubsub_prefix}:{tenant}:{safe_user}:{safe_event}"
+        return f"wappa:{self.pubsub_prefix}:{inbox}:{safe_user}:{safe_event}"
 
     # ---- parsers ----------------------------------------------------------
     def parse_trigger(self, key: str) -> tuple[str, str, str] | None:
@@ -143,7 +143,7 @@ class KeyFactory(BaseModel):
             key: Redis key like "wappa:EXPTRIGGER:payment_reminder:TXN_12345"
 
         Returns:
-            (tenant, action, identifier) or None if not a trigger key
+            (inbox, action, identifier) or None if not a trigger key
 
         Example:
             >>> keys.parse_trigger("wappa:EXPTRIGGER:payment_reminder:TXN_12345")
@@ -160,8 +160,8 @@ class KeyFactory(BaseModel):
             if len(parts) != 4 or parts[1] != self.trigger_prefix:
                 return None
 
-            tenant, _, action, identifier = parts
-            return tenant, action, identifier
+            inbox, _, action, identifier = parts
+            return inbox, action, identifier
         except (ValueError, IndexError):
             return None
 

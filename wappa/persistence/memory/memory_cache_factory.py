@@ -26,12 +26,12 @@ class MemoryCacheFactory(ICacheFactory):
     Uses thread-safe in-memory storage with TTL support:
     - State cache: Uses states namespace with automatic TTL cleanup
     - User cache: Uses users namespace with context isolation
-    - Table cache: Uses tables namespace with tenant isolation
+    - Table cache: Uses tables namespace with inbox isolation
     - AI State cache: Uses ai_states namespace with automatic TTL cleanup
 
     All instances implement the type-specific cache interfaces directly.
 
-    HYBRID PATTERN: Context (tenant_id, user_id) can be:
+    HYBRID PATTERN: Context (inbox_id, user_id) can be:
     1. Used from defaults set at construction (most common - webhook flow)
     2. Overridden per-call (for API events with different user context)
 
@@ -40,59 +40,59 @@ class MemoryCacheFactory(ICacheFactory):
 
     def create_state_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IStateCache:
         """
         Create Memory state cache instance.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Returns:
             MemoryStateHandler implementing IStateCache
         """
-        effective_tenant, effective_user = self._resolve_context(tenant_id, user_id)
-        return MemoryStateHandler(tenant=effective_tenant, user_id=effective_user)
+        effective_inbox, effective_user = self._resolve_context(inbox_id, user_id)
+        return MemoryStateHandler(inbox=effective_inbox, user_id=effective_user)
 
     def create_user_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IUserCache:
         """
         Create Memory user cache instance.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Returns:
             MemoryUser implementing IUserCache
         """
-        effective_tenant, effective_user = self._resolve_context(tenant_id, user_id)
-        return MemoryUser(tenant=effective_tenant, user_id=effective_user)
+        effective_inbox, effective_user = self._resolve_context(inbox_id, user_id)
+        return MemoryUser(inbox=effective_inbox, user_id=effective_user)
 
     def create_table_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
     ) -> ITableCache:
         """
         Create Memory table cache instance.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
 
         Returns:
             MemoryTable implementing ITableCache
         """
-        effective_tenant, _ = self._resolve_context(tenant_id, None)
-        return MemoryTable(tenant=effective_tenant)
+        effective_inbox, _ = self._resolve_context(inbox_id, None)
+        return MemoryTable(inbox=effective_inbox)
 
     def create_expiry_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IExpiryCache:
         """
@@ -102,7 +102,7 @@ class MemoryCacheFactory(ICacheFactory):
         Use Redis backend for time-based automation features.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Raises:
@@ -115,18 +115,18 @@ class MemoryCacheFactory(ICacheFactory):
 
     def create_ai_state_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IAIStateCache:
         """
         Create Memory AI state cache instance.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Returns:
             MemoryAIState implementing IAIStateCache
         """
-        effective_tenant, effective_user = self._resolve_context(tenant_id, user_id)
-        return MemoryAIState(tenant=effective_tenant, user_id=effective_user)
+        effective_inbox, effective_user = self._resolve_context(inbox_id, user_id)
+        return MemoryAIState(inbox=effective_inbox, user_id=effective_user)

@@ -10,13 +10,13 @@ from fastapi import Depends, Request
 from wappa.api.dependencies.whatsapp_media_dependencies import (
     get_whatsapp_media_factory,
 )
-from wappa.api.utils.tenant_helpers import require_tenant_context
+from wappa.api.utils.inbox_helpers import require_inbox_context
 from wappa.core.logging.logger import get_logger
 from wappa.domain.builders.message_builder import MessageBuilder
 from wappa.domain.factories.media_factory import WhatsAppMediaFactory
 from wappa.domain.factories.message_factory import WhatsAppMessageFactory
 from wappa.domain.interfaces.messaging_interface import IMessenger
-from wappa.domain.services.tenant_credentials_service import TenantCredentialsService
+from wappa.domain.services import SettingsInboxCredentialStore
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
     WhatsAppInteractiveHandler,
@@ -44,38 +44,34 @@ async def get_whatsapp_message_factory() -> WhatsAppMessageFactory:
 
 
 async def get_whatsapp_client(request: Request) -> WhatsAppClient:
-    """Get configured WhatsApp client with tenant-specific credentials.
+    """Get configured WhatsApp client with inbox-specific credentials.
 
     Args:
         request: FastAPI request object containing HTTP session
 
     Returns:
-        Configured WhatsApp client with persistent session and tenant credentials
+        Configured WhatsApp client with persistent session and inbox credentials
 
     Raises:
-        ValueError: If tenant credentials are invalid
+        ValueError: If inbox credentials are invalid
     """
-    # Get persistent HTTP session from app state (created in main.py lifespan)
     session = request.app.state.http_session
 
-    # Get tenant ID from context (set by webhook processing or API middleware)
-    tenant_id = require_tenant_context()
+    # Get inbox ID from context (set by webhook processing or API middleware)
+    inbox_id = require_inbox_context()
 
-    # Get tenant-specific access token (future: from database)
-    access_token = TenantCredentialsService.get_whatsapp_access_token(tenant_id)
+    credential_store = SettingsInboxCredentialStore()
 
-    # Validate tenant
-    if not TenantCredentialsService.validate_tenant(tenant_id):
-        raise ValueError(f"Invalid or inactive tenant: {tenant_id}")
+    if not await credential_store.validate_inbox(inbox_id):
+        raise ValueError(f"Invalid or inactive inbox: {inbox_id}")
 
-    # Create tenant-aware logger
+    credentials = await credential_store.get_credentials(inbox_id)
     logger = get_logger(__name__)
 
-    # Create WhatsApp client with dependency injection
     return WhatsAppClient(
         session=session,
-        access_token=access_token,
-        phone_number_id=tenant_id,  # tenant_id IS the phone_number_id
+        access_token=credentials.access_token,
+        phone_number_id=inbox_id,  # inbox_id IS the phone_number_id
         logger=logger,
     )
 
@@ -83,7 +79,7 @@ async def get_whatsapp_client(request: Request) -> WhatsAppClient:
 async def get_whatsapp_media_handler(
     client: WhatsAppClient = Depends(get_whatsapp_client),
 ) -> WhatsAppMediaHandler:
-    """Get configured WhatsApp media handler with tenant-specific context.
+    """Get configured WhatsApp media handler with inbox-specific context.
 
     Args:
         client: Configured WhatsApp client with persistent session
@@ -91,14 +87,14 @@ async def get_whatsapp_media_handler(
     Returns:
         Configured WhatsApp media handler for upload/download operations
     """
-    tenant_id = require_tenant_context()
-    return WhatsAppMediaHandler(client=client, tenant_id=tenant_id)
+    inbox_id = require_inbox_context()
+    return WhatsAppMediaHandler(client=client, inbox_id=inbox_id)
 
 
 async def get_whatsapp_interactive_handler(
     client: WhatsAppClient = Depends(get_whatsapp_client),
 ) -> WhatsAppInteractiveHandler:
-    """Get configured WhatsApp interactive handler with tenant-specific context.
+    """Get configured WhatsApp interactive handler with inbox-specific context.
 
     Args:
         client: Configured WhatsApp client with persistent session
@@ -106,14 +102,14 @@ async def get_whatsapp_interactive_handler(
     Returns:
         Configured WhatsApp interactive handler for button/list/CTA operations
     """
-    tenant_id = require_tenant_context()
-    return WhatsAppInteractiveHandler(client=client, tenant_id=tenant_id)
+    inbox_id = require_inbox_context()
+    return WhatsAppInteractiveHandler(client=client, inbox_id=inbox_id)
 
 
 async def get_whatsapp_template_handler(
     client: WhatsAppClient = Depends(get_whatsapp_client),
 ) -> WhatsAppTemplateHandler:
-    """Get configured WhatsApp template handler with tenant-specific context.
+    """Get configured WhatsApp template handler with inbox-specific context.
 
     Args:
         client: Configured WhatsApp client with persistent session
@@ -121,14 +117,14 @@ async def get_whatsapp_template_handler(
     Returns:
         Configured WhatsApp template handler for business template operations
     """
-    tenant_id = require_tenant_context()
-    return WhatsAppTemplateHandler(client=client, tenant_id=tenant_id)
+    inbox_id = require_inbox_context()
+    return WhatsAppTemplateHandler(client=client, inbox_id=inbox_id)
 
 
 async def get_whatsapp_specialized_handler(
     client: WhatsAppClient = Depends(get_whatsapp_client),
 ) -> WhatsAppSpecializedHandler:
-    """Get configured WhatsApp specialized handler with tenant-specific context.
+    """Get configured WhatsApp specialized handler with inbox-specific context.
 
     Args:
         client: Configured WhatsApp client with persistent session
@@ -136,21 +132,20 @@ async def get_whatsapp_specialized_handler(
     Returns:
         Configured WhatsApp specialized handler for contact and location operations
     """
-    tenant_id = require_tenant_context()
-    return WhatsAppSpecializedHandler(client=client, tenant_id=tenant_id)
+    inbox_id = require_inbox_context()
+    return WhatsAppSpecializedHandler(client=client, inbox_id=inbox_id)
 
 
 async def get_whatsapp_template_info_service(
     client: WhatsAppClient = Depends(get_whatsapp_client),
 ) -> WhatsAppTemplateInfoService:
     """Get configured WhatsApp template info service with WABA context."""
-    tenant_id = require_tenant_context()
-    business_account_id = TenantCredentialsService.get_whatsapp_business_account_id(
-        tenant_id
-    )
+    inbox_id = require_inbox_context()
+    credential_store = SettingsInboxCredentialStore()
+    credentials = await credential_store.get_credentials(inbox_id)
     return WhatsAppTemplateInfoService(
         client=client,
-        business_account_id=business_account_id,
+        business_account_id=credentials.platform_account_id or "",
     )
 
 
@@ -168,14 +163,14 @@ async def get_whatsapp_messenger(
     media_factory: WhatsAppMediaFactory = Depends(get_whatsapp_media_factory),
 ) -> IMessenger:
     """Get unified WhatsApp messenger implementation with complete functionality."""
-    tenant_id = require_tenant_context()
+    inbox_id = require_inbox_context()
     return WhatsAppMessenger(
         client=client,
         media_handler=media_handler,
         interactive_handler=interactive_handler,
         template_handler=template_handler,
         specialized_handler=specialized_handler,
-        tenant_id=tenant_id,
+        inbox_id=inbox_id,
         message_factory=message_factory,
         media_factory=media_factory,
     )

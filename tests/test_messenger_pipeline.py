@@ -39,7 +39,7 @@ from wappa.schemas.core.types import PlatformType
 def _make_raw() -> MagicMock:
     raw = MagicMock()
     raw.platform = PlatformType.WHATSAPP
-    raw.tenant_id = "test-tenant"
+    raw.inbox_id = "test-inbox"
 
     async def _ok(*args, **kwargs) -> MessageResult:
         return MessageResult(success=True, message_id="wamid.test", recipient="5599")
@@ -232,13 +232,13 @@ async def test_sse_lifecycle_middleware_publishes_after_raw_send():
     )
 
     async with sse_event_scope(
-        tenant_id="test-tenant",
+        inbox_id="test-inbox",
         user_id="5599",
         phone_number="5599",
         platform="whatsapp",
     ):
         subscription = await hub.subscribe(
-            tenant_id="test-tenant",
+            inbox_id="test-inbox",
             event_types={"outgoing_bot_message"},
         )
         await pipeline.send_text("hola", "5599")

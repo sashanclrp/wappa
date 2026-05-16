@@ -8,12 +8,12 @@ from pydantic import BaseModel, Field
 from ....domain.interfaces.cache_interfaces import IUserCache
 from ..ops import hdel, hget, hincrby_with_expire
 from .utils.serde import loads
-from .utils.tenant_cache import TenantCache
+from .utils.inbox_cache import InboxCache
 
 logger = logging.getLogger("RedisUser")
 
 
-class RedisUser(TenantCache, IUserCache):
+class RedisUser(InboxCache, IUserCache):
     """
     Repository for user-specific operations.
 
@@ -32,7 +32,7 @@ class RedisUser(TenantCache, IUserCache):
     Single Responsibility: User data management only
 
     Example usage:
-        user = RedisUser(tenant="mimeia", user_id="user123")
+        user = RedisUser(inbox="mimeia", user_id="user123")
         await user.upsert({"name": "Alice", "score": 100})
         data = await user.get()
         name = await user.get_field("name")
@@ -43,7 +43,7 @@ class RedisUser(TenantCache, IUserCache):
 
     def _key(self) -> str:
         """Build user key using KeyFactory"""
-        return self.keys.user(self.tenant, self.user_id)
+        return self.keys.user(self.inbox, self.user_id)
 
     # ---- Public API extracted from RedisHandler User methods ----------------
     async def get(self, models: type[BaseModel] | None = None) -> dict[str, Any] | None:
@@ -114,7 +114,7 @@ class RedisUser(TenantCache, IUserCache):
             value: Value to match
             models: Optional BaseModel class for full object reconstruction
         """
-        pattern = self.keys.user(self.tenant, "*")
+        pattern = self.keys.user(self.inbox, "*")
         return await self._find_by_field(pattern, field, value, models=models)
 
     async def delete(self) -> int:

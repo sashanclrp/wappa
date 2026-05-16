@@ -22,7 +22,7 @@ router = APIRouter(
     tags=["WhatsApp - Templates Info"],
     responses={
         400: {"description": "Bad Request - Invalid template query parameters"},
-        401: {"description": "Unauthorized - Invalid tenant credentials"},
+        401: {"description": "Unauthorized - Invalid inbox credentials"},
         403: {"description": "Forbidden - Template access denied"},
         404: {"description": "Not Found - Template or WABA resource not found"},
         429: {"description": "Rate Limited - Too many requests"},

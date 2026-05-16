@@ -259,10 +259,10 @@ async def test_publish_api_notification_uses_event_user_id(monkeypatch):
 
     captured: dict[str, Any] = {}
 
-    async def fake_publish(event_type, tenant, user_id, platform, data):
+    async def fake_publish(event_type, inbox_id, user_id, platform, data):
         captured.update(
             event_type=event_type,
-            tenant=tenant,
+            inbox_id=inbox_id,
             user_id=user_id,
             platform=platform,
             data=data,
@@ -278,7 +278,7 @@ async def test_publish_api_notification_uses_event_user_id(monkeypatch):
         user_id="CO.573168227670",
         request_payload={"message": "hi", "recipient": "573168227670"},
         response_success=True,
-        tenant_id="tenant-1",
+        inbox_id="inbox-1",
     )
 
     await pubsub_handlers.publish_api_notification(event)

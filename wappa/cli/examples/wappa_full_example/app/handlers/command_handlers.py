@@ -673,7 +673,7 @@ class CommandHandlers:
             "• `/api/whatsapp/templates/*` - Send templates\n"
             "• `/api/whatsapp/interactive/*` - Interactive messages\n\n"
             "*Webhooks:*\n"
-            "• `/webhook/messenger/{tenant_id}/whatsapp` - Receive webhooks\n\n"
+            "• `/webhook/messenger/{inbox_id}/whatsapp` - Receive webhooks\n\n"
             "💡 *Template State Example:*\n"
             "Use `/template` command to learn how to send templates with state handlers\n\n"
             "📊 *Statistics:*\n"

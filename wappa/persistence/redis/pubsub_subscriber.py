@@ -4,14 +4,14 @@ Redis PubSub subscriber utilities for frontend integration.
 Provides async helpers for subscribing to Wappa notifications in
 Reflex-based frontend applications.
 
-Channel Pattern: wappa:notify:{tenant}:{user_id}:{event_type}
+Channel Pattern: wappa:notify:{inbox}:{user_id}:{event_type}
 
 Usage:
     from redis.asyncio import Redis
     from wappa.persistence.redis import subscribe, build_pattern
 
     redis = Redis.from_url("redis://localhost:6379")
-    pattern = build_pattern("my_tenant", event_type="incoming_message")
+    pattern = build_pattern("my_inbox", event_type="incoming_message")
 
     async for notification in subscribe(redis, patterns=[pattern]):
         print(f"Received: {notification.event} for {notification.user_id}")
@@ -43,7 +43,7 @@ class Notification:
     """Parsed notification from PubSub channel."""
 
     event: str
-    tenant: str
+    inbox: str
     user_id: str
     platform: str
     data: dict[str, Any]
@@ -97,7 +97,7 @@ async def subscribe(
 
                 yield Notification(
                     event=payload.get("event", "unknown"),
-                    tenant=payload.get("tenant", ""),
+                    inbox=payload.get("inbox", ""),
                     user_id=payload.get("user_id", ""),
                     platform=payload.get("platform", "whatsapp"),
                     data=payload.get("data", {}),
@@ -118,23 +118,23 @@ async def subscribe(
         await pubsub.close()
 
 
-def build_channel(tenant: str, user_id: str, event_type: str) -> str:
+def build_channel(inbox: str, user_id: str, event_type: str) -> str:
     """
     Build exact channel name for SUBSCRIBE.
 
     Args:
-        tenant: Tenant identifier
+        inbox: Inbox identifier
         user_id: User/phone identifier
         event_type: Event type (incoming_message, outgoing_message, bot_reply, status_change)
 
     Returns:
-        Channel name like "wappa:notify:tenant:user:event"
+        Channel name like "wappa:notify:inbox:user:event"
     """
-    return _key_factory.channel(tenant, user_id, event_type)
+    return _key_factory.channel(inbox, user_id, event_type)
 
 
 def build_pattern(
-    tenant: str,
+    inbox: str,
     user_id: str = "*",
     event_type: str = "*",
 ) -> str:
@@ -142,24 +142,24 @@ def build_pattern(
     Build channel pattern for PSUBSCRIBE with wildcards.
 
     Args:
-        tenant: Tenant identifier (required)
+        inbox: Inbox identifier (required)
         user_id: User/phone identifier (default "*" for all users)
         event_type: Event type (default "*" for all events)
 
     Returns:
-        Pattern like "wappa:notify:tenant:*:*"
+        Pattern like "wappa:notify:inbox:*:*"
 
     Examples:
-        # All events for a tenant
-        build_pattern("my_tenant")
+        # All events for an inbox
+        build_pattern("my_inbox")
 
         # All events for specific user
-        build_pattern("my_tenant", "5511999887766")
+        build_pattern("my_inbox", "5511999887766")
 
         # Only incoming messages for all users
-        build_pattern("my_tenant", event_type="incoming_message")
+        build_pattern("my_inbox", event_type="incoming_message")
     """
-    return _key_factory.channel_pattern(tenant, user_id, event_type)
+    return _key_factory.channel_pattern(inbox, user_id, event_type)
 
 
 async def listen_once(

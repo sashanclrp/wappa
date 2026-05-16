@@ -18,18 +18,18 @@ logger = logging.getLogger(__name__)
 async def _run_with_sse_scope(event: ExpiryEvent) -> None:
     """Wrap the handler so any SSE emitted from inside carries coherent identity.
 
-    The expiry key only gives us ``(tenant, identifier)``. We classify
+    The expiry key only gives us ``(inbox, identifier)``. We classify
     ``identifier`` by shape into bsuid/phone; apps can refine via
     ``update_identity`` / ``update_metadata`` once they load cache state.
     """
     # Lazy import — context_helpers imports listener which imports this
     # module, so anchor the dep at call time instead of import time.
-    from wappa.core.expiry.context_helpers import parse_tenant_from_expired_key
+    from wappa.core.expiry.context_helpers import parse_inbox_from_expired_key
 
-    tenant_id = parse_tenant_from_expired_key(event.expired_key) or "unknown"
+    inbox_id = parse_inbox_from_expired_key(event.expired_key) or "unknown"
     bsuid, phone = classify_meta_identifier(event.identifier)
     async with sse_event_scope(
-        tenant_id=tenant_id,
+        inbox_id=inbox_id,
         user_id=event.identifier,
         bsuid=bsuid,
         phone_number=phone,

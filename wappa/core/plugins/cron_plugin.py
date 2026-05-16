@@ -27,7 +27,7 @@ class _CronRegistration:
 
     cron_id: str
     expr: str
-    tenant_id: str | None = None
+    inbox_id: str | None = None
     user_id: str | None = None
     tags: list[str] = field(default_factory=list)
     payload: dict[str, Any] = field(default_factory=dict)
@@ -41,7 +41,7 @@ class CronPlugin:
     Plugin for scheduling cron jobs that fire into the event handler pipeline.
 
     Crons are registered via add_cron() before app startup. When a cron fires,
-    the plugin creates a CronEvent, builds WappaContext (if tenant-scoped),
+    the plugin creates a CronEvent, builds WappaContext (if inbox-scoped),
     clones the handler via with_context(), and dispatches to process_cron_event().
 
     Example:
@@ -49,7 +49,7 @@ class CronPlugin:
         cron_plugin.add_cron(
             cron_id="daily_report",
             expr="0 9 * * *",
-            tenant_id="acme",
+            inbox_id="acme",
             user_id="5551234567",
         )
         app.add_plugin(cron_plugin)
@@ -86,7 +86,7 @@ class CronPlugin:
         cron_id: str,
         expr: str,
         *,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
         tags: list[str] | None = None,
         payload: dict[str, Any] | None = None,
@@ -100,7 +100,7 @@ class CronPlugin:
         Args:
             cron_id: Unique job name — used as dispatch key in process_cron_event()
             expr: Cron expression (e.g., "0 9 * * *" for daily at 9 AM)
-            tenant_id: Optional tenant scope — if set, full context available
+            inbox_id: Optional inbox scope — if set, full context available
             user_id: Optional user scope — for messenger/cache targeting
             tags: Optional tags for secondary filtering
             payload: Optional static data available in the CronEvent
@@ -115,7 +115,7 @@ class CronPlugin:
             _CronRegistration(
                 cron_id=cron_id,
                 expr=expr,
-                tenant_id=tenant_id,
+                inbox_id=inbox_id,
                 user_id=user_id,
                 tags=tags or [],
                 payload=payload or {},
@@ -207,7 +207,7 @@ class CronPlugin:
 
         Pipeline:
         1. Create CronEvent from registration data + timestamp
-        2. Create WappaContext (tenant-scoped or db-only for system crons)
+        2. Create WappaContext (inbox-scoped or db-only for system crons)
         3. Clone handler via with_context()
         4. Dispatch via CronEventDispatcher
         """
@@ -220,7 +220,7 @@ class CronPlugin:
             cron_id=reg.cron_id,
             cron_expr=reg.expr,
             tags=reg.tags,
-            tenant_id=reg.tenant_id,
+            inbox_id=reg.inbox_id,
             user_id=reg.user_id,
             payload=reg.payload,
             metadata={"actual_time": now.isoformat()},
@@ -249,17 +249,17 @@ class CronPlugin:
         """
         Create a context-bound handler clone for a cron execution.
 
-        Tenant-scoped crons get full context (messenger, cache, db).
-        System crons (no tenant_id) get db-only context.
+        Inbox-scoped crons get full context (messenger, cache, db).
+        System crons (no inbox_id) get db-only context.
         """
-        if reg.tenant_id and self._context_factory:
+        if reg.inbox_id and self._context_factory:
             ctx = await self._context_factory.create_context(
-                tenant_id=reg.tenant_id,
+                inbox_id=reg.inbox_id,
                 user_id=reg.user_id,
                 include_messenger=reg.user_id is not None,
             )
             return self.event_handler.with_context(
-                tenant_id=reg.tenant_id,
+                inbox_id=reg.inbox_id,
                 user_id=reg.user_id or "",
                 messenger=ctx.messenger,
                 cache_factory=ctx.cache_factory,
@@ -268,11 +268,11 @@ class CronPlugin:
             )
 
         # System cron: db-only context
-        tenant_id = reg.tenant_id or "__system__"
+        inbox_id = reg.inbox_id or "__system__"
         if self._context_factory:
-            ctx = await self._context_factory.create_context(tenant_id=tenant_id)
+            ctx = await self._context_factory.create_context(inbox_id=inbox_id)
             return self.event_handler.with_context(
-                tenant_id=tenant_id,
+                inbox_id=inbox_id,
                 user_id="",
                 messenger=None,
                 cache_factory=None,
@@ -281,7 +281,7 @@ class CronPlugin:
             )
 
         return self.event_handler.with_context(
-            tenant_id=tenant_id,
+            inbox_id=inbox_id,
             user_id="",
             messenger=None,
             cache_factory=None,

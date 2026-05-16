@@ -52,7 +52,7 @@ class FileManager:
         logger.debug(f"Cache directories ensured at: {cache_root}")
 
     def get_cache_file_path(
-        self, cache_type: str, tenant_id: str, user_id: str | None = None
+        self, cache_type: str, inbox_id: str, user_id: str | None = None
     ) -> Path:
         cache_root = self.get_cache_root()
 
@@ -60,17 +60,17 @@ class FileManager:
             case "users":
                 if not user_id:
                     raise ValueError("user_id is required for users cache")
-                return cache_root / "users" / f"{tenant_id}_{user_id}.json"
+                return cache_root / "users" / f"{inbox_id}_{user_id}.json"
             case "tables":
-                return cache_root / "tables" / f"{tenant_id}_tables.json"
+                return cache_root / "tables" / f"{inbox_id}_tables.json"
             case "states":
                 if not user_id:
                     raise ValueError("user_id is required for states cache")
-                return cache_root / "states" / f"{tenant_id}_{user_id}_state.json"
+                return cache_root / "states" / f"{inbox_id}_{user_id}_state.json"
             case "ai_states":
                 if not user_id:
                     raise ValueError("user_id is required for ai_states cache")
-                return cache_root / "ai_states" / f"{tenant_id}_{user_id}_ai_state.json"
+                return cache_root / "ai_states" / f"{inbox_id}_{user_id}_ai_state.json"
             case _:
                 raise ValueError(f"Invalid cache_type: {cache_type}")
 

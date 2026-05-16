@@ -27,14 +27,14 @@ def handle_whatsapp_error(
     error: Exception,
     operation: str,
     recipient: str,
-    tenant_id: str,
+    inbox_id: str,
     logger: Logger | ContextLogger,
     extra_context: str | None = None,
     include_traceback: bool = False,
 ) -> MessageResult:
     if is_authentication_error(error):
         logger.error(f"CRITICAL: WhatsApp Authentication Failed - Cannot {operation}!")
-        logger.error(f"Check WhatsApp access token for tenant {tenant_id}")
+        logger.error(f"Check WhatsApp access token for inbox {inbox_id}")
 
     error_code = None
     if is_bsuid_unsupported_error(error):
@@ -56,5 +56,5 @@ def handle_whatsapp_error(
         error_code=error_code,
         recipient=recipient,
         platform=PlatformType.WHATSAPP,
-        tenant_id=tenant_id,
+        inbox_id=inbox_id,
     )

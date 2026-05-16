@@ -1,5 +1,5 @@
 """
-Global error handling middleware with tenant and context awareness.
+Global error handling middleware with inbox and context awareness.
 
 Provides structured error responses and comprehensive logging for Wappa framework.
 """
@@ -17,7 +17,7 @@ from wappa.core.logging.logger import get_logger
 
 class ErrorHandlerMiddleware(BaseHTTPMiddleware):
     """
-    Global error handling middleware with tenant-aware logging.
+    Global error handling middleware with inbox-aware logging.
 
     Catches all unhandled exceptions and provides structured error responses
     while maintaining security by not exposing internal details in production.
@@ -39,7 +39,7 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
             return await self._handle_unexpected_exception(request, exc)
 
     async def _log_http_exception(self, request: Request, exc: HTTPException) -> None:
-        """Log HTTP exceptions with tenant context."""
+        """Log HTTP exceptions with inbox context."""
         logger = get_logger(__name__)
         logger.warning(
             f"HTTP {exc.status_code} - {request.method} {request.url.path} - "

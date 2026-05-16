@@ -94,7 +94,7 @@ router = APIRouter(
     tags=["WhatsApp - Send Templates"],
     responses={
         400: {"description": "Bad Request - Invalid template format or parameters"},
-        401: {"description": "Unauthorized - Invalid tenant credentials"},
+        401: {"description": "Unauthorized - Invalid inbox credentials"},
         403: {"description": "Forbidden - Template not approved or access denied"},
         404: {"description": "Not Found - Template not found"},
         413: {"description": "Payload Too Large - Template content too large"},

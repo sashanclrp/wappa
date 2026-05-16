@@ -15,7 +15,7 @@ class IPubSubPublisher(ABC):
     """
     Interface for publishing notifications via Redis PubSub.
 
-    Context (tenant_id, user_id, platform) is established via constructor.
+    Context (inbox_id, user_id, platform) is established via constructor.
     Notifications are lightweight signals - actual data should be stored in
     UserCache and fetched by subscribers based on the notification.
 

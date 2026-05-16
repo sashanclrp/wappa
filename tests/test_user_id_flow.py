@@ -59,7 +59,7 @@ def _make_event(recipient: str, user_id: str) -> APIMessageEvent:
         user_id=user_id,
         request_payload={"recipient": recipient, "text": "hi"},
         response_success=True,
-        tenant_id="test-tenant",
+        inbox_id="test-inbox",
         platform="whatsapp",
     )
 
@@ -129,18 +129,18 @@ def test_api_event_dispatcher_falls_back_to_recipient_when_same() -> None:
 
 
 def _make_tenant():
-    from wappa.webhooks.core.webhook_interfaces import TenantBase
+    from wappa.webhooks.core.webhook_interfaces import InboxBase
 
-    return TenantBase(
-        business_phone_number_id="12345",
-        display_phone_number="+571234567",
-        platform_tenant_id="12345",
+    return InboxBase(
+        inbox_id="12345",
+        display_address="+571234567",
+        platform_account_id="12345",
     )
 
 
 def test_status_webhook_user_id_set_to_bsuid_when_present() -> None:
     status = StatusWebhook(
-        tenant=_make_tenant(),
+        inbox=_make_tenant(),
         message_id="wamid.abc",
         status="delivered",
         recipient_phone_id="+573001234567",
@@ -156,7 +156,7 @@ def test_status_webhook_user_id_set_to_bsuid_when_present() -> None:
 
 def test_status_webhook_user_id_falls_back_to_phone_when_no_bsuid() -> None:
     status = StatusWebhook(
-        tenant=_make_tenant(),
+        inbox=_make_tenant(),
         message_id="wamid.abc",
         status="read",
         recipient_phone_id="+573001234567",
@@ -172,7 +172,7 @@ def test_status_webhook_user_id_falls_back_to_phone_when_no_bsuid() -> None:
 def test_status_webhook_user_id_can_be_overridden_after_enrichment() -> None:
     """Simulate controller enriching user_id after phone→BSUID lookup."""
     status = StatusWebhook(
-        tenant=_make_tenant(),
+        inbox=_make_tenant(),
         message_id="wamid.abc",
         status="sent",
         recipient_phone_id="+573001234567",
@@ -193,7 +193,7 @@ def test_status_webhook_user_id_can_be_overridden_after_enrichment() -> None:
 def test_status_webhook_user_id_none_when_no_identifiers() -> None:
     """No phone and no BSUID — user_id stays None."""
     status = StatusWebhook(
-        tenant=_make_tenant(),
+        inbox=_make_tenant(),
         message_id="wamid.abc",
         status="failed",
         recipient_phone_id="",

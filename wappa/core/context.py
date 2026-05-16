@@ -30,12 +30,12 @@ class WappaContext:
     """
     Unified request context for Wappa infrastructure access.
 
-    Bundles tenant identity, user identity, and all framework dependencies
+    Bundles inbox identity, user identity, and all framework dependencies
     into a single object. Supports two-phase creation where user_id is
     initially None and set later via with_user().
     """
 
-    tenant_id: str
+    inbox_id: str
     user_id: str | None = None
 
     # Infrastructure dependencies
@@ -69,7 +69,7 @@ class WappaContextFactory:
 
     async def create_context(
         self,
-        tenant_id: str,
+        inbox_id: str,
         user_id: str | None = None,
         *,
         include_messenger: bool = False,
@@ -79,7 +79,7 @@ class WappaContextFactory:
         Create a WappaContext with infrastructure dependencies from app.state.
 
         Args:
-            tenant_id: Tenant identifier
+            inbox_id: Inbox identifier
             user_id: Optional user identifier (can be set later via ctx.with_user())
             include_messenger: Whether to create a messenger instance
             platform: Messaging platform for messenger creation
@@ -92,15 +92,15 @@ class WappaContextFactory:
         db_read = session_manager.get_read_session if session_manager else None
 
         cache_factory = (
-            self._create_cache_factory(tenant_id, user_id) if user_id else None
+            self._create_cache_factory(inbox_id, user_id) if user_id else None
         )
 
         messenger = None
         if include_messenger:
-            messenger = await self._create_messenger(tenant_id, user_id, platform)
+            messenger = await self._create_messenger(inbox_id, user_id, platform)
 
         ctx = WappaContext(
-            tenant_id=tenant_id,
+            inbox_id=inbox_id,
             user_id=user_id,
             db=db,
             db_read=db_read,
@@ -109,7 +109,7 @@ class WappaContextFactory:
         )
 
         self.logger.debug(
-            f"Created WappaContext: tenant={tenant_id}, user={user_id}, "
+            f"Created WappaContext: inbox={inbox_id}, user={user_id}, "
             f"db={'yes' if db else 'no'}, cache={'yes' if cache_factory else 'no'}, "
             f"messenger={'yes' if messenger else 'no'}"
         )
@@ -117,7 +117,7 @@ class WappaContextFactory:
         return ctx
 
     def _create_cache_factory(
-        self, tenant_id: str, user_id: str
+        self, inbox_id: str, user_id: str
     ) -> ICacheFactory | None:
         """Create cache factory using same logic as WebhookController."""
         try:
@@ -134,7 +134,7 @@ class WappaContextFactory:
                     return None
 
             factory_class = create_cache_factory(cache_type)
-            return factory_class(tenant_id=tenant_id, user_id=user_id)
+            return factory_class(inbox_id=inbox_id, user_id=user_id)
 
         except Exception as e:
             self.logger.error(f"Cache factory creation failed: {e}")
@@ -142,7 +142,7 @@ class WappaContextFactory:
 
     async def _create_messenger(
         self,
-        tenant_id: str,
+        inbox_id: str,
         user_id: str | None,
         platform: PlatformType,
     ) -> IMessenger | None:
@@ -158,7 +158,7 @@ class WappaContextFactory:
             messenger_factory = MessengerFactory(http_session)
             raw_messenger = await messenger_factory.create_messenger(
                 platform=platform,
-                tenant_id=tenant_id,
+                inbox_id=inbox_id,
             )
 
             # Apply the app-level messenger middleware pipeline. Identity

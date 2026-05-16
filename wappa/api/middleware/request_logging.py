@@ -1,5 +1,5 @@
 """
-Request and response logging middleware with tenant and user context.
+Request and response logging middleware with inbox and user context.
 
 Provides comprehensive logging for monitoring, debugging, and audit trails for Wappa framework.
 """
@@ -17,7 +17,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     Middleware for logging HTTP requests and responses with context.
 
     Features:
-    - Tenant-aware logging
+    - Inbox-aware logging
     - Request/response timing
     - Privacy-conscious logging (excludes sensitive data)
     - Structured log format for monitoring
@@ -43,7 +43,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # Start timing
         start_time = time.time()
 
-        # Get logger with context (context is set by OwnerMiddleware and processors)
+        # Get logger with context (context is set by InboxMiddleware and processors)
         from wappa.core.logging.logger import get_logger
 
         logger = get_logger(__name__)

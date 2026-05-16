@@ -10,7 +10,7 @@ from fastapi import Request
 
 from wappa.api.services.handler_state_service import HandlerStateService
 from wappa.api.services.template_state_service import TemplateStateService
-from wappa.core.logging.context import get_current_tenant_context
+from wappa.core.logging.context import get_current_inbox_context
 from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.cache_factory import ICacheFactory
 from wappa.domain.interfaces.identity_resolver import IIdentityResolver
@@ -25,7 +25,7 @@ async def get_cache_factory(
     """
     Get cache factory for API routes.
 
-    Creates a tenant-scoped cache factory for state management.
+    Creates an inbox-scoped cache factory for state management.
     For API routes (unlike webhooks), the user_id is the message recipient.
 
     Args:
@@ -33,7 +33,7 @@ async def get_cache_factory(
         recipient: Optional recipient phone number for user-scoped caches
 
     Returns:
-        ICacheFactory instance with tenant context
+        ICacheFactory instance with inbox context
 
     Raises:
         RuntimeError: If cache factory cannot be created
@@ -41,17 +41,17 @@ async def get_cache_factory(
     try:
         # Get cache type from app state (set by WappaCorePlugin)
         cache_type = getattr(request.app.state, "wappa_cache_type", "memory")
-        tenant_id = get_current_tenant_context()
+        inbox_id = get_current_inbox_context()
 
-        if not tenant_id:
-            raise RuntimeError("No tenant context available for cache factory")
+        if not inbox_id:
+            raise RuntimeError("No inbox context available for cache factory")
 
         # For API routes, user_id is the recipient phone number
         # If not provided, use a placeholder that will be replaced per operation
         user_id = recipient or "api-route"
 
         factory_class = create_cache_factory(cache_type)
-        return factory_class(tenant_id=tenant_id, user_id=user_id)
+        return factory_class(inbox_id=inbox_id, user_id=user_id)
 
     except Exception as e:
         logger.error(f"Failed to create cache factory: {e}")

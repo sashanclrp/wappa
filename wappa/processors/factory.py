@@ -207,7 +207,7 @@ class ProcessorFactory:
         # Cache the processor
         self._processors[platform] = processor
 
-        # Use context-aware logger that automatically gets tenant/user context
+        # Use context-aware logger that automatically gets inbox/user context
         logger = get_logger(__name__)
         logger.info(f"Created and cached processor for platform: {platform.value}")
         return processor

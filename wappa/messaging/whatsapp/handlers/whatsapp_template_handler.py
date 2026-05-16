@@ -18,9 +18,9 @@ from wappa.schemas.core.recipient import apply_recipient_to_payload
 class WhatsAppTemplateHandler:
     """Template message operations for WhatsAppMessenger."""
 
-    def __init__(self, client: WhatsAppClient, tenant_id: str):
+    def __init__(self, client: WhatsAppClient, inbox_id: str):
         self.client = client
-        self._tenant_id = tenant_id
+        self._inbox_id = inbox_id
         self.logger = get_logger(__name__)
 
     def _build_text_parameter(self, param: TemplateParameter) -> dict[str, Any]:
@@ -83,7 +83,7 @@ class WhatsAppTemplateHandler:
         )
         return MessageResult.from_response_payload(
             response,
-            tenant_id=self._tenant_id,
+            inbox_id=self._inbox_id,
             fallback_recipient=recipient,
         )
 
@@ -147,7 +147,7 @@ class WhatsAppTemplateHandler:
                 error=e,
                 operation=f"send text template '{template_name}'",
                 recipient=recipient,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 logger=self.logger,
             )
 
@@ -203,7 +203,7 @@ class WhatsAppTemplateHandler:
                 error=e,
                 operation=f"send media template '{template_name}'",
                 recipient=recipient,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 logger=self.logger,
             )
 
@@ -272,6 +272,6 @@ class WhatsAppTemplateHandler:
                 error=e,
                 operation=f"send location template '{template_name}'",
                 recipient=recipient,
-                tenant_id=self._tenant_id,
+                inbox_id=self._inbox_id,
                 logger=self.logger,
             )

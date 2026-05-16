@@ -32,7 +32,7 @@ class _DummyClient:
 
 def _build_handler() -> tuple[WhatsAppTemplateHandler, _DummyClient]:
     client = _DummyClient()
-    return WhatsAppTemplateHandler(client=client, tenant_id="tenant-1"), client
+    return WhatsAppTemplateHandler(client=client, inbox_id="inbox-1"), client
 
 
 @pytest.mark.asyncio

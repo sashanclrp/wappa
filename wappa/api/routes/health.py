@@ -37,7 +37,7 @@ async def health_check() -> dict[str, Any]:
             "environment": settings.environment,
             "version": "2.0.0",
             "log_level": settings.log_level,
-            "owner_id": settings.owner_id,
+            "inbox_id": settings.inbox_id,
         },
         "services": {"logging": "operational", "configuration": "loaded"},
     }
@@ -75,7 +75,7 @@ async def detailed_health_check() -> dict[str, Any]:
         "configuration": {
             "log_level": settings.log_level,
             "log_dir": settings.log_dir,
-            "owner_id": settings.owner_id,
+            "inbox_id": settings.inbox_id,
             "api_version": settings.api_version,
             "time_zone": settings.time_zone,
             "port": settings.port,

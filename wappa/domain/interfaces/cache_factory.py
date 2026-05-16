@@ -19,10 +19,10 @@ class ICacheFactory(ABC):
     """
     Interface for creating context-aware cache instances.
 
-    Cache factories create cache instances bound to specific tenants and users,
+    Cache factories create cache instances bound to specific inboxes and users,
     ensuring proper data isolation and context management.
 
-    HYBRID PATTERN: Context (tenant_id, user_id) can be:
+    HYBRID PATTERN: Context (inbox_id, user_id) can be:
     1. Injected at construction time (default context for most operations)
     2. Overridden per-call when creating cache instances (for special cases like API events)
 
@@ -56,7 +56,7 @@ class ICacheFactory(ABC):
         cache = factory.create_user_cache(user_id=event.user_id)
     """
 
-    def __init__(self, tenant_id: str, user_id: str):
+    def __init__(self, inbox_id: str, user_id: str):
         """
         Initialize cache factory with default request context.
 
@@ -64,43 +64,43 @@ class ICacheFactory(ABC):
         Context can be overridden per-call when needed (e.g., API events).
 
         Args:
-            tenant_id: Default tenant identifier for namespace isolation
+            inbox_id: Default inbox identifier for namespace isolation
             user_id: Default user identifier for user-specific caches
 
         Raises:
-            ValueError: If tenant_id or user_id is None or empty
+            ValueError: If inbox_id or user_id is None or empty
         """
-        if not tenant_id or not user_id:
+        if not inbox_id or not user_id:
             raise ValueError(
-                f"Missing required context: tenant_id={tenant_id}, user_id={user_id}"
+                f"Missing required context: inbox_id={inbox_id}, user_id={user_id}"
             )
-        self.tenant_id = tenant_id
+        self.inbox_id = inbox_id
         self.user_id = user_id
 
     def _resolve_context(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> tuple[str, str]:
         """
-        Resolve effective tenant_id and user_id using override or default.
+        Resolve effective inbox_id and user_id using override or default.
 
         Args:
-            tenant_id: Optional override for tenant_id (uses default if None)
+            inbox_id: Optional override for inbox_id (uses default if None)
             user_id: Optional override for user_id (uses default if None)
 
         Returns:
-            Tuple of (effective_tenant_id, effective_user_id)
+            Tuple of (effective_inbox_id, effective_user_id)
         """
         return (
-            tenant_id if tenant_id is not None else self.tenant_id,
+            inbox_id if inbox_id is not None else self.inbox_id,
             user_id if user_id is not None else self.user_id,
         )
 
     @abstractmethod
     def create_state_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IStateCache:
         """
@@ -109,7 +109,7 @@ class ICacheFactory(ABC):
         Used for handler state management and conversation state tracking.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Returns:
@@ -130,7 +130,7 @@ class ICacheFactory(ABC):
     @abstractmethod
     def create_user_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IUserCache:
         """
@@ -139,7 +139,7 @@ class ICacheFactory(ABC):
         Used for user profile data, preferences, and user-specific information.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Returns:
@@ -158,15 +158,15 @@ class ICacheFactory(ABC):
     @abstractmethod
     def create_table_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
     ) -> ITableCache:
         """
         Create table cache instance with context binding.
 
-        Used for shared data, lookup tables, and tenant-wide information.
+        Used for shared data, lookup tables, and inbox-wide information.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
 
         Returns:
             Context-bound table cache instance implementing ITableCache
@@ -176,7 +176,7 @@ class ICacheFactory(ABC):
     @abstractmethod
     def create_expiry_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IExpiryCache:
         """
@@ -185,7 +185,7 @@ class ICacheFactory(ABC):
         Used for time-based automation (reminders, timeouts, scheduled actions).
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Returns:
@@ -204,7 +204,7 @@ class ICacheFactory(ABC):
     @abstractmethod
     def create_ai_state_cache(
         self,
-        tenant_id: str | None = None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
     ) -> IAIStateCache:
         """
@@ -213,7 +213,7 @@ class ICacheFactory(ABC):
         Used for AI agent state management and context sharing.
 
         Args:
-            tenant_id: Optional override (uses default if None)
+            inbox_id: Optional override (uses default if None)
             user_id: Optional override (uses default if None)
 
         Returns:

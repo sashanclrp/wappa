@@ -23,10 +23,10 @@ class RedisPubSubPublisher(BaseModel, IPubSubPublisher):
     Publishes lightweight notifications to channels. Actual data should be
     stored in UserCache - notifications just signal "something changed".
 
-    Channel Pattern: wappa:notify:{tenant}:{user_id}:{event_type}
+    Channel Pattern: wappa:notify:{inbox}:{user_id}:{event_type}
     """
 
-    tenant: str = Field(..., min_length=1)
+    inbox: str = Field(..., min_length=1)
     user_id: str = Field(..., min_length=1)
     platform: str = Field(default="whatsapp")
     keys: KeyFactory = Field(default_factory=KeyFactory)
@@ -35,7 +35,7 @@ class RedisPubSubPublisher(BaseModel, IPubSubPublisher):
 
     def get_channel(self, event_type: PubSubEventType) -> str:
         """Get channel name for event type."""
-        return self.keys.channel(self.tenant, self.user_id, event_type)
+        return self.keys.channel(self.inbox, self.user_id, event_type)
 
     async def publish(
         self,
@@ -51,7 +51,7 @@ class RedisPubSubPublisher(BaseModel, IPubSubPublisher):
 
         payload = {
             "event": event_type,
-            "tenant": self.tenant,
+            "inbox": self.inbox,
             "user_id": self.user_id,
             "platform": self.platform,
             "data": data,

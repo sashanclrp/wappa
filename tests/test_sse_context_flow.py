@@ -50,7 +50,7 @@ async def test_sse_event_scope_sets_and_resets_contextvar():
     assert get_sse_context() is None
 
     async with sse_event_scope(
-        tenant_id="t-1",
+        inbox_id="t-1",
         user_id="US.canonical",
         bsuid="US.canonical",
         phone_number="15551234567",
@@ -65,7 +65,7 @@ async def test_sse_event_scope_sets_and_resets_contextvar():
 
 @pytest.mark.asyncio
 async def test_update_metadata_and_identity_apply_to_active_scope():
-    async with sse_event_scope(tenant_id="t-1", user_id="15551234567"):
+    async with sse_event_scope(inbox_id="t-1", user_id="15551234567"):
         update_metadata(conversation_id="conv-42", run_id="run-1")
         update_identity(bsuid="US.new", phone_number="15551234567")
 
@@ -91,7 +91,7 @@ async def test_publish_sse_event_reads_identity_from_context():
     sub = await hub.subscribe()
 
     async with sse_event_scope(
-        tenant_id="t-1",
+        inbox_id="t-1",
         user_id="US.canonical",
         bsuid="US.canonical",
         phone_number="15551234567",
@@ -108,7 +108,7 @@ async def test_publish_sse_event_reads_identity_from_context():
     events = await _drain(sub, timeout=0.1)
     assert len(events) == 1
     env = events[0]
-    assert env["tenant_id"] == "t-1"
+    assert env["inbox_id"] == "t-1"
     assert env["user_id"] == "US.canonical"
     assert env["bsuid"] == "US.canonical"
     assert env["phone_number"] == "15551234567"
@@ -135,7 +135,7 @@ async def test_publish_sse_event_without_scope_yields_defaults():
     events = await _drain(sub, timeout=0.1)
     assert len(events) == 1
     env = events[0]
-    assert env["tenant_id"] == "unknown"
+    assert env["inbox_id"] == "unknown"
     assert env["user_id"] == "unknown"
     assert env["bsuid"] is None
     assert env["phone_number"] is None
@@ -149,7 +149,7 @@ async def test_sse_messenger_wrapper_emits_with_context_identity():
 
     inner = MagicMock()
     inner.platform.value = "whatsapp"
-    inner.tenant_id = "t-1"
+    inner.inbox_id = "t-1"
     # Mimic IMessenger.send_text return contract.
     fake_result = MagicMock()
     fake_result.model_dump = MagicMock(return_value={"message_id": "wamid.xyz"})
@@ -158,7 +158,7 @@ async def test_sse_messenger_wrapper_emits_with_context_identity():
     wrapper = SSEMessengerWrapper(inner=inner, event_hub=hub)
 
     async with sse_event_scope(
-        tenant_id="t-1",
+        inbox_id="t-1",
         user_id="US.canonical",
         bsuid="US.canonical",
         phone_number="15551234567",
@@ -191,8 +191,8 @@ class _FakeWebhook:
         self.user = _FakeUser(
             user_id="US.canonical", bsuid="US.canonical", phone_number="15551234567"
         )
-        self.tenant = MagicMock()
-        self.tenant.get_tenant_key = MagicMock(return_value="t-1")
+        self.inbox = MagicMock()
+        self.inbox.get_tenant_key = MagicMock(return_value="t-1")
         self.platform = MagicMock()
         self.platform.value = "whatsapp"
         self.message = MagicMock()
@@ -217,7 +217,7 @@ async def test_incoming_message_defers_until_post_process_and_picks_up_metadata(
     webhook = _FakeWebhook()
 
     async with sse_event_scope(
-        tenant_id="t-1",
+        inbox_id="t-1",
         user_id="US.canonical",
         bsuid="US.canonical",
         phone_number="15551234567",
@@ -250,7 +250,7 @@ async def test_post_process_without_staged_payload_is_noop():
     handler = SSEMessageHandler(event_hub=hub)
     webhook = _FakeWebhook()
 
-    async with sse_event_scope(tenant_id="t-1", user_id="US.canonical"):
+    async with sse_event_scope(inbox_id="t-1", user_id="US.canonical"):
         await handler.post_process_message(webhook)
 
     events = await _drain(sub, timeout=0.05)

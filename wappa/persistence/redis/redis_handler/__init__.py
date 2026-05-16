@@ -11,14 +11,14 @@ from .table import RedisTable
 from .user import RedisUser
 
 # Utils
-from .utils import KeyFactory, TenantCache, dumps, loads
+from .utils import KeyFactory, InboxCache, dumps, loads
 
 __all__ = [
     # Infrastructure
     "KeyFactory",
     "dumps",
     "loads",
-    "TenantCache",
+    "InboxCache",
     # Cache Repositories
     "RedisUser",
     "RedisStateHandler",

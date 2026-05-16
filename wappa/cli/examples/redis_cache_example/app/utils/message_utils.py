@@ -23,7 +23,7 @@ def extract_user_data(webhook: IncomingMessageWebhook) -> dict[str, str]:
     return {
         "user_id": webhook.user.user_id,
         "user_name": webhook.user.profile_name or "Unknown User",
-        "tenant_id": webhook.tenant.get_tenant_key(),
+        "inbox_id": webhook.inbox.get_inbox_key(),
         "message_id": webhook.message.message_id,
     }
 

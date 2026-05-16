@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.messaging_interface import IMessenger
-from wappa.domain.services.tenant_credentials_service import TenantCredentialsService
+from wappa.domain.services.inbox_credentials_service import SettingsInboxCredentialStore
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
     WhatsAppInteractiveHandler,
@@ -34,21 +34,21 @@ class MessengerFactory:
         self._messenger_cache: dict[str, IMessenger] = {}
 
     async def create_messenger(
-        self, platform: PlatformType, tenant_id: str, force_recreate: bool = False
+        self, platform: PlatformType, inbox_id: str, force_recreate: bool = False
     ) -> IMessenger:
-        cache_key = f"{platform.value}:{tenant_id}"
+        cache_key = f"{platform.value}:{inbox_id}"
 
         if not force_recreate and cache_key in self._messenger_cache:
             self.logger.debug(f"Using cached messenger for {cache_key}")
             return self._messenger_cache[cache_key]
 
         self.logger.debug(
-            f"Creating new messenger for platform: {platform.value}, tenant: {tenant_id}"
+            f"Creating new messenger for platform: {platform.value}, inbox: {inbox_id}"
         )
 
         try:
             if platform == PlatformType.WHATSAPP:
-                messenger = await self._create_whatsapp_messenger(tenant_id)
+                messenger = await self._create_whatsapp_messenger(inbox_id)
             else:
                 raise ValueError(f"Unsupported platform: {platform.value}")
 
@@ -61,36 +61,38 @@ class MessengerFactory:
             )
             raise RuntimeError(f"Messenger creation failed: {e}") from e
 
-    async def _create_whatsapp_messenger(self, tenant_id: str) -> WhatsAppMessenger:
-        self.logger.debug(f"Creating WhatsApp messenger for tenant: {tenant_id}")
+    async def _create_whatsapp_messenger(self, inbox_id: str) -> WhatsAppMessenger:
+        self.logger.debug(f"Creating WhatsApp messenger for inbox: {inbox_id}")
 
-        if not TenantCredentialsService.validate_tenant(tenant_id):
-            raise ValueError(f"Invalid or inactive tenant: {tenant_id}")
+        credential_store = SettingsInboxCredentialStore()
+        if not await credential_store.validate_inbox(inbox_id):
+            raise ValueError(f"Invalid or inactive inbox: {inbox_id}")
 
-        access_token = TenantCredentialsService.get_whatsapp_access_token(tenant_id)
+        credentials = await credential_store.get_credentials(inbox_id)
+        access_token = credentials.access_token
 
         client = WhatsAppClient(
             session=self._http_session,
             access_token=access_token,
-            phone_number_id=tenant_id,
+            phone_number_id=inbox_id,
             logger=self.logger,
         )
 
         messenger = WhatsAppMessenger(
             client=client,
-            media_handler=WhatsAppMediaHandler(client=client, tenant_id=tenant_id),
+            media_handler=WhatsAppMediaHandler(client=client, inbox_id=inbox_id),
             interactive_handler=WhatsAppInteractiveHandler(
-                client=client, tenant_id=tenant_id
+                client=client, inbox_id=inbox_id
             ),
-            template_handler=WhatsAppTemplateHandler(client=client, tenant_id=tenant_id),
+            template_handler=WhatsAppTemplateHandler(client=client, inbox_id=inbox_id),
             specialized_handler=WhatsAppSpecializedHandler(
-                client=client, tenant_id=tenant_id
+                client=client, inbox_id=inbox_id
             ),
-            tenant_id=tenant_id,
+            inbox_id=inbox_id,
         )
 
         self.logger.info(
-            f"✅ WhatsApp messenger created successfully for tenant: {tenant_id}"
+            f"✅ WhatsApp messenger created successfully for inbox: {inbox_id}"
         )
         return messenger
 
@@ -101,10 +103,10 @@ class MessengerFactory:
         return platform in self.get_supported_platforms()
 
     def clear_cache(
-        self, platform: PlatformType = None, tenant_id: str = None
+        self, platform: PlatformType = None, inbox_id: str = None
     ) -> None:
-        if platform and tenant_id:
-            cache_key = f"{platform.value}:{tenant_id}"
+        if platform and inbox_id:
+            cache_key = f"{platform.value}:{inbox_id}"
             self._messenger_cache.pop(cache_key, None)
             self.logger.debug(f"Cleared messenger cache for {cache_key}")
         elif platform:
@@ -116,13 +118,13 @@ class MessengerFactory:
             for key in to_remove:
                 del self._messenger_cache[key]
             self.logger.debug(f"Cleared messenger cache for platform: {platform.value}")
-        elif tenant_id:
+        elif inbox_id:
             to_remove = [
-                key for key in self._messenger_cache if key.endswith(f":{tenant_id}")
+                key for key in self._messenger_cache if key.endswith(f":{inbox_id}")
             ]
             for key in to_remove:
                 del self._messenger_cache[key]
-            self.logger.debug(f"Cleared messenger cache for tenant: {tenant_id}")
+            self.logger.debug(f"Cleared messenger cache for inbox: {inbox_id}")
         else:
             self._messenger_cache.clear()
             self.logger.debug("Cleared entire messenger cache")

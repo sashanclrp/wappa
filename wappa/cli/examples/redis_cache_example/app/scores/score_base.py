@@ -23,7 +23,7 @@ class ScoreDependencies:
     abstractions that score modules depend on.
 
     The cache_factory provides context-aware cache instances that are created
-    per-request with tenant and user identity already injected.
+    per-request with inbox and user identity already injected.
     """
 
     messenger: WhatsAppMessenger
@@ -62,7 +62,7 @@ class ScoreBase(ABC):
 
     @property
     def table_cache(self):
-        """Get table cache from factory (pre-bound to current tenant context)."""
+        """Get table cache from factory (pre-bound to current inbox context)."""
         return self.cache_factory.create_table_cache()
 
     @property
