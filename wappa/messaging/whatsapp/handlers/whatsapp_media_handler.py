@@ -14,6 +14,8 @@ from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppres
 from pathlib import Path
 from typing import Any, BinaryIO
 
+import aiohttp
+
 from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.media_interface import IMediaHandler
 from wappa.domain.models.media_result import (
@@ -272,6 +274,108 @@ class WhatsAppMediaHandler(IMediaHandler):
                 success=False,
                 error=str(e),
                 error_code="UPLOAD_FAILED",
+                tenant_id=self._tenant_id,
+            )
+
+    async def upload_media_from_url(
+        self,
+        url: str,
+        *,
+        filename: str = "download",
+        timeout: float = 60.0,
+    ) -> MediaUploadResult:
+        """Download a public URL and re-upload to WhatsApp Media API.
+
+        Uses a separate HTTP client with NO auth headers to avoid
+        leaking the WhatsApp Bearer token to third-party hosts.
+        """
+        try:
+            self.logger.debug(f"Downloading media from URL for re-upload: {url}")
+
+            # Auth isolation: fresh session with zero headers — no Bearer token leak
+            download_timeout = aiohttp.ClientTimeout(total=timeout)
+            async with (
+                aiohttp.ClientSession(timeout=download_timeout) as session,
+                session.get(url) as response,
+            ):
+                    if response.status != 200:
+                        return MediaUploadResult(
+                            success=False,
+                            error=f"Download failed: HTTP {response.status} from {url}",
+                            error_code="DOWNLOAD_FAILED",
+                            tenant_id=self._tenant_id,
+                        )
+
+                    content_type = response.content_type
+                    if not content_type or content_type == "application/octet-stream":
+                        return MediaUploadResult(
+                            success=False,
+                            error=f"Source URL did not provide a usable Content-Type header: {url}",
+                            error_code="MIME_TYPE_UNKNOWN",
+                            tenant_id=self._tenant_id,
+                        )
+
+                    if not self.validate_media_type(content_type):
+                        return MediaUploadResult(
+                            success=False,
+                            error=f"Unsupported MIME type '{content_type}' from source URL. Supported types: {sorted(self.supported_media_types)}",
+                            error_code="MIME_TYPE_UNSUPPORTED",
+                            tenant_id=self._tenant_id,
+                        )
+
+                    max_size = self._get_max_size_for_mime_type(content_type)
+
+                    # Reject early if Content-Length is provided and exceeds limit
+                    content_length = response.content_length
+                    if content_length is not None and content_length > max_size:
+                        return MediaUploadResult(
+                            success=False,
+                            error=f"Source file size ({content_length} bytes) exceeds the limit ({max_size} bytes) for type {content_type}",
+                            error_code="FILE_SIZE_EXCEEDED",
+                            tenant_id=self._tenant_id,
+                        )
+
+                    # Stream download with running size guard
+                    data = bytearray()
+                    async for chunk in response.content.iter_chunked(8192):
+                        data.extend(chunk)
+                        if len(data) > max_size:
+                            return MediaUploadResult(
+                                success=False,
+                                error=f"Download aborted: file size exceeded {max_size} bytes for type {content_type}",
+                                error_code="FILE_SIZE_EXCEEDED",
+                                tenant_id=self._tenant_id,
+                            )
+
+            # Derive a filename extension from the MIME type
+            extension_map = self._get_extension_map()
+            ext = extension_map.get(content_type, "")
+            upload_filename = f"{filename}{ext}" if not filename.endswith(ext) else filename
+
+            self.logger.debug(
+                f"Downloaded {len(data)} bytes ({content_type}), re-uploading as {upload_filename}"
+            )
+
+            return await self.upload_media_from_bytes(
+                file_data=bytes(data),
+                media_type=content_type,
+                filename=upload_filename,
+            )
+
+        except TimeoutError:
+            self.logger.warning(f"Download timed out after {timeout}s: {url}")
+            return MediaUploadResult(
+                success=False,
+                error=f"Download timed out after {timeout}s: {url}",
+                error_code="DOWNLOAD_FAILED",
+                tenant_id=self._tenant_id,
+            )
+        except Exception as e:
+            self.logger.exception(f"Failed to upload media from URL {url}: {e}")
+            return MediaUploadResult(
+                success=False,
+                error=str(e),
+                error_code="DOWNLOAD_FAILED",
                 tenant_id=self._tenant_id,
             )
 

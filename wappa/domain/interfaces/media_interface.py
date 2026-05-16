@@ -132,6 +132,33 @@ class IMediaHandler(ABC):
         pass
 
     @abstractmethod
+    async def upload_media_from_url(
+        self,
+        url: str,
+        *,
+        filename: str = "download",
+        timeout: float = 60.0,
+    ) -> MediaUploadResult:
+        """
+        Download a public URL and re-upload to the platform's Media API.
+
+        Uses a separate HTTP client with NO auth headers to avoid
+        leaking platform Bearer tokens to third-party hosts.
+
+        The Content-Type is read from the source response headers
+        and used as the media_type for the upload.
+
+        Args:
+            url: Public URL to download media from
+            filename: Filename for the re-upload (default: "download")
+            timeout: Download timeout in seconds (default: 60.0)
+
+        Returns:
+            MediaUploadResult with upload status and media ID
+        """
+        pass
+
+    @abstractmethod
     async def upload_media_from_stream(
         self,
         file_stream: BinaryIO,

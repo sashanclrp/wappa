@@ -5,6 +5,15 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-05-15
+
+Adds `upload_media_from_url()` to `IMediaHandler` and `WhatsAppMediaHandler`, enabling consumers to download a public URL and re-upload it to the WhatsApp Media API in a single call. Uses an isolated HTTP session with no auth headers to prevent Bearer token leakage to third-party hosts.
+
+### Added
+- **`IMediaHandler.upload_media_from_url(url, *, filename, timeout)`** — new abstract method on the platform-agnostic media interface.
+- **`WhatsAppMediaHandler.upload_media_from_url()`** — full implementation with MIME validation, two-phase file size enforcement (Content-Length header + streaming guard), automatic filename extension derivation, and auth-isolated download via a fresh `aiohttp.ClientSession`.
+- **9 unit tests** covering happy path, auth isolation, download failure, missing/unsupported MIME type, size limits (header and streaming), filename extension, and custom timeout.
+
 ## [0.10.0] - 2026-05-14
 
 Adds `delete_all_for_user()` to the three user-scoped cache interfaces, allowing callers to wipe all cached state for a user without knowing individual handler/agent/action names. Designed for conversation-close cleanup where the full set of cache keys is unknown.
