@@ -22,11 +22,32 @@ When no custom store is configured, Wappa uses `SettingsInboxCredentialStore`, w
 
 ## Universal Webhooks
 
-Host applications should import the user-sent-message Universal Model as:
+Host applications import inbound webhook schemas and Universal Models from
+`wappa.webhooks`.
+
+Public inbound imports include:
 
 - `from wappa.webhooks import InboundMessageWebhook`
 - `from wappa.webhooks.core.webhook_interfaces import InboundMessageWebhook`
+- `from wappa.webhooks import StatusWebhook`
+- `from wappa.webhooks import ErrorWebhook`
+- `from wappa.webhooks import SystemWebhook`
+- `from wappa.webhooks import CustomWebhook`
+- `from wappa.webhooks import UniversalWebhook`
+- `from wappa.webhooks.whatsapp import WhatsAppWebhook`
+- `from wappa.webhooks.whatsapp.*` platform payload schemas
 
 `InboundMessageWebhook` is the only public inbound-message Universal Model name. Wappa does not provide a compatibility alias for previous inbound-message model names.
+
+The old inbound schema paths under `wappa.schemas.whatsapp`,
+`wappa.schemas.factory`, and `wappa.schemas.core.base_*` are intentionally
+removed. No compatibility import path is provided.
+
+`wappa.schemas` remains public only for shared primitives such as:
+
+- `wappa.schemas.core.types.PlatformType`
+- `wappa.schemas.core.types.MessageType`
+- `wappa.schemas.core.recipient.RecipientRequest`
+- `wappa.schemas.core.recipient.apply_recipient_to_payload`
 
 Webhook processors are translation-only adapters. They return Universal Models and do not mutate ContextVars, construct messengers, construct cache factories, open DB sessions, clone handlers, or dispatch events. Those responsibilities belong to the Inbound Runtime and its Dispatch Context.

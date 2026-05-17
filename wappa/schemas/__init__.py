@@ -1,6 +1,7 @@
 """
-Schema definitions for the Mimeia AI Agent Platform.
+Shared schema primitives for Wappa.
 
-This package contains platform-specific webhook schemas for processing
-messages from various messaging platforms (WhatsApp, Telegram, Teams, Instagram).
+Inbound webhook payload schemas and Universal Models live in ``wappa.webhooks``.
+This package only owns cross-cutting primitives used by inbound, outbound,
+API, and runtime modules.
 """

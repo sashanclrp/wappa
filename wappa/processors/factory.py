@@ -9,8 +9,8 @@ from typing import Any
 
 from wappa.core.logging.logger import get_logger
 from wappa.processors.base_processor import BaseWebhookProcessor, ProcessorError
-from wappa.schemas.core.base_webhook import BaseWebhook
 from wappa.schemas.core.types import ErrorCode, PlatformType
+from wappa.webhooks.core.base_webhook import BaseWebhook
 
 
 class PlatformDetector:
@@ -177,13 +177,15 @@ class ProcessorFactory:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the factory with logger."""
         if not hasattr(self, "_initialized"):
             self.logger = get_logger(__name__)
             self._initialized = True
 
-    def get_processor(self, platform: PlatformType, **kwargs) -> BaseWebhookProcessor:
+    def get_processor(
+        self, platform: PlatformType, **kwargs: Any
+    ) -> BaseWebhookProcessor:
         """
         Get or create a processor for the specified platform.
 
@@ -213,7 +215,7 @@ class ProcessorFactory:
         return processor
 
     def _create_processor(
-        self, platform: PlatformType, **kwargs
+        self, platform: PlatformType, **kwargs: Any
     ) -> BaseWebhookProcessor:
         """
         Create a new processor instance for the specified platform.
@@ -273,7 +275,7 @@ class ProcessorFactory:
         payload: dict[str, Any],
         url_path: str | None = None,
         headers: dict[str, str] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> BaseWebhookProcessor:
         """
         Auto-detect platform and return appropriate processor.
@@ -387,12 +389,12 @@ class WebhookFactory:
     for parsing webhook payloads from any supported platform.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the webhook factory with schema factory."""
         self.logger = get_logger(__name__)
 
         # Import schema factory (avoid circular imports)
-        from wappa.schemas.factory import schema_factory
+        from wappa.webhooks.factory import schema_factory
 
         self.schema_factory = schema_factory
 
@@ -401,7 +403,7 @@ class WebhookFactory:
         payload: dict[str, Any],
         url_path: str | None = None,
         headers: dict[str, str] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> BaseWebhook:
         """
         Create a webhook instance from raw payload with automatic platform detection.
@@ -449,7 +451,7 @@ class WebhookFactory:
             ) from e
 
     def create_webhook_for_platform(
-        self, platform: PlatformType, payload: dict[str, Any], **kwargs
+        self, platform: PlatformType, payload: dict[str, Any], **kwargs: Any
     ) -> BaseWebhook:
         """
         Create a webhook instance for a specific platform.
