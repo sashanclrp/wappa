@@ -51,3 +51,19 @@ removed. No compatibility import path is provided.
 - `wappa.schemas.core.recipient.apply_recipient_to_payload`
 
 Webhook processors are translation-only adapters. They return Universal Models and do not mutate ContextVars, construct messengers, construct cache factories, open DB sessions, clone handlers, or dispatch events. Those responsibilities belong to the Inbound Runtime and its Dispatch Context.
+
+## Messenger
+
+`IMessenger` is Wappa's public outbound message interface. Host applications use it to send text, media, interactive, template, and specialized messages through an Inbox.
+
+**Stable surface:**
+
+- `from wappa.domain.interfaces import IMessenger`
+- All `send_*` methods and `mark_as_read` on the interface
+- `MessageResult` as the uniform return type
+
+**Design commitment:**
+
+- The interface stays as a single seam until the split threshold documented in `wappa/messaging/ARCHITECTURE.md` is met.
+- If a split is justified in the future, it will be a clean breaking change with no compatibility aliases.
+- Internal handler composition (per message family) is not part of the public contract.

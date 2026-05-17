@@ -100,3 +100,29 @@ WhatsAppMessenger._resolve_media_object(path, ...)
 ## inbox_id Mapping
 
 `WhatsAppClient.phone_number_id` is the `inbox_id` for the WhatsApp platform. It flows into every `MessageResult` and `MediaUploadResult` as `inbox_id`. The mapping is explicit: `inbox_id == phone_number_id` for all WhatsApp operations.
+
+## Messenger Seam Decision
+
+`IMessenger` remains Wappa's single public outbound interface for host applications.
+
+**Why the seam stays whole:**
+
+- No second real platform adapter (Telegram, Instagram) exists yet to create pressure.
+- Tests do not repeatedly need smaller Messenger fakes.
+- Host applications have not requested smaller outbound capability sets.
+- Message families (text, media, interactive, template, specialized) share the same `inbox_id`, `MessageResult`, and error-handling semantics — the interface is wide but cohesive.
+
+**Internal composition is allowed:**
+
+WhatsApp (and future adapters) may organize handler classes by message family internally. This is implementation structure, not public contract. The four handlers (`WhatsAppMediaHandler`, `WhatsAppInteractiveHandler`, `WhatsAppTemplateHandler`, `WhatsAppSpecializedHandler`) stay as internal composition detail.
+
+**Split threshold — revisit only when:**
+
+1. A second real platform adapter cannot implement `IMessenger` coherently.
+2. Tests repeatedly need smaller Messenger fakes because the wide interface creates concrete pain.
+3. Host applications need to depend on a smaller outbound capability set for security or lifecycle reasons.
+4. Message families diverge enough that keeping one interface hides real invariants.
+
+**If the threshold is met:**
+
+Split with a clean breaking change. No compatibility aliases, no deprecation shims, no adapter layers wrapping old → new.
