@@ -4,33 +4,27 @@
 
 ## What it does
 
-`WebhookPlugin` adds specialized webhook endpoints to Wappa applications for receiving HTTP callbacks from external services (payment providers, CRM systems, etc.).
+`WebhookPlugin` adds endpoints for External Webhook Sources such as payment systems, CRMs, or operational tools. It is not for messaging platforms; messaging platform webhooks belong to the Inbound Runtime.
 
-It supports two modes:
-
-- **Raw handler mode (v1)**: Pass a callable that receives the raw `Request`. Simple, no Wappa infrastructure access.
-- **Processor mode (v2)**: Pass an `IWebhookProcessor` that gets full Wappa infrastructure (messenger, cache, database) injected automatically — same pipeline as WhatsApp webhooks.
-
-Each plugin instance handles one provider. Compose multiple instances for different services.
+Each plugin instance handles one External Webhook Source and uses an `IWebhookProcessor` to translate the raw HTTP request into an `ExternalEvent`.
 
 ## How to activate
 
-### Processor mode (v2) — with full infrastructure
-
 ```python
-from wappa import Wappa, WappaEventHandler, ExternalEvent
+from wappa import ExternalEvent, Wappa, WappaEventHandler
 from wappa.core.plugins import WebhookPlugin
 
+
 class MercadoPagoProcessor:
-    def get_provider_name(self) -> str:
+    def get_source_name(self) -> str:
         return "mercadopago"
 
-    async def parse_event(self, request, tenant_id):
+    async def parse_event(self, request, inbox_id):
         body = await request.json()
         return ExternalEvent(
             source="mercadopago",
             event_type=body.get("type", "unknown"),
-            tenant_id=tenant_id,
+            inbox_id=inbox_id,
             payload=body.get("data", {}),
             raw_data=body,
         )
@@ -40,12 +34,10 @@ class MercadoPagoProcessor:
             return None
         async with db() as session:
             sub = await get_subscription(session, event.payload["id"])
-            return sub.user_phone if sub else None
+            return sub.user_id if sub else None
+
 
 class MyHandler(WappaEventHandler):
-    async def process_message(self, webhook):
-        await self.messenger.send_text(webhook.user.user_id, "Hello!")
-
     async def process_external_event(self, event: ExternalEvent):
         if event.source == "mercadopago" and event.event_type == "payment.approved":
             cache = self.cache_factory.create_user_cache()
@@ -54,6 +46,7 @@ class MyHandler(WappaEventHandler):
                 text="Payment confirmed!",
                 recipient=event.user_id,
             )
+
 
 handler = MyHandler()
 app = Wappa(cache="redis", ...)
@@ -69,101 +62,65 @@ app.add_plugin(
 )
 ```
 
-### Raw handler mode (v1) — simple, no infrastructure
-
-```python
-from wappa.core.plugins import WebhookPlugin
-
-async def wompi_webhook_handler(request, tenant_id, provider):
-    body = await request.json()
-    return {"status": "received", "provider": provider}
-
-app.add_plugin(
-    WebhookPlugin(
-        provider="wompi",
-        handler=wompi_webhook_handler,
-        prefix="/webhook/payment",
-    )
-)
-```
-
-### Service webhook (no tenant ID)
-
-```python
-app.add_plugin(
-    WebhookPlugin(
-        provider="github",
-        handler=github_webhook_handler,
-        prefix="/webhook/services",
-        include_tenant_id=False,
-    )
-)
-```
-
 ## Configuration options
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `provider` | `str` | (required) | Provider name used in URL path and OpenAPI tags |
-| `handler` | `Callable \| None` | `None` | Async callable for raw handler mode (v1) |
-| `processor` | `IWebhookProcessor \| None` | `None` | Processor instance for infrastructure-injected mode (v2) |
-| `event_handler` | `WappaEventHandler \| None` | `None` | Handler prototype for cloning (required with `processor`) |
-| `prefix` | `str \| None` | `"/webhook/{provider}"` | URL prefix for the router |
+| `external_source` | `str` | (required) | External source name used in URL path, status output, and OpenAPI tags |
+| `processor` | `IWebhookProcessor` | (required) | Processor that validates the request and creates an `ExternalEvent` |
+| `event_handler` | `WappaEventHandler` | (required) | Handler prototype cloned for dispatch |
+| `prefix` | `str \| None` | `"/webhook/{external_source}"` | URL prefix for the router |
 | `methods` | `list[str] \| None` | `["POST"]` | HTTP methods the endpoint accepts |
-| `include_tenant_id` | `bool` | `True` | Whether to include `{tenant_id}` as a path parameter |
+| `include_inbox_id` | `bool` | `True` | Whether to include `{inbox_id}` as a path parameter |
 | `**route_kwargs` | `Any` | -- | Additional keyword arguments forwarded to FastAPI `api_route` |
 
-Either `handler` or `processor` must be provided. When `processor` is used, `event_handler` is also required.
+## Processing pipeline
 
-## Processor mode pipeline (v2)
-
-When a webhook arrives in processor mode:
+When a webhook arrives:
 
 ```
-POST /webhook/payment/{tenant_id}
+POST /webhook/payment/{inbox_id}
     │
     ├── Returns {"status": "accepted"} immediately (200)
     │
     └── Background task:
-        ├── processor.parse_event(request, tenant_id) → ExternalEvent
-        │   (your Pydantic schema validates the raw payload HERE)
-        ├── WappaContextFactory.create_context(tenant_id) → DB-only context
+        ├── processor.parse_event(request, inbox_id) → ExternalEvent
+        │   (your Pydantic schema validates the raw payload here)
+        ├── WappaContextFactory.create_context(inbox_id) → DB-only context
         ├── processor.resolve_user_id(event, db) → user_id
-        ├── WappaContextFactory.create_context(tenant_id, user_id, messenger=True)
+        ├── WappaContextFactory.create_context(inbox_id, user_id, include_messenger=True)
         │   → full context (messenger + cache + db)
         ├── handler.with_context(...) → cloned handler
         └── handler.process_external_event(event)
 ```
 
-### Two-phase context
+External webhooks identify an external resource such as a payment, subscription, or ticket. The processor resolves the Wappa `user_id` in two phases:
 
-External webhooks identify a resource (payment, subscription), not a user. The processor resolves the user in two phases:
+1. DB-only context to look up the user from the external payload.
+2. Full context with Messenger and Cache Factory once the user is known.
 
-1. **Phase 1**: DB-only context to look up the user from the webhook payload
-2. **Phase 2**: Full context with messenger + cache once the user is known
-
-### IWebhookProcessor interface
+## IWebhookProcessor interface
 
 ```python
 class IWebhookProcessor(Protocol):
-    def get_provider_name(self) -> str: ...
-    async def parse_event(self, request: Request, tenant_id: str) -> ExternalEvent: ...
+    def get_source_name(self) -> str: ...
+    async def parse_event(self, request: Request, inbox_id: str) -> ExternalEvent: ...
     async def resolve_user_id(self, event: ExternalEvent, db: Callable | None) -> str | None: ...
 ```
 
 | Method | Purpose |
 |--------|---------|
-| `get_provider_name()` | Provider identifier for logging |
-| `parse_event()` | Validate raw request → typed `ExternalEvent` (your schema goes here) |
-| `resolve_user_id()` | Optional: look up user from event payload via DB |
+| `get_source_name()` | External source identifier for logging |
+| `parse_event()` | Validate raw request and return a typed `ExternalEvent` |
+| `resolve_user_id()` | Optional lookup from external payload to Wappa `user_id` |
 
-### ExternalEvent model
+## ExternalEvent model
 
 ```python
 class ExternalEvent(BaseModel):
     source: str              # "stripe", "mercadopago"
     event_type: str          # "payment.approved"
-    tenant_id: str           # From URL path
+    inbox_id: str            # From URL path
     user_id: str | None      # Resolved by processor
     payload: dict[str, Any]  # Validated webhook data
     metadata: dict[str, Any] # Additional context
@@ -171,37 +128,16 @@ class ExternalEvent(BaseModel):
     raw_data: dict | None    # Original body (excluded from serialization)
 ```
 
-### Handler method
-
-```python
-async def process_external_event(self, event: ExternalEvent) -> None:
-    """Override in your WappaEventHandler subclass."""
-    # Available when tenant-scoped:
-    # self.messenger — send messages
-    # self.cache_factory — access caches
-    # self.db / self.db_read — database sessions
-```
-
-## Raw handler signature (v1)
-
-```python
-async def handler(request: Request, tenant_id: str | None, provider: str) -> dict
-```
-
-- **`request`** -- raw FastAPI/Starlette `Request` object
-- **`tenant_id`** -- from URL path, or `None` when `include_tenant_id=False`
-- **`provider`** -- provider name from plugin initialization
-
 ## URL patterns
 
-**With tenant ID** (`include_tenant_id=True`, the default):
+**With Inbox ID** (`include_inbox_id=True`, the default):
 
 ```
-POST {prefix}/{tenant_id}
-GET  {prefix}/{tenant_id}/status
+POST {prefix}/{inbox_id}
+GET  {prefix}/{inbox_id}/status
 ```
 
-**Without tenant ID** (`include_tenant_id=False`):
+**Without Inbox ID** (`include_inbox_id=False`):
 
 ```
 POST {prefix}/
@@ -210,35 +146,30 @@ GET  {prefix}/status
 
 ## Status endpoint
 
-Every `WebhookPlugin` instance registers a GET status endpoint:
-
 ```json
 {
-    "status": "active",
-    "provider": "mercadopago",
-    "tenant_id": "tenant-123",
-    "webhook_url": "https://example.com/webhook/payment/tenant-123",
-    "methods": ["POST"],
-    "mode": "processor"
+  "status": "active",
+  "external_source": "mercadopago",
+  "inbox_id": "508386009032748",
+  "webhook_url": "https://example.com/webhook/payment/508386009032748",
+  "methods": ["POST"]
 }
 ```
 
-The `mode` field shows `"processor"` (v2) or `"raw"` (v1).
-
-## Multiple providers
+## Multiple External Webhook Sources
 
 ```python
 app.add_plugin(
     WebhookPlugin("stripe", processor=StripeProcessor(),
-                   event_handler=handler, prefix="/webhook/payment")
+                  event_handler=handler, prefix="/webhook/payment")
 )
 app.add_plugin(
     WebhookPlugin("mercadopago", processor=MPProcessor(),
-                   event_handler=handler, prefix="/webhook/payment")
+                  event_handler=handler, prefix="/webhook/payment")
 )
 app.add_plugin(
     WebhookPlugin("hubspot", processor=HubspotProcessor(),
-                   event_handler=handler, prefix="/webhook/crm")
+                  event_handler=handler, prefix="/webhook/crm")
 )
 ```
 

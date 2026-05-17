@@ -133,22 +133,16 @@ pubsub_subscriber.py
 
 **Stateless KeyFactory** — All key-string logic lives in one Pydantic model with no side effects. It can be instantiated anywhere and tested without a Redis connection.
 
-## Inbox Identity Rename (in progress)
+## Inbox Identity Naming
 
-The following code identifiers are being renamed as part of ADR 0001:
+The persistence context uses `inbox_id` as the cache namespace boundary.
+Legacy `tenant_id` names were removed by ADR 0001 and the v0.13 clean-break
+release. Current persistence code should use:
 
-| Current name (code) | Target name (canonical) | Location |
-|---------------------|------------------------|----------|
-| `TenantCache` class | `InboxCache` | `redis_handler/utils/tenant_cache.py` |
-| `TenantCache.tenant` field | `InboxCache.inbox_id` | same file |
-| `KeyFactory.user(tenant, ...)` | `KeyFactory.user(inbox_id, ...)` | `key_factory.py` (all methods) |
-| `ICacheFactory.__init__(tenant_id, ...)` | `__init__(inbox_id, ...)` | `domain/interfaces/cache_factory.py` |
-| `ICacheFactory._resolve_context(tenant_id, ...)` | `_resolve_context(inbox_id, ...)` | same file |
-| `RedisCacheFactory.create_*_cache(tenant_id=...)` | `create_*_cache(inbox_id=...)` | `redis_cache_factory.py` |
-| `RedisStateHandler.list_users_with_handler(tenant_id, ...)` | `(inbox_id, ...)` | `state_handler.py` |
-| `Notification.tenant` field | `Notification.inbox_id` | `pubsub_subscriber.py` |
-| `build_channel(tenant, ...)` | `build_channel(inbox_id, ...)` | `pubsub_subscriber.py` |
-| `build_pattern(tenant, ...)` | `build_pattern(inbox_id, ...)` | `pubsub_subscriber.py` |
+- `ICacheFactory.__init__(inbox_id, user_id)`
+- `ICacheFactory._resolve_context(inbox_id, user_id)`
+- `create_*_cache(inbox_id=..., user_id=...)`
+- Redis key patterns whose first segment is the Inbox ID
 
 **Redis key values are not affected.** The first segment of every key is the `phone_number_id` value, which does not change. Only the Python variable names that hold that value are being renamed.
 

@@ -5,6 +5,15 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.2] - 2026-05-16
+
+Release-hardening patch for the clean-break architecture release.
+
+### Fixed
+- Aligns `uv.lock` package metadata with `pyproject.toml` version `0.13.2`.
+- Clears the remaining Ruff findings in the test and message-factory surfaces.
+- Updates current plugin and persistence docs to use canonical `inbox_id` and `External Webhook Source` language instead of old `tenant_id` / provider wording.
+
 ## [0.13.1] - 2026-05-16
 
 Centralizes Wappa's public import surface into stable, shallow paths so host applications no longer need to reach into internal module structure. Adds a `wappa/sse/` convenience package and populates `wappa/messaging`, `wappa/persistence`, `wappa/webhooks`, `wappa/api`, and `wappa/schemas` with the re-exports that Symphonai (and future consumers) actually use.

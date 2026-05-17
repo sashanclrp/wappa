@@ -37,7 +37,7 @@ cron_plugin = CronPlugin(event_handler=handler)
 cron_plugin.add_cron(
     cron_id="daily_report",
     expr="0 9 * * *",
-    tenant_id="acme",
+    inbox_id="508386009032748",
     user_id="5551234567",
     tags=["reports"],
     payload={"report_type": "summary"},
@@ -58,7 +58,7 @@ cron_plugin = (
     .add_cron(cron_id="hourly_sync", expr="0 * * * *", tags=["sync"])
     .add_cron(cron_id="daily_cleanup", expr="0 3 * * *", tags=["maintenance"])
     .add_cron(cron_id="weekly_report", expr="0 9 * * 1",
-              tenant_id="acme", user_id="5551234567", tags=["reports"])
+              inbox_id="508386009032748", user_id="5551234567", tags=["reports"])
 )
 app.add_plugin(cron_plugin)
 ```
@@ -79,7 +79,7 @@ app.add_plugin(cron_plugin)
 |---|---|---|---|
 | `cron_id` | `str` | (required) | Unique job name — primary dispatch key in `process_cron_event()` |
 | `expr` | `str` | (required) | Cron expression (e.g., `"0 9 * * *"`) |
-| `tenant_id` | `str \| None` | `None` | Tenant scope — if set, full context (messenger, cache, db) available |
+| `inbox_id` | `str \| None` | `None` | Inbox scope — if set, full context (messenger, cache, db) available |
 | `user_id` | `str \| None` | `None` | User scope — for messenger/cache targeting |
 | `tags` | `list[str] \| None` | `None` | Tags for secondary filtering |
 | `payload` | `dict \| None` | `None` | Static data available in the CronEvent |
@@ -116,9 +116,9 @@ Standard 5-field format:
 
 | Registration | Infrastructure Available |
 |-------------|------------------------|
-| `tenant_id` + `user_id` set | `self.messenger`, `self.cache_factory`, `self.db` |
-| `tenant_id` set, no `user_id` | `self.db` only (messenger/cache require user_id) |
-| No `tenant_id` (system cron) | `self.db` only (no tenant isolation) |
+| `inbox_id` + `user_id` set | `self.messenger`, `self.cache_factory`, `self.db` |
+| `inbox_id` set, no `user_id` | `self.db` only (messenger/cache require user_id) |
+| No `inbox_id` (system cron) | `self.db` only (no Inbox scope) |
 
 Always check availability before using:
 
@@ -139,7 +139,7 @@ class CronEvent(BaseModel):
     cron_id: str              # Unique job name — primary dispatch key
     cron_expr: str            # Cron expression ("0 9 * * *")
     tags: list[str]           # Tags from registration
-    tenant_id: str | None     # Tenant scope (None for system crons)
+    inbox_id: str | None      # Inbox scope (None for system crons)
     user_id: str | None       # User scope (None if not set)
     payload: dict[str, Any]   # Static data from registration
     metadata: dict[str, Any]  # Runtime info (actual_time)
@@ -174,7 +174,7 @@ async def process_cron_event(self, event: CronEvent):
 cron_plugin.add_cron(
     cron_id="send_report",
     expr="0 9 * * *",
-    tenant_id="acme",
+    inbox_id="508386009032748",
     user_id="5551234567",
     payload={"report_type": "daily", "format": "pdf"},
 )
@@ -205,7 +205,7 @@ fastapi-crons fires job on schedule
     │
     └── CronPlugin._fire_cron_event(registration)
         ├── Creates CronEvent from registration data + timestamp
-        ├── If tenant_id: WappaContextFactory → full context
+        ├── If inbox_id: WappaContextFactory → full context
         │   Else: WappaContextFactory → db-only context
         ├── handler.with_context(...) → cloned handler
         └── CronEventDispatcher → handler.process_cron_event(event)

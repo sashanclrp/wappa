@@ -158,37 +158,37 @@ RedisPubSubPlugin(
 
 ### How It Works
 
-The notification contains tenant information:
+The notification contains Inbox information:
 
 ```python
-notification.tenant    # "mimeia", "acme", "company-x", etc.
+notification.inbox_id  # "508386009032748"
 notification.user_id   # "5511999887766"
 notification.platform  # "whatsapp"
 ```
 
 The subscriber:
 
-1. **Subscribes to ALL tenants**: Pattern `wappa:notify:*:*:*`
-2. **Creates messengers dynamically**: One per tenant, cached for reuse
-3. **Uses tenant-specific credentials**: Each tenant uses its own WhatsApp credentials
+1. **Subscribes to ALL Inboxes**: Pattern `wappa:notify:*:*:*`
+2. **Creates messengers dynamically**: One per Inbox, cached for reuse
+3. **Uses Inbox-specific credentials**: Each Inbox uses its own WhatsApp credentials
 
 ```python
 # From app/pubsub_listener.py
-messenger_cache = {}  # Cache messengers by tenant {tenant_id: IMessenger}
+messenger_cache = {}  # Cache messengers by Inbox {inbox_id: IMessenger}
 
 async for notification in subscribe(redis, patterns=["wappa:notify:*:*:*"]):
-    tenant = notification.tenant
+    inbox_id = notification.inbox_id
 
-    # MULTI-TENANT: Get or create messenger for this tenant
-    if tenant not in messenger_cache:
-        logger.info(f"🔨 Creating new messenger for tenant: {tenant}")
-        messenger_cache[tenant] = await messenger_factory.create_messenger(
+    # MULTI-INBOX: Get or create messenger for this Inbox
+    if inbox_id not in messenger_cache:
+        logger.info(f"Creating new messenger for inbox: {inbox_id}")
+        messenger_cache[inbox_id] = await messenger_factory.create_messenger(
             platform=PlatformType(platform),
-            tenant_id=tenant,  # Use tenant-specific credentials
+            inbox_id=inbox_id,
         )
 
-    # Use the tenant-specific messenger
-    active_messenger = messenger_cache[tenant]
+    # Use the Inbox-specific messenger
+    active_messenger = messenger_cache[inbox_id]
     await send_event_notification(active_messenger, user_id, event_type, data)
 ```
 

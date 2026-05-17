@@ -65,7 +65,7 @@ Optional query-string filters on `/api/sse/events`:
 
 | Parameter | Example | Description |
 |---|---|---|
-| `tenant_id` | `mimeia` | Receive events for a specific tenant only |
+| `inbox_id` | `508386009032748` | Receive events for a specific Inbox only |
 | `user_id` | `573001112233` | Receive events for a specific user only |
 | `event_types` | `incoming_message,status_change` | Comma-separated list of event types to subscribe to |
 
@@ -114,7 +114,7 @@ Every SSE message uses this envelope:
   "event_id": "uuid",
   "event_type": "incoming_message",
   "timestamp": "2026-03-06T23:10:11.123456+00:00",
-  "tenant_id": "mimeia",
+  "inbox_id": "508386009032748",
   "user_id": "573001112233",
   "platform": "whatsapp",
   "source": "webhook",
@@ -147,34 +147,24 @@ All SSE events support an optional `metadata` field in the envelope. This allows
 
 Wappa treats metadata as **opaque** -- it never validates or transforms the contents. The application owns the schema.
 
-### Setting metadata at construction time
+### Setting metadata from host code
 
-Pass `metadata` when creating the plugin. It flows to all handler wrappers and the messenger wrapper automatically:
+Call `update_metadata()` from code that is running inside an active event scope:
 
 ```python
-SSEEventsPlugin(
-    metadata={
-        "conversation_id": str(conversation_id),
-        "chat_id": str(chat_id),
-        "run_id": None,
-    }
+update_metadata(
+    conversation_id=str(conversation_id),
+    chat_id=str(chat_id),
+    run_id=None,
 )
 ```
 
 ### Updating metadata at runtime
 
-Use `update_metadata()` to merge new values into the existing metadata dict. This updates all active SSE handlers (incoming, status, error) at once:
+Use `update_metadata()` to merge new values into the active event scope:
 
 ```python
-# On the plugin instance
-sse_plugin.update_metadata(run_id=str(run_id))
-```
-
-Individual SSE wrappers also expose `update_metadata()`:
-
-```python
-# On the messenger wrapper directly
-messenger.update_metadata(run_id=str(run_id))
+update_metadata(run_id=str(run_id))
 ```
 
 ### Resulting envelope
@@ -184,7 +174,7 @@ messenger.update_metadata(run_id=str(run_id))
   "event_id": "...",
   "event_type": "outgoing_bot_message",
   "timestamp": "...",
-  "tenant_id": "mimeia",
+  "inbox_id": "508386009032748",
   "user_id": "573001112233",
   "platform": "whatsapp",
   "source": "bot_messenger",
@@ -250,11 +240,11 @@ source.onerror = (err) => {
 // source.close();
 ```
 
-Filter by tenant/user from frontend:
+Filter by Inbox/User from frontend:
 
 ```javascript
 const scoped = new URL("/api/sse/events", window.location.origin);
-scoped.searchParams.set("tenant_id", "mimeia");
+scoped.searchParams.set("inbox_id", "508386009032748");
 scoped.searchParams.set("user_id", "573001112233");
 const source = new EventSource(scoped.toString());
 ```

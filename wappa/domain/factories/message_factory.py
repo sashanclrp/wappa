@@ -235,13 +235,10 @@ class WhatsAppMessageFactory(MessageFactory):
                 if not body or len(body) > 4096:
                     return False
 
-            if (
+            return not (
                 message_payload.get("status") == "read"
                 and "message_id" not in message_payload
-            ):
-                return False
-
-            return True
+            )
         except (KeyError, TypeError):
             return False
 

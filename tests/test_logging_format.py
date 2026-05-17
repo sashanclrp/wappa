@@ -16,7 +16,6 @@ import logging
 from io import StringIO
 from unittest.mock import patch
 
-import pytest
 from rich.logging import RichHandler
 
 from wappa.core.logging.logger import (

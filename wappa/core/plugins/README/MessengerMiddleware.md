@@ -191,20 +191,20 @@ class RetryMiddleware(MessengerMiddleware):
 builder.add_messenger_middleware(RetryMiddleware(attempts=3), priority=PRIORITY_RELIABILITY)
 ```
 
-### Reading request identity
+### Reading event identity
 
-Middleware is **app-scoped** (constructed once at `configure()` time) and shared across requests. Per-request identity — tenant, user, BSUID, phone — comes from the active `SSEEventContext`, which the framework entry points (webhook / API / expiry) set for every request.
+Middleware is **app-scoped** (constructed once at `configure()` time) and shared across requests. Per-event identity — Inbox, User, BSUID, phone — comes from the active `SSEEventContext`, which the framework entry points (webhook / API / expiry) set for every event.
 
 ```python
 from wappa.core.sse.context import get_sse_context
 
-class TenantAwareMiddleware(MessengerMiddleware):
-    name = "tenant_aware"
+class InboxAwareMiddleware(MessengerMiddleware):
+    name = "inbox_aware"
 
     async def handle(self, invocation, call_next):
         ctx = get_sse_context()
-        tenant = ctx.tenant_id if ctx else "unknown"
-        # ... use tenant without per-request construction
+        inbox_id = ctx.inbox_id if ctx else "unknown"
+        # ... use inbox_id without per-event construction
         return await call_next(invocation)
 ```
 

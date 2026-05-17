@@ -90,15 +90,12 @@ from wappa import Wappa, WappaEventHandler
 class MyHandler(WappaEventHandler):
     async def handle_message(self, message):
         # cache_factory is injected automatically per request
-        user_cache = self.cache_factory.create_user_cache(
-            tenant_id=self.tenant_id,
-            user_id=self.user_id,
-        )
+        user_cache = self.cache_factory.create_user_cache()
         await user_cache.set("last_seen", "2026-03-09")
         value = await user_cache.get("last_seen")
 ```
 
-The `cache_factory` attribute is set to `None` until the request context is bound. When Redis is the active cache backend, the factory creates Redis-backed cache instances scoped to the current tenant and user.
+The `cache_factory` attribute is set to `None` until the Dispatch Context is bound. When Redis is the active cache backend, the factory creates Redis-backed cache instances scoped to the current Inbox and User.
 
 ## Health monitoring
 
