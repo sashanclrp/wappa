@@ -13,10 +13,10 @@ it handles ONLY data extraction with no side effects.
 
 from __future__ import annotations
 
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 
-def extract_media_data(webhook: IncomingMessageWebhook) -> dict:
+def extract_media_data(webhook: InboundMessageWebhook) -> dict:
     """
     Extract media metadata from webhook for media messages.
 
@@ -84,7 +84,7 @@ def extract_media_data(webhook: IncomingMessageWebhook) -> dict:
     return media_data
 
 
-def extract_json_content(webhook: IncomingMessageWebhook) -> dict | None:
+def extract_json_content(webhook: InboundMessageWebhook) -> dict | None:
     """
     Extract structured JSON content for special message types.
 
@@ -173,7 +173,7 @@ def _extract_location_json(message) -> dict:
     return json_content
 
 
-def _extract_interactive_json(webhook: IncomingMessageWebhook, message) -> dict:
+def _extract_interactive_json(webhook: InboundMessageWebhook, message) -> dict:
     """Extract JSON content for interactive messages."""
     json_content = {
         "message_type": "interactive",
@@ -213,7 +213,7 @@ def _extract_reaction_json(message) -> dict:
     return json_content
 
 
-def extract_contact_data(webhook: IncomingMessageWebhook) -> dict:
+def extract_contact_data(webhook: InboundMessageWebhook) -> dict:
     """
     Extract contact information from contact messages.
 
@@ -246,7 +246,7 @@ def extract_contact_data(webhook: IncomingMessageWebhook) -> dict:
     return contact_data
 
 
-def determine_message_kind(webhook: IncomingMessageWebhook) -> str:
+def determine_message_kind(webhook: InboundMessageWebhook) -> str:
     """
     Determine message kind from webhook.
 

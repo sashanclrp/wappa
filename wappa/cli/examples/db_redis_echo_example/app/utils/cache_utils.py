@@ -16,7 +16,7 @@ from uuid import uuid4
 
 from sqlmodel import select
 
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 from ..models.cache_models import ConversationCache
 from ..models.database_models import Chat, Platform
@@ -47,7 +47,7 @@ class CacheHelper:
         self,
         user_cache,
         user_id: str,
-        webhook: IncomingMessageWebhook,
+        webhook: InboundMessageWebhook,
     ) -> ConversationCache:
         """
         Get or create conversation in Redis cache.
@@ -83,7 +83,7 @@ class CacheHelper:
         return conversation
 
     async def _get_or_create_chat(
-        self, user_id: str, webhook: IncomingMessageWebhook
+        self, user_id: str, webhook: InboundMessageWebhook
     ) -> str:
         """
         Get or create chat record in database.

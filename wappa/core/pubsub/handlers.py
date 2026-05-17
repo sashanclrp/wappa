@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from ...domain.interfaces.pubsub_interface import PubSubEventType
 from ...persistence.redis.redis_handler.pubsub import RedisPubSubPublisher
-from ...webhooks import IncomingMessageWebhook, StatusWebhook
+from ...webhooks import InboundMessageWebhook, StatusWebhook
 from ..events.default_handlers import (
     DefaultMessageHandler,
     DefaultStatusHandler,
@@ -118,7 +118,7 @@ class PubSubMessageHandler(DefaultMessageHandler):
                 mask_sensitive_data=mask_sensitive_data,
             )
 
-    async def log_incoming_message(self, webhook: IncomingMessageWebhook) -> None:
+    async def log_incoming_message(self, webhook: InboundMessageWebhook) -> None:
         """Log message and publish incoming_message notification."""
         await super().log_incoming_message(webhook)
 

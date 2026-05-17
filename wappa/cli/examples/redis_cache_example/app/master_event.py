@@ -14,7 +14,7 @@ This module defines the main WappaEventHandler that:
 from typing import TYPE_CHECKING, Any
 
 from wappa import WappaEventHandler
-from wappa.webhooks import ErrorWebhook, IncomingMessageWebhook, StatusWebhook
+from wappa.webhooks import ErrorWebhook, InboundMessageWebhook, StatusWebhook
 
 if TYPE_CHECKING:
     from wappa.domain.events.api_message_event import APIMessageEvent
@@ -54,7 +54,7 @@ class RedisCacheExampleHandler(WappaEventHandler):
             "🎯 RedisCacheExampleHandler initialized - ready for SOLID architecture setup"
         )
 
-    async def process_message(self, webhook: IncomingMessageWebhook) -> None:
+    async def process_message(self, webhook: InboundMessageWebhook) -> None:
         """
         Main message processing method required by WappaEventHandler.
 
@@ -260,7 +260,7 @@ class RedisCacheExampleHandler(WappaEventHandler):
             raise
 
     async def _execute_score_pipeline(
-        self, webhook: IncomingMessageWebhook
+        self, webhook: InboundMessageWebhook
     ) -> dict[str, Any]:
         """
         Execute the score module processing pipeline.
@@ -350,7 +350,7 @@ class RedisCacheExampleHandler(WappaEventHandler):
             }
 
     async def _send_error_response(
-        self, webhook: IncomingMessageWebhook, error_details: str
+        self, webhook: InboundMessageWebhook, error_details: str
     ) -> None:
         """
         Send user-friendly error response when processing fails.

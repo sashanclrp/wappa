@@ -189,7 +189,7 @@ class BaseWebhookProcessor(ABC):
         """Get the handler for a specific message type."""
         return self._message_type_handlers.get(message_type)
 
-    # Legacy _process_incoming_messages method removed - Universal Webhook Interface handles this via IncomingMessageWebhook
+    # Legacy _process_incoming_messages method removed - Universal Webhook Interface handles this via InboundMessageWebhook
 
     # Legacy _process_status_updates method removed - Universal Webhook Interface handles this via StatusWebhook
 

@@ -13,7 +13,8 @@ Terms specific to the plugin system. Shared kernel terms (`inbox_id`, Host Appli
 | **messenger middleware** | A cross-cutting async callable that wraps every outbound `IMessenger` call. Registered via `add_messenger_middleware` with a priority band. |
 | **SSEEventHub** | The in-process fanout broker owned by `SSEEventsPlugin` that holds per-client async queues and distributes real-time events to SSE subscribers. |
 | **expiry listener** | A long-running background `asyncio.Task` started by `ExpiryPlugin` that subscribes to Redis keyspace expiry notifications and dispatches expiry actions. |
-| **processor mode** | The v2 operating mode of `WebhookPlugin` in which an `IWebhookProcessor` handles parsing and user resolution, giving the handler full Wappa infrastructure context. |
-| **raw handler mode** | The v1 operating mode of `WebhookPlugin` in which a plain callable `(request, inbox_id, provider) -> dict` processes the request with no Wappa infrastructure. |
+| **External Webhook Source** | A non-messaging system that sends webhooks into Wappa, such as MercadoPago, Stripe, Wompi, GitHub, or a CRM. |
+| **processor mode** | The operating mode of `WebhookPlugin` in which an `IWebhookProcessor` handles an External Webhook Source and produces an `ExternalEvent`. |
+| **raw handler mode** | Legacy operating mode of `WebhookPlugin` in which a plain callable processes the request with no Wappa infrastructure. Target for removal in the clean-break compatibility cleanup. |
 | **PubSub channel** | The Redis channel pattern (`wappa:notify:{inbox_id}:{user_id}:{event_type}`) used by `RedisPubSubPlugin` to broadcast real-time event notifications. |
 | **AuthStrategy** | An abstract strategy object encapsulating a single authentication scheme (Bearer, Basic, JWT, or custom) that `AuthPlugin` passes to `AuthMiddleware`. |

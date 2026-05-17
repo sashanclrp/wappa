@@ -7,7 +7,7 @@ This module handles all state-related commands including:
 - WAPPA state message processing
 """
 
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 from ..models.redis_demo_models import StateHandler
 from ..utils.cache_utils import get_cache_ttl
@@ -24,7 +24,7 @@ class StateCommandsScore(ScoreBase):
     on state management and command processing.
     """
 
-    async def can_handle(self, webhook: IncomingMessageWebhook) -> bool:
+    async def can_handle(self, webhook: InboundMessageWebhook) -> bool:
         """
         This score handles /WAPPA, /EXIT commands and messages in WAPPA state.
 
@@ -52,7 +52,7 @@ class StateCommandsScore(ScoreBase):
         except Exception:
             return False
 
-    async def process(self, webhook: IncomingMessageWebhook) -> bool:
+    async def process(self, webhook: InboundMessageWebhook) -> bool:
         """
         Process state commands and WAPPA state messages.
 
@@ -90,7 +90,7 @@ class StateCommandsScore(ScoreBase):
             return False
 
     async def _handle_wappa_activation(
-        self, webhook: IncomingMessageWebhook, user_id: str
+        self, webhook: InboundMessageWebhook, user_id: str
     ) -> None:
         """
         Handle /WAPPA command activation.
@@ -141,7 +141,7 @@ class StateCommandsScore(ScoreBase):
             raise
 
     async def _handle_wappa_exit(
-        self, webhook: IncomingMessageWebhook, user_id: str
+        self, webhook: InboundMessageWebhook, user_id: str
     ) -> None:
         """
         Handle /EXIT command deactivation.
@@ -203,7 +203,7 @@ class StateCommandsScore(ScoreBase):
             raise
 
     async def _handle_wappa_state_message(
-        self, webhook: IncomingMessageWebhook, user_id: str, message_text: str
+        self, webhook: InboundMessageWebhook, user_id: str, message_text: str
     ) -> None:
         """
         Handle regular messages when user is in WAPPA state.

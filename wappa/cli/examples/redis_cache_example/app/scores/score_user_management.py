@@ -7,7 +7,7 @@ This module handles all user-related operations including:
 - User activity tracking
 """
 
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 from ..models.redis_demo_models import User
 from ..utils.cache_utils import get_cache_ttl
@@ -23,7 +23,7 @@ class UserManagementScore(ScoreBase):
     on user-related business logic.
     """
 
-    async def can_handle(self, webhook: IncomingMessageWebhook) -> bool:
+    async def can_handle(self, webhook: InboundMessageWebhook) -> bool:
         """
         This score handles all webhooks since every message needs user management.
 
@@ -35,7 +35,7 @@ class UserManagementScore(ScoreBase):
         """
         return True
 
-    async def process(self, webhook: IncomingMessageWebhook) -> bool:
+    async def process(self, webhook: InboundMessageWebhook) -> bool:
         """
         Process user data extraction and caching.
 
@@ -164,7 +164,7 @@ class UserManagementScore(ScoreBase):
             return None
 
     async def _send_welcome_message(
-        self, webhook: IncomingMessageWebhook, user: User, user_id: str
+        self, webhook: InboundMessageWebhook, user: User, user_id: str
     ) -> None:
         """
         Send welcome/acknowledgment message based on user's message count.

@@ -11,7 +11,8 @@ Terms specific to this bounded context. Shared kernel terms (`inbox_id`, `user_i
 | **Interactive Message** | A WhatsApp-native message type that renders actionable UI: reply-button menus, list menus, or CTA-URL buttons. Owned by `WhatsAppInteractiveHandler`. |
 | **Template** | A pre-approved WhatsApp Business message structure. Three variants exist: text-only, media-header, and location-header. Template category (marketing vs. utility/service) controls which API endpoint is used. |
 | **Marketing Override** | An optional flag (`override: bool`) that forces a marketing template through the `marketing_messages` endpoint instead of the default `messages` endpoint. |
-| **MessageResult** | The uniform return type for every outbound send operation. Carries `success`, `message_id`, resolved recipient fields, `inbox_id` (stored as `tenant_id` in current code), platform, and optional error details. |
+| **MessageResult** | The uniform return type for every outbound send operation. Carries `success`, `message_id`, resolved recipient fields, `inbox_id`, platform, and optional error details. |
+| **Messenger** | Wappa's outbound message interface for Host Applications. Keep this as the public seam; do not introduce smaller public seams such as `TextMessenger` or `MediaMessenger` until real platform adapters or testing pressure justify it. |
 | **Specialized Message** | Contact cards, locations sent as a point-on-map, and location-request messages. Owned by `WhatsAppSpecializedHandler`. |
 | **Template Info Service** | A read-only WABA-level helper that queries the Graph API for template metadata — listing, lookup by name, lookup by ID, and namespace resolution. Does not send messages. |
 | **WhatsApp Management URL** | Graph API endpoints scoped to the WhatsApp Business Account (WABA ID), used exclusively for template management read operations. Separate from per-inbox messaging endpoints. |

@@ -18,7 +18,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 from ..models.cache_models import CachedMessage
 from ..utils.cache_utils import CacheHelper
@@ -54,7 +54,7 @@ class MessageHandlers:
         self.cache_helper = CacheHelper(cache_factory)
         self.logger = logger
 
-    async def handle_message(self, webhook: IncomingMessageWebhook) -> dict:
+    async def handle_message(self, webhook: InboundMessageWebhook) -> dict:
         """
         Handle regular message: cache in Redis and echo back.
 
@@ -145,7 +145,7 @@ class MessageHandlers:
 
     def _build_echo_response(
         self,
-        webhook: IncomingMessageWebhook,
+        webhook: InboundMessageWebhook,
         message_text: str,
         media_data: dict,
         message_count: int,
@@ -325,7 +325,7 @@ class MessageHandlers:
 
 # Convenience function for direct use
 async def handle_message_by_type(
-    webhook: IncomingMessageWebhook,
+    webhook: InboundMessageWebhook,
     messenger,
     cache_factory,
     logger,
@@ -334,7 +334,7 @@ async def handle_message_by_type(
     Handle message based on its type (convenience function).
 
     Args:
-        webhook: IncomingMessageWebhook to process
+        webhook: InboundMessageWebhook to process
         messenger: IMessenger instance
         cache_factory: Cache factory
         logger: Logger instance

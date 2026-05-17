@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from wappa.domain.interfaces.messaging_interface import IMessenger
     from wappa.webhooks import (
         ErrorWebhook,
-        IncomingMessageWebhook,
+        InboundMessageWebhook,
         StatusWebhook,
         SystemWebhook,
     )
@@ -183,7 +183,7 @@ class WappaEventHandler(ABC):
 
         return handler
 
-    async def handle_message(self, webhook: "IncomingMessageWebhook") -> None:
+    async def handle_message(self, webhook: "InboundMessageWebhook") -> None:
         """
         Handle incoming message webhook using Template Method pattern.
 
@@ -193,7 +193,7 @@ class WappaEventHandler(ABC):
         3. Post-processing: Optional cleanup/metrics
 
         Args:
-            webhook: IncomingMessageWebhook containing the message data
+            webhook: InboundMessageWebhook containing the message data
         """
         # 1. Pre-processing: Framework logging (always happens)
         await self._default_message_handler.log_incoming_message(webhook)
@@ -205,7 +205,7 @@ class WappaEventHandler(ABC):
         await self._default_message_handler.post_process_message(webhook)
 
     @abstractmethod
-    async def process_message(self, webhook: "IncomingMessageWebhook") -> None:
+    async def process_message(self, webhook: "InboundMessageWebhook") -> None:
         """
         Process incoming message webhook with custom business logic.
 
@@ -213,7 +213,7 @@ class WappaEventHandler(ABC):
         The framework handles logging automatically before calling this method.
 
         Args:
-            webhook: IncomingMessageWebhook containing the message data
+            webhook: InboundMessageWebhook containing the message data
         """
         pass
 

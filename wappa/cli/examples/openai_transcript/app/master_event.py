@@ -3,7 +3,7 @@ from openai import AsyncOpenAI
 from wappa import WappaEventHandler
 from wappa.core.config import settings
 from wappa.core.logging import get_logger
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 from .openai_utils import AudioProcessingService
 
@@ -11,7 +11,7 @@ logger = get_logger("TranscriptEventHandler")
 
 
 class TranscriptEventHandler(WappaEventHandler):
-    async def process_message(self, webhook: IncomingMessageWebhook):
+    async def process_message(self, webhook: InboundMessageWebhook):
         message_type = webhook.get_message_type_name()
 
         await self.messenger.mark_as_read(

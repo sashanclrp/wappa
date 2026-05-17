@@ -13,7 +13,7 @@ This handler shows:
 
 from wappa import WappaEventHandler
 from wappa.core.logging import get_logger
-from wappa.webhooks import ErrorWebhook, IncomingMessageWebhook, StatusWebhook
+from wappa.webhooks import ErrorWebhook, InboundMessageWebhook, StatusWebhook
 
 logger = get_logger(__name__)
 
@@ -32,7 +32,7 @@ class SimpleEchoHandler(WappaEventHandler):
         self._message_count = 0
         logger.info("🔄 SimpleEchoHandler initialized - ready to echo messages")
 
-    async def process_message(self, webhook: IncomingMessageWebhook) -> None:
+    async def process_message(self, webhook: InboundMessageWebhook) -> None:
         """
         Process incoming messages with simple echo functionality.
 
@@ -70,7 +70,7 @@ class SimpleEchoHandler(WappaEventHandler):
 
     async def _handle_message_by_type(
         self,
-        webhook: IncomingMessageWebhook,
+        webhook: InboundMessageWebhook,
         user_id: str,
         message_text: str,
         message_type: str,
@@ -99,7 +99,7 @@ class SimpleEchoHandler(WappaEventHandler):
             logger.error(f"❌ Error handling {message_type} message: {e}")
 
     async def _handle_text_message(
-        self, webhook: IncomingMessageWebhook, user_id: str, message_text: str
+        self, webhook: InboundMessageWebhook, user_id: str, message_text: str
     ) -> None:
         """Handle text messages with simple echo."""
 
@@ -129,7 +129,7 @@ class SimpleEchoHandler(WappaEventHandler):
             logger.error(f"❌ Text echo failed: {result.error}")
 
     async def _handle_media_message(
-        self, webhook: IncomingMessageWebhook, user_id: str, message_type: str
+        self, webhook: InboundMessageWebhook, user_id: str, message_type: str
     ) -> None:
         """Handle media messages."""
 
@@ -149,7 +149,7 @@ class SimpleEchoHandler(WappaEventHandler):
             logger.error(f"❌ {message_type} response failed: {result.error}")
 
     async def _handle_location_message(
-        self, webhook: IncomingMessageWebhook, user_id: str
+        self, webhook: InboundMessageWebhook, user_id: str
     ) -> None:
         """Handle location messages."""
 
@@ -169,7 +169,7 @@ class SimpleEchoHandler(WappaEventHandler):
             logger.error(f"❌ Location response failed: {result.error}")
 
     async def _handle_contact_message(
-        self, webhook: IncomingMessageWebhook, user_id: str
+        self, webhook: InboundMessageWebhook, user_id: str
     ) -> None:
         """Handle contact messages."""
 
@@ -189,7 +189,7 @@ class SimpleEchoHandler(WappaEventHandler):
             logger.error(f"❌ Contact response failed: {result.error}")
 
     async def _handle_other_message(
-        self, webhook: IncomingMessageWebhook, user_id: str, message_type: str
+        self, webhook: InboundMessageWebhook, user_id: str, message_type: str
     ) -> None:
         """Handle other message types."""
 

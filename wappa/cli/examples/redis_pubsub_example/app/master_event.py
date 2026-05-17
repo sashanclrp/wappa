@@ -13,7 +13,7 @@ The handler automatically replies to messages, triggering the bot_reply event.
 from typing import TYPE_CHECKING
 
 from wappa import WappaEventHandler
-from wappa.webhooks import ErrorWebhook, IncomingMessageWebhook, StatusWebhook
+from wappa.webhooks import ErrorWebhook, InboundMessageWebhook, StatusWebhook
 
 if TYPE_CHECKING:
     from wappa.domain.events.api_message_event import APIMessageEvent
@@ -36,7 +36,7 @@ class PubSubExampleHandler(WappaEventHandler):
         self._message_count = 0
         self.logger.info("PubSubExampleHandler initialized")
 
-    async def process_message(self, webhook: IncomingMessageWebhook) -> None:
+    async def process_message(self, webhook: InboundMessageWebhook) -> None:
         """
         Process incoming messages and send auto-reply.
 

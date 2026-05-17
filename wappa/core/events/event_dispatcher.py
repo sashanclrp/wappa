@@ -5,7 +5,7 @@ from wappa.core.logging.logger import get_logger
 from wappa.webhooks import (
     CustomWebhook,
     ErrorWebhook,
-    IncomingMessageWebhook,
+    InboundMessageWebhook,
     StatusWebhook,
     SystemWebhook,
 )
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 _WEBHOOK_EMOJI = {
-    "IncomingMessageWebhook": "💬",
+    "InboundMessageWebhook": "💬",
     "StatusWebhook": "📊",
     "ErrorWebhook": "🚨",
     "SystemWebhook": "⚙️",
@@ -81,7 +81,7 @@ class WappaEventDispatcher:
             )
 
             match universal_webhook:
-                case IncomingMessageWebhook():
+                case InboundMessageWebhook():
                     result = await self._handle_message_webhook(
                         universal_webhook, handler
                     )
@@ -128,7 +128,7 @@ class WappaEventDispatcher:
 
     async def _handle_message_webhook(
         self,
-        webhook: "IncomingMessageWebhook",
+        webhook: "InboundMessageWebhook",
         handler: "WappaEventHandler",
     ) -> dict[str, Any]:
         try:

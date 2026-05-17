@@ -1,9 +1,8 @@
 """
 Universal webhook routes for the Wappa framework.
 
-Provides webhook endpoints that delegate to WebhookController for business logic.
-Routes handle only HTTP concerns (validation, responses) while controller
-handles dependency injection and webhook processing.
+Provides webhook endpoints that delegate accepted payloads to the Inbound Runtime.
+Routes handle only HTTP concerns while the controller adapts app-state dependencies.
 """
 
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -22,9 +21,6 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
     """
     Create webhook router with controller delegation.
 
-    This factory function creates the webhook routes that delegate all business logic
-    to the WebhookController, maintaining clean separation of concerns.
-
     Args:
         event_dispatcher: WappaEventDispatcher instance with user's event handler
 
@@ -33,6 +29,7 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
     """
     # Create controller instance for this router
     webhook_controller = WebhookController(event_dispatcher)
+    logger = get_logger(__name__)
 
     router = APIRouter(
         prefix="/webhook",
@@ -56,7 +53,7 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         """
         Handle webhook verification (challenge-response) for messaging platforms.
 
-        Delegates all business logic to WebhookController while handling HTTP concerns.
+        Delegates verification policy to WebhookController while handling HTTP concerns.
 
         Args:
             request: FastAPI request object
@@ -68,7 +65,6 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         Returns:
             PlainTextResponse with challenge string if verification succeeds
         """
-        # Delegate to controller (handles business logic and inbox extraction)
         return await webhook_controller.verify_webhook(
             request=request,
             platform=platform,
@@ -92,7 +88,6 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         WhatsApp and other platforms send verification requests to the same URL
         they use for webhook processing. This handles GET requests with verification.
         """
-        # Delegate to controller (inbox_id will be extracted from URL by middleware)
         return await webhook_controller.verify_webhook(
             request=request,
             platform=platform,
@@ -110,8 +105,7 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         """
         Process incoming webhook payload from a messaging platform.
 
-        Delegates business logic to WebhookController while handling HTTP concerns.
-        The controller creates per-request dependencies with correct inbox isolation.
+        Parses JSON and delegates accepted payloads to the Inbound Runtime.
 
         Args:
             request: FastAPI request object
@@ -123,13 +117,13 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         """
         try:
             payload = await request.json()
-        except Exception as e:
-            logger = get_logger(__name__)
-            logger.error(f"Failed to parse webhook payload: {e}")
-            raise HTTPException(status_code=400, detail="Invalid JSON payload") from e
+        except Exception as exc:
+            logger.error("Failed to parse webhook payload: %s", exc)
+            raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
 
         return await webhook_controller.process_webhook(
             request=request,
+            inbox_id=inbox_id,
             platform=platform,
             payload=payload,
         )
@@ -153,15 +147,14 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         Returns:
             Dict with webhook status information
         """
-        logger = get_logger(__name__)
-        logger.info(f"Status check for {platform} webhook - inbox: {inbox_id}")
+        logger.info("Status check for %s webhook - inbox: %s", platform, inbox_id)
 
         try:
             platform_type = PlatformType(platform.lower())
-        except ValueError as e:
+        except ValueError as exc:
             raise HTTPException(
                 status_code=400, detail=f"Unsupported platform: {platform}"
-            ) from e
+            ) from exc
 
         webhook_url = webhook_url_factory.generate_webhook_url(platform_type, inbox_id)
         verify_url = webhook_url_factory.generate_webhook_url(

@@ -11,7 +11,7 @@ from logging import Logger
 
 from wappa.domain.interfaces.cache_factory import ICacheFactory
 from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 
 @dataclass
@@ -89,7 +89,7 @@ class ScoreBase(ABC):
         }
 
     @abstractmethod
-    async def can_handle(self, webhook: IncomingMessageWebhook) -> bool:
+    async def can_handle(self, webhook: InboundMessageWebhook) -> bool:
         """
         Determine if this score can handle the given webhook.
 
@@ -102,7 +102,7 @@ class ScoreBase(ABC):
         pass
 
     @abstractmethod
-    async def process(self, webhook: IncomingMessageWebhook) -> bool:
+    async def process(self, webhook: InboundMessageWebhook) -> bool:
         """
         Process the webhook with this score's business logic.
 
@@ -172,7 +172,7 @@ class ScoreRegistry:
         """Get all registered scores."""
         return self._scores.copy()
 
-    async def find_handler(self, webhook: IncomingMessageWebhook) -> ScoreBase | None:
+    async def find_handler(self, webhook: InboundMessageWebhook) -> ScoreBase | None:
         """
         Find the first score that can handle the webhook.
 

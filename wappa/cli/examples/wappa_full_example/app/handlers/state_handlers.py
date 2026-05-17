@@ -7,7 +7,7 @@ selections, including state validation, response processing, and cleanup.
 
 import time
 
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 from ..models.state_models import ButtonState, ListState, StateType
 from ..models.user_models import UserProfile
@@ -34,7 +34,7 @@ class StateHandlers:
 
     async def handle_button_state_response(
         self,
-        webhook: IncomingMessageWebhook,
+        webhook: InboundMessageWebhook,
         user_profile: UserProfile,
         button_state: ButtonState,
     ) -> dict[str, any]:
@@ -42,7 +42,7 @@ class StateHandlers:
         Handle response when user is in button state.
 
         Args:
-            webhook: IncomingMessageWebhook with user input
+            webhook: InboundMessageWebhook with user input
             user_profile: User profile for tracking
             button_state: Active button state
 
@@ -105,7 +105,7 @@ class StateHandlers:
 
     async def handle_list_state_response(
         self,
-        webhook: IncomingMessageWebhook,
+        webhook: InboundMessageWebhook,
         user_profile: UserProfile,
         list_state: ListState,
     ) -> dict[str, any]:
@@ -113,7 +113,7 @@ class StateHandlers:
         Handle response when user is in list state.
 
         Args:
-            webhook: IncomingMessageWebhook with user input
+            webhook: InboundMessageWebhook with user input
             user_profile: User profile for tracking
             list_state: Active list state
 
@@ -174,7 +174,7 @@ class StateHandlers:
 
     async def _process_button_selection(
         self,
-        webhook: IncomingMessageWebhook,
+        webhook: InboundMessageWebhook,
         user_profile: UserProfile,
         button_state: ButtonState,
         selection_id: str,
@@ -259,7 +259,7 @@ class StateHandlers:
 
     async def _process_list_selection(
         self,
-        webhook: IncomingMessageWebhook,
+        webhook: InboundMessageWebhook,
         user_profile: UserProfile,
         list_state: ListState,
         selection_id: str,
@@ -425,7 +425,7 @@ class StateHandlers:
 
     async def handle_template_example_state(
         self,
-        webhook: IncomingMessageWebhook,
+        webhook: InboundMessageWebhook,
         user_profile: UserProfile,
         state_data: dict[str, any],
     ) -> dict[str, any]:
@@ -438,7 +438,7 @@ class StateHandlers:
         - Other messages → Show reminder
 
         Args:
-            webhook: IncomingMessageWebhook from WhatsApp
+            webhook: InboundMessageWebhook from WhatsApp
             user_profile: User profile from cache
             state_data: State data from cache (template_name, message_id, etc.)
 
@@ -472,7 +472,7 @@ class StateHandlers:
 
     async def _echo_template_example(
         self,
-        webhook: IncomingMessageWebhook,
+        webhook: InboundMessageWebhook,
         user_profile: UserProfile,
         state_data: dict[str, any],
         start_time: float,
@@ -562,7 +562,7 @@ class StateHandlers:
 
     async def _exit_template_example_state(
         self,
-        webhook: IncomingMessageWebhook,
+        webhook: InboundMessageWebhook,
         user_profile: UserProfile,
         state_data: dict[str, any],
         start_time: float,
@@ -626,7 +626,7 @@ class StateHandlers:
 
 # Convenience functions for direct use
 async def handle_user_in_state(
-    webhook: IncomingMessageWebhook,
+    webhook: InboundMessageWebhook,
     user_profile: UserProfile,
     messenger,
     cache_factory,
@@ -636,7 +636,7 @@ async def handle_user_in_state(
     Handle user response when they are in an active state (convenience function).
 
     Args:
-        webhook: IncomingMessageWebhook with user response
+        webhook: InboundMessageWebhook with user response
         user_profile: User profile for tracking
         messenger: IMessenger instance
         cache_factory: Cache factory

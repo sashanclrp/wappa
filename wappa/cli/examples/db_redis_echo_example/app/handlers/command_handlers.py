@@ -16,7 +16,7 @@ from uuid import UUID
 
 from sqlmodel import select
 
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 from ..models.cache_models import ConversationCache
 from ..models.database_models import (
@@ -53,7 +53,7 @@ class CommandHandlers:
         self.logger = logger
 
     async def handle_command(
-        self, webhook: IncomingMessageWebhook, command: str
+        self, webhook: InboundMessageWebhook, command: str
     ) -> dict:
         """
         Route command to appropriate handler method.
@@ -76,7 +76,7 @@ class CommandHandlers:
         self.logger.warning(f"Unsupported command: {command}")
         return {"success": False, "error": f"Unsupported command: {command}"}
 
-    async def handle_close(self, webhook: IncomingMessageWebhook) -> dict:
+    async def handle_close(self, webhook: InboundMessageWebhook) -> dict:
         """
         Close conversation: persist to DB and clear Redis cache.
 
@@ -133,7 +133,7 @@ class CommandHandlers:
             )
             return {"success": False, "error": str(e)}
 
-    async def handle_history(self, webhook: IncomingMessageWebhook) -> dict:
+    async def handle_history(self, webhook: InboundMessageWebhook) -> dict:
         """
         Show message history count from Redis cache.
 

@@ -10,7 +10,7 @@ This module handles all cache statistics operations including:
 
 from datetime import UTC, datetime
 
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 from ..models.redis_demo_models import CacheStats, MessageLog, StateHandler, User
 from ..utils.message_utils import extract_command_from_message, extract_user_data
@@ -26,7 +26,7 @@ class CacheStatisticsScore(ScoreBase):
     on cache performance monitoring and statistics.
     """
 
-    async def can_handle(self, webhook: IncomingMessageWebhook) -> bool:
+    async def can_handle(self, webhook: InboundMessageWebhook) -> bool:
         """
         This score handles /STATS command specifically.
 
@@ -43,7 +43,7 @@ class CacheStatisticsScore(ScoreBase):
         command, _ = extract_command_from_message(message_text.strip())
         return command == "/STATS"
 
-    async def process(self, webhook: IncomingMessageWebhook) -> bool:
+    async def process(self, webhook: InboundMessageWebhook) -> bool:
         """
         Process cache statistics request.
 
@@ -65,7 +65,7 @@ class CacheStatisticsScore(ScoreBase):
             await self._handle_error(e, "cache_statistics_processing")
             return False
 
-    async def _handle_stats_request(self, webhook: IncomingMessageWebhook) -> None:
+    async def _handle_stats_request(self, webhook: InboundMessageWebhook) -> None:
         """
         Handle /STATS command to show cache statistics.
 

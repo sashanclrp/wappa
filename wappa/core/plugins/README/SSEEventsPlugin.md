@@ -129,7 +129,7 @@ The `metadata` field is always present. It is `null` when no metadata was config
 
 ## Payload details
 
-**`incoming_message`** -- `payload` is the normalized `IncomingMessageWebhook` model (`model_dump` JSON), not raw webhook JSON.
+**`incoming_message`** -- `payload` is the normalized `InboundMessageWebhook` model (`model_dump` JSON), not raw webhook JSON.
 
 **`status_change`** -- `payload` is the normalized `StatusWebhook` model (`model_dump` JSON), not raw webhook JSON.
 

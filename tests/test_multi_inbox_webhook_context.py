@@ -1,21 +1,26 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import Any
 
 import httpx
 import pytest
+from fastapi import HTTPException
 
 from wappa.api.controllers.webhook_controller import WebhookController
 from wappa.core.events.event_dispatcher import WappaEventDispatcher
 from wappa.core.events.event_handler import WappaEventHandler
+from wappa.core.inbound import (
+    InboundRuntime,
+    InboundRuntimeDependencies,
+    PayloadInboxMismatchError,
+)
 from wappa.domain.interfaces.inbox_credential_store import (
     IInboxCredentialStore,
     InboxCredentials,
     InboxNotFoundError,
 )
 from wappa.schemas.core.types import PlatformType
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 INBOX_1 = "111111111111111"
 INBOX_2 = "222222222222222"
@@ -93,7 +98,7 @@ class _RecordingHandler(WappaEventHandler):
         super().__init__()
         self.records: list[dict[str, Any]] = []
 
-    async def process_message(self, webhook: IncomingMessageWebhook) -> None:
+    async def process_message(self, webhook: InboundMessageWebhook) -> None:
         assert self.inbox_id is not None
         assert self.user_id is not None
         assert self.messenger is not None
@@ -182,23 +187,16 @@ def _message_payload(
 @pytest.mark.asyncio
 async def test_webhooks_from_multiple_inboxes_get_isolated_handler_contexts() -> None:
     handler = _RecordingHandler()
-    controller = WebhookController(WappaEventDispatcher(handler))
+    runtime = InboundRuntime(WappaEventDispatcher(handler))
     credential_store = _MultiInboxCredentialStore()
     http_session = _RecordingHTTPSession()
-    request = SimpleNamespace(
-        app=SimpleNamespace(
-            state=SimpleNamespace(
-                http_session=http_session,
-                inbox_credential_store=credential_store,
-                messenger_middleware=[],
-                wappa_cache_type="memory",
-            )
-        )
+    dependencies = _runtime_dependencies(
+        credential_store=credential_store,
+        http_session=http_session,
     )
 
-    await controller._process_webhook_async(
-        request=request,
-        platform_type=PlatformType.WHATSAPP,
+    dispatch_context_1 = await runtime.build_dispatch_context(
+        platform=runtime_platform(),
         inbox_id=INBOX_1,
         payload=_message_payload(
             inbox_id=INBOX_1,
@@ -208,10 +206,12 @@ async def test_webhooks_from_multiple_inboxes_get_isolated_handler_contexts() ->
             message_id="wamid.inbox1",
             text="hello inbox 1",
         ),
+        dependencies=dependencies,
     )
-    await controller._process_webhook_async(
-        request=request,
-        platform_type=PlatformType.WHATSAPP,
+    await runtime.dispatch(dispatch_context_1)
+
+    dispatch_context_2 = await runtime.build_dispatch_context(
+        platform=runtime_platform(),
         inbox_id=INBOX_2,
         payload=_message_payload(
             inbox_id=INBOX_2,
@@ -221,7 +221,9 @@ async def test_webhooks_from_multiple_inboxes_get_isolated_handler_contexts() ->
             message_id="wamid.inbox2",
             text="hello inbox 2",
         ),
+        dependencies=dependencies,
     )
+    await runtime.dispatch(dispatch_context_2)
 
     assert handler.records == [
         {
@@ -270,3 +272,89 @@ async def test_webhooks_from_multiple_inboxes_get_isolated_handler_contexts() ->
         "CO.USER111",
         "CO.USER222",
     ]
+
+
+@pytest.mark.asyncio
+async def test_inbound_runtime_rejects_payload_inbox_mismatch() -> None:
+    runtime = InboundRuntime(WappaEventDispatcher(_RecordingHandler()))
+    dependencies = _runtime_dependencies(
+        credential_store=_MultiInboxCredentialStore(),
+        http_session=_RecordingHTTPSession(),
+    )
+
+    with pytest.raises(PayloadInboxMismatchError, match="does not match routed inbox_id"):
+        await runtime.build_dispatch_context(
+            platform=runtime_platform(),
+            inbox_id=INBOX_1,
+            payload=_message_payload(
+                inbox_id=INBOX_2,
+                platform_account_id="2222222222",
+                user_id="CO.USER222",
+                phone_number="573002222222",
+                message_id="wamid.mismatch",
+                text="wrong inbox",
+            ),
+            dependencies=dependencies,
+        )
+
+
+@pytest.mark.asyncio
+async def test_controller_maps_payload_inbox_mismatch_to_bad_request() -> None:
+    controller = WebhookController(WappaEventDispatcher(_RecordingHandler()))
+    request = _controller_request(
+        credential_store=_MultiInboxCredentialStore(),
+        http_session=_RecordingHTTPSession(),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await controller.process_webhook(
+            request=request,
+            inbox_id=INBOX_1,
+            platform="whatsapp",
+            payload=_message_payload(
+                inbox_id=INBOX_2,
+                platform_account_id="2222222222",
+                user_id="CO.USER222",
+                phone_number="573002222222",
+                message_id="wamid.mismatch",
+                text="wrong inbox",
+            ),
+        )
+
+    assert exc_info.value.status_code == 400
+
+
+def runtime_platform() -> PlatformType:
+    return PlatformType.WHATSAPP
+
+
+def _runtime_dependencies(
+    *,
+    credential_store: IInboxCredentialStore,
+    http_session: _RecordingHTTPSession,
+) -> InboundRuntimeDependencies:
+    return InboundRuntimeDependencies(
+        http_session=http_session,
+        inbox_credential_store=credential_store,
+        messenger_middleware=[],
+        cache_type="memory",
+    )
+
+
+def _controller_request(
+    *,
+    credential_store: IInboxCredentialStore,
+    http_session: _RecordingHTTPSession,
+):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        app=SimpleNamespace(
+            state=SimpleNamespace(
+                http_session=http_session,
+                inbox_credential_store=credential_store,
+                messenger_middleware=[],
+                wappa_cache_type="memory",
+            )
+        )
+    )

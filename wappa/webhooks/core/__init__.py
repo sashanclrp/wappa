@@ -25,27 +25,27 @@ from .webhook_interfaces import (
     AdReferralBase,
     BusinessContextBase,
     ConversationBase,
+    CustomWebhook,
     ErrorDetailBase,
     ErrorWebhook,
     ForwardContextBase,
-    # Universal webhook types (note: outgoing webhooks are actually status updates)
-    IncomingMessageWebhook,
-    StatusWebhook,
-    # Base components
+    InboundMessageWebhook,
     InboxBase,
+    StatusWebhook,
+    SystemEventType,
+    SystemWebhook,
     UniversalWebhook,
     UserBase,
 )
 
-# Legacy WebhookEventData and MessageEventData removed - use Universal Webhook Interface
-
 __all__ = [
-    # Universal webhook interfaces
-    "IncomingMessageWebhook",
+    "InboundMessageWebhook",
     "StatusWebhook",
     "ErrorWebhook",
+    "SystemWebhook",
+    "SystemEventType",
+    "CustomWebhook",
     "UniversalWebhook",
-    # Base components
     "InboxBase",
     "UserBase",
     "BusinessContextBase",
@@ -53,7 +53,6 @@ __all__ = [
     "AdReferralBase",
     "ConversationBase",
     "ErrorDetailBase",
-    # Core types
     "PlatformType",
     "MessageType",
     "MessageStatus",
@@ -62,10 +61,8 @@ __all__ = [
     "MediaType",
     "ConversationType",
     "ErrorCode",
-    # Base classes
     "BaseMessage",
     "BaseTextMessage",
     "BaseWebhook",
     "BaseMessageStatus",
-    # Legacy WebhookEventData and MessageEventData removed
 ]

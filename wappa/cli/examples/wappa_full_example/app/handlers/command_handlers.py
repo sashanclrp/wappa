@@ -13,7 +13,7 @@ from wappa.messaging.whatsapp.models.interactive_models import (
     ListSection,
     ReplyButton,
 )
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 from ..models.state_models import ButtonState, ListState, StateType
 from ..models.user_models import UserProfile
@@ -37,13 +37,13 @@ class CommandHandlers:
         self.logger = logger
 
     async def handle_button_command(
-        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+        self, webhook: InboundMessageWebhook, user_profile: UserProfile
     ) -> dict[str, any]:
         """
         Handle /button command - creates interactive button message.
 
         Args:
-            webhook: IncomingMessageWebhook with command
+            webhook: InboundMessageWebhook with command
             user_profile: User profile for tracking
 
         Returns:
@@ -142,13 +142,13 @@ class CommandHandlers:
             return {"success": False, "error": str(e)}
 
     async def handle_list_command(
-        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+        self, webhook: InboundMessageWebhook, user_profile: UserProfile
     ) -> dict[str, any]:
         """
         Handle /list command - creates interactive list message.
 
         Args:
-            webhook: IncomingMessageWebhook with command
+            webhook: InboundMessageWebhook with command
             user_profile: User profile for tracking
 
         Returns:
@@ -265,13 +265,13 @@ class CommandHandlers:
             return {"success": False, "error": str(e)}
 
     async def handle_cta_command(
-        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+        self, webhook: InboundMessageWebhook, user_profile: UserProfile
     ) -> dict[str, any]:
         """
         Handle /cta command - sends call-to-action message.
 
         Args:
-            webhook: IncomingMessageWebhook with command
+            webhook: InboundMessageWebhook with command
             user_profile: User profile for tracking
 
         Returns:
@@ -336,13 +336,13 @@ class CommandHandlers:
             return {"success": False, "error": str(e)}
 
     async def handle_location_command(
-        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+        self, webhook: InboundMessageWebhook, user_profile: UserProfile
     ) -> dict[str, any]:
         """
         Handle /location command - sends predefined location.
 
         Args:
-            webhook: IncomingMessageWebhook with command
+            webhook: InboundMessageWebhook with command
             user_profile: User profile for tracking
 
         Returns:
@@ -416,7 +416,7 @@ class CommandHandlers:
             return {"success": False, "error": str(e)}
 
     async def handle_template_command(
-        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+        self, webhook: InboundMessageWebhook, user_profile: UserProfile
     ) -> dict[str, any]:
         """
         Handle /template command - explains template state demonstration.
@@ -425,7 +425,7 @@ class CommandHandlers:
         when state_config is provided in the request.
 
         Args:
-            webhook: IncomingMessageWebhook with command
+            webhook: InboundMessageWebhook with command
             user_profile: User profile for tracking
 
         Returns:
@@ -499,7 +499,7 @@ class CommandHandlers:
             return {"success": False, "error": str(e)}
 
     async def handle_api_stats_command(
-        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+        self, webhook: InboundMessageWebhook, user_profile: UserProfile
     ) -> dict[str, any]:
         """
         Handle /API-STATS command - displays comprehensive API activity statistics.
@@ -511,7 +511,7 @@ class CommandHandlers:
         - Recent message history
 
         Args:
-            webhook: IncomingMessageWebhook with command
+            webhook: InboundMessageWebhook with command
             user_profile: User profile for tracking
 
         Returns:
@@ -652,7 +652,7 @@ class CommandHandlers:
             }
 
     async def handle_docs_command(
-        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+        self, webhook: InboundMessageWebhook, user_profile: UserProfile
     ) -> dict[str, any]:
         """
         Handle /docs command - provides API documentation links and information.
@@ -722,7 +722,7 @@ COMMAND_HANDLERS = {
 # Convenience functions for direct use
 async def handle_command(
     command: str,
-    webhook: IncomingMessageWebhook,
+    webhook: InboundMessageWebhook,
     user_profile: UserProfile,
     messenger,
     cache_factory,
@@ -733,7 +733,7 @@ async def handle_command(
 
     Args:
         command: Command string (e.g., "/button")
-        webhook: IncomingMessageWebhook with command
+        webhook: InboundMessageWebhook with command
         user_profile: User profile for tracking
         messenger: IMessenger instance
         cache_factory: Cache factory

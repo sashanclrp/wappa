@@ -4,7 +4,7 @@ Universal Webhook Interface definitions for platform-agnostic webhook handling.
 This module defines the universal webhook types that all messaging platforms
 must transform their webhooks into:
 
-1. IncomingMessageWebhook - All user-sent messages (text, media, interactive, etc.)
+1. InboundMessageWebhook - All user-sent messages (text, media, interactive, etc.)
 2. StatusWebhook - Message delivery status updates (sent, delivered, read, failed)
 3. ErrorWebhook - System, app, and account-level errors
 4. SystemWebhook - Platform-level account/identity events (phone changes, BSUID updates, preferences)
@@ -27,8 +27,8 @@ from wappa.webhooks.core.webhook_interfaces.base_components import (
     ConversationBase,
     ErrorDetailBase,
     ForwardContextBase,
-    SystemEventDetail,
     InboxBase,
+    SystemEventDetail,
     UserBase,
 )
 
@@ -66,7 +66,7 @@ class WhatsAppIncomingWebhookData(BaseModel):
     )
 
 
-class IncomingMessageWebhook(BaseModel):
+class InboundMessageWebhook(BaseModel):
     """
     Universal interface for all incoming messages from users to businesses.
 
@@ -661,7 +661,7 @@ class CustomWebhook(BaseModel):
 
 # Type union for all universal webhook interfaces
 UniversalWebhook = (
-    IncomingMessageWebhook
+    InboundMessageWebhook
     | StatusWebhook
     | ErrorWebhook
     | SystemWebhook

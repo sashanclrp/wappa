@@ -7,7 +7,7 @@ This module handles all message history operations including:
 - /HISTORY command processing
 """
 
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 from ..models.json_demo_models import MessageLog
 from ..utils.cache_utils import get_cache_ttl
@@ -29,7 +29,7 @@ class MessageHistoryScore(ScoreBase):
     on message history management.
     """
 
-    async def can_handle(self, webhook: IncomingMessageWebhook) -> bool:
+    async def can_handle(self, webhook: InboundMessageWebhook) -> bool:
         """
         This score handles all messages for logging, plus /HISTORY command.
 
@@ -41,7 +41,7 @@ class MessageHistoryScore(ScoreBase):
         """
         return True
 
-    async def process(self, webhook: IncomingMessageWebhook) -> bool:
+    async def process(self, webhook: InboundMessageWebhook) -> bool:
         """
         Process message logging and handle /HISTORY command.
 
@@ -72,7 +72,7 @@ class MessageHistoryScore(ScoreBase):
             await self._handle_error(e, "message_history_processing")
             return False
 
-    async def _log_message(self, webhook: IncomingMessageWebhook) -> None:
+    async def _log_message(self, webhook: InboundMessageWebhook) -> None:
         """
         Log message to user's message history.
 
@@ -125,7 +125,7 @@ class MessageHistoryScore(ScoreBase):
             self.logger.error(f"Error logging message: {e}")
             raise
 
-    async def _handle_history_request(self, webhook: IncomingMessageWebhook) -> None:
+    async def _handle_history_request(self, webhook: InboundMessageWebhook) -> None:
         """
         Handle /HISTORY command to show user's message history.
 

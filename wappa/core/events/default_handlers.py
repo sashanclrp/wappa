@@ -13,7 +13,7 @@ from typing import Any
 from wappa.core.logging.logger import get_logger
 from wappa.webhooks import (
     ErrorWebhook,
-    IncomingMessageWebhook,
+    InboundMessageWebhook,
     StatusWebhook,
     SystemWebhook,
 )
@@ -105,14 +105,14 @@ class DefaultMessageHandler:
             "last_reset": datetime.now(),
         }
 
-    async def log_incoming_message(self, webhook: IncomingMessageWebhook) -> None:
+    async def log_incoming_message(self, webhook: InboundMessageWebhook) -> None:
         """
         Log incoming message webhook with configured strategy.
 
         This is the main entry point called by the framework before user processing.
 
         Args:
-            webhook: IncomingMessageWebhook containing the message data
+            webhook: InboundMessageWebhook containing the message data
         """
         if self.log_strategy == MessageLogStrategy.NONE:
             return
@@ -134,18 +134,18 @@ class DefaultMessageHandler:
         elif self.log_strategy == MessageLogStrategy.FILTERED:
             await self._log_filtered(logger, webhook)
 
-    async def post_process_message(self, webhook: IncomingMessageWebhook) -> None:
+    async def post_process_message(self, webhook: InboundMessageWebhook) -> None:
         """
         Post-process message after user handling (optional hook for future features).
 
         Args:
-            webhook: IncomingMessageWebhook that was processed
+            webhook: InboundMessageWebhook that was processed
         """
         # Future: Add post-processing logic like response time tracking,
         # conversation state updates, or user engagement metrics
         pass
 
-    def _update_stats(self, webhook: IncomingMessageWebhook) -> None:
+    def _update_stats(self, webhook: InboundMessageWebhook) -> None:
         """Update internal statistics tracking."""
         self._stats["total_messages"] += 1
 
@@ -178,7 +178,7 @@ class DefaultMessageHandler:
             ):
                 self._stats["sensitive_content_detected"] += 1
 
-    def _get_content_preview(self, webhook: IncomingMessageWebhook) -> str:
+    def _get_content_preview(self, webhook: InboundMessageWebhook) -> str:
         """Get masked content preview for logging."""
         content = webhook.get_message_text() or ""
 
@@ -194,7 +194,7 @@ class DefaultMessageHandler:
 
         return content
 
-    async def _log_stats_only(self, logger, webhook: IncomingMessageWebhook) -> None:
+    async def _log_stats_only(self, logger, webhook: InboundMessageWebhook) -> None:
         """Log only statistics summary."""
         if self._stats["total_messages"] % 10 == 0:  # Log every 10 messages
             logger.info(
@@ -203,7 +203,7 @@ class DefaultMessageHandler:
                 f"Active users: {len(self._stats['by_user'])}"
             )
 
-    async def _log_summarized(self, logger, webhook: IncomingMessageWebhook) -> None:
+    async def _log_summarized(self, logger, webhook: InboundMessageWebhook) -> None:
         """Log summarized message information."""
         user_id = webhook.user.user_id if webhook.user else "unknown"
         message_type = webhook.get_message_type_name()
@@ -215,7 +215,7 @@ class DefaultMessageHandler:
             + (f" - '{content_preview}'" if content_preview else "")
         )
 
-    async def _log_full_detail(self, logger, webhook: IncomingMessageWebhook) -> None:
+    async def _log_full_detail(self, logger, webhook: InboundMessageWebhook) -> None:
         """Log full message details."""
         user_id = webhook.user.user_id if webhook.user else "unknown"
         inbox_id = webhook.inbox.get_inbox_key() if webhook.inbox else "unknown"
@@ -227,7 +227,7 @@ class DefaultMessageHandler:
             f"Type={message_type}, Content='{content_preview}'"
         )
 
-    async def _log_filtered(self, logger, webhook: IncomingMessageWebhook) -> None:
+    async def _log_filtered(self, logger, webhook: InboundMessageWebhook) -> None:
         """Log with custom filtering logic (can be extended by users)."""
         message_type = webhook.get_message_type_name()
 

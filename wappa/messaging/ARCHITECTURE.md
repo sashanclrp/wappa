@@ -8,6 +8,10 @@
 - Own outbound message construction for all WhatsApp message types: text, media, interactive, templates, contacts, locations.
 - Own recipient normalization (phone → E.164, BSUID detection) via `schemas.core.recipient`.
 - Own read-only template metadata queries against the WABA-level Graph API.
+- Keep `Messenger` / `IMessenger` as the public outbound seam for Host Applications.
+  Internal WhatsApp handlers may stay grouped by message family, but public
+  `TextMessenger`, `MediaMessenger`, or similar seams are deferred until there is
+  concrete pressure from multiple platform adapters or tests.
 
 ## Not Owned Here
 
@@ -95,4 +99,4 @@ WhatsAppMessenger._resolve_media_object(path, ...)
 
 ## inbox_id Mapping
 
-`WhatsAppClient.phone_number_id` is the `inbox_id` for the WhatsApp platform. It flows into every `MessageResult` and `MediaUploadResult` as `tenant_id` (pending rename). The mapping is explicit: `inbox_id == phone_number_id` for all WhatsApp operations.
+`WhatsAppClient.phone_number_id` is the `inbox_id` for the WhatsApp platform. It flows into every `MessageResult` and `MediaUploadResult` as `inbox_id`. The mapping is explicit: `inbox_id == phone_number_id` for all WhatsApp operations.

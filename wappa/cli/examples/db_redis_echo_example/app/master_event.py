@@ -20,7 +20,7 @@ Responsibilities:
 from __future__ import annotations
 
 from wappa import WappaEventHandler
-from wappa.webhooks import ErrorWebhook, IncomingMessageWebhook, StatusWebhook
+from wappa.webhooks import ErrorWebhook, InboundMessageWebhook, StatusWebhook
 
 from .handlers.command_handlers import (
     CommandHandlers,
@@ -65,7 +65,7 @@ class DBRedisExampleHandler(WappaEventHandler):
         self._failed_processing = 0
         self._commands_processed = 0
 
-    async def process_message(self, webhook: IncomingMessageWebhook) -> None:
+    async def process_message(self, webhook: InboundMessageWebhook) -> None:
         """
         Process incoming message with Redis caching and DB persistence.
 
@@ -201,7 +201,7 @@ class DBRedisExampleHandler(WappaEventHandler):
             self.logger.error(f"Failed to setup dependencies: {e}", exc_info=True)
             return False
 
-    async def _send_error_response(self, webhook: IncomingMessageWebhook) -> None:
+    async def _send_error_response(self, webhook: InboundMessageWebhook) -> None:
         """
         Send user-friendly error response when processing fails.
 

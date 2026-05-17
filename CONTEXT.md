@@ -34,8 +34,8 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 
 | Term | Definition |
 |------|-----------|
-| **WappaEventHandler** | Abstract base class the Host Application implements. Receives dispatched events with per-request context (`inbox_id`, `user_id`, `messenger`, `cache_factory`, `db`) already injected. |
-| `process_message(webhook)` | Fires when a User sends a message to an Inbox. Input: `IncomingMessageWebhook`. The only abstract (required) processor. |
+| **WappaEventHandler** | Abstract base class the Host Application implements. Receives dispatched events with Dispatch Context dependencies (`inbox_id`, `user_id`, `messenger`, `cache_factory`, `db`) already injected. |
+| `process_message(webhook)` | Fires when a User sends a message to an Inbox. Input: `InboundMessageWebhook`. |
 | `process_status(webhook)` | Fires on message delivery status changes (sent, delivered, read, failed). Input: `StatusWebhook`. |
 | `process_error(webhook)` | Fires when the platform reports an error. Input: `ErrorWebhook`. |
 | `process_system_webhook(webhook)` | Fires on system events: phone number change, BSUID update, marketing preference change. Input: `SystemWebhook`. |
@@ -48,10 +48,16 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | Term | Definition |
 |------|-----------|
 | **Webhook** | An inbound HTTP request from a platform carrying message, status, or system events. |
-| **Universal Model** | The platform-agnostic representation of a parsed webhook payload. All platform-specific parsing collapses into these models before dispatch. |
+| **Inbound Runtime** | The Wappa module that turns an accepted platform webhook into a context-bound handler dispatch. It owns orchestration across Inbox/User context, Messenger, Cache Factory, DB sessions, SSE scope, and event dispatch. |
+| **Dispatch Context** | The per-event runtime bundle containing `inbox_id`, `user_id`, `messenger`, `cache_factory`, DB access, SSE identity, and the cloned `WappaEventHandler`. Use this instead of "request context" for event processing because background work may outlive the HTTP request. |
+| **Processor** | A pure platform payload translator. A Processor parses a platform webhook payload into a Universal Model. It must not mutate ContextVars, build messengers, resolve cache factories, or clone handlers. |
+| **Universal Model** | The platform-agnostic Pydantic schema representation of a parsed webhook payload. All platform-specific parsing collapses into these models before dispatch. |
+| **InboundMessageWebhook** | Canonical name for the Universal Model representing a User-sent message entering Wappa. |
 | **Event Dispatch** | The act of routing a parsed universal model to the appropriate WappaEventHandler processor method. |
 | **Messenger** | The outbound message interface. Sends text, media, interactive, template, and specialized messages to a User on a Platform via an Inbox. |
 | **Messenger Pipeline** | Composable middleware stack wrapping outbound message calls (SSE lifecycle, PubSub notification, etc.). |
+| **External Webhook Source** | A non-messaging system that sends webhooks into Wappa, such as MercadoPago, Stripe, Wompi, GitHub, or a CRM. |
+| **Payment Provider** | A payment-specific External Webhook Source, such as MercadoPago, Stripe, or Wompi. This term is allowed for payment integrations, not for messaging platforms. |
 
 ## Persistence
 
@@ -85,4 +91,6 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | `tenant`, `tenant_id` | `inbox_id` (if it means the platform-facing identity) or `owner_id` (if it means a business grouping supplied by the host) |
 | `multi-tenant` | "multi-inbox" if describing Wappa's ability to handle multiple inboxes; avoid entirely if describing business tenancy (not Wappa's concern) |
 | `provider` (as a code identifier) | `platform` — the canonical term in Wappa for external messaging services |
+| `Request Context` (for event dispatch) | `Dispatch Context` |
+| `Compatibility Shim` | No replacement. Wappa should prefer clean breaking changes over old import-path preservation. |
 | `TenantBase`, `TenantCredentialsService` | `InboxBase`, `SettingsInboxCredentialStore` (or any `IInboxCredentialStore` implementation) |

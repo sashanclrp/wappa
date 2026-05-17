@@ -2,12 +2,12 @@
 Metadata extraction utilities for webhook processing.
 
 This module provides functions to extract comprehensive metadata from
-IncomingMessageWebhook objects based on message type.
+InboundMessageWebhook objects based on message type.
 """
 
 import time
 
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 from ..models.webhook_metadata import (
     ContactMessageMetadata,
@@ -26,13 +26,13 @@ class MetadataExtractor:
 
     @staticmethod
     def extract_metadata(
-        webhook: IncomingMessageWebhook, start_time: float = None
+        webhook: InboundMessageWebhook, start_time: float = None
     ) -> WebhookMetadata:
         """
         Extract appropriate metadata from webhook based on message type.
 
         Args:
-            webhook: IncomingMessageWebhook to extract metadata from
+            webhook: InboundMessageWebhook to extract metadata from
             start_time: Optional start time for processing time calculation
 
         Returns:
@@ -296,13 +296,13 @@ class MetadataExtractor:
 
 # Convenience functions for direct use
 def extract_webhook_metadata(
-    webhook: IncomingMessageWebhook, start_time: float = None
+    webhook: InboundMessageWebhook, start_time: float = None
 ) -> WebhookMetadata:
     """
     Extract metadata from webhook (convenience function).
 
     Args:
-        webhook: IncomingMessageWebhook to process
+        webhook: InboundMessageWebhook to process
         start_time: Optional start time for processing measurement
 
     Returns:

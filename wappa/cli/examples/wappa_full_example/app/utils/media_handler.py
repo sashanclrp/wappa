@@ -6,7 +6,7 @@ from pathlib import Path
 
 import httpx
 
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 
 class MediaHandler:
@@ -25,7 +25,7 @@ class MediaHandler:
             await self.session.aclose()
 
     async def get_media_info_from_webhook(
-        self, webhook: IncomingMessageWebhook
+        self, webhook: InboundMessageWebhook
     ) -> dict[str, str] | None:
         """Extract media information from a webhook, or None if no media present."""
         message = webhook.message
@@ -271,7 +271,7 @@ class MediaHandler:
             }
 
 
-async def extract_media_info(webhook: IncomingMessageWebhook) -> dict[str, str] | None:
+async def extract_media_info(webhook: InboundMessageWebhook) -> dict[str, str] | None:
     """Extract media information from a webhook."""
     return await MediaHandler().get_media_info_from_webhook(webhook)
 
@@ -298,7 +298,7 @@ async def send_local_media_file(
 
 async def relay_webhook_media(
     messenger,
-    webhook: IncomingMessageWebhook,
+    webhook: InboundMessageWebhook,
     recipient: str,
     reply_to_message_id: str = None,
 ) -> dict[str, any]:

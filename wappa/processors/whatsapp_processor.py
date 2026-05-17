@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 from pydantic import ValidationError
 
 from wappa.core.config.settings import settings
-from wappa.core.logging.context import set_request_context
 from wappa.processors.base_processor import (
     BaseWebhookProcessor,
     # ProcessingResult removed - Universal Webhook Interface is the ONLY way
@@ -29,10 +28,10 @@ if TYPE_CHECKING:
         ErrorDetailBase,
         ErrorWebhook,
         ForwardContextBase,
-        IncomingMessageWebhook,
+        InboundMessageWebhook,
+        InboxBase,
         StatusWebhook,
         SystemWebhook,
-        InboxBase,
         UniversalWebhook,
         UserBase,
         WhatsAppIncomingWebhookData,
@@ -357,24 +356,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
             universal_webhook.set_raw_webhook_data(payload)
 
-            # Context: inbox_id (from URL or JSON), user_id (from JSON)
-            webhook_inbox_id = inbox_base.platform_account_id
-            webhook_user_id = None
-            if getattr(universal_webhook, "user", None):
-                webhook_user_id = universal_webhook.user.user_id
-            elif hasattr(universal_webhook, "recipient_id"):
-                webhook_user_id = universal_webhook.recipient_id
-            # ErrorWebhook has no user context (system-level errors)
-
-            set_request_context(
-                inbox_id=webhook_inbox_id,
-                user_id=webhook_user_id,
-            )
-
-            self.logger.debug(
-                f"✅ Set webhook context - inbox_id: {webhook_inbox_id}, user_id: {webhook_user_id}"
-            )
-
             return universal_webhook
 
         except Exception as e:
@@ -395,24 +376,24 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         # not — fall back to the WABA ID + URL-supplied inbox_id.
         first_value = webhook.entry[0].changes[0].value
         metadata = getattr(first_value, "metadata", None)
+        waba_id = webhook.entry[0].id
         if metadata is not None:
             return InboxBase(
                 inbox_id=metadata.phone_number_id,
                 display_address=metadata.display_phone_number,
-                platform_account_id=metadata.phone_number_id,
+                platform_account_id=waba_id,
             )
 
-        waba_id = webhook.entry[0].id
         return InboxBase(
-            inbox_id="",
+            inbox_id=inbox_id or "",
             display_address="",
-            platform_account_id=inbox_id or waba_id,
+            platform_account_id=waba_id,
         )
 
     async def _create_incoming_message_webhook(
         self, webhook: BaseWebhook, inbox_base: "InboxBase", **kwargs
-    ) -> "IncomingMessageWebhook":
-        from wappa.webhooks.core.webhook_interfaces import IncomingMessageWebhook
+    ) -> "InboundMessageWebhook":
+        from wappa.webhooks.core.webhook_interfaces import InboundMessageWebhook
 
         raw_messages = webhook.get_raw_messages()
         if not raw_messages:
@@ -443,7 +424,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         forward_context = self._extract_forward_context(raw_message)
         ad_referral = self._extract_ad_referral(raw_message)
 
-        return IncomingMessageWebhook(
+        return InboundMessageWebhook(
             inbox=inbox_base,
             user=user_base,
             whatsapp=whatsapp_data,

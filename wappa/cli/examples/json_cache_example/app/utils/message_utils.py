@@ -7,10 +7,10 @@ different score modules for consistent message handling.
 
 from datetime import datetime
 
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 
-def extract_user_data(webhook: IncomingMessageWebhook) -> dict[str, str]:
+def extract_user_data(webhook: InboundMessageWebhook) -> dict[str, str]:
     """
     Extract user data from webhook in a standardized format.
 

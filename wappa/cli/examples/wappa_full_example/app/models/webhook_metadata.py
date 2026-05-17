@@ -1,7 +1,7 @@
 """
 Webhook metadata models for different message types.
 
-These models extract and structure relevant metadata from IncomingMessageWebhook
+These models extract and structure relevant metadata from InboundMessageWebhook
 objects to provide comprehensive information about each message type.
 """
 
@@ -61,7 +61,7 @@ class TextMessageMetadata(BaseMessageMetadata):
     def from_webhook(
         cls, webhook, processing_time_ms: int = None
     ) -> "TextMessageMetadata":
-        """Create TextMessageMetadata from IncomingMessageWebhook."""
+        """Create TextMessageMetadata from InboundMessageWebhook."""
         text_content = webhook.get_message_text() or ""
         return cls(
             message_id=webhook.message.message_id,
@@ -100,7 +100,7 @@ class MediaMessageMetadata(BaseMessageMetadata):
     def from_webhook(
         cls, webhook, message_type: MessageType, processing_time_ms: int = None
     ) -> "MediaMessageMetadata":
-        """Create MediaMessageMetadata from IncomingMessageWebhook."""
+        """Create MediaMessageMetadata from InboundMessageWebhook."""
         # Extract media information from webhook
         media_id = getattr(webhook.message, "media_id", "") or getattr(
             webhook.message, "id", ""
@@ -154,7 +154,7 @@ class LocationMessageMetadata(BaseMessageMetadata):
     def from_webhook(
         cls, webhook, processing_time_ms: int = None
     ) -> "LocationMessageMetadata":
-        """Create LocationMessageMetadata from IncomingMessageWebhook."""
+        """Create LocationMessageMetadata from InboundMessageWebhook."""
         # Extract location data from webhook
         latitude = getattr(webhook.message, "latitude", 0.0)
         longitude = getattr(webhook.message, "longitude", 0.0)
@@ -191,7 +191,7 @@ class ContactMessageMetadata(BaseMessageMetadata):
     def from_webhook(
         cls, webhook, processing_time_ms: int = None
     ) -> "ContactMessageMetadata":
-        """Create ContactMessageMetadata from IncomingMessageWebhook."""
+        """Create ContactMessageMetadata from InboundMessageWebhook."""
         # Extract contact data from webhook
         contacts = getattr(webhook.message, "contacts", [])
         if not isinstance(contacts, list):
@@ -246,7 +246,7 @@ class InteractiveMessageMetadata(BaseMessageMetadata):
     def from_webhook(
         cls, webhook, processing_time_ms: int = None
     ) -> "InteractiveMessageMetadata":
-        """Create InteractiveMessageMetadata from IncomingMessageWebhook."""
+        """Create InteractiveMessageMetadata from InboundMessageWebhook."""
         # Extract interactive data
         selection_id = webhook.get_interactive_selection() or ""
         interaction_type = "unknown"
@@ -297,7 +297,7 @@ class UnknownMessageMetadata(BaseMessageMetadata):
     def from_webhook(
         cls, webhook, processing_time_ms: int = None
     ) -> "UnknownMessageMetadata":
-        """Create UnknownMessageMetadata from IncomingMessageWebhook."""
+        """Create UnknownMessageMetadata from InboundMessageWebhook."""
         # Capture raw message data for debugging
         raw_data = {}
         if hasattr(webhook.message, "__dict__"):

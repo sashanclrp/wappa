@@ -28,7 +28,7 @@ Wappa is a multi-context library. Each bounded context owns its own language, in
 │                    ┌─────────────────────────────────────┐                │
 │                    │       WappaEventHandler (ABC)        │                │
 │                    │                                     │                │
-│                    │  process_message(webhook)      ◄────── IncomingMessageWebhook
+│                    │  process_message(webhook)      ◄────── InboundMessageWebhook
 │                    │  process_status(webhook)       ◄────── StatusWebhook
 │                    │  process_error(webhook)        ◄────── ErrorWebhook
 │                    │  process_system_webhook(webhook)◄────── SystemWebhook
@@ -61,7 +61,7 @@ Wappa is a multi-context library. Each bounded context owns its own language, in
 │        │ parses platform payload into                                     │
 │        ▼                                                                  │
 │   ┌───────────────┐                                                       │
-│   │Universal Models│  IncomingMessageWebhook, StatusWebhook,              │
+│   │Universal Models│  InboundMessageWebhook, StatusWebhook,               │
 │   │(InboxBase,     │  ErrorWebhook, SystemWebhook                         │
 │   │ UserBase, etc.)│                                                      │
 │   └───────────────┘                                                       │
@@ -92,7 +92,7 @@ The Host Application implements `WappaEventHandler` and overrides these processo
 
 | Processor | Event Source | Input Type | When Fired |
 |-----------|-------------|-----------|------------|
-| `process_message()` | Platform webhook | `IncomingMessageWebhook` | User sends a message to the Inbox |
+| `process_message()` | Platform webhook | `InboundMessageWebhook` | User sends a message to the Inbox |
 | `process_status()` | Platform webhook | `StatusWebhook` | Message delivery status changes (sent, delivered, read, failed) |
 | `process_error()` | Platform webhook | `ErrorWebhook` | Platform reports an error |
 | `process_system_webhook()` | Platform webhook | `SystemWebhook` | System events: phone number change, BSUID update, marketing preference |

@@ -7,7 +7,7 @@ including text, media, location, contact, and interactive messages.
 
 import time
 
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 from ..models.user_models import UserProfile
 from ..utils.cache_utils import CacheHelper
@@ -33,13 +33,13 @@ class MessageHandlers:
         self.logger = logger
 
     async def handle_text_message(
-        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+        self, webhook: InboundMessageWebhook, user_profile: UserProfile
     ) -> dict[str, any]:
         """
         Handle text message with echo functionality.
 
         Args:
-            webhook: IncomingMessageWebhook with text message
+            webhook: InboundMessageWebhook with text message
             user_profile: User profile for tracking
 
         Returns:
@@ -111,13 +111,13 @@ class MessageHandlers:
             return {"success": False, "error": str(e)}
 
     async def handle_media_message(
-        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+        self, webhook: InboundMessageWebhook, user_profile: UserProfile
     ) -> dict[str, any]:
         """
         Handle media message with relay functionality.
 
         Args:
-            webhook: IncomingMessageWebhook with media message
+            webhook: InboundMessageWebhook with media message
             user_profile: User profile for tracking
 
         Returns:
@@ -197,13 +197,13 @@ class MessageHandlers:
             return {"success": False, "error": str(e)}
 
     async def handle_location_message(
-        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+        self, webhook: InboundMessageWebhook, user_profile: UserProfile
     ) -> dict[str, any]:
         """
         Handle location message with echo functionality.
 
         Args:
-            webhook: IncomingMessageWebhook with location message
+            webhook: InboundMessageWebhook with location message
             user_profile: User profile for tracking
 
         Returns:
@@ -292,13 +292,13 @@ class MessageHandlers:
             return {"success": False, "error": str(e)}
 
     async def handle_contact_message(
-        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+        self, webhook: InboundMessageWebhook, user_profile: UserProfile
     ) -> dict[str, any]:
         """
         Handle contact message with echo functionality.
 
         Args:
-            webhook: IncomingMessageWebhook with contact message
+            webhook: InboundMessageWebhook with contact message
             user_profile: User profile for tracking
 
         Returns:
@@ -389,13 +389,13 @@ class MessageHandlers:
             return {"success": False, "error": str(e)}
 
     async def handle_interactive_message(
-        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+        self, webhook: InboundMessageWebhook, user_profile: UserProfile
     ) -> dict[str, any]:
         """
         Handle interactive message (button/list selections).
 
         Args:
-            webhook: IncomingMessageWebhook with interactive message
+            webhook: InboundMessageWebhook with interactive message
             user_profile: User profile for tracking
 
         Returns:
@@ -522,7 +522,7 @@ class MessageHandlers:
 
 # Convenience functions for direct use
 async def handle_message_by_type(
-    webhook: IncomingMessageWebhook,
+    webhook: InboundMessageWebhook,
     user_profile: UserProfile,
     messenger,
     cache_factory,
@@ -532,7 +532,7 @@ async def handle_message_by_type(
     Handle message based on its type (convenience function).
 
     Args:
-        webhook: IncomingMessageWebhook to process
+        webhook: InboundMessageWebhook to process
         user_profile: User profile for tracking
         messenger: IMessenger instance
         cache_factory: Cache factory

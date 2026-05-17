@@ -12,13 +12,13 @@ When expiry fires (15s inactivity), the expiry handler echoes all messages back.
 from datetime import UTC, datetime
 
 from wappa import WappaEventHandler
-from wappa.webhooks import IncomingMessageWebhook
+from wappa.webhooks import InboundMessageWebhook
 
 
 class MasterEventHandler(WappaEventHandler):
     """Event handler for message accumulation with expiry tracking."""
 
-    async def process_message(self, webhook: IncomingMessageWebhook) -> None:
+    async def process_message(self, webhook: InboundMessageWebhook) -> None:
         """
         Process incoming message by accumulating it and managing expiry trigger.
 
@@ -98,7 +98,7 @@ class MasterEventHandler(WappaEventHandler):
                 text="⚠️ Sorry, something went wrong processing your message.",
             )
 
-    def _extract_message_content(self, webhook: IncomingMessageWebhook) -> str:
+    def _extract_message_content(self, webhook: InboundMessageWebhook) -> str:
         """
         Extract message content as text for storage.
 

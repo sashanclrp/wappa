@@ -3,8 +3,10 @@
 ## Responsibilities
 
 - Parse and validate raw HTTP payloads from messaging platforms into typed Pydantic models.
-- Produce `UniversalWebhook` instances (`IncomingMessageWebhook`, `StatusWebhook`,
+- Produce `UniversalWebhook` instances (`InboundMessageWebhook`, `StatusWebhook`,
   `ErrorWebhook`, `SystemWebhook`, `CustomWebhook`) for downstream dispatch.
+- Validate the platform payload's inbox identifier against the URL `inbox_id` when
+  the platform provides one.
 - Gate unknown Meta `change.field` values against a runtime registry; reject unregistered fields.
 - Expose platform-agnostic inspection (`is_incoming_message`, `is_status_update`, etc.)
   through the `BaseWebhook` interface.
@@ -12,13 +14,16 @@
 
 ## Explicit Boundaries — What This Context Does NOT Own
 
-- Dispatching `UniversalWebhook` events to handlers (owned by `wappa/core/events/`).
+- Dispatching `UniversalWebhook` events to handlers (owned by the Inbound Runtime
+  and `wappa/core/events/`).
 - Sending outbound messages (owned by `wappa/messaging/`).
 - Cache scoping, session state, or persistence (owned by `wappa/persistence/`).
 - HTTP route handling (owned by `wappa/api/`).
-- Processor logic that enriches webhooks from persistence (owned by `wappa/processors/`).
+- Runtime orchestration, ContextVars, Messenger construction, Cache Factory construction,
+  DB session injection, SSE scope, and handler cloning (owned by the Inbound Runtime).
 - `PlatformType`, `MessageType`, `WebhookType`, and other shared enums (live in
-  `wappa/schemas/core/types.py`; `core/types.py` is a re-export shim only).
+  `wappa/schemas/core/types.py` today. `core/types.py` is a current re-export
+  slated for removal or relocation by the clean-break compatibility cleanup.
 
 ## Module Structure
 
@@ -32,9 +37,9 @@ wappa/webhooks/
 │   ├── base_status.py          # Base status model
 │   ├── types.py                # Re-export shim → wappa.schemas.core.types (do not add code here)
 │   └── webhook_interfaces/
-│       ├── base_components.py  # TenantBase, UserBase, BusinessContextBase, ForwardContextBase,
+│       ├── base_components.py  # InboxBase, UserBase, BusinessContextBase, ForwardContextBase,
 │       │                       # AdReferralBase, ConversationBase, ErrorDetailBase, SystemEventDetail
-│       └── universal_webhooks.py  # IncomingMessageWebhook, StatusWebhook, ErrorWebhook,
+│       └── universal_webhooks.py  # InboundMessageWebhook, StatusWebhook, ErrorWebhook,
 │                                  # SystemWebhook, CustomWebhook, UniversalWebhook union
 │
 └── whatsapp/
@@ -71,7 +76,7 @@ wappa/webhooks/
 | `BaseWebhook` | ABC that all platform webhook containers implement. Enforces `platform`, `webhook_type`, `source_id` (= `inbox_id`), and the inspection/extraction interface. |
 | `WhatsAppWebhook` | Concrete `BaseWebhook` for Meta's `whatsapp_business_account` envelope. Owns routing between built-in and custom field paths via `WebhookChange._route_field`. |
 | `WebhookChange` | Routes `change.field` to `WebhookValue` (strict) or `CustomWebhookValue` (permissive). Rejects unknown unregistered fields at Pydantic validation time. |
-| `IncomingMessageWebhook` | Universal outbound model for user→business messages. Carries `TenantBase` (inbox), `UserBase`, and a `BaseMessage` subclass. |
+| `InboundMessageWebhook` | Canonical Universal Webhook Schema for user→business messages. Carries `InboxBase`, `UserBase`, and a `BaseMessage` subclass. |
 | `StatusWebhook` | Universal outbound model for delivery status events. `user_id` field is populated by the processors layer (BSUID > phone fallback). |
 | `SchemaFactory` | Singleton (`schema_factory`). Entry point for creating platform-specific containers (`create_webhook_instance`) and per-type messages (`create_message_instance`). Delegates universal webhook assembly to `wappa/processors/`. |
 | `MessageSchemaRegistry` | Holds `{PlatformType: {MessageType: BaseMessage subclass}}`. Pre-loaded with all 14 WhatsApp message types at startup. |
@@ -102,9 +107,12 @@ HTTP POST (raw JSON)
         │  webhook.is_incoming_message / .is_status_update / .is_system_event / .is_custom_field
         ▼
   wappa/processors/ (WhatsApp processor)
-        │  Enriches user_id from persistence when needed; assembles universal model
+        │  Purely translates platform payload into Universal Model
         ▼
-  UniversalWebhook  (IncomingMessageWebhook | StatusWebhook | ErrorWebhook | SystemWebhook | CustomWebhook)
+  UniversalWebhook  (InboundMessageWebhook | StatusWebhook | ErrorWebhook | SystemWebhook | CustomWebhook)
+        │
+        ▼
+  Inbound Runtime builds Dispatch Context
         │
         ▼
   wappa/core/events/ dispatcher  →  host application handlers

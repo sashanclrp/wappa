@@ -9,7 +9,7 @@ commands, state management, and all message type handling.
 import time
 
 from wappa import WappaEventHandler
-from wappa.webhooks import ErrorWebhook, IncomingMessageWebhook, StatusWebhook
+from wappa.webhooks import ErrorWebhook, InboundMessageWebhook, StatusWebhook
 
 from .handlers.command_handlers import (
     CommandHandlers,
@@ -58,7 +58,7 @@ class WappaFullExampleHandler(WappaEventHandler):
             "🚀 WappaFullExampleHandler initialized - comprehensive demo ready"
         )
 
-    async def process_message(self, webhook: IncomingMessageWebhook) -> None:
+    async def process_message(self, webhook: InboundMessageWebhook) -> None:
         """
         Main message processing method with comprehensive functionality.
 
@@ -72,7 +72,7 @@ class WappaFullExampleHandler(WappaEventHandler):
         7. Statistics tracking and logging
 
         Args:
-            webhook: IncomingMessageWebhook containing message data
+            webhook: InboundMessageWebhook containing message data
         """
         start_time = time.time()
         self._total_messages += 1
@@ -354,7 +354,7 @@ class WappaFullExampleHandler(WappaEventHandler):
             return False
 
     async def _handle_user_profile_and_welcome(
-        self, webhook: IncomingMessageWebhook
+        self, webhook: InboundMessageWebhook
     ) -> UserProfile | None:
         """Handle user profile caching and send welcome message to first-time users."""
         try:
@@ -383,7 +383,7 @@ class WappaFullExampleHandler(WappaEventHandler):
             return None
 
     async def _send_welcome_message(
-        self, webhook: IncomingMessageWebhook, user_profile: UserProfile
+        self, webhook: InboundMessageWebhook, user_profile: UserProfile
     ) -> None:
         """Send welcome message with instructions to first-time users."""
         user_id = webhook.user.user_id
@@ -431,7 +431,7 @@ class WappaFullExampleHandler(WappaEventHandler):
         except Exception as e:
             self.logger.error(f"❌ Error sending welcome message: {e}")
 
-    async def _mark_message_as_read(self, webhook: IncomingMessageWebhook) -> None:
+    async def _mark_message_as_read(self, webhook: InboundMessageWebhook) -> None:
         """Mark incoming message as read (as specified in requirements)."""
         try:
             result = await self.messenger.mark_as_read(
@@ -449,7 +449,7 @@ class WappaFullExampleHandler(WappaEventHandler):
             self.logger.warning(f"⚠️ Error marking message as read: {e}")
 
     async def _handle_special_command(
-        self, webhook: IncomingMessageWebhook, user_profile: UserProfile, command: str
+        self, webhook: InboundMessageWebhook, user_profile: UserProfile, command: str
     ) -> None:
         """Handle special commands using command handlers."""
         try:
@@ -498,7 +498,7 @@ class WappaFullExampleHandler(WappaEventHandler):
             )
 
     async def _send_error_response(
-        self, webhook: IncomingMessageWebhook, error_details: str
+        self, webhook: InboundMessageWebhook, error_details: str
     ) -> None:
         """Send user-friendly error response when processing fails."""
         try:

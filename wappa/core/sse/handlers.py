@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any, Final, Literal
 
-from ...webhooks import ErrorWebhook, IncomingMessageWebhook, StatusWebhook
+from ...webhooks import ErrorWebhook, InboundMessageWebhook, StatusWebhook
 from ..events.default_handlers import (
     DefaultErrorHandler,
     DefaultMessageHandler,
@@ -53,11 +53,11 @@ def register_sse_event_type(event_type: str) -> None:
 
 
 def _normalized_webhook_payload(
-    webhook: IncomingMessageWebhook | StatusWebhook | ErrorWebhook,
+    webhook: InboundMessageWebhook | StatusWebhook | ErrorWebhook,
 ) -> dict[str, Any]:
     """Build normalized webhook payload for SSE messages.
 
-    For IncomingMessageWebhook the message field is enriched via
+    For InboundMessageWebhook the message field is enriched via
     ``to_universal_dict()`` so that abstract-property content
     (text_content, media_id, selected_option_id, …) is included.
     Plain ``model_dump()`` only captures Pydantic fields (e.g.
@@ -65,7 +65,7 @@ def _normalized_webhook_payload(
     """
     data = webhook.model_dump(mode="json", exclude_none=False)
 
-    if isinstance(webhook, IncomingMessageWebhook):
+    if isinstance(webhook, InboundMessageWebhook):
         data["message"] = webhook.message.to_universal_dict()
 
     return data
@@ -174,7 +174,7 @@ class SSEMessageHandler(DefaultMessageHandler):
             payload=pending["payload"],
         )
 
-    async def log_incoming_message(self, webhook: IncomingMessageWebhook) -> None:
+    async def log_incoming_message(self, webhook: InboundMessageWebhook) -> None:
         """Log locally and stage the SSE payload for eager flush."""
         await super().log_incoming_message(webhook)
 
@@ -189,7 +189,7 @@ class SSEMessageHandler(DefaultMessageHandler):
         }
         ctx._pending_flush = self._flush_pending
 
-    async def post_process_message(self, webhook: IncomingMessageWebhook) -> None:
+    async def post_process_message(self, webhook: InboundMessageWebhook) -> None:
         """Safety-net flush for pipelines that never enriched metadata or sent a reply."""
         await super().post_process_message(webhook)
         flush_incoming_sse()

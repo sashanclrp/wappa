@@ -30,24 +30,25 @@ Platform (WhatsApp, etc.)
 ┌─────────────────────────────────┐
 │  API Layer (routes + controller)│
 │                                 │
-│  1. Validate platform enum      │
-│  2. Parse JSON body             │
+│  1. Parse JSON body             │
+│  2. Validate platform enum      │
 │  3. InboxMiddleware sets        │
 │     inbox_id in request context │
-│  4. Delegate to controller      │
+│  4. Delegate to Inbound Runtime │
 └────────────────┬────────────────┘
                  │
                  ▼
 ┌─────────────────────────────────┐
-│  WebhookController              │
+│  Inbound Runtime                │
 │                                 │
-│  1. Resolve inbox credentials   │
-│  2. Create Messenger (factory)  │
-│  3. Create CacheFactory         │
-│  4. Clone handler via           │
+│  1. Validate routed inbox_id    │
+│  2. Call platform processor     │
+│  3. Validate payload inbox      │
+│  4. Create Dispatch Context     │
+│  5. Clone handler via           │
 │     with_context(inbox_id,      │
 │     user_id, messenger, cache)  │
-│  5. Call platform processor     │
+│  6. Open SSE scope + dispatch   │
 └────────────────┬────────────────┘
                  │
                  ▼
@@ -61,7 +62,7 @@ Platform (WhatsApp, etc.)
 │      MessageBase, etc.)         │
 │  2. Classify: message, status,  │
 │     error, or system event      │
-│  3. Dispatch to EventDispatcher │
+│  3. Return the Universal Model  │
 └────────────────┬────────────────┘
                  │
                  ▼
@@ -90,6 +91,17 @@ Platform (WhatsApp, etc.)
 │    self.db / self.db_read       │
 └─────────────────────────────────┘
 ```
+
+**Inbound Runtime boundary:** The Inbound Runtime owns the Dispatch Context: `inbox_id`,
+`user_id`, Messenger, Cache Factory, DB sessions, SSE identity, and cloned
+`WappaEventHandler`. Platform processors are pure translators and must not mutate
+ContextVars, build messengers, resolve cache factories, or clone handlers.
+
+**Inbox authority:** The URL `inbox_id` is the routing authority and is validated
+through the configured `IInboxCredentialStore`. If a platform payload also carries
+an inbox identifier, Wappa validates that it matches the routed Inbox. For WhatsApp,
+payload `metadata.phone_number_id` maps to `inbox_id`; `entry[].id` maps to
+`platform_account_id` (WABA ID). Mismatches are rejected, not silently overridden.
 
 ## Message Flow — Outbound (Host sends a reply)
 

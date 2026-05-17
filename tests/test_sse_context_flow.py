@@ -185,7 +185,7 @@ class _FakeUser:
 
 
 class _FakeWebhook:
-    """Minimal stand-in for IncomingMessageWebhook for the deferred-flush path."""
+    """Minimal stand-in for InboundMessageWebhook for the deferred-flush path."""
 
     def __init__(self):
         self.user = _FakeUser(
