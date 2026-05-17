@@ -87,7 +87,7 @@ class DispatchContext:
 
 
 class InboundRuntime:
-    """Turns accepted provider webhooks into context-bound handler dispatch."""
+    """Turns accepted platform webhooks into context-bound handler dispatch."""
 
     def __init__(self, event_dispatcher: WappaEventDispatcher) -> None:
         self.event_dispatcher = event_dispatcher
