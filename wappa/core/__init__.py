@@ -48,7 +48,6 @@ from .plugins import (
 from .pubsub import (
     PubSubEventType,
     PubSubMessageHandler,
-    PubSubMessengerWrapper,
     PubSubStatusHandler,
     publish_api_notification,
     publish_notification,
@@ -93,7 +92,6 @@ __all__ = [
     "PubSubEventType",
     "PubSubMessageHandler",
     "PubSubStatusHandler",
-    "PubSubMessengerWrapper",
     "publish_notification",
     "publish_api_notification",
     # Core Application

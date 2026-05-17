@@ -11,7 +11,7 @@ from .base_status import BaseMessageStatus
 from .base_webhook import BaseWebhook
 
 # Core types and base classes
-from .types import (
+from wappa.schemas.core.types import (
     ConversationType,
     ErrorCode,
     InteractiveType,
@@ -37,7 +37,6 @@ from .webhook_interfaces import (
     UserBase,
 )
 
-# Legacy WebhookEventData and MessageEventData removed - use Universal Webhook Interface
 
 __all__ = [
     # Universal webhook interfaces
@@ -67,5 +66,4 @@ __all__ = [
     "BaseTextMessage",
     "BaseWebhook",
     "BaseMessageStatus",
-    # Legacy WebhookEventData and MessageEventData removed
 ]

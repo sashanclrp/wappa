@@ -1,8 +1,6 @@
 """
-External webhook processor interface.
-
-Defines the contract that external webhook integrations must implement
-to participate in the Wappa gateway pipeline.
+Contract that external webhook integrations must satisfy to participate
+in the Wappa gateway pipeline.
 """
 
 from typing import TYPE_CHECKING, Protocol
@@ -21,22 +19,21 @@ class IWebhookProcessor(Protocol):
     """
     Interface for external webhook processors.
 
-    Implementors parse raw HTTP requests into typed ExternalEvent instances,
-    optionally resolve user identity from event payload, and identify
-    the provider name.
+    Implementors parse raw HTTP requests into ExternalEvent instances,
+    optionally resolve user identity, and declare their source name.
 
     Example:
         class MercadoPagoProcessor:
-            def get_provider_name(self) -> str:
+            def get_source_name(self) -> str:
                 return "mercadopago"
 
-            async def parse_event(self, request, tenant_id):
+            async def parse_event(self, request, inbox_id):
                 body = await request.json()
                 validated = MPWebhookSchema.model_validate(body)
                 return ExternalEvent(
                     source="mercadopago",
                     event_type=f"{validated.type}.{validated.action}",
-                    tenant_id=tenant_id,
+                    inbox_id=inbox_id,
                     payload=validated.model_dump(),
                     raw_data=body,
                 )
@@ -49,27 +46,19 @@ class IWebhookProcessor(Protocol):
                     return sub.user_phone if sub else None
     """
 
-    def get_provider_name(self) -> str:
-        """Return the provider identifier (e.g., 'mercadopago', 'stripe')."""
+    def get_source_name(self) -> str:
+        """Return the source identifier (e.g., 'mercadopago', 'stripe')."""
         ...
 
     async def parse_event(
         self,
         request: "Request",
-        tenant_id: str,
+        inbox_id: str,
     ) -> "ExternalEvent":
         """
-        Parse raw HTTP request into a typed ExternalEvent.
+        Parse a raw HTTP request into a typed ExternalEvent.
 
-        Args:
-            request: FastAPI Request object with raw webhook body
-            tenant_id: Tenant identifier from URL path
-
-        Returns:
-            Validated ExternalEvent instance
-
-        Raises:
-            ValueError: If webhook payload is invalid or signature fails
+        Raises ValueError if the payload is invalid or signature verification fails.
         """
         ...
 
@@ -79,13 +68,8 @@ class IWebhookProcessor(Protocol):
         db: "Callable[[], AbstractAsyncContextManager[AsyncSession]] | None",
     ) -> str | None:
         """
-        Optionally resolve user identity from event payload.
+        Optionally resolve a user identifier from the event payload.
 
-        Args:
-            event: The parsed ExternalEvent
-            db: Database session factory (None if DB plugin not configured)
-
-        Returns:
-            User identifier (e.g., phone number) or None if unresolvable
+        Returns None if identity cannot be determined or db is not configured.
         """
         ...

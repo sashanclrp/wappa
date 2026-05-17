@@ -22,7 +22,7 @@ from wappa.webhooks.core.base_webhook import (
     BaseWebhook,
     BaseWebhookMetadata,
 )
-from wappa.webhooks.core.types import PlatformType, WebhookType
+from wappa.schemas.core.types import PlatformType, WebhookType
 from wappa.webhooks.whatsapp.base_models import WhatsAppContact, WhatsAppMetadata
 
 

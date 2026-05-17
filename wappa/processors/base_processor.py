@@ -15,8 +15,6 @@ from wappa.schemas.core.base_status import BaseMessageStatus
 from wappa.schemas.core.base_webhook import BaseWebhook
 from wappa.schemas.core.types import ErrorCode, MessageType, PlatformType
 
-# Legacy ProcessingResult class removed - Universal Webhook Interface is now the ONLY way
-# Use processor.create_universal_webhook() method instead for type-safe webhook handling
 
 
 class ProcessorCapabilities:
@@ -95,7 +93,6 @@ class BaseWebhookProcessor(ABC):
         """Get the capabilities of this processor."""
         pass
 
-    # Legacy process_webhook abstract method removed - Universal Webhook Interface is the ONLY way
     # All processors must implement create_universal_webhook() method instead
 
     @abstractmethod
@@ -189,9 +186,7 @@ class BaseWebhookProcessor(ABC):
         """Get the handler for a specific message type."""
         return self._message_type_handlers.get(message_type)
 
-    # Legacy _process_incoming_messages method removed - Universal Webhook Interface handles this via IncomingMessageWebhook
 
-    # Legacy _process_status_updates method removed - Universal Webhook Interface handles this via StatusWebhook
 
     def get_processing_stats(self) -> dict[str, Any]:
         """
@@ -214,7 +209,6 @@ class BaseWebhookProcessor(ABC):
             ],
         }
 
-    # Legacy create_error_result method removed - Universal Webhook Interface handles errors via ErrorWebhook
 
     def __str__(self) -> str:
         """String representation of the processor."""

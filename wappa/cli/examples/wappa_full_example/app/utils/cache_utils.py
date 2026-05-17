@@ -600,11 +600,11 @@ class CacheHelper:
 
 
 class CacheKeys:
-    """Centralized cache key management (legacy - kept for backward compatibility)."""
+    """Centralized cache key management."""
 
     @staticmethod
     def user_profile(user_id: str) -> str:
-        """Get cache key for user profile (legacy - no longer used directly)."""
+        """Get cache key for user profile."""
         return f"user_profile_{user_id}"
 
     @staticmethod
@@ -614,7 +614,7 @@ class CacheKeys:
 
     @staticmethod
     def message_history(user_id: str) -> str:
-        """Get cache key for message history (legacy - use table_name + pkid now)."""
+        """Get cache key for message history."""
         return f"history_{user_id}"
 
     @staticmethod

@@ -11,7 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .types import (
+from wappa.schemas.core.types import (
     ConversationType,
     InteractiveType,
     MediaType,

@@ -11,7 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .types import PlatformType, WebhookType
+from wappa.schemas.core.types import PlatformType, WebhookType
 
 
 class BaseContact(BaseModel, ABC):

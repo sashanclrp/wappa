@@ -20,27 +20,6 @@ from dotenv import load_dotenv
 
 load_dotenv(".env")
 
-_RENAMED = {
-    "ENVIRONMENT": "SYSTEM_ENVIRONMENT",
-    "LOG_LEVEL": "SYSTEM_LOG_LEVEL",
-    "LOG_DIR": "SYSTEM_LOG_DIR",
-    "TIME_ZONE": "SYSTEM_TIME_ZONE",
-    "API_VERSION": "META_API_VERSION",
-    "BASE_URL": "META_BASE_URL",
-    "WHATSAPP_WEBHOOK_VERIFY_TOKEN": "WP_WEBHOOK_VERIFY_TOKEN",
-}
-
-
-def _check_legacy_vars() -> None:
-    found = [old for old in _RENAMED if os.getenv(old) is not None]
-    if found:
-        lines = "\n".join(f"  {old}  →  {_RENAMED[old]}" for old in found)
-        raise EnvironmentError(
-            f"\n\n[wappa] Outdated environment variables detected. "
-            f"Rename them in your .env and redeploy:\n\n{lines}\n\n"
-            f"See CHANGELOG v0.5.0 for the full migration guide."
-        )
-
 
 def _get_version_from_pyproject() -> str:
     current_path = Path(__file__)
@@ -75,8 +54,6 @@ class Settings:
     """Application settings with environment-based configuration."""
 
     def __init__(self):
-        _check_legacy_vars()
-
         # ── Version ──────────────────────────────────────────────
         self.version: str = _get_version_from_pyproject()
 

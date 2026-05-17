@@ -22,17 +22,11 @@ from .handlers import (
     publish_api_notification,
     publish_notification,
 )
-from .messenger_wrapper import PubSubMessengerWrapper
 
 __all__ = [
-    # Event type
     "PubSubEventType",
-    # Handler wrappers
     "PubSubMessageHandler",
     "PubSubStatusHandler",
-    # Publisher utilities
     "publish_notification",
     "publish_api_notification",
-    # Messenger wrapper
-    "PubSubMessengerWrapper",
 ]

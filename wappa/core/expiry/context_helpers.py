@@ -1,11 +1,6 @@
 """
-Context helpers for expiry action handlers.
-
-Provides utility functions to bootstrap messenger and cache factory instances
-for expiry handler context, hiding the manual bootstrapping complexity.
-
-These helpers enable expiry handlers to use framework patterns with minimal boilerplate,
-matching the production quality standards of WappaEventHandler implementations.
+Utility functions that bootstrap messenger and cache factory instances
+for use inside expiry action handlers.
 
 Example:
     from wappa.core.expiry import (
@@ -17,16 +12,12 @@ Example:
     @expiry_registry.on_expire_action("user_inactivity")
     async def handle_user_inactivity(identifier: str, full_key: str) -> None:
         tenant_id = parse_tenant_from_expired_key(full_key)
-        user_id = identifier
-
         messenger = await create_expiry_messenger(tenant_id)
-        cache_factory = create_expiry_cache_factory(tenant_id, user_id)
+        cache_factory = create_expiry_cache_factory(tenant_id, identifier)
         user_cache = cache_factory.create_user_cache()
-
-        # Business logic here...
 """
 
-from wappa.core.expiry.listener import get_fastapi_app
+from wappa.core.expiry.app_context import get_app_context
 from wappa.core.logging.logger import get_logger
 from wappa.domain.factories.messenger_factory import MessengerFactory
 from wappa.domain.interfaces.cache_factory import ICacheFactory
@@ -69,42 +60,23 @@ class CacheFactoryCreationError(ExpiryContextError):
 
 async def create_expiry_messenger(tenant_id: str) -> IMessenger:
     """
-    Bootstrap messenger for expiry handler context.
+    Return a WhatsApp messenger for use inside an expiry handler.
 
-    Creates a WhatsApp messenger instance using the shared HTTP session
-    from FastAPI app state, following the same pattern as webhook controllers.
-
-    This function hides the 18-line manual bootstrapping complexity,
-    providing production-ready error handling with specific error types.
-
-    Args:
-        tenant_id: Tenant identifier (WhatsApp phone_number_id)
-
-    Returns:
-        Configured IMessenger instance ready for sending messages
+    Uses the shared HTTP session from FastAPI app state, matching the
+    pattern used by webhook controllers.
 
     Raises:
-        FastAPIAppNotAvailableError: If FastAPI app is not registered
-        HTTPSessionNotAvailableError: If HTTP session is not in app state
-        MessengerCreationError: If messenger factory fails to create messenger
-
-    Example:
-        messenger = await create_expiry_messenger("wappa")
-        await messenger.send_text(recipient="+1234567890", text="Hello!")
+        FastAPIAppNotAvailableError: If ExpiryPlugin is not configured.
+        HTTPSessionNotAvailableError: If http_session is missing from app.state.
+        MessengerCreationError: If the messenger factory fails.
     """
     # Get FastAPI app to access shared HTTP session
-    try:
-        app = get_fastapi_app()
-    except Exception as e:
-        logger.error(f"Failed to get FastAPI app: {e}")
-        raise FastAPIAppNotAvailableError(
-            "FastAPI app not available - expiry listener may not be properly initialized"
-        ) from e
+    app = get_app_context().get_app()
 
     if not app:
         logger.error("FastAPI app not registered - cannot create messenger")
         raise FastAPIAppNotAvailableError(
-            "FastAPI app not registered - call set_fastapi_app() during app startup"
+            "FastAPI app not registered - ensure ExpiryPlugin is configured"
         )
 
     # Get shared HTTP session from app state (for connection pooling)
@@ -134,26 +106,11 @@ async def create_expiry_messenger(tenant_id: str) -> IMessenger:
 
 def create_expiry_cache_factory(tenant_id: str, user_id: str) -> ICacheFactory:
     """
-    Bootstrap cache factory for expiry handler context.
-
-    Creates a Redis cache factory instance with the specified tenant and user context,
-    following the framework's context-aware cache factory pattern.
-
-    Args:
-        tenant_id: Tenant identifier for namespace isolation
-        user_id: User identifier for user-specific caches
-
-    Returns:
-        Configured ICacheFactory instance for creating context-bound caches
+    Return a Redis cache factory scoped to the given tenant and user.
 
     Raises:
-        CacheFactoryCreationError: If cache factory creation fails
-        ValueError: If tenant_id or user_id is empty
-
-    Example:
-        cache_factory = create_expiry_cache_factory("wappa", "+1234567890")
-        user_cache = cache_factory.create_user_cache()
-        data = await user_cache.get()
+        ValueError: If tenant_id or user_id is empty.
+        CacheFactoryCreationError: If Redis dependencies are missing or creation fails.
     """
     if not tenant_id:
         raise ValueError("tenant_id is required for cache factory creation")
@@ -183,23 +140,10 @@ def create_expiry_cache_factory(tenant_id: str, user_id: str) -> ICacheFactory:
 
 def parse_tenant_from_expired_key(full_key: str) -> str:
     """
-    Parse tenant ID from a Redis expiry trigger key.
+    Extract the tenant segment from a Redis expiry trigger key.
 
-    Expiry trigger keys follow the pattern: {tenant}:EXPTRIGGER:{action}:{identifier}
-    This function extracts the tenant portion from the full key.
-
-    Args:
-        full_key: Complete Redis key that expired
-                 (e.g., "wappa:EXPTRIGGER:user_inactivity:+1234567890")
-
-    Returns:
-        Tenant ID extracted from the key, or "wappa" as default fallback
-
-    Example:
-        >>> parse_tenant_from_expired_key("acme:EXPTRIGGER:reminder:USER123")
-        "acme"
-        >>> parse_tenant_from_expired_key("simple_key")
-        "wappa"
+    Keys follow the pattern: {tenant}:EXPTRIGGER:{action}:{identifier}
+    Returns "wappa" as a fallback for keys without a colon separator.
     """
     if ":" in full_key:
         return full_key.split(":")[0]

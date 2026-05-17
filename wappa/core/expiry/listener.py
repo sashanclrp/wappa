@@ -16,7 +16,6 @@ Components:
 import asyncio
 import logging
 
-from .app_context import get_fastapi_app, set_fastapi_app
 from .connection import ConnectionConfig, RedisConnectionManager
 from .dispatcher import ExpiryDispatcher
 from .parser import ExpiryEventParser
@@ -133,9 +132,6 @@ async def _run_listener_loop(
             dispatcher.dispatch(event)
 
 
-# Re-export backward compatibility functions
 __all__ = [
     "run_expiry_listener",
-    "get_fastapi_app",
-    "set_fastapi_app",
 ]

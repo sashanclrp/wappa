@@ -19,7 +19,7 @@ Usage:
 
 # Universal Webhook Interfaces (User Request: Quick access to these)
 from .core.base_webhook import BaseContact, BaseWebhook, BaseWebhookMetadata
-from .core.types import PlatformType, UniversalMessageData, WebhookType
+from wappa.schemas.core.types import PlatformType, UniversalMessageData, WebhookType
 from .core.webhook_interfaces.universal_webhooks import (
     CustomWebhook,
     ErrorWebhook,

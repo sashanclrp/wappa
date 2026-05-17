@@ -10,7 +10,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from wappa.webhooks.core.base_message import BaseAudioMessage, BaseMessageContext
-from wappa.webhooks.core.types import (
+from wappa.schemas.core.types import (
     ConversationType,
     MediaType,
     PlatformType,

@@ -49,7 +49,7 @@ class ExternalEventDispatcher:
         try:
             self.logger.info(
                 f"Dispatching external event: {event.source}/{event.event_type} "
-                f"(tenant={event.tenant_id}, user={event.user_id})"
+                f"(inbox={event.inbox_id}, user={event.user_id})"
             )
 
             await request_handler.handle_external_event(event)
@@ -62,7 +62,7 @@ class ExternalEventDispatcher:
                 "action": "external_event_processed",
                 "source": event.source,
                 "event_type": event.event_type,
-                "tenant_id": event.tenant_id,
+                "inbox_id": event.inbox_id,
                 "user_id": event.user_id,
                 "dispatch_time": dispatch_time,
             }

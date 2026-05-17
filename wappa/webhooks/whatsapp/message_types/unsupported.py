@@ -10,7 +10,7 @@ from typing import Any, Literal
 from pydantic import ConfigDict, Field, field_validator
 
 from wappa.webhooks.core.base_message import BaseMessage, BaseMessageContext
-from wappa.webhooks.core.types import (
+from wappa.schemas.core.types import (
     ConversationType,
     MessageType,
     PlatformType,

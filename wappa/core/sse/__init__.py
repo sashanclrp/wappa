@@ -22,8 +22,6 @@ from .handlers import (
     publish_sse_event,
     register_sse_event_type,
 )
-from .messenger_wrapper import SSEMessengerWrapper
-
 __all__ = [
     "SSEEventContext",
     "SSEEventHub",
@@ -35,7 +33,6 @@ __all__ = [
     "SSEMessageHandler",
     "SSEStatusHandler",
     "SSEErrorHandler",
-    "SSEMessengerWrapper",
     "publish_sse_event",
     "publish_api_sse_event",
     "get_sse_context",
