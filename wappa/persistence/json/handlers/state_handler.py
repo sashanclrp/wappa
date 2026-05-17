@@ -310,9 +310,9 @@ class JSONStateHandler(IStateCache):
     ) -> list[str]:
         import asyncio
 
+        from ...redis.redis_handler.utils.key_factory import default_key_factory as kf
         from .utils.file_manager import file_manager
         from .utils.serialization import extract_cache_file_data
-        from ...redis.redis_handler.utils.key_factory import default_key_factory as kf
 
         states_dir = file_manager.get_cache_root() / "states"
         key_prefix = f"{inbox_id}:{kf.handler_prefix}:{handler_name}:"

@@ -308,8 +308,8 @@ class MemoryStateHandler(IStateCache):
     async def list_users_with_handler(
         cls, inbox_id: str, handler_name: str
     ) -> list[str]:
-        from .utils.memory_store import get_memory_store
         from ...redis.redis_handler.utils.key_factory import default_key_factory as kf
+        from .utils.memory_store import get_memory_store
 
         store = get_memory_store()
         key_prefix = f"{inbox_id}:{kf.handler_prefix}:{handler_name}:"

@@ -17,7 +17,9 @@ Usage:
 
 from wappa.schemas.core.types import PlatformType, UniversalMessageData, WebhookType
 
+from .core.base_message import BaseMessage
 from .core.base_webhook import BaseContact, BaseWebhook, BaseWebhookMetadata
+from .core.webhook_interfaces.base_components import InboxBase, SystemEventDetail
 from .core.webhook_interfaces.universal_webhooks import (
     CustomWebhook,
     ErrorWebhook,
@@ -62,4 +64,8 @@ __all__ = [
     "ErrorData",
     "Pricing",
     "Conversation",
+    # Base message and webhook components
+    "BaseMessage",
+    "InboxBase",
+    "SystemEventDetail",
 ]

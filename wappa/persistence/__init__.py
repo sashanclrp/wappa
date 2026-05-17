@@ -33,6 +33,11 @@ from ..domain.interfaces.tables_repository import ITablesRepository
 from ..domain.interfaces.user_repository import IUserRepository
 from .cache_factory import create_cache_factory, get_cache_factory
 
+# Redis implementation re-exports
+from .redis import RedisClient
+from .redis import ops as redis_ops
+from .redis.redis_cache_factory import RedisCacheFactory
+
 __all__ = [
     # Cache Factory Functions (User Request: Main access point)
     "create_cache_factory",
@@ -47,4 +52,8 @@ __all__ = [
     "IPubSubRepository",
     "IExpiryRepository",
     "ISharedStateRepository",
+    # Redis implementations
+    "RedisCacheFactory",
+    "RedisClient",
+    "redis_ops",
 ]

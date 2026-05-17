@@ -575,7 +575,7 @@ class SystemWebhook(BaseModel):
         """Check if this is a marketing preference change event."""
         return self.system_event_type == SystemEventType.MARKETING_PREFERENCE
 
-    def get_summary(self) -> dict[str, any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get a summary of this webhook for logging and monitoring."""
         return {
             "webhook_type": "system",

@@ -7,8 +7,8 @@ from pydantic import BaseModel
 
 from ....domain.interfaces.cache_interfaces import ITableCache
 from ..ops import hget, hincrby_with_expire
-from .utils.serde import loads
 from .utils.inbox_cache import InboxCache
+from .utils.serde import loads
 
 logger = logging.getLogger("RedisTable")
 

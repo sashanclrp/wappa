@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 
 from ....domain.interfaces.cache_interfaces import IAIStateCache
 from ..ops import hget, hincrby_with_expire, hset
-from .utils.serde import dumps, loads
 from .utils.inbox_cache import InboxCache
+from .utils.serde import dumps, loads
 
 logger = logging.getLogger("RedisAIState")
 

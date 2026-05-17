@@ -23,6 +23,14 @@ Usage (User Request: Quick access to WhatsApp messaging components):
 """
 
 # Core Messaging Interface
+# Messenger Pipeline (public contract for middleware authors)
+from wappa.core.messaging.pipeline import (
+    PRIORITY_CACHE,
+    MessengerMiddleware,
+    MessengerPipeline,
+    SendInvocation,
+    SendNext,
+)
 from wappa.domain.interfaces.messaging_interface import IMessenger
 
 # WhatsApp Client & Messenger (User Request: Quick access)
@@ -51,4 +59,10 @@ __all__ = [
     "WhatsAppInteractiveHandler",
     "WhatsAppTemplateHandler",
     "WhatsAppSpecializedHandler",
+    # Messenger Pipeline
+    "MessengerMiddleware",
+    "MessengerPipeline",
+    "SendInvocation",
+    "SendNext",
+    "PRIORITY_CACHE",
 ]

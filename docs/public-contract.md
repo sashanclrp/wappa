@@ -67,3 +67,73 @@ Webhook processors are translation-only adapters. They return Universal Models a
 - The interface stays as a single seam until the split threshold documented in `wappa/messaging/ARCHITECTURE.md` is met.
 - If a split is justified in the future, it will be a clean breaking change with no compatibility aliases.
 - Internal handler composition (per message family) is not part of the public contract.
+
+## Canonical Import Paths (SDK Surface)
+
+Host applications should prefer these shallow imports over deep internal paths.
+Internal module paths (`wappa.core.*`, `wappa.persistence.redis.redis_handler.*`) are implementation details and may change without notice.
+
+### Top-level (`from wappa import ...`)
+
+- `Wappa`, `WappaBuilder`, `WappaPlugin`, `WappaEventHandler`
+- `ExternalEvent`, `CronEvent`, `ExpiryPlugin`, `expiry_registry`
+- `IIdentityResolver`, `PassthroughIdentityResolver`, `IWebhookProcessor`
+- `CustomWebhook`, `WappaContext`
+
+### SSE (`from wappa.sse import ...`)
+
+- `publish_sse_event`, `publish_api_sse_event`
+- `sse_event_scope`, `get_sse_context`, `classify_meta_identifier`
+- `update_identity`, `update_metadata`, `flush_incoming_sse`, `derive_identifiers`
+- `SSEEventHub`, `SSESubscription`, `SSEEventType`, `register_sse_event_type`
+
+### Messaging (`from wappa.messaging import ...`)
+
+- `IMessenger`, `WhatsAppMessenger`, `WhatsAppClient`
+- `WhatsAppMediaHandler`, `WhatsAppInteractiveHandler`, `WhatsAppTemplateHandler`, `WhatsAppSpecializedHandler`
+- `MessengerMiddleware`, `MessengerPipeline`, `SendInvocation`, `SendNext`, `PRIORITY_CACHE`
+
+### Persistence (`from wappa.persistence import ...`)
+
+- `create_cache_factory`, `get_cache_factory`, `ICacheFactory`
+- `RedisCacheFactory`, `RedisClient`, `redis_ops`
+- `IStateRepository`, `IUserRepository`, `IExpiryRepository`, `ISharedStateRepository`
+
+### Webhooks (`from wappa.webhooks import ...`)
+
+- `InboundMessageWebhook`, `StatusWebhook`, `ErrorWebhook`, `SystemWebhook`, `CustomWebhook`
+- `BaseMessage`, `InboxBase`, `SystemEventDetail`
+- `WhatsAppWebhook`, `WhatsAppMetadata`, `PlatformType`, `SystemEventType`
+
+### Domain Interfaces (`from wappa.domain.interfaces import ...`)
+
+- `IMessenger`, `IMediaHandler`, `ICacheFactory`
+- `IExpiryCache`, `IStateCache`, `ITableCache`, `IUserCache`
+- `IInboxCredentialStore`, `InboxCredentials`, `InboxNotFoundError`
+- `IIdentityResolver`, `PassthroughIdentityResolver`
+
+### API (`from wappa.api import ...`)
+
+- `TemplateStateService`
+- `convert_body_parameters`, `raise_for_failed_result`, `require_inbox_context`
+- `dispatch_message_event`, `fire_api_event`, `resolve_event_user_id`
+
+### Schemas (`from wappa.schemas import ...`)
+
+- `looks_like_bsuid`
+
+### Core Logging (`from wappa.core.logging import ...`)
+
+- `get_logger`, `get_app_logger`, `setup_app_logging`
+- `get_current_inbox_context`, `set_request_context`
+
+### Core Expiry (`from wappa.core.expiry import ...`)
+
+- `expiry_registry`, `run_expiry_listener`
+- `get_app_context`, `AppContext`
+- `create_expiry_messenger`, `create_expiry_cache_factory`, `parse_inbox_from_expired_key`
+
+### Migration Notes (v0.13.0)
+
+- `from wappa.core.expiry.listener import get_fastapi_app` is removed. Use `from wappa.core.expiry import get_app_context` then `get_app_context().get_app()`.
+- Deep paths under `wappa.schemas.whatsapp`, `wappa.schemas.factory`, and `wappa.schemas.core.base_*` are removed. Use `wappa.webhooks` instead.

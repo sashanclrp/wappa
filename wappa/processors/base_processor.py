@@ -193,7 +193,6 @@ class BaseWebhookProcessor(ABC):
         """Get the handler for a specific message type."""
         return self._message_type_handlers.get(message_type)
 
-
     def get_processing_stats(self) -> dict[str, Any]:
         """
         Get processing statistics for monitoring and analysis.

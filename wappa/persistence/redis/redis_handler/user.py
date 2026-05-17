@@ -7,8 +7,8 @@ from pydantic import BaseModel, Field
 
 from ....domain.interfaces.cache_interfaces import IUserCache
 from ..ops import hdel, hget, hincrby_with_expire
-from .utils.serde import loads
 from .utils.inbox_cache import InboxCache
+from .utils.serde import loads
 
 logger = logging.getLogger("RedisUser")
 

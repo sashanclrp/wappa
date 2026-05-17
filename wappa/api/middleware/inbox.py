@@ -72,13 +72,8 @@ class InboxMiddleware(BaseHTTPMiddleware):
 
     def _is_public_endpoint(self, path: str) -> bool:
         """Check if endpoint is public and doesn't require inbox context."""
-        if path == "/":
-            return True
-
-        public_prefixes = [
-            "/health",
-            "/docs",
-            "/redoc",
-            "/openapi.json",
-        ]
-        return any(path.startswith(prefix) for prefix in public_prefixes)
+        public_paths = {"/"}
+        public_prefixes = ("/health", "/docs", "/redoc", "/openapi.json")
+        return path in public_paths or any(
+            path.startswith(prefix) for prefix in public_prefixes
+        )

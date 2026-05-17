@@ -8,9 +8,9 @@ from pydantic import BaseModel, Field
 
 from ....domain.interfaces.cache_interfaces import IStateCache
 from ..ops import hget, hincrby_with_expire, hset, scan_keys
+from .utils.inbox_cache import InboxCache
 from .utils.key_factory import default_key_factory
 from .utils.serde import dumps, loads
-from .utils.inbox_cache import InboxCache
 
 logger = logging.getLogger("RedisStateHandler")
 

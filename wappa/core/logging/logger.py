@@ -12,7 +12,7 @@ import logging
 import os
 import re
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from rich.console import Console
 from rich.logging import RichHandler
@@ -54,7 +54,7 @@ class WappaJSONFormatter(logging.Formatter):
         clean_msg = m.group("rest") if m else raw_msg
 
         obj: dict[str, str] = {
-            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).strftime(
+            "ts": datetime.fromtimestamp(record.created, tz=UTC).strftime(
                 "%Y-%m-%dT%H:%M:%S"
             ),
             "level": record.levelname,

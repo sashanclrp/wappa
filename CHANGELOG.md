@@ -5,6 +5,27 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.1] - 2026-05-16
+
+Centralizes Wappa's public import surface into stable, shallow paths so host applications no longer need to reach into internal module structure. Adds a `wappa/sse/` convenience package and populates `wappa/messaging`, `wappa/persistence`, `wappa/webhooks`, `wappa/api`, and `wappa/schemas` with the re-exports that Symphonai (and future consumers) actually use.
+
+### Added
+- **`wappa.sse` package** — stable re-exports for all SSE symbols (`publish_sse_event`, `sse_event_scope`, `classify_meta_identifier`, etc.).
+- **`wappa.messaging` pipeline exports** — `MessengerMiddleware`, `MessengerPipeline`, `SendInvocation`, `SendNext`, `PRIORITY_CACHE`.
+- **`wappa.persistence` Redis exports** — `RedisCacheFactory`, `RedisClient`, `redis_ops`.
+- **`wappa.webhooks` base exports** — `BaseMessage`, `InboxBase`, `SystemEventDetail`.
+- **`wappa.domain.interfaces`** — `IExpiryCache` now exported alongside other cache interfaces.
+- **`wappa.core.logging`** — `get_current_inbox_context`, `set_request_context` re-exported.
+- **`wappa.schemas`** — `looks_like_bsuid` re-exported at package level.
+- **`wappa.api`** — `TemplateStateService`, `convert_body_parameters`, `raise_for_failed_result`, `require_inbox_context`, `resolve_event_user_id`, `dispatch_message_event`, `fire_api_event`.
+- **`docs/public-contract.md`** — canonical import paths reference with v0.13.0 migration notes.
+
+### Fixed
+- Type annotation: `dict[str, any]` → `dict[str, Any]` in `SystemWebhook.get_summary`.
+- Return type: `get_message_builder` now correctly typed as `Callable[[str], MessageBuilder]`.
+- Logger consistency: f-strings → `%s`-style lazy formatting in `error_handler.py`.
+- PEP 693: `timezone.utc` → `datetime.UTC` across logging and persistence handlers.
+
 ## [0.13.0] - 2026-05-16
 
 Breaking architectural reset: Wappa now speaks its own language. The `inbox_id` replaces `tenant_id`/`owner_id` as the single runtime identity concept, all backward-compatibility shims from the schema migration era are removed, and webhook schema ownership is consolidated under `wappa/webhooks/` (the `wappa/schemas/` mirror is gone). Adds an inbound dispatch context for multi-inbox routing and a database-backed inbox credential store.

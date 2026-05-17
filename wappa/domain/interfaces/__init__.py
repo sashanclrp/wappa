@@ -6,7 +6,7 @@ Defines the contracts that infrastructure layer must implement.
 
 from .base_repository import IBaseRepository
 from .cache_factory import ICacheFactory
-from .cache_interfaces import IStateCache, ITableCache, IUserCache
+from .cache_interfaces import IExpiryCache, IStateCache, ITableCache, IUserCache
 from .expiry_repository import IExpiryRepository
 from .identity_resolver import IIdentityResolver, PassthroughIdentityResolver
 from .inbox_credential_store import (
@@ -42,6 +42,7 @@ __all__ = [
     "InboxCredentials",
     "InboxNotFoundError",
     # Cache interfaces (type-specific - preferred)
+    "IExpiryCache",
     "IUserCache",
     "IStateCache",
     "ITableCache",

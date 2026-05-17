@@ -33,14 +33,20 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
 
         except HTTPException as http_exc:
             logger.warning(
-                f"HTTP {http_exc.status_code} - {request.method} {request.url.path} - "
-                f"Detail: {http_exc.detail}"
+                "HTTP %s - %s %s - Detail: %s",
+                http_exc.status_code,
+                request.method,
+                request.url.path,
+                http_exc.detail,
             )
             raise
 
         except Exception as exc:
             logger.error(
-                f"Unhandled exception in {request.method} {request.url.path}: {exc}",
+                "Unhandled exception in %s %s: %s",
+                request.method,
+                request.url.path,
+                exc,
                 exc_info=True,
             )
             if self._is_webhook_endpoint(request.url.path):

@@ -11,7 +11,7 @@ from .table import RedisTable
 from .user import RedisUser
 
 # Utils
-from .utils import KeyFactory, InboxCache, dumps, loads
+from .utils import InboxCache, KeyFactory, dumps, loads
 
 __all__ = [
     # Infrastructure

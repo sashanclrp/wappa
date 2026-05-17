@@ -5,6 +5,7 @@ Provides dependency injection for WhatsApp messaging services including
 factory pattern, client management, and messenger implementations.
 """
 
+from collections.abc import Callable
 from typing import cast
 
 from fastapi import Depends, Request
@@ -195,19 +196,19 @@ async def get_whatsapp_messenger(
 
 async def get_message_builder(
     factory: WhatsAppMessageFactory = Depends(get_whatsapp_message_factory),
-) -> MessageBuilder:
-    """Get message builder for fluent message construction.
+) -> Callable[[str], MessageBuilder]:
+    """Get a factory callable for fluent message construction.
+
+    Returns a callable that accepts a recipient string and produces a
+    ``MessageBuilder`` scoped to that recipient.
 
     Args:
         factory: Message factory for creating platform-specific payloads
 
     Returns:
-        MessageBuilder instance for fluent message construction
-
-    Note: The recipient should be set when using the builder
+        Callable ``(recipient: str) -> MessageBuilder``
     """
 
-    # Return a builder factory function since recipient is set per message
     def create_builder(recipient: str) -> MessageBuilder:
         return MessageBuilder(factory, recipient)
 

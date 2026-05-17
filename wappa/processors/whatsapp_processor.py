@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from wappa.core.config.settings import settings
 from wappa.processors.base_processor import (
     BaseWebhookProcessor,
-    # ProcessingResult removed - Universal Webhook Interface is the ONLY way
     ProcessorCapabilities,
     ProcessorError,
 )

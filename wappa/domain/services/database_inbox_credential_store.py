@@ -72,9 +72,9 @@ class DatabaseInboxCredentialStore(IInboxCredentialStore):
     async def validate_inbox(self, inbox_id: str) -> bool:
         try:
             await self.get_credentials(inbox_id)
+            return True
         except InboxNotFoundError:
             return False
-        return True
 
     async def invalidate_cache(self, inbox_id: str) -> None:
         redis = await self._get_redis()
