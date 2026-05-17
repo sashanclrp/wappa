@@ -11,12 +11,9 @@ from fastapi import Request
 from wappa.api.services.handler_state_service import HandlerStateService
 from wappa.api.services.template_state_service import TemplateStateService
 from wappa.core.logging.context import get_current_inbox_context
-from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.cache_factory import ICacheFactory
 from wappa.domain.interfaces.identity_resolver import IIdentityResolver
 from wappa.persistence.cache_factory import create_cache_factory
-
-logger = get_logger(__name__)
 
 
 async def get_cache_factory(
@@ -38,24 +35,18 @@ async def get_cache_factory(
     Raises:
         RuntimeError: If cache factory cannot be created
     """
-    try:
-        # Get cache type from app state (set by WappaCorePlugin)
-        cache_type = getattr(request.app.state, "wappa_cache_type", "memory")
-        inbox_id = get_current_inbox_context()
+    cache_type = getattr(request.app.state, "wappa_cache_type", "memory")
+    inbox_id = get_current_inbox_context()
 
-        if not inbox_id:
-            raise RuntimeError("No inbox context available for cache factory")
+    if not inbox_id:
+        raise RuntimeError("No inbox context available for cache factory")
 
-        # For API routes, user_id is the recipient phone number
-        # If not provided, use a placeholder that will be replaced per operation
-        user_id = recipient or "api-route"
+    # For API routes, user_id is the recipient phone number.
+    # Use a placeholder when recipient is not yet known.
+    user_id = recipient or "api-route"
 
-        factory_class = create_cache_factory(cache_type)
-        return factory_class(inbox_id=inbox_id, user_id=user_id)
-
-    except Exception as e:
-        logger.error(f"Failed to create cache factory: {e}")
-        raise RuntimeError(f"Cache factory creation failed: {e}") from e
+    factory_class = create_cache_factory(cache_type)
+    return factory_class(inbox_id=inbox_id, user_id=user_id)
 
 
 def _get_identity_resolver(request: Request) -> IIdentityResolver | None:

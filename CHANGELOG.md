@@ -5,6 +5,27 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-05-16
+
+Breaking architectural reset: Wappa now speaks its own language. The `inbox_id` replaces `tenant_id`/`owner_id` as the single runtime identity concept, all backward-compatibility shims from the schema migration era are removed, and webhook schema ownership is consolidated under `wappa/webhooks/` (the `wappa/schemas/` mirror is gone). Adds an inbound dispatch context for multi-inbox routing and a database-backed inbox credential store.
+
+### Changed
+- **`inbox_id` is the core runtime identity** — replaces `tenant_id`/`owner_id` throughout middleware, logging, cache key factories, context propagation, and plugin lifecycle.
+- **Webhook schema consolidation** — `wappa/webhooks/` is now the single source of truth; the duplicated `wappa/schemas/` package (including factory, validators, all message type mirrors) is deleted.
+- **Inbound dispatch context** — new `wappa/core/inbound/` module provides `InboundRuntime` for multi-inbox webhook routing with credential resolution.
+- **Inbox middleware** — replaces the old `owner` middleware with inbox-aware request scoping.
+- **Webhook controller** — simplified from monolithic handler to thin dispatch layer using the inbound runtime.
+- **Code quality pass** — lazy log formatting, removed dead helpers, type annotation fixes (`any` → `Any`), collapsed trivial indirections.
+
+### Added
+- **`InboxCredentialStore` interface** + `DatabaseInboxCredentialStore` implementation for runtime credential lookup.
+- **`InboxCredentialsService`** — domain service wrapping the credential store with caching.
+- **`inbox_helpers.py`** — utility for `require_inbox_context()` extraction from requests.
+
+### Removed
+- **All compatibility shims** — `wappa/schemas/` package (factory, validators, base models, all WhatsApp message type mirrors, status models, webhook container), `messenger_wrapper.py` (both SSE and pubsub copies), `recipient_resolver.py`, `tenant_helpers.py`, `tenant_credentials_service.py`, `cache_interface.py` (old monolithic interface).
+- **`wappa/webhooks/core/types.py`** — dead type aliases.
+
 ## [0.12.0] - 2026-05-16
 
 Replaces aiohttp with httpx as the async HTTP client across the entire framework. httpx is the modern Python standard with a cleaner API, sync+async support, HTTP/2, and better typing. Includes SOLID improvements in the WhatsApp client: instance-level activity tracking, transport-agnostic form data builder, safe streaming via async context managers, and cleaner error handling.

@@ -161,11 +161,9 @@ class DatabaseInboxCredentialStore(IInboxCredentialStore):
 
     @staticmethod
     def _normalize_mapping(mapping: Mapping[Any, Any]) -> dict[str, str]:
-        normalized: dict[str, str] = {}
-        for key, value in mapping.items():
-            normalized_key = key.decode() if isinstance(key, bytes) else str(key)
-            normalized_value = (
-                value.decode() if isinstance(value, bytes) else str(value)
+        return {
+            (k.decode() if isinstance(k, bytes) else str(k)): (
+                v.decode() if isinstance(v, bytes) else str(v)
             )
-            normalized[normalized_key] = normalized_value
-        return normalized
+            for k, v in mapping.items()
+        }

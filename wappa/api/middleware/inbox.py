@@ -30,56 +30,34 @@ class InboxMiddleware(BaseHTTPMiddleware):
         inbox_id = None
 
         try:
-            logger.debug(
-                f"🔍 InboxMiddleware processing: {request.method} {request.url.path}"
-            )
-
             # Extract inbox_id from webhook URL pattern: /webhook/inboxes/{inbox_id}/{platform}
             if request.url.path.startswith("/webhook/"):
-                logger.debug(f"🎯 Webhook request detected: {request.url.path}")
                 path_parts = request.url.path.strip("/").split("/")
-                logger.debug(f"📋 Path parts: {path_parts} (length: {len(path_parts)})")
 
                 if len(path_parts) >= 4:
                     # path_parts = ["webhook", "inboxes", "inbox_id", "platform"]
                     inbox_id = path_parts[2]
-                    logger.debug(f"🔑 Extracted inbox_id from URL: '{inbox_id}'")
 
                     if self._is_valid_inbox_id(inbox_id):
                         set_request_context(inbox_id=inbox_id)
-                        logger.debug(
-                            f"✅ Inbox ID context set successfully: {inbox_id}"
-                        )
                     else:
-                        logger.error(f"❌ Invalid inbox ID format: {inbox_id}")
+                        logger.error("Invalid inbox ID format: %s", inbox_id)
                         raise HTTPException(
                             status_code=400, detail=f"Invalid inbox ID: {inbox_id}"
                         )
                 else:
-                    logger.warning(
-                        f"⚠️ Webhook URL does not have enough parts: {path_parts}"
-                    )
+                    logger.warning("Webhook URL does not have enough parts: %s", path_parts)
 
             # For non-webhook endpoints (API routes), use default inbox from settings.
-            else:
-                is_public = self._is_public_endpoint(request.url.path)
-                logger.debug(f"🔍 Non-webhook route - is_public: {is_public}")
+            elif not self._is_public_endpoint(request.url.path):
+                set_request_context(inbox_id=settings.inbox_id)
 
-                if not is_public:
-                    default_inbox = settings.inbox_id
-                    logger.debug(f"🔑 Setting context - inbox: {default_inbox}")
-                    set_request_context(inbox_id=default_inbox)
-                    logger.debug(
-                        f"✅ API route context set - inbox: {default_inbox}"
-                    )
-
-            response = await call_next(request)
-            return response
+            return await call_next(request)
 
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Error in inbox middleware: {e}", exc_info=True)
+            logger.error("Error in inbox middleware: %s", e, exc_info=True)
             raise HTTPException(status_code=500, detail="Internal server error") from e
 
     def _is_valid_inbox_id(self, inbox_id: str) -> bool:

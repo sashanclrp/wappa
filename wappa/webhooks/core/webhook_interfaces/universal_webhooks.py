@@ -226,7 +226,7 @@ class InboundMessageWebhook(BaseModel):
         """
         self.raw_webhook_data = raw_data
 
-    def get_summary(self) -> dict[str, any]:
+    def get_summary(self) -> dict[str, Any]:
         """
         Get a summary of this webhook for logging and monitoring.
 
@@ -370,7 +370,7 @@ class StatusWebhook(BaseModel):
             return False
         return not self.conversation.is_free_conversation()
 
-    def get_summary(self) -> dict[str, any]:
+    def get_summary(self) -> dict[str, Any]:
         """
         Get a summary of this webhook for logging and monitoring.
 
@@ -473,7 +473,7 @@ class ErrorWebhook(BaseModel):
         """Get list of all error codes in this webhook."""
         return [error.error_code for error in self.errors]
 
-    def get_summary(self) -> dict[str, any]:
+    def get_summary(self) -> dict[str, Any]:
         """
         Get a summary of this webhook for logging and monitoring.
 

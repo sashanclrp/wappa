@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 
 class WhatsAppWebhookProcessor(BaseWebhookProcessor):
-    # WhatsApp Business Platform webhook processor.
+    """WhatsApp Business Platform webhook processor."""
 
     def __init__(self):
         super().__init__()
@@ -104,8 +104,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         self.register_message_handler("button", self._create_button_message)
         self.register_message_handler("order", self._create_order_message)
 
-    # Use create_universal_webhook() method instead for type-safe webhook handling
-
     def validate_webhook_signature(
         self, payload: bytes, signature: str, **kwargs
     ) -> bool:
@@ -135,7 +133,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             return is_valid
 
         except Exception as e:
-            self.logger.error(f"Error validating webhook signature: {e}", exc_info=True)
+            self.logger.error("Error validating webhook signature: %s", e, exc_info=True)
             return False
 
     def parse_webhook_container(self, payload: dict[str, Any], **kwargs) -> BaseWebhook:
@@ -147,7 +145,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             context = {"field_registry": self._field_registry}
             webhook = WhatsAppWebhook.model_validate(payload, context=context)
             self.logger.debug(
-                f"Successfully parsed WhatsApp webhook from {webhook.business_id}"
+                "Successfully parsed WhatsApp webhook from %s", webhook.business_id
             )
             return webhook
 
@@ -180,7 +178,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             return WhatsAppMessageStatus.model_validate(status_data)
 
         except ValidationError as e:
-            self.logger.error(f"Failed to parse WhatsApp message status: {e}")
+            self.logger.error("Failed to parse WhatsApp message status: %s", e)
             raise
 
     # Message creation handlers
@@ -300,7 +298,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     ) -> "UniversalWebhook":
         try:
             webhook = self.parse_webhook_container(payload)
-            self.logger.debug(f"📨 Raw WhatsApp webhook received: {payload}")
+            self.logger.debug("Raw WhatsApp webhook received: %s", payload)
 
             inbox_base = self._create_inbox_base(webhook, inbox_id)
 
@@ -358,7 +356,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             return universal_webhook
 
         except Exception as e:
-            self.logger.error(f"Failed to create universal webhook: {e}", exc_info=True)
+            self.logger.error("Failed to create universal webhook: %s", e, exc_info=True)
             raise ProcessorError(
                 f"Failed to transform WhatsApp webhook to universal interface: {e}",
                 ErrorCode.PROCESSING_ERROR,

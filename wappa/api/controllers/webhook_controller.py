@@ -61,19 +61,19 @@ class WebhookController:
         if hub_mode == "subscribe" and hub_challenge:
             expected = settings.wp_webhook_verify_token
             if not hub_verify_token:
-                self.logger.error(f"❌ Missing verification token for {platform}")
+                self.logger.error("Missing verification token for %s", platform)
                 raise HTTPException(
                     status_code=403, detail="Missing verification token"
                 )
 
             if not expected or hub_verify_token != expected:
-                self.logger.error("❌ Invalid verification token received")
+                self.logger.error("Invalid verification token received")
                 raise HTTPException(
                     status_code=403, detail="Invalid verification token"
                 )
 
             self.logger.info(
-                "✅ Webhook verification successful for %s, inbox: %s",
+                "Webhook verification successful for %s, inbox: %s",
                 platform,
                 inbox_id,
             )
