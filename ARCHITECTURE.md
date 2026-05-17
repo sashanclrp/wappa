@@ -139,7 +139,7 @@ Host's process_message():
      └── depends on → Domain Interfaces, Webhooks (universal models)
    
    Webhooks (parsing)
-     └── depends on → Schemas, Domain Models
+     └── depends on → Shared Schema Primitives, Domain Models
    
    Messaging (outbound)
      └── depends on → Domain Interfaces, Platform SDKs (httpx)
@@ -168,9 +168,10 @@ Wappa today is WhatsApp-only in implementation but multi-platform in design:
 
 1. **Universal Webhook Models** (`wappa/webhooks/core/`): `InboxBase`, `UserBase`, `MessageBase`, `StatusBase`, `ErrorBase`, `SystemBase` — platform-agnostic.
 2. **Platform Adapters** (`wappa/webhooks/whatsapp/`, `wappa/messaging/whatsapp/`): Parse WhatsApp-specific payloads into universal models; construct WhatsApp-specific API requests from universal send calls.
-3. **PlatformType enum**: New platforms add a value here. The router, dispatcher, and factory resolve the correct adapter.
-4. **Inbox Credential Store** (`IInboxCredentialStore`): Resolves the credentials for a concrete `inbox_id`. The default `SettingsInboxCredentialStore` supports a single settings-backed WhatsApp Inbox; hosts that manage many Inboxes inject their own store, including the provided database-backed implementation.
-5. **Adding a new platform** requires:
+3. **Shared Schema Primitives** (`wappa/schemas/core/types.py`, `wappa/schemas/core/recipient.py`): Cross-cutting enums and outbound recipient normalization shared by inbound, outbound, API, and runtime modules. Inbound webhook schemas do not live here.
+4. **PlatformType enum**: New platforms add a value here. The router, dispatcher, and factory resolve the correct adapter.
+5. **Inbox Credential Store** (`IInboxCredentialStore`): Resolves the credentials for a concrete `inbox_id`. The default `SettingsInboxCredentialStore` supports a single settings-backed WhatsApp Inbox; hosts that manage many Inboxes inject their own store, including the provided database-backed implementation.
+6. **Adding a new platform** requires:
    - A webhook processor implementing the platform's payload → universal model mapping
    - A messenger implementing `IMessenger` for that platform's send API
    - A credential resolver for that platform's auth (implementing `IInboxCredentialStore`)

@@ -7,13 +7,14 @@ webhook processors must inherit from to ensure consistent interfaces.
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
 
 from wappa.core.logging.logger import get_logger
-from wappa.schemas.core.base_message import BaseMessage
-from wappa.schemas.core.base_status import BaseMessageStatus
-from wappa.schemas.core.base_webhook import BaseWebhook
 from wappa.schemas.core.types import ErrorCode, MessageType, PlatformType
+from wappa.webhooks.core.base_message import BaseMessage
+from wappa.webhooks.core.base_status import BaseMessageStatus
+from wappa.webhooks.core.base_webhook import BaseWebhook
 
 # Legacy ProcessingResult class removed - Universal Webhook Interface is now the ONLY way
 # Use processor.create_universal_webhook() method instead for type-safe webhook handling
@@ -72,16 +73,16 @@ class BaseWebhookProcessor(ABC):
     to provide a consistent interface for webhook processing.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.logger = get_logger(__name__)
 
         # Message type handlers - subclasses should populate this
-        self._message_type_handlers: dict[str, callable] = {}
+        self._message_type_handlers: dict[str, Callable[..., BaseMessage]] = {}
 
         # Processing statistics
         self._processed_count = 0
         self._error_count = 0
-        self._last_processed = None
+        self._last_processed: datetime | None = None
 
     @property
     @abstractmethod
@@ -100,7 +101,7 @@ class BaseWebhookProcessor(ABC):
 
     @abstractmethod
     def validate_webhook_signature(
-        self, payload: bytes, signature: str, **kwargs
+        self, payload: bytes, signature: str, **kwargs: Any
     ) -> bool:
         """
         Validate webhook signature for security.
@@ -116,7 +117,9 @@ class BaseWebhookProcessor(ABC):
         pass
 
     @abstractmethod
-    def parse_webhook_container(self, payload: dict[str, Any], **kwargs) -> BaseWebhook:
+    def parse_webhook_container(
+        self, payload: dict[str, Any], **kwargs: Any
+    ) -> BaseWebhook:
         """
         Parse the top-level webhook structure.
 
@@ -139,7 +142,10 @@ class BaseWebhookProcessor(ABC):
 
     @abstractmethod
     def create_message_from_data(
-        self, message_data: dict[str, Any], message_type: MessageType, **kwargs
+        self,
+        message_data: dict[str, Any],
+        message_type: MessageType,
+        **kwargs: Any,
     ) -> BaseMessage:
         """
         Create a message instance from raw data.
@@ -160,7 +166,7 @@ class BaseWebhookProcessor(ABC):
 
     @abstractmethod
     def create_status_from_data(
-        self, status_data: dict[str, Any], **kwargs
+        self, status_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessageStatus:
         """
         Create a status instance from raw data.
@@ -181,7 +187,9 @@ class BaseWebhookProcessor(ABC):
         """Check if the platform string matches this processor."""
         return platform.lower() == self.platform.value.lower()
 
-    def register_message_handler(self, message_type: str, handler: Callable) -> None:
+    def register_message_handler(
+        self, message_type: str, handler: Callable[..., BaseMessage]
+    ) -> None:
         """Register a handler for a specific message type."""
         self._message_type_handlers[message_type] = handler
 
