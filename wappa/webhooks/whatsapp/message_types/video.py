@@ -9,12 +9,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from wappa.webhooks.core.base_message import BaseMessageContext, BaseVideoMessage
-from wappa.webhooks.core.types import (
+from wappa.schemas.core.types import (
     ConversationType,
     PlatformType,
     UniversalMessageData,
 )
+from wappa.webhooks.core.base_message import BaseMessageContext, BaseVideoMessage
 from wappa.webhooks.whatsapp.base_models import AdReferral, MessageContext
 
 
@@ -218,7 +218,7 @@ class WhatsAppVideoMessage(BaseVideoMessage):
     @property
     def media_type(self):
         """Get the media type from MediaType enum."""
-        from wappa.webhooks.core.types import MediaType
+        from wappa.schemas.core.types import MediaType
 
         mime_str = self.video.mime_type
         try:

@@ -44,7 +44,7 @@ from .context_helpers import (
 
 # Handler dispatch (Issue 2 fix - extracted class)
 from .dispatcher import ExpiryDispatcher
-from .listener import get_fastapi_app, run_expiry_listener, set_fastapi_app
+from .listener import run_expiry_listener
 
 # Event parsing (Issue 2 & 3 fix - extracted class, uses registry.resolve)
 from .parser import ExpiryEvent, ExpiryEventParser
@@ -56,13 +56,11 @@ from .reconnection import ReconnectionConfig, ReconnectionStrategy
 from .registry import AsyncHandler, ExpirationHandlerRegistry, expiry_registry
 
 __all__ = [
-    # Primary exports (backward compatible)
+    # Primary exports
     "ExpirationHandlerRegistry",
     "expiry_registry",
     "AsyncHandler",
     "run_expiry_listener",
-    "get_fastapi_app",
-    "set_fastapi_app",
     # Context management
     "AppContext",
     "get_app_context",

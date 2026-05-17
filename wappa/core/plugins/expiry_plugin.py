@@ -163,10 +163,10 @@ class ExpiryPlugin:
             # Store in app state for access/monitoring
             app.state.expiry_listener_task = self._listener_task
 
-            # Store app reference globally for expiry handlers to access HTTP session
-            from ..expiry.listener import set_fastapi_app
+            # Store app reference for expiry handlers to access HTTP session
+            from ..expiry.app_context import get_app_context
 
-            set_fastapi_app(app)
+            get_app_context().set_app(app)
 
             logger.info("✅ ExpiryPlugin startup completed")
             logger.info("====================================")

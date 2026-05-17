@@ -9,8 +9,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from wappa.schemas.core.types import MessageStatus
 from wappa.webhooks.core.base_status import BaseMessageStatus
-from wappa.webhooks.core.types import MessageStatus
 from wappa.webhooks.whatsapp.base_models import Conversation, MessageError, Pricing
 
 

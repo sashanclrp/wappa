@@ -105,11 +105,7 @@ class SendInvocation:
         )
 
     def to_request_payload(self) -> dict[str, Any]:
-        """Serializable named-argument payload (for event emission).
-
-        Matches the legacy ``SSEMessengerWrapper`` ``request`` payload
-        shape so existing SSE subscribers remain wire-compatible.
-        """
+        """Serializable named-argument payload (for event emission)."""
         return _to_serializable(dict(self.arguments))
 
 

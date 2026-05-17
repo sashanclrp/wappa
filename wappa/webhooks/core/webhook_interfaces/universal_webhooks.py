@@ -19,8 +19,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from wappa.schemas.core.types import MessageStatus, PlatformType
 from wappa.webhooks.core.base_message import BaseMessage
-from wappa.webhooks.core.types import MessageStatus, PlatformType
 from wappa.webhooks.core.webhook_interfaces.base_components import (
     AdReferralBase,
     BusinessContextBase,

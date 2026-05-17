@@ -1,4 +1,4 @@
-"""End-to-end coverage for the v0.3.6 SSE context propagation contract.
+"""End-to-end coverage for the SSE context propagation contract.
 
 These tests exercise:
 - ``sse_event_scope`` sets and resets the contextvar cleanly.
@@ -7,22 +7,19 @@ These tests exercise:
   so envelopes always carry ``bsuid`` / ``phone_number`` / ``metadata``.
 - ``SSEMessageHandler`` defers emission until ``post_process_message``,
   picking up metadata the app set during ``process_message``.
-- ``SSEMessengerWrapper`` publishes with zero per-wrapper identity and
-  still produces a complete envelope when a scope is active.
 """
 
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
 from wappa.core.sse import (
     SSEEventHub,
     SSEMessageHandler,
-    SSEMessengerWrapper,
     publish_sse_event,
 )
 from wappa.core.sse.context import (
@@ -41,7 +38,7 @@ async def _drain(subscription, timeout: float = 0.5) -> list[dict]:
             events.append(
                 await asyncio.wait_for(subscription.queue.get(), timeout=timeout)
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return events
 
 
@@ -140,41 +137,6 @@ async def test_publish_sse_event_without_scope_yields_defaults():
     assert env["bsuid"] is None
     assert env["phone_number"] is None
     assert env["metadata"] is None
-
-
-@pytest.mark.asyncio
-async def test_sse_messenger_wrapper_emits_with_context_identity():
-    hub = SSEEventHub()
-    sub = await hub.subscribe()
-
-    inner = MagicMock()
-    inner.platform.value = "whatsapp"
-    inner.inbox_id = "t-1"
-    # Mimic IMessenger.send_text return contract.
-    fake_result = MagicMock()
-    fake_result.model_dump = MagicMock(return_value={"message_id": "wamid.xyz"})
-    inner.send_text = AsyncMock(return_value=fake_result)
-
-    wrapper = SSEMessengerWrapper(inner=inner, event_hub=hub)
-
-    async with sse_event_scope(
-        inbox_id="t-1",
-        user_id="US.canonical",
-        bsuid="US.canonical",
-        phone_number="15551234567",
-    ):
-        update_metadata(conversation_id="conv-42")
-        await wrapper.send_text("hello", recipient="15551234567")
-
-    events = await _drain(sub, timeout=0.1)
-    assert len(events) == 1
-    env = events[0]
-    assert env["event_type"] == "outgoing_bot_message"
-    assert env["source"] == "bot_messenger"
-    assert env["bsuid"] == "US.canonical"
-    assert env["phone_number"] == "15551234567"
-    assert env["metadata"] == {"conversation_id": "conv-42"}
-    assert env["payload"]["message_type"] == "text"
 
 
 @dataclass

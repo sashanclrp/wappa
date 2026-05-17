@@ -10,12 +10,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from wappa.webhooks.core.base_message import BaseMessageContext, BaseTextMessage
-from wappa.webhooks.core.types import (
+from wappa.schemas.core.types import (
     ConversationType,
     PlatformType,
     UniversalMessageData,
 )
+from wappa.webhooks.core.base_message import BaseMessageContext, BaseTextMessage
 from wappa.webhooks.whatsapp.base_models import AdReferral, MessageContext
 
 

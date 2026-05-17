@@ -104,7 +104,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         self.register_message_handler("button", self._create_button_message)
         self.register_message_handler("order", self._create_order_message)
 
-    # Legacy process_webhook method removed - Universal Webhook Interface is now the ONLY way
     # Use create_universal_webhook() method instead for type-safe webhook handling
 
     def validate_webhook_signature(

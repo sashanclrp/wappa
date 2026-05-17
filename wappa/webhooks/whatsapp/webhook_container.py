@@ -17,12 +17,12 @@ from pydantic import (
 )
 
 from wappa.core.events.field_registry import BUILTIN_WEBHOOK_FIELDS
+from wappa.schemas.core.types import PlatformType, WebhookType
 from wappa.webhooks.core.base_webhook import (
     BaseContact,
     BaseWebhook,
     BaseWebhookMetadata,
 )
-from wappa.webhooks.core.types import PlatformType, WebhookType
 from wappa.webhooks.whatsapp.base_models import WhatsAppContact, WhatsAppMetadata
 
 

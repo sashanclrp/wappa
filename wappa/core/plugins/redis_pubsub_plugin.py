@@ -44,7 +44,7 @@ class RedisPubSubPlugin:
     Event Types:
         incoming_message: Webhook-received messages (PubSubMessageHandler)
         outgoing_message: API-sent messages (api post-process hook)
-        bot_reply: Bot-sent messages (PubSubMessengerWrapper)
+        bot_reply: Bot-sent messages (PubSubNotificationMiddleware)
         status_change: Status updates (PubSubStatusHandler)
 
     Usage:

@@ -6,7 +6,6 @@ Defines the contracts that infrastructure layer must implement.
 
 from .base_repository import IBaseRepository
 from .cache_factory import ICacheFactory
-from .cache_interface import ICache
 from .cache_interfaces import IStateCache, ITableCache, IUserCache
 from .expiry_repository import IExpiryRepository
 from .identity_resolver import IIdentityResolver, PassthroughIdentityResolver
@@ -47,8 +46,6 @@ __all__ = [
     "IStateCache",
     "ITableCache",
     "ICacheFactory",
-    # Cache interface (deprecated - use type-specific interfaces instead)
-    "ICache",
     # PubSub interface
     "IPubSubPublisher",
     "PubSubEventType",

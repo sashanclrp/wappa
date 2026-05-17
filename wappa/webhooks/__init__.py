@@ -15,8 +15,9 @@ Usage:
     from wappa.webhooks.whatsapp.message_types import TextMessage, ImageMessage
 """
 
+from wappa.schemas.core.types import PlatformType, UniversalMessageData, WebhookType
+
 from .core.base_webhook import BaseContact, BaseWebhook, BaseWebhookMetadata
-from .core.types import PlatformType, UniversalMessageData, WebhookType
 from .core.webhook_interfaces.universal_webhooks import (
     CustomWebhook,
     ErrorWebhook,

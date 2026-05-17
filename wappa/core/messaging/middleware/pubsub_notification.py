@@ -1,7 +1,6 @@
 """Pub/Sub bot-reply notification middleware.
 
-Replaces the legacy ``PubSubMessengerWrapper``. Publishes a compact
-notification (message_id + message_type) on the
+Publishes a compact notification (message_id + message_type) on the
 ``wappa:notify:{inbox_id}:{user_id}:bot_reply`` channel after every
 successful outgoing send. Identity comes from the active
 ``SSEEventContext`` (set once per request at the framework entry point)

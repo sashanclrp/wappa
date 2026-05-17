@@ -120,11 +120,11 @@ The plugin intercepts events at each stage without modifying existing handler co
 
 Pre-v0.4.0 the plugin flipped `app.state.pubsub_wrap_messenger = True` and the webhook controller branched on that flag to wrap `self.messenger` with a `PubSubMessengerWrapper` — a ~300 LOC class that re-implemented all 18 `IMessenger` methods purely to emit a `bot_reply` notification after each send. Adding a sibling concern (a cache write, a metrics probe) forced the same copy-paste.
 
-In v0.4.0 that wrapper was rewritten as a ~60 LOC `PubSubNotificationMiddleware` on the general messenger pipeline. It reads tenant + user identity from the active `SSEEventContext` (set once per request by the framework entry point), so the middleware is app-scoped and shared across requests. Adding another outbound concern is a single `add_messenger_middleware` call at the right priority — no new `app.state` flags, no controller changes, no private-attribute drilling.
+In v0.4.0 that wrapper was rewritten as a ~60 LOC `PubSubNotificationMiddleware` on the general messenger pipeline. It reads inbox + user identity from the active `SSEEventContext` (set once per request by the framework entry point), so the middleware is app-scoped and shared across requests. Adding another outbound concern is a single `add_messenger_middleware` call at the right priority — no new `app.state` flags, no controller changes, no private-attribute drilling.
 
 `mark_as_read()` still bypasses the pipeline (it is not a user-visible message), matching legacy behaviour.
 
-The legacy `PubSubMessengerWrapper` is kept as a deprecation shim through v0.5.0 and will be removed in v0.6.0. See [MessengerMiddleware.md](./MessengerMiddleware.md) for the full design.
+The legacy `PubSubMessengerWrapper` import was removed in the clean-break compatibility cleanup. See [MessengerMiddleware.md](./MessengerMiddleware.md) for the full design.
 
 ## Subscription examples
 

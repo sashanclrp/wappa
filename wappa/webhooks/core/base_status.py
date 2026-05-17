@@ -11,7 +11,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .types import MessageStatus, PlatformType, UniversalMessageData
+from wappa.schemas.core.types import MessageStatus, PlatformType, UniversalMessageData
 
 
 class BaseMessageStatus(BaseModel, ABC):

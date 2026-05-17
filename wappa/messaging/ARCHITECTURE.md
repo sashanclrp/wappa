@@ -46,7 +46,6 @@ messaging/
       whatsapp_template_info_service.py  # Read-only WABA template listing and lookup
     utils/
       error_helpers.py            # handle_whatsapp_error — uniform error → MessageResult
-    recipient_resolver.py         # Backward-compat re-export of schemas.core.recipient utilities
 ```
 
 ## Key Classes and Roles

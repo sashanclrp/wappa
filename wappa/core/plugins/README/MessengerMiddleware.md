@@ -247,16 +247,11 @@ pipeline.raw_messenger            # the underlying transport (IMessenger)
 pipeline.middleware_chain         # tuple of registered middleware, outer → inner
 ```
 
-## Legacy wrappers (deprecated)
+## Removed Legacy Wrappers
 
-`SSEMessengerWrapper` and `PubSubMessengerWrapper` are kept as thin shims that emit a `DeprecationWarning` on construction. They work for one more minor version and will be removed in v0.6.0. Any code that imports them directly — especially code that reads `._inner` or `._event_hub` — should migrate to `add_messenger_middleware` instead:
+`SSEMessengerWrapper` and `PubSubMessengerWrapper` were removed in the clean-break compatibility cleanup. Code that imported them directly — especially code that read `._inner` or `._event_hub` — must use `add_messenger_middleware` instead:
 
 ```python
-# Deprecated
-from wappa.core.sse import SSEMessengerWrapper
-messenger = SSEMessengerWrapper(inner=raw, event_hub=hub)
-
-# New
 # (done automatically when SSEEventsPlugin is added)
 builder.add_plugin(SSEEventsPlugin())
 ```

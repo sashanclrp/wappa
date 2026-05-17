@@ -103,9 +103,7 @@ Supported `event_types` values:
 
 Pre-v0.4.0 the plugin set `app.state.sse_wrap_messenger = True` and the webhook controller branched on that flag to wrap `self.messenger` with an `SSEMessengerWrapper`. That wrapper re-implemented all 18 `IMessenger` methods just to intercept each one. Downstream apps that needed a cache write to complete before the SSE publish had to drill `messenger._inner` and `sse_wrapper._event_hub` to reassemble the stack manually.
 
-In v0.4.0 that wrapper was rewritten as a ~50 LOC `SSELifecycleMiddleware` inside the general messenger pipeline. Ordering with any other concern (cache, pub/sub, retry) is now declarative via priority; there are no private attributes to drill. See [MessengerMiddleware.md](./MessengerMiddleware.md) for the full picture.
-
-The legacy `SSEMessengerWrapper` is kept as a deprecation shim through v0.5.0 and will be removed in v0.6.0.
+In v0.4.0 that wrapper was rewritten as a ~50 LOC `SSELifecycleMiddleware` inside the general messenger pipeline. Ordering with any other concern (cache, pub/sub, retry) is now declarative via priority; there are no private attributes to drill. The legacy `SSEMessengerWrapper` import was removed in the clean-break compatibility cleanup. See [MessengerMiddleware.md](./MessengerMiddleware.md) for the full picture.
 
 ## Event envelope format
 

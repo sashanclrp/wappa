@@ -1,7 +1,5 @@
 """SSE outgoing-message lifecycle middleware.
 
-Replaces the legacy ``SSEMessengerWrapper``. Semantics preserved exactly:
-
     flush staged incoming_message  →  await send  →  publish outgoing_bot_message
 
 Identity for the envelope comes from the active ``SSEEventContext`` — the

@@ -133,7 +133,7 @@ class SSEMessageHandler(DefaultMessageHandler):
 
     ``log_incoming_message`` stages the payload + flush callback on the
     request-scoped context. Flush fires on the first of: ``update_metadata``
-    / ``update_identity`` call, outgoing send via ``SSEMessengerWrapper``,
+    / ``update_identity`` call, outgoing send via SSE middleware,
     or ``post_process_message`` (safety net) — guaranteeing
     ``incoming_message`` always precedes ``outgoing_bot_message``.
     """

@@ -22,7 +22,6 @@ Usage (User Request: Quick access to create_cache_factory):
 # Cache Factory Functions (User Request: Quick access to create_cache_factory)
 # Cache Interfaces
 from ..domain.interfaces.cache_factory import ICacheFactory
-from ..domain.interfaces.cache_interface import ICache
 from ..domain.interfaces.expiry_repository import IExpiryRepository
 from ..domain.interfaces.pubsub_repository import IPubSubRepository
 
@@ -40,7 +39,6 @@ __all__ = [
     "get_cache_factory",
     # Core Interfaces
     "ICacheFactory",
-    "ICache",
     "IRepositoryFactory",
     # Repository Interfaces
     "IStateRepository",

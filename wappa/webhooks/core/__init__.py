@@ -5,13 +5,8 @@ This module provides platform-agnostic base classes and types that enable
 unified processing across multiple messaging platforms (WhatsApp, Telegram, Teams, Instagram).
 """
 
-# Universal webhook interfaces for platform-agnostic handling
-from .base_message import BaseMessage, BaseTextMessage
-from .base_status import BaseMessageStatus
-from .base_webhook import BaseWebhook
-
 # Core types and base classes
-from .types import (
+from wappa.schemas.core.types import (
     ConversationType,
     ErrorCode,
     InteractiveType,
@@ -21,6 +16,11 @@ from .types import (
     PlatformType,
     WebhookType,
 )
+
+# Universal webhook interfaces for platform-agnostic handling
+from .base_message import BaseMessage, BaseTextMessage
+from .base_status import BaseMessageStatus
+from .base_webhook import BaseWebhook
 from .webhook_interfaces import (
     AdReferralBase,
     BusinessContextBase,
