@@ -5,6 +5,14 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.3] - 2026-05-18
+
+Upgraded FastAPI to 0.136.1 and all transitive dependencies including Starlette 1.0.0. Wappa now runs on Starlette 1.0+ out of the box — no upper pin. A sibling project (Symphonai) needed a temporary `starlette<1.0` pin due to a startup hang with AnyIO 4.12; that workaround lives in Symphonai's own `pyproject.toml`, not here. If you hit a similar issue in your host application, pin starlette locally until the root cause is identified.
+
+### Changed
+- Upgraded FastAPI from 0.135.1+ to 0.136.1 with Starlette 1.0.0 and AnyIO 4.13 in the lock file.
+- Refreshed all transitive dependency versions in `uv.lock`.
+
 ## [0.13.2] - 2026-05-16
 
 Release-hardening patch for the clean-break architecture release.
