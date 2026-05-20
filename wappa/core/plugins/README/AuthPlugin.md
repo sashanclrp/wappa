@@ -97,9 +97,12 @@ Default excluded paths are always included:
 - `/health`
 - `/api/sse/status`
 - `/webhook/messenger`
+- `/webhook/inboxes`
 - `/docs`
 - `/openapi.json`
 - `/redoc`
+
+`/webhook/messenger` is retained for verify-only callbacks (for example, `GET /webhook/messenger/{platform}/verify`), while platform webhook processing is served under `/webhook/inboxes/{inbox_id}/{platform}`.
 
 Add your own exclusions on top of the defaults:
 

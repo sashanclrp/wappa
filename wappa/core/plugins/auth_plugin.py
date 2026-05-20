@@ -54,6 +54,7 @@ class AuthPlugin:
         "/health",
         "/api/sse/status",
         "/webhook/messenger",
+        "/webhook/inboxes",
         "/docs",
         "/openapi.json",
         "/redoc",

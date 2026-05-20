@@ -25,6 +25,18 @@ When no custom store is configured, Wappa uses `SettingsInboxCredentialStore`, w
 Host applications import inbound webhook schemas and Universal Models from
 `wappa.webhooks`.
 
+Canonical messaging webhook routes are:
+
+- `GET /webhook/inboxes/{inbox_id}/{platform}` for platform verification at the
+  same URL used for processing.
+- `POST /webhook/inboxes/{inbox_id}/{platform}` for inbound platform webhook
+  processing.
+- `GET /webhook/messenger/{platform}/verify` for retained verify-only callbacks.
+
+Wappa does not provide an inbox-scoped `/webhook/messenger/{inbox_id}/{platform}`
+processing route.
+Wappa also does not process platform webhooks on `/webhook/messenger/*` paths.
+
 Public inbound imports include:
 
 - `from wappa.webhooks import InboundMessageWebhook`

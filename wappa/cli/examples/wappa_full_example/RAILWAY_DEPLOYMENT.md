@@ -80,7 +80,7 @@ After deployment, configure your WhatsApp webhook:
 
 2. **Set webhook in Facebook Developer Console**:
    ```
-   Webhook URL: https://your-app-name.up.railway.app/webhook/messenger/YOUR_PHONE_ID/whatsapp
+   Webhook URL: https://your-app-name.up.railway.app/webhook/inboxes/YOUR_PHONE_ID/whatsapp
    Verify Token: your_webhook_token_here
    ```
 
@@ -257,10 +257,10 @@ railway variables get REDIS_URL
 railway logs
 
 # Verify webhook URL format:
-# https://your-app.up.railway.app/webhook/messenger/PHONE_ID/whatsapp
+# https://your-app.up.railway.app/webhook/inboxes/PHONE_ID/whatsapp
 
 # Test webhook endpoint
-curl -X GET "https://your-app.up.railway.app/webhook/messenger/YOUR_PHONE_ID/whatsapp?hub.verify_token=YOUR_TOKEN&hub.challenge=test"
+curl -X GET "https://your-app.up.railway.app/webhook/inboxes/YOUR_PHONE_ID/whatsapp?hub.verify_token=YOUR_TOKEN&hub.challenge=test"
 ```
 
 ## 💰 Railway Pricing Considerations
@@ -322,8 +322,11 @@ railway open          # Open deployed application
 After Railway deployment, use these URLs:
 
 ```bash
-# Primary webhook URL
-https://your-app.up.railway.app/webhook/messenger/YOUR_PHONE_ID/whatsapp
+# Platform webhook processing + GET verification URL
+https://your-app.up.railway.app/webhook/inboxes/YOUR_PHONE_ID/whatsapp
+
+# Optional retained verify-only callback URL
+https://your-app.up.railway.app/webhook/messenger/whatsapp/verify
 
 # Health check
 https://your-app.up.railway.app/health

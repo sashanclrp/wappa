@@ -54,7 +54,7 @@ class WebhookURLFactory:
         # In production, this would be configured via environment
         # For now, use a placeholder that should be configured
         webhook_base_url = getattr(settings, "webhook_base_url", None)
-        if webhook_base_url:
+        if isinstance(webhook_base_url, str) and webhook_base_url:
             return webhook_base_url
 
         # Default fallback (should be configured in production)
@@ -80,18 +80,17 @@ class WebhookURLFactory:
         Example:
             >>> factory = WebhookURLFactory()
             >>> factory.generate_webhook_url(PlatformType.WHATSAPP, "123456789")
-            "https://your-domain.com/webhook/messenger/123456789/whatsapp"
+            "https://your-domain.com/webhook/inboxes/123456789/whatsapp"
         """
         platform_name = platform.value.lower()
 
         if endpoint_type == WebhookEndpointType.VERIFY:
             return f"{self.base_url}/webhook/messenger/{platform_name}/verify"
-        elif endpoint_type == WebhookEndpointType.STATUS:
-            return (
-                f"{self.base_url}/webhook/inboxes/{inbox_id}/{platform_name}/status"
-            )
-        else:  # WEBHOOK (default)
-            return f"{self.base_url}/webhook/inboxes/{inbox_id}/{platform_name}"
+        if endpoint_type == WebhookEndpointType.STATUS:
+            return f"{self.base_url}/webhook/inboxes/{inbox_id}/{platform_name}/status"
+
+        # WEBHOOK (default): canonical processing endpoint
+        return f"{self.base_url}/webhook/inboxes/{inbox_id}/{platform_name}"
 
     def generate_whatsapp_webhook_url(self) -> str:
         """
@@ -131,7 +130,7 @@ class WebhookURLFactory:
                 "webhook_pattern": f"/webhook/inboxes/{{inbox_id}}/{platform_name}",
                 "verify_pattern": f"/webhook/messenger/{platform_name}/verify",
                 "status_pattern": f"/webhook/inboxes/{{inbox_id}}/{platform_name}/status",
-                "example_webhook": self.generate_webhook_url(platform, "TENANT_ID"),
+                "example_webhook": self.generate_webhook_url(platform, "INBOX_ID"),
                 "example_verify": self.generate_webhook_url(
                     platform, "", WebhookEndpointType.VERIFY
                 ),
@@ -161,7 +160,7 @@ class WebhookURLFactory:
         Parse webhook URL path and extract inbox_id and platform.
 
         Args:
-            webhook_path: Webhook URL path (e.g., "/webhook/messenger/123/whatsapp")
+            webhook_path: Webhook URL path (e.g., "/webhook/inboxes/123/whatsapp")
 
         Returns:
             Tuple of (inbox_id, platform) if valid, None otherwise
@@ -171,7 +170,7 @@ class WebhookURLFactory:
         if (
             len(path_parts) >= 4
             and path_parts[0] == "webhook"
-            and path_parts[1] == "messenger"
+            and path_parts[1] == "inboxes"
         ):
             return path_parts[2], path_parts[3]
 
@@ -182,7 +181,7 @@ class WebhookURLFactory:
         Extract platform type from a webhook URL path.
 
         Args:
-            webhook_path: Webhook URL path (e.g., "/webhook/messenger/123/whatsapp")
+            webhook_path: Webhook URL path (e.g., "/webhook/inboxes/123/whatsapp")
 
         Returns:
             PlatformType if found, None otherwise
@@ -197,12 +196,12 @@ class WebhookURLFactory:
         except ValueError:
             return None
 
-    def extract_tenant_from_url(self, webhook_path: str) -> str | None:
+    def extract_inbox_from_url(self, webhook_path: str) -> str | None:
         """
         Extract inbox ID from a webhook URL path.
 
         Args:
-            webhook_path: Webhook URL path (e.g., "/webhook/messenger/123/whatsapp")
+            webhook_path: Webhook URL path (e.g., "/webhook/inboxes/123/whatsapp")
 
         Returns:
             Inbox ID if found, None otherwise

@@ -8,7 +8,7 @@ Build intelligent WhatsApp bots, workflows, and chat applications with clean arc
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com)
 [![WhatsApp Business API](https://img.shields.io/badge/WhatsApp-Business%20API-25D366.svg)](https://developers.facebook.com/docs/whatsapp)
-[![Version](https://img.shields.io/badge/version-0.13.3-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.13.4-orange.svg)](CHANGELOG.md)
 
 > **v0.13.0 — Clean-break release** — `inbox_id` replaces `tenant_id`/`owner_id` as core identity, all compatibility shims removed, webhook schemas consolidated under `wappa/webhooks/`, inbound dispatch context added for multi-inbox routing. See [CHANGELOG.md](CHANGELOG.md) for the full breakdown.
 

@@ -5,6 +5,28 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.4] - 2026-05-20
+
+Fixes WhatsApp webhook verification when host applications enable `AuthPlugin`.
+Wappa now treats the canonical inbox-scoped webhook route as an unauthenticated
+platform webhook surface, and removes stale generated/docs references to the old
+inbox-scoped messenger path.
+
+### Fixed
+- Added `/webhook/inboxes` to `AuthPlugin.DEFAULT_EXCLUDES` so
+  `GET /webhook/inboxes/{inbox_id}/{platform}` verification and
+  `POST /webhook/inboxes/{inbox_id}/{platform}` processing bypass JWT/API auth
+  and reach Wappa's webhook runtime.
+- Updated `WebhookURLFactory` examples, parsing, generated platform details, and
+  route extraction helpers to use `/webhook/inboxes/{inbox_id}/{platform}` as
+  the canonical processing URL.
+- Clarified public contract and generated/example docs so
+  `/webhook/messenger/{platform}/verify` is verify-only, while platform webhook
+  receiving happens only through `/webhook/inboxes/{inbox_id}/{platform}`.
+- Added regression coverage for auth exclusion, verification success/failure,
+  route method boundaries, generated `/webhook/platforms` payloads, and stale
+  messenger processing path rejection.
+
 ## [0.13.3] - 2026-05-18
 
 Upgraded FastAPI to 0.136.1 and all transitive dependencies including Starlette 1.0.0. Wappa now runs on Starlette 1.0+ out of the box — no upper pin. A sibling project (Symphonai) needed a temporary `starlette<1.0` pin due to a startup hang with AnyIO 4.12; that workaround lives in Symphonai's own `pyproject.toml`, not here. If you hit a similar issue in your host application, pin starlette locally until the root cause is identified.
