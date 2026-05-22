@@ -5,6 +5,17 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.6] - 2026-05-21
+
+Broadens the Redis serde JSON serialization handler to cover all common Python
+types that Pydantic `model_dump()` can produce, preventing `TypeError` crashes
+when cached models contain fields beyond `datetime`.
+
+### Changed
+- Replaced `_datetime_handler` with `_json_default_handler` in Redis serde,
+  adding support for `date`, `time`, `timedelta`, `UUID`, `Decimal`, `Enum`,
+  `bytes`, `set`/`frozenset`, `PurePath`, and IP address types.
+
 ## [0.13.5] - 2026-05-21
 
 Fixes a Pydantic validation error when WhatsApp sends unsupported message webhooks

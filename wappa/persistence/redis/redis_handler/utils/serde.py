@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
+from decimal import Decimal
 from enum import Enum
+from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
+from pathlib import PurePath
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -37,10 +41,30 @@ def _convert_redis_to_bools(obj: Any) -> Any:
         return obj
 
 
-def _datetime_handler(obj: Any) -> str:
-    """Handle datetime objects during JSON serialization"""
+def _json_default_handler(obj: Any) -> str | int | float | list:
+    """Handle non-JSON-serializable types from Pydantic model_dump()."""
     if isinstance(obj, datetime):
         return obj.isoformat()
+    if isinstance(obj, date):
+        return obj.isoformat()
+    if isinstance(obj, time):
+        return obj.isoformat()
+    if isinstance(obj, timedelta):
+        return obj.total_seconds()
+    if isinstance(obj, UUID):
+        return str(obj)
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, Enum):
+        return obj.value
+    if isinstance(obj, bytes):
+        return obj.decode("utf-8", errors="replace")
+    if isinstance(obj, (set, frozenset)):
+        return list(obj)
+    if isinstance(obj, PurePath):
+        return str(obj)
+    if isinstance(obj, (IPv4Address, IPv6Address, IPv4Network, IPv6Network)):
+        return str(obj)
     raise TypeError(f"Object of type {type(obj)} is not JSON serializable")
 
 
@@ -81,9 +105,9 @@ def dumps(obj: Any) -> str:
         # Convert to dict first, then convert bools to "1"/"0", then to JSON
         model_dict = obj.model_dump()
         redis_dict = _convert_bools_to_redis(model_dict)
-        return json.dumps(redis_dict, ensure_ascii=False, default=_datetime_handler)
+        return json.dumps(redis_dict, ensure_ascii=False, default=_json_default_handler)
     try:
-        return json.dumps(obj, ensure_ascii=False, default=_datetime_handler)
+        return json.dumps(obj, ensure_ascii=False, default=_json_default_handler)
     except TypeError as e:
         logger.warning(
             f"Could not JSON serialize value of type {type(obj)}. Falling back to str(). Error: {e}. Value: {obj!r}"
