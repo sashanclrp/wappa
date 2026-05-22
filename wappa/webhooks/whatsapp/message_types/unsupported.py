@@ -1,8 +1,10 @@
 """
 WhatsApp unsupported message schema.
 
-This module contains Pydantic models for processing WhatsApp unsupported messages,
-which are sent when users send message types not supported by the Cloud API.
+Pydantic model for WhatsApp unsupported message webhooks — sent when a user
+sends a message type not supported by the Cloud API (e.g. unknown subtypes,
+numbers already in use with the API). The payload always includes one or more
+error objects explaining the cause.
 """
 
 from typing import Any, Literal
@@ -18,71 +20,62 @@ from wappa.schemas.core.types import (
 from wappa.webhooks.core.base_message import BaseMessage, BaseMessageContext
 from wappa.webhooks.whatsapp.base_models import MessageContext, MessageError
 
+# WhatsApp error code for unknown/unsupported message subtypes.
+_UNKNOWN_TYPE_ERROR_CODE = 131051
+
 
 class WhatsAppUnsupportedMessage(BaseMessage):
     """
     WhatsApp unsupported message model.
 
-    Represents messages that are not supported by the WhatsApp Cloud API, such as:
-    - New message types not yet supported
-    - Messages sent to numbers already in use with the API
-    - Other unsupported content types
-
-    These messages include error information explaining why they're unsupported.
+    Represents messages rejected by the WhatsApp Cloud API with error
+    information that explains why the content could not be delivered.
+    The ``unsupported`` field carries the provider sub-payload WhatsApp
+    attaches alongside ``"type": "unsupported"`` (v24.0+).
     """
 
     model_config = ConfigDict(
         extra="forbid", str_strip_whitespace=True, validate_assignment=True
     )
 
-    # Standard message fields (BSUID support v24.0+)
+    # Standard identity fields (BSUID support v24.0+)
     from_: str = Field(
         default="",
         alias="from",
-        description="WhatsApp user phone number (may be empty for username-only users)",
+        description="Sender phone number (may be empty for username-only users)",
     )
     from_bsuid: str | None = Field(
         None,
         alias="from_user_id",
-        description="Business Scoped User ID (BSUID) - stable identifier from webhook",
+        description="Business Scoped User ID — stable sender identifier (v24.0+)",
     )
     id: str = Field(..., description="Unique WhatsApp message ID")
     timestamp_str: str = Field(
         ..., alias="timestamp", description="Unix timestamp when the message was sent"
     )
-    type: Literal["unsupported"] = Field(
-        ..., description="Message type, always 'unsupported' for unsupported messages"
+    type: Literal["unsupported"] = Field(..., description="Always 'unsupported'")
+
+    # Provider sub-payload attached alongside the type discriminator.
+    unsupported: dict[str, Any] | None = Field(
+        None, description="Provider payload describing the unsupported message subtype"
     )
 
-    # Error information
     errors: list[MessageError] = Field(
-        ..., description="List of errors explaining why the message is unsupported"
+        ..., description="One or more errors explaining why the message is unsupported"
     )
-
-    # Context field
     context: MessageContext | None = Field(
-        None, description="Context for unsupported messages (rare)"
+        None, description="Reply/forward context (rare for unsupported messages)"
     )
 
-    @property
-    def sender_id(self) -> str:
-        """Get the recommended sender identifier (BSUID if available, else phone)."""
-        if self.from_bsuid and self.from_bsuid.strip():
-            return self.from_bsuid.strip()
-        return self.from_
-
-    @property
-    def has_bsuid(self) -> bool:
-        """Check if this message has a BSUID set."""
-        return bool(self.from_bsuid and self.from_bsuid.strip())
+    # ------------------------------------------------------------------
+    # Validators
+    # ------------------------------------------------------------------
 
     @field_validator("id")
     @classmethod
     def validate_message_id(cls, v: str) -> str:
-        """Validate WhatsApp message ID format."""
         if not v or len(v) < 10:
             raise ValueError("WhatsApp message ID must be at least 10 characters")
-        # WhatsApp message IDs typically start with 'wamid.'
         if not v.startswith("wamid."):
             raise ValueError("WhatsApp message ID should start with 'wamid.'")
         return v
@@ -90,110 +83,72 @@ class WhatsAppUnsupportedMessage(BaseMessage):
     @field_validator("timestamp_str")
     @classmethod
     def validate_timestamp(cls, v: str) -> str:
-        """Validate Unix timestamp format."""
         if not v.isdigit():
             raise ValueError("Timestamp must be numeric")
-        # Validate reasonable timestamp range (after 2020, before 2100)
-        timestamp_int = int(v)
-        if timestamp_int < 1577836800 or timestamp_int > 4102444800:
+        ts = int(v)
+        if ts < 1577836800 or ts > 4102444800:
             raise ValueError("Timestamp must be a valid Unix timestamp")
         return v
 
     @field_validator("errors")
     @classmethod
     def validate_errors(cls, v: list[MessageError]) -> list[MessageError]:
-        """Validate errors list is not empty."""
-        if not v or len(v) == 0:
+        if not v:
             raise ValueError("Unsupported messages must include error information")
         return v
 
+    # ------------------------------------------------------------------
+    # Identity helpers
+    # ------------------------------------------------------------------
+
     @property
-    def sender_phone(self) -> str:
-        """Get the sender's phone number (clean accessor)."""
+    def sender_id(self) -> str:
+        """BSUID when available, otherwise the sender phone number."""
+        if self.from_bsuid and self.from_bsuid.strip():
+            return self.from_bsuid.strip()
         return self.from_
 
     @property
-    def error_count(self) -> int:
-        """Get the number of errors."""
-        return len(self.errors)
+    def has_bsuid(self) -> bool:
+        return bool(self.from_bsuid and self.from_bsuid.strip())
+
+    @property
+    def sender_phone(self) -> str:
+        return self.from_
+
+    # ------------------------------------------------------------------
+    # Error helpers
+    # ------------------------------------------------------------------
 
     @property
     def primary_error(self) -> MessageError:
-        """Get the first (primary) error."""
         return self.errors[0]
 
     @property
     def error_codes(self) -> list[int]:
-        """Get list of all error codes."""
         return [error.code for error in self.errors]
 
     @property
     def error_messages(self) -> list[str]:
-        """Get list of all error messages."""
         return [error.message for error in self.errors]
 
-    @property
-    def unix_timestamp(self) -> int:
-        """Get the timestamp as an integer."""
-        return self.timestamp
-
     def has_error_code(self, code: int) -> bool:
-        """Check if a specific error code is present."""
         return code in self.error_codes
 
     def get_error_by_code(self, code: int) -> MessageError | None:
-        """Get the first error with the specified code."""
-        for error in self.errors:
-            if error.code == code:
-                return error
-        return None
+        return next((e for e in self.errors if e.code == code), None)
 
     def is_unknown_message_type(self) -> bool:
-        """Check if this is an unknown message type error (code 131051)."""
-        return self.has_error_code(131051)
-
-    def is_duplicate_phone_usage(self) -> bool:
-        """
-        Check if this error is due to sending to a number already in use.
-
-        Note: This is based on the trigger description and may need adjustment
-        based on actual error codes for this scenario.
-        """
-        # This would need to be updated with the actual error code
-        # for duplicate phone number usage once documented
-        return False
+        """Return True when the error indicates an unknown message subtype (131051)."""
+        return self.has_error_code(_UNKNOWN_TYPE_ERROR_CODE)
 
     def get_unsupported_reason(self) -> str:
-        """
-        Get a human-readable reason why the message is unsupported.
-
-        Returns:
-            Primary error message explaining the unsupported reason.
-        """
+        """Human-readable reason from the primary error."""
         return self.primary_error.message
 
-    def to_summary_dict(self) -> dict[str, str | bool | int | list]:
-        """
-        Create a summary dictionary for logging and analysis.
-
-        Returns:
-            Dictionary with key message information for structured logging.
-        """
-        return {
-            "message_id": self.id,
-            "sender": self.sender_phone,
-            "timestamp": self.unix_timestamp,
-            "type": self.type,
-            "error_count": self.error_count,
-            "error_codes": self.error_codes,
-            "error_messages": self.error_messages,
-            "primary_error_code": self.primary_error.code,
-            "primary_error_message": self.primary_error.message,
-            "is_unknown_message_type": self.is_unknown_message_type(),
-            "unsupported_reason": self.get_unsupported_reason(),
-        }
-
-    # Implement abstract methods from BaseMessage
+    # ------------------------------------------------------------------
+    # BaseMessage abstract implementations
+    # ------------------------------------------------------------------
 
     @property
     def platform(self) -> PlatformType:
@@ -238,7 +193,7 @@ class WhatsAppUnsupportedMessage(BaseMessage):
             "timestamp": self.timestamp,
             "processed_at": self.processed_at.isoformat(),
             "has_context": self.has_context(),
-            "error_count": self.error_count,
+            "error_count": len(self.errors),
             "error_codes": self.error_codes,
             "primary_error_code": self.primary_error.code,
             "primary_error_message": self.primary_error.message,
@@ -262,9 +217,8 @@ class WhatsAppUnsupportedMessage(BaseMessage):
             "errors": [error.model_dump() for error in self.errors],
             "context": self.context.model_dump() if self.context else None,
             "error_analysis": {
-                "error_count": self.error_count,
+                "error_count": len(self.errors),
                 "is_unknown_message_type": self.is_unknown_message_type(),
-                "is_duplicate_phone_usage": self.is_duplicate_phone_usage(),
                 "primary_error": self.primary_error.model_dump(),
             },
         }

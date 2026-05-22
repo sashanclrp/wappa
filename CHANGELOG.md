@@ -5,6 +5,19 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.5] - 2026-05-21
+
+Fixes a Pydantic validation error when WhatsApp sends unsupported message webhooks
+containing the `"unsupported": {"type": "unknown"}` sub-payload. The model now
+accepts this provider field instead of rejecting it as an extra input.
+
+### Fixed
+- Added `unsupported: dict[str, Any] | None` field to `WhatsAppUnsupportedMessage`
+  so the model accepts the provider sub-payload WhatsApp attaches to unsupported
+  message webhooks (previously caused a 400 response due to `extra="forbid"`).
+- Extracted magic error code `131051` to a named module constant.
+- Removed dead code: redundant property aliases and a permanently-false predicate.
+
 ## [0.13.4] - 2026-05-20
 
 Fixes WhatsApp webhook verification when host applications enable `AuthPlugin`.
