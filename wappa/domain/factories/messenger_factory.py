@@ -5,6 +5,10 @@ from typing import TYPE_CHECKING
 from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.inbox_credential_store import IInboxCredentialStore
 from wappa.domain.interfaces.messaging_interface import IMessenger
+from wappa.domain.interfaces.session_provider import (
+    HTTPSessionClosedError,
+    validate_session,
+)
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
     WhatsAppInteractiveHandler,
@@ -38,14 +42,32 @@ class MessengerFactory:
         self.logger = get_logger(__name__)
         self._messenger_cache: dict[str, IMessenger] = {}
 
+    def _get_session(self) -> "httpx.AsyncClient":
+        """Return the HTTP session after validating it is open."""
+        if self._http_session is None:
+            raise RuntimeError(
+                "MessengerFactory._http_session is None — the factory was "
+                "constructed without an httpx.AsyncClient. Ensure "
+                "app.state.http_session is passed when creating the factory "
+                "(check WappaCorePlugin startup and InboundRuntime wiring)."
+            )
+        return validate_session(self._http_session)
+
     async def create_messenger(
         self, platform: PlatformType, inbox_id: str, force_recreate: bool = False
     ) -> IMessenger:
         cache_key = f"{platform.value}:{inbox_id}"
 
         if not force_recreate and cache_key in self._messenger_cache:
-            self.logger.debug(f"Using cached messenger for {cache_key}")
-            return self._messenger_cache[cache_key]
+            try:
+                self._get_session()
+                self.logger.debug(f"Using cached messenger for {cache_key}")
+                return self._messenger_cache[cache_key]
+            except HTTPSessionClosedError:
+                self.logger.warning(
+                    f"Cached messenger for {cache_key} has stale session, evicting"
+                )
+                del self._messenger_cache[cache_key]
 
         self.logger.debug(
             f"Creating new messenger for platform: {platform.value}, inbox: {inbox_id}"
@@ -70,9 +92,14 @@ class MessengerFactory:
         self.logger.debug(f"Creating WhatsApp messenger for inbox: {inbox_id}")
 
         if self._credential_store is None:
-            raise RuntimeError("Inbox credential store is not configured")
-        if self._http_session is None:
-            raise RuntimeError("HTTP session is not configured")
+            raise RuntimeError(
+                "MessengerFactory._credential_store is None — cannot resolve "
+                f"credentials for inbox '{inbox_id}'. Ensure an "
+                "IInboxCredentialStore is wired (check WappaBuilder or "
+                "InboundRuntime dependency construction)."
+            )
+
+        session = self._get_session()
 
         if not await self._credential_store.validate_inbox(inbox_id):
             raise ValueError(f"Invalid or inactive inbox: {inbox_id}")
@@ -80,7 +107,7 @@ class MessengerFactory:
         credentials = await self._credential_store.get_credentials(inbox_id)
 
         client = WhatsAppClient(
-            session=self._http_session,
+            session=session,
             access_token=credentials.access_token,
             phone_number_id=inbox_id,
             logger=self.logger,

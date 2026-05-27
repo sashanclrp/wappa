@@ -10,6 +10,7 @@ from wappa.api.middleware.inbox import InboxMiddleware
 from wappa.api.middleware.request_logging import RequestLoggingMiddleware
 from wappa.api.routes.health import router as health_router
 from wappa.api.routes.whatsapp_combined import whatsapp_router
+from wappa.domain.interfaces.session_provider import validate_session
 
 from ..config.settings import settings
 from ..logging.logger import get_app_logger, setup_app_logging
@@ -70,14 +71,9 @@ class WappaCorePlugin:
             logger.debug(f"💾 Set app.state.wappa_cache_type = {self.cache_type.value}")
 
             logger.info("🌐 Creating persistent HTTP client...")
-            transport = httpx.AsyncHTTPTransport(
-                limits=httpx.Limits(
-                    max_connections=100,
-                    max_keepalive_connections=20,
-                ),
-            )
-            app.state.http_session = httpx.AsyncClient(
-                transport=transport, timeout=httpx.Timeout(30.0)
+            app.state.http_session = self._new_http_client()
+            app.state.get_http_session = lambda: validate_session(
+                app.state.http_session
             )
             logger.info(
                 "✅ Persistent HTTP client created - connections: 100, keepalive: 20"
@@ -127,6 +123,31 @@ class WappaCorePlugin:
 
         except Exception as e:
             logger.error(f"❌ Error during Wappa core shutdown: {e}", exc_info=True)
+
+    async def recreate_http_session(self, app: FastAPI) -> None:
+        """Recreate the HTTP session after hot-reload or session failure.
+
+        Closes the existing session (if still open) and creates a fresh one.
+        All subsequent calls through get_http_session() will use the new session.
+        """
+        logger = get_app_logger()
+
+        old_session = getattr(app.state, "http_session", None)
+        if old_session and not old_session.is_closed:
+            await old_session.aclose()
+            logger.info("Closed existing HTTP session for recreation")
+
+        app.state.http_session = self._new_http_client()
+        app.state.get_http_session = lambda: validate_session(app.state.http_session)
+        logger.info("HTTP session recreated successfully")
+
+    @staticmethod
+    def _new_http_client() -> httpx.AsyncClient:
+        """Create a new httpx.AsyncClient with the standard Wappa transport settings."""
+        transport = httpx.AsyncHTTPTransport(
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
+        )
+        return httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(30.0))
 
     async def _display_webhook_urls(self, logger, base_url: str) -> None:
         try:

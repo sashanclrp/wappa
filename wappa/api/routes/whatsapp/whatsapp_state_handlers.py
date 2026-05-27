@@ -100,7 +100,10 @@ async def set_handler_state(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to set handler state: {str(e)}",
+            detail=(
+                f"Failed to set handler state '{request.handler_config.handler_value}' "
+                f"for recipient '{request.recipient}': {type(e).__name__}: {e}"
+            ),
         ) from e
 
 

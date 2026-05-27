@@ -111,7 +111,8 @@ async def send_button_message(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to send button message: {str(e)}"
+            status_code=500,
+            detail=f"Failed to send button message to '{request.recipient}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -151,7 +152,8 @@ async def send_list_message(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to send list message: {str(e)}"
+            status_code=500,
+            detail=f"Failed to send list message to '{request.recipient}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -191,7 +193,8 @@ async def send_cta_message(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to send CTA message: {str(e)}"
+            status_code=500,
+            detail=f"Failed to send CTA message to '{request.recipient}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -281,7 +284,8 @@ async def send_complex_button_message(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to send complex button message: {str(e)}"
+            status_code=500,
+            detail=f"Failed to send complex button message to '{recipient}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -366,5 +370,6 @@ async def send_menu_list_message(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to send menu list message: {str(e)}"
+            status_code=500,
+            detail=f"Failed to send menu list message to '{recipient}': {type(e).__name__}: {e}",
         ) from e

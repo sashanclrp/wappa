@@ -23,6 +23,7 @@ from wappa.domain.interfaces.inbox_credential_store import (
     InboxCredentials,
 )
 from wappa.domain.interfaces.messaging_interface import IMessenger
+from wappa.domain.interfaces.session_provider import validate_session
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
     WhatsAppInteractiveHandler,
@@ -53,11 +54,17 @@ def get_inbox_credential_store(request: Request) -> IInboxCredentialStore:
     """Get the app-scoped inbox credential store."""
     store = getattr(request.app.state, "inbox_credential_store", None)
     if store is None:
-        raise RuntimeError("Inbox credential store is not configured in app.state")
+        raise RuntimeError(
+            "IInboxCredentialStore not found in app.state — ensure "
+            "WappaBuilder.with_whatsapp() or a credential store plugin "
+            "was configured before startup"
+        )
     return cast(IInboxCredentialStore, store)
 
 
-async def _resolve_inbox_credentials(request: Request, inbox_id: str) -> InboxCredentials:
+async def _resolve_inbox_credentials(
+    request: Request, inbox_id: str
+) -> InboxCredentials:
     credential_store = get_inbox_credential_store(request)
     return await credential_store.get_credentials(inbox_id)
 
@@ -74,14 +81,18 @@ async def get_whatsapp_client(request: Request) -> WhatsAppClient:
     Raises:
         ValueError: If inbox credentials are invalid
     """
-    session = request.app.state.http_session
+    session = validate_session(request.app.state.http_session)
 
     # Get inbox ID from context (set by webhook processing or API middleware)
     inbox_id = require_inbox_context()
 
     credential_store = get_inbox_credential_store(request)
     if not await credential_store.validate_inbox(inbox_id):
-        raise ValueError(f"Invalid or inactive inbox: {inbox_id}")
+        raise ValueError(
+            f"Inbox '{inbox_id}' failed credential validation — either the "
+            f"inbox does not exist in the credential store, or its credentials "
+            f"are missing/inactive. Check your IInboxCredentialStore configuration."
+        )
 
     credentials = await _resolve_inbox_credentials(request, inbox_id)
     logger = get_logger(__name__)

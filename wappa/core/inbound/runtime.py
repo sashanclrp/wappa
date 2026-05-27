@@ -290,7 +290,11 @@ class InboundRuntime:
 
             base_handler = self.event_dispatcher.event_handler
             if not base_handler:
-                raise RuntimeError("No event handler registered with dispatcher")
+                raise RuntimeError(
+                    "No WappaEventHandler registered with the event dispatcher — "
+                    "call app.register_handler() or WappaBuilder.with_event_handler() "
+                    "before processing webhooks"
+                )
 
             return base_handler.with_context(
                 inbox_id=inbox_id,
@@ -301,7 +305,11 @@ class InboundRuntime:
                 db_read=db_read,
             )
         except Exception as exc:
-            raise RuntimeError(f"Dispatch Context creation failed: {exc}") from exc
+            raise RuntimeError(
+                f"Dispatch Context creation failed for inbox '{inbox_id}', "
+                f"user '{user_id}', platform '{platform.value}': "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
 
     def _create_cache_factory(
         self,

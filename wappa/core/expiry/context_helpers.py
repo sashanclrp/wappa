@@ -24,6 +24,10 @@ from wappa.core.logging.logger import get_logger
 from wappa.domain.factories.messenger_factory import MessengerFactory
 from wappa.domain.interfaces.cache_factory import ICacheFactory
 from wappa.domain.interfaces.messaging_interface import IMessenger
+from wappa.domain.interfaces.session_provider import (
+    HTTPSessionClosedError,
+    validate_session,
+)
 from wappa.persistence.cache_factory import create_cache_factory
 from wappa.schemas.core.types import PlatformType
 
@@ -97,6 +101,21 @@ async def create_expiry_messenger(inbox_id: str) -> IMessenger:
         raise HTTPSessionNotAvailableError(
             "HTTP session not available - ensure http_session is set in app.state during startup"
         )
+
+    try:
+        validate_session(http_session)
+    except HTTPSessionClosedError as e:
+        logger.error(
+            "HTTP session closed during expiry handler for inbox %s — "
+            "app may be shutting down or was hot-reloaded while an expiry action was in-flight",
+            inbox_id,
+            exc_info=True,
+        )
+        raise HTTPSessionNotAvailableError(
+            f"HTTP session is closed — expiry handler for inbox '{inbox_id}' "
+            f"cannot send messages. If this occurs after hot-reload, call "
+            f"WappaCorePlugin.recreate_http_session() to restore the transport."
+        ) from e
 
     # Create messenger factory with shared HTTP session
     try:

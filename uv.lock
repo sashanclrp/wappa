@@ -1836,7 +1836,7 @@ wheels = [
 
 [[package]]
 name = "wappa"
-version = "0.13.4"
+version = "0.13.6"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },

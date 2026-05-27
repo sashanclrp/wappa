@@ -46,7 +46,9 @@ class InboxMiddleware(BaseHTTPMiddleware):
                             status_code=400, detail=f"Invalid inbox ID: {inbox_id}"
                         )
                 else:
-                    logger.warning("Webhook URL does not have enough parts: %s", path_parts)
+                    logger.warning(
+                        "Webhook URL does not have enough parts: %s", path_parts
+                    )
 
             # For non-webhook endpoints (API routes), use default inbox from settings.
             elif not self._is_public_endpoint(request.url.path):
@@ -58,7 +60,13 @@ class InboxMiddleware(BaseHTTPMiddleware):
             raise
         except Exception as e:
             logger.error("Error in inbox middleware: %s", e, exc_info=True)
-            raise HTTPException(status_code=500, detail="Internal server error") from e
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    f"InboxMiddleware failed while resolving inbox context for "
+                    f"path '{request.url.path}': {type(e).__name__}: {e}"
+                ),
+            ) from e
 
     def _is_valid_inbox_id(self, inbox_id: str) -> bool:
         """Validate inbox ID format."""

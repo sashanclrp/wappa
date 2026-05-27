@@ -1,0 +1,225 @@
+"""Tests for HTTP client lifecycle ownership and stale-session detection."""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
+import pytest
+
+from wappa.domain.interfaces.session_provider import (
+    HTTPSessionClosedError,
+    validate_session,
+)
+
+# --- validate_session ---
+
+
+def test_validate_session_open():
+    session = MagicMock(spec=httpx.AsyncClient)
+    session.is_closed = False
+    result = validate_session(session)
+    assert result is session
+
+
+def test_validate_session_closed():
+    session = MagicMock(spec=httpx.AsyncClient)
+    session.is_closed = True
+    with pytest.raises(HTTPSessionClosedError, match="app.state.http_session.*closed"):
+        validate_session(session)
+
+
+# --- MessengerFactory ---
+
+
+@pytest.fixture
+def mock_credential_store():
+    store = AsyncMock()
+    store.validate_inbox = AsyncMock(return_value=True)
+    store.get_credentials = AsyncMock(return_value=MagicMock(access_token="test-token"))
+    return store
+
+
+@pytest.fixture
+def open_session():
+    session = MagicMock(spec=httpx.AsyncClient)
+    session.is_closed = False
+    return session
+
+
+@pytest.fixture
+def closed_session():
+    session = MagicMock(spec=httpx.AsyncClient)
+    session.is_closed = True
+    return session
+
+
+class TestMessengerFactorySessionGuard:
+    def test_get_session_none_raises(self):
+        from wappa.domain.factories.messenger_factory import MessengerFactory
+
+        factory = MessengerFactory(http_session=None)
+        with pytest.raises(
+            RuntimeError, match="MessengerFactory._http_session is None"
+        ):
+            factory._get_session()
+
+    def test_get_session_closed_raises(self, closed_session):
+        from wappa.domain.factories.messenger_factory import MessengerFactory
+
+        factory = MessengerFactory(http_session=closed_session)
+        with pytest.raises(HTTPSessionClosedError):
+            factory._get_session()
+
+    def test_get_session_open_returns(self, open_session):
+        from wappa.domain.factories.messenger_factory import MessengerFactory
+
+        factory = MessengerFactory(http_session=open_session)
+        result = factory._get_session()
+        assert result is open_session
+
+    @pytest.mark.asyncio
+    async def test_create_messenger_closed_session_raises(
+        self, closed_session, mock_credential_store
+    ):
+        from wappa.domain.factories.messenger_factory import MessengerFactory
+        from wappa.schemas.core.types import PlatformType
+
+        factory = MessengerFactory(
+            http_session=closed_session, credential_store=mock_credential_store
+        )
+        with pytest.raises(RuntimeError, match="Messenger creation failed"):
+            await factory.create_messenger(
+                platform=PlatformType.WHATSAPP, inbox_id="12345"
+            )
+
+    @pytest.mark.asyncio
+    async def test_cached_messenger_evicted_when_session_closes(
+        self, open_session, mock_credential_store
+    ):
+        from wappa.domain.factories.messenger_factory import MessengerFactory
+        from wappa.schemas.core.types import PlatformType
+
+        factory = MessengerFactory(
+            http_session=open_session, credential_store=mock_credential_store
+        )
+
+        # Create and cache a messenger
+        await factory.create_messenger(platform=PlatformType.WHATSAPP, inbox_id="12345")
+        assert "whatsapp:12345" in factory._messenger_cache
+
+        # Close the session — next access should evict + fail
+        open_session.is_closed = True
+        with pytest.raises(RuntimeError, match="Messenger creation failed"):
+            await factory.create_messenger(
+                platform=PlatformType.WHATSAPP, inbox_id="12345"
+            )
+
+        assert "whatsapp:12345" not in factory._messenger_cache
+
+
+# --- Expiry context helpers ---
+
+
+class TestExpiryMessengerSessionGuard:
+    @pytest.mark.asyncio
+    async def test_closed_session_raises_http_not_available(self, closed_session):
+        from wappa.core.expiry.context_helpers import (
+            HTTPSessionNotAvailableError,
+            create_expiry_messenger,
+        )
+
+        mock_app = MagicMock()
+        mock_app.state.http_session = closed_session
+
+        mock_context = MagicMock()
+        mock_context.get_app.return_value = mock_app
+
+        with (
+            patch(
+                "wappa.core.expiry.context_helpers.get_app_context",
+                return_value=mock_context,
+            ),
+            pytest.raises(
+                HTTPSessionNotAvailableError,
+                match="HTTP session is closed.*expiry handler.*inbox.*12345",
+            ),
+        ):
+            await create_expiry_messenger("12345")
+
+
+# --- WappaContextFactory ---
+
+
+class TestContextFactorySessionGuard:
+    @pytest.mark.asyncio
+    async def test_returns_none_for_closed_session(self, closed_session):
+        from wappa.schemas.core.types import PlatformType
+
+        mock_app = MagicMock()
+        mock_app.state.http_session = closed_session
+
+        from wappa.core.context import WappaContextFactory
+
+        factory = WappaContextFactory(app=mock_app)
+        result = await factory._create_messenger(
+            inbox_id="12345", user_id="user1", platform=PlatformType.WHATSAPP
+        )
+        assert result is None
+
+
+# --- WappaCorePlugin session recreation ---
+
+
+class TestSessionRecreation:
+    @pytest.mark.asyncio
+    async def test_recreate_replaces_session(self):
+        from wappa.core.plugins.wappa_core_plugin import WappaCorePlugin
+        from wappa.core.types import CacheType
+
+        plugin = WappaCorePlugin(cache_type=CacheType.MEMORY)
+        mock_app = MagicMock(spec=["state"])
+        mock_app.state = MagicMock()
+
+        old_session = AsyncMock(spec=httpx.AsyncClient)
+        old_session.is_closed = False
+        mock_app.state.http_session = old_session
+
+        await plugin.recreate_http_session(mock_app)
+
+        old_session.aclose.assert_awaited_once()
+        # New session should be a real httpx.AsyncClient
+        new_session = mock_app.state.http_session
+        assert isinstance(new_session, httpx.AsyncClient)
+        assert not new_session.is_closed
+
+        # Provider should work
+        provider = mock_app.state.get_http_session
+        assert provider() is new_session
+
+        # Cleanup
+        await new_session.aclose()
+
+    @pytest.mark.asyncio
+    async def test_recreate_handles_already_closed(self):
+        from wappa.core.plugins.wappa_core_plugin import WappaCorePlugin
+        from wappa.core.types import CacheType
+
+        plugin = WappaCorePlugin(cache_type=CacheType.MEMORY)
+        mock_app = MagicMock(spec=["state"])
+        mock_app.state = MagicMock()
+
+        old_session = MagicMock(spec=httpx.AsyncClient)
+        old_session.is_closed = True
+        mock_app.state.http_session = old_session
+
+        await plugin.recreate_http_session(mock_app)
+
+        # Should not attempt to close an already-closed session
+        old_session.aclose.assert_not_called()
+
+        new_session = mock_app.state.http_session
+        assert isinstance(new_session, httpx.AsyncClient)
+        assert not new_session.is_closed
+
+        await new_session.aclose()

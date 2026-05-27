@@ -119,7 +119,13 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
             payload = await request.json()
         except Exception as exc:
             logger.error("Failed to parse webhook payload: %s", exc)
-            raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Webhook payload is not valid JSON for inbox '{inbox_id}' "
+                    f"on platform '{platform}': {type(exc).__name__}: {exc}"
+                ),
+            ) from exc
 
         return await webhook_controller.process_webhook(
             request=request,

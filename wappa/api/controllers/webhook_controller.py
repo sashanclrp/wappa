@@ -63,13 +63,23 @@ class WebhookController:
             if not hub_verify_token:
                 self.logger.error("Missing verification token for %s", platform)
                 raise HTTPException(
-                    status_code=403, detail="Missing verification token"
+                    status_code=403,
+                    detail=(
+                        f"Webhook verification for platform '{platform}' requires "
+                        f"hub.verify_token query parameter — set WP_WEBHOOK_VERIFY_TOKEN "
+                        f"in your .env and configure the same token in the platform dashboard"
+                    ),
                 )
 
             if not expected or hub_verify_token != expected:
                 self.logger.error("Invalid verification token received")
                 raise HTTPException(
-                    status_code=403, detail="Invalid verification token"
+                    status_code=403,
+                    detail=(
+                        f"Webhook verification token mismatch for platform '{platform}' — "
+                        f"the token sent by the platform does not match WP_WEBHOOK_VERIFY_TOKEN. "
+                        f"Ensure the token in your platform dashboard matches the value in .env"
+                    ),
                 )
 
             self.logger.info(
@@ -81,7 +91,11 @@ class WebhookController:
 
         raise HTTPException(
             status_code=405,
-            detail="Method not allowed for webhook verification endpoint",
+            detail=(
+                f"Webhook verification for '{platform}' requires GET with query params: "
+                f"hub.mode=subscribe, hub.challenge=<challenge>, hub.verify_token=<token>. "
+                f"Received request is missing hub.mode or hub.challenge."
+            ),
         )
 
     async def process_webhook(
@@ -103,7 +117,13 @@ class WebhookController:
             )
 
         if not inbox_id:
-            raise HTTPException(status_code=400, detail="Inbox ID is required")
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Inbox ID is required in the webhook URL path. "
+                    "Expected format: /webhook/inboxes/{inbox_id}/{platform}"
+                ),
+            )
 
         platform_type = self._parse_platform_type(platform)
 
@@ -125,7 +145,11 @@ class WebhookController:
         except Exception as exc:
             self.logger.error("Inbound Runtime failed: %s", exc, exc_info=True)
             raise HTTPException(
-                status_code=500, detail="Inbound Runtime failed"
+                status_code=500,
+                detail=(
+                    f"Webhook processing failed for inbox '{inbox_id}' on "
+                    f"platform '{platform}': {type(exc).__name__}: {exc}"
+                ),
             ) from exc
 
     def _create_runtime_dependencies(
@@ -148,7 +172,11 @@ class WebhookController:
         app_state = request.app.state
         store = getattr(app_state, "inbox_credential_store", None)
         if store is None:
-            raise RuntimeError("Inbox credential store is not configured in app.state")
+            raise RuntimeError(
+                "IInboxCredentialStore not found in app.state — ensure "
+                "WappaBuilder.with_whatsapp() or a credential store plugin "
+                "was configured before startup"
+            )
         return cast(IInboxCredentialStore, store)
 
     def _parse_platform_type(self, platform: str) -> PlatformType:

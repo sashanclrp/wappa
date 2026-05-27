@@ -155,6 +155,15 @@ class WappaContextFactory:
                 self.logger.warning("No HTTP session in app.state, skipping messenger")
                 return None
 
+            if http_session.is_closed:
+                self.logger.warning(
+                    "HTTP session is closed — cannot create messenger for inbox '%s'. "
+                    "App may be shutting down or needs session recreation via "
+                    "WappaCorePlugin.recreate_http_session()",
+                    inbox_id,
+                )
+                return None
+
             messenger_factory = MessengerFactory(http_session)
             raw_messenger = await messenger_factory.create_messenger(
                 platform=platform,

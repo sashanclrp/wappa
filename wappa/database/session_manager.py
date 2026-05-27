@@ -304,7 +304,7 @@ class PostgresSessionManager:
         # Dispose read engines
         for engine in self._read_engines:
             try:
-                await engine.dispose()
+                await engine.dispose(close=False)
             except Exception as e:
                 logger.warning(f"Error disposing read engine: {e}")
 
@@ -314,7 +314,7 @@ class PostgresSessionManager:
         # Dispose write engine
         if self._write_engine:
             try:
-                await self._write_engine.dispose()
+                await self._write_engine.dispose(close=False)
                 logger.info("Write engine disposed successfully")
             except Exception as e:
                 logger.warning(f"Error disposing write engine: {e}")

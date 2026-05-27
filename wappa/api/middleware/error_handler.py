@@ -59,15 +59,20 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
 
     async def _create_webhook_error_response(self, exc: Exception) -> JSONResponse:
         """Create error response for webhook endpoints."""
+        exc_type = type(exc).__name__
         error_response: dict[str, Any] = {
             "status": "error",
-            "message": "Webhook processing failed",
+            "message": (
+                f"Webhook processing failed at {exc_type}: {exc}"
+                if settings.is_development
+                else f"Webhook processing failed ({exc_type}) — check server logs for full trace"
+            ),
             "type": "webhook_error",
+            "error_class": exc_type,
         }
 
         if settings.is_development:
             error_response["debug"] = {
-                "exception_type": type(exc).__name__,
                 "exception_message": str(exc),
             }
 
@@ -75,15 +80,20 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
 
     async def _create_api_error_response(self, exc: Exception) -> JSONResponse:
         """Create error response for regular API endpoints."""
+        exc_type = type(exc).__name__
         error_response: dict[str, Any] = {
-            "detail": "Internal server error",
+            "detail": (
+                f"Unhandled {exc_type}: {exc}"
+                if settings.is_development
+                else f"Internal error ({exc_type}) — check server logs with timestamp below"
+            ),
             "type": "internal_error",
+            "error_class": exc_type,
             "timestamp": time.time(),
         }
 
         if settings.is_development:
             error_response["debug"] = {
-                "exception_type": type(exc).__name__,
                 "exception_message": str(exc),
                 "traceback": traceback.format_exc().split("\n"),
             }

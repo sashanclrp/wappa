@@ -92,19 +92,28 @@ class AuthMiddleware(BaseHTTPMiddleware):
                     del request._headers
 
         # Authenticate
+        strategy_name = type(self.strategy).__name__
         try:
             result = await self.strategy.authenticate(request)
         except Exception as e:
             logger.error("Auth strategy error: %s", e, exc_info=True)
             return JSONResponse(
                 status_code=500,
-                content={"detail": "Internal authentication error"},
+                content={
+                    "detail": (
+                        f"Authentication strategy '{strategy_name}' raised "
+                        f"{type(e).__name__} — check auth configuration and credentials"
+                    )
+                },
             )
 
         if not result.authenticated:
             return JSONResponse(
                 status_code=401,
-                content={"detail": result.error or "Unauthorized"},
+                content={
+                    "detail": result.error
+                    or f"Authentication failed — provide valid credentials for strategy '{strategy_name}'"
+                },
             )
 
         # Expose user info on request.state

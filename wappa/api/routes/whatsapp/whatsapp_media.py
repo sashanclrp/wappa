@@ -115,7 +115,10 @@ async def upload_media(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}") from e
+        raise HTTPException(
+            status_code=500,
+            detail=f"Media upload failed for file '{file.filename}': {type(e).__name__}: {e}",
+        ) from e
 
 
 @router.post(
@@ -152,7 +155,8 @@ async def send_image_message(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to send image: {str(e)}"
+            status_code=500,
+            detail=f"Failed to send image to '{request.recipient}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -191,7 +195,8 @@ async def send_video_message(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to send video: {str(e)}"
+            status_code=500,
+            detail=f"Failed to send video to '{request.recipient}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -230,7 +235,8 @@ async def send_audio_message(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to send audio: {str(e)}"
+            status_code=500,
+            detail=f"Failed to send audio to '{request.recipient}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -269,7 +275,8 @@ async def send_document_message(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to send document: {str(e)}"
+            status_code=500,
+            detail=f"Failed to send document to '{request.recipient}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -307,7 +314,8 @@ async def send_sticker_message(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to send sticker: {str(e)}"
+            status_code=500,
+            detail=f"Failed to send sticker to '{request.recipient}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -339,7 +347,8 @@ async def get_media_info(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to get media info: {str(e)}"
+            status_code=500,
+            detail=f"Failed to get media info for media_id '{media_id}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -402,7 +411,8 @@ async def download_media(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to download media: {str(e)}"
+            status_code=500,
+            detail=f"Failed to download media_id '{media_id}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -435,7 +445,8 @@ async def delete_media(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to delete media: {str(e)}"
+            status_code=500,
+            detail=f"Failed to delete media_id '{media_id}': {type(e).__name__}: {e}",
         ) from e
 
 

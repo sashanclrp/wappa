@@ -124,7 +124,7 @@ async def test_inbox_webhook_bad_verify_token_returns_forbidden_not_auth_failure
         )
 
     assert response.status_code == 403
-    assert response.json()["detail"] == "Invalid verification token"
+    assert "token mismatch" in response.json()["detail"].lower()
 
 
 @pytest.mark.asyncio

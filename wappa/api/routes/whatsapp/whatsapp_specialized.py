@@ -132,7 +132,7 @@ async def send_contact_card(
         logger.error(f"Unexpected error sending contact card: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error: {str(e)}",
+            detail=f"Failed to send contact card to '{request.recipient}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -177,7 +177,7 @@ async def send_location_message(
         logger.error(f"Unexpected error sending location: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error: {str(e)}",
+            detail=f"Failed to send location to '{request.recipient}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -217,7 +217,7 @@ async def send_location_request_message(
         logger.error(f"Unexpected error sending location request: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error: {str(e)}",
+            detail=f"Failed to send location request to '{request.recipient}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -262,7 +262,7 @@ async def validate_contact_data(contact: ContactCard) -> ContactValidationResult
         logger.error(f"Unexpected error validating contact: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error: {str(e)}",
+            detail=f"Unexpected {type(e).__name__} in specialized message handler: {e}",
         ) from e
 
 
@@ -323,5 +323,5 @@ async def validate_coordinates(
         logger.error(f"Unexpected error validating coordinates: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Internal server error: {str(e)}",
+            detail=f"Unexpected {type(e).__name__} in specialized message handler: {e}",
         ) from e

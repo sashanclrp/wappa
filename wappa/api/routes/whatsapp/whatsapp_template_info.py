@@ -35,7 +35,10 @@ def _raise_info_http_error(exc: httpx.HTTPStatusError) -> None:
     """Translate Meta Graph API errors into FastAPI HTTP responses."""
     raise HTTPException(
         status_code=exc.response.status_code,
-        detail=f"WhatsApp template info request failed: {str(exc)}",
+        detail=(
+            f"Meta Graph API returned HTTP {exc.response.status_code} "
+            f"for template info request: {exc}"
+        ),
     ) from exc
 
 

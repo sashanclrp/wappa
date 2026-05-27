@@ -5,6 +5,49 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0] - 2026-05-27
+
+HTTP client lifecycle ownership and actionable error messages across the entire
+framework. Wappa now owns session validity for all messenger instances — host
+applications no longer need to detect or repair closed httpx sessions. Every
+error response identifies what failed, why, and how to fix it.
+
+### Added
+- `HTTPSessionClosedError` and `validate_session()` in
+  `wappa.domain.interfaces.session_provider` — centralized session guard.
+- `WappaCorePlugin.recreate_http_session(app)` — supported hook for host
+  applications that hot-reload or need to restore a closed transport.
+- `app.state.get_http_session` provider callable — returns a guaranteed-open
+  session or raises `HTTPSessionClosedError`.
+- `MessengerFactory._get_session()` — validates session before creating or
+  returning cached messengers; stale cache entries auto-evict.
+- ADR-0003: HTTP Client Lifecycle Ownership — records adapter ownership rules,
+  credential boundary separation, and session recreation contract.
+- `tests/test_http_session_lifecycle.py` — 11 tests covering all lifecycle
+  guard paths.
+
+### Changed
+- All API error responses now include: operation context (recipient, inbox_id,
+  media_id), exception type, and actionable remediation guidance.
+- Error handler middleware returns `error_class` field and descriptive messages
+  instead of generic "Internal server error".
+- Webhook controller verification errors explain which env var to check and
+  the expected query parameter format.
+- Auth middleware errors name the strategy class that failed.
+- `WP_PHONE_ID` validation error explains where to find the value in the Meta
+  Business dashboard.
+- `InboundRuntime` dispatch context errors include inbox/user/platform context.
+- Extracted `_new_http_client()` in WappaCorePlugin to eliminate duplicate
+  transport construction (DRY).
+
+### Fixed
+- `MessengerFactory` no longer silently uses a closed `httpx.AsyncClient` —
+  raises immediately with a diagnostic message.
+- Expiry handlers detect closed sessions before attempting messenger creation,
+  wrapping in `HTTPSessionNotAvailableError` with inbox-specific context.
+- `WappaContextFactory._create_messenger` returns `None` gracefully when the
+  session is closed instead of producing a broken messenger.
+
 ## [0.13.6] - 2026-05-21
 
 Broadens the Redis serde JSON serialization handler to cover all common Python

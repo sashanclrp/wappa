@@ -265,7 +265,8 @@ async def send_welcome_template(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to send welcome template: {str(e)}"
+            status_code=500,
+            detail=f"Failed to send welcome template to '{recipient}': {type(e).__name__}: {e}",
         ) from e
 
 
@@ -312,5 +313,6 @@ async def send_store_location_template(
         raise
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Failed to send store location template: {str(e)}"
+            status_code=500,
+            detail=f"Failed to send store location template to '{recipient}': {type(e).__name__}: {e}",
         ) from e

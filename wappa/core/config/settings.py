@@ -125,7 +125,12 @@ class Settings:
     @property
     def inbox_id(self) -> str:
         if not self.wp_phone_id:
-            raise ValueError("WP_PHONE_ID is required for inbox_id")
+            raise ValueError(
+                "WP_PHONE_ID environment variable is required — this is the "
+                "WhatsApp phone number ID from Meta Business dashboard "
+                "(Settings > Phone Numbers > Phone Number ID). "
+                "Set it in your .env file: WP_PHONE_ID=your_phone_number_id"
+            )
         return self.wp_phone_id
 
     @property
