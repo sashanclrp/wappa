@@ -35,8 +35,6 @@ USAGE:
 - Wappa CLI: wappa dev app/main.py
 """
 
-import asyncio
-
 from wappa import Wappa
 from wappa.core.config.settings import settings
 from wappa.core.logging import get_logger
@@ -158,14 +156,16 @@ def create_wappa_application() -> Wappa:
                 fastapi_app.state, "inbox_credential_store", None
             )
             tracker = getattr(fastapi_app.state, "background_work_tracker", None)
+            if not tracker:
+                logger.error(
+                    "❌ BackgroundWorkTracker not available - cannot start subscriber"
+                )
+                return
 
             coro = start_pubsub_listener(
                 session_lifecycle.get_session, credential_store
             )
-            if tracker:
-                tracker.track(coro, name="pubsub_listener")
-            else:
-                asyncio.create_task(coro)
+            tracker.track(coro, name="pubsub_listener")
 
             logger.info("✅ Redis PubSub subscriber started")
 

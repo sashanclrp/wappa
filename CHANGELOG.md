@@ -5,6 +5,26 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.1] - 2026-05-27
+
+Removes the last `asyncio.create_task` fallback from the Redis pub/sub example
+and adds regression tests for the lifecycle fixes shipped in v0.17.0. Closes
+Issue #5.
+
+### Changed
+- Redis pub/sub example requires `BackgroundWorkTracker` — removed
+  `asyncio.create_task` fallback path. The example now fails loudly if the
+  tracker is missing, matching the framework's clean-break contract.
+
+### Added
+- `tests/test_api_event_tracking.py` (8 tests): regression coverage for
+  `dispatch_api_message_event()`, `fire_api_event()`, and the
+  `dispatch_message_event()` decorator — verifies tracker submission, raises
+  without tracker, and skips during drain.
+- `tests/test_memory_store_shutdown.py` (3 tests): verifies
+  `WappaCorePlugin._core_shutdown()` stops the memory store cleanup task and
+  skips it for non-memory cache types.
+
 ## [0.17.0] - 2026-05-27
 
 Completes the lifecycle contract that v0.16.0 documented but partially shipped.
