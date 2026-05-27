@@ -59,9 +59,7 @@ class TestMessengerFactorySessionGuard:
         from wappa.domain.factories.messenger_factory import MessengerFactory
 
         factory = MessengerFactory(http_session=None)
-        with pytest.raises(
-            RuntimeError, match="MessengerFactory._http_session is None"
-        ):
+        with pytest.raises(RuntimeError, match="no session source"):
             factory._get_session()
 
     def test_get_session_closed_raises(self, closed_session):
@@ -123,14 +121,14 @@ class TestMessengerFactorySessionGuard:
 
 class TestExpiryMessengerSessionGuard:
     @pytest.mark.asyncio
-    async def test_closed_session_raises_http_not_available(self, closed_session):
+    async def test_no_lifecycle_raises_http_not_available(self):
         from wappa.core.expiry.context_helpers import (
             HTTPSessionNotAvailableError,
             create_expiry_messenger,
         )
 
         mock_app = MagicMock()
-        mock_app.state.http_session = closed_session
+        mock_app.state.session_lifecycle = None
 
         mock_context = MagicMock()
         mock_context.get_app.return_value = mock_app
@@ -142,10 +140,39 @@ class TestExpiryMessengerSessionGuard:
             ),
             pytest.raises(
                 HTTPSessionNotAvailableError,
-                match="HTTP session is closed.*expiry handler.*inbox.*12345",
+                match="SessionLifecycle not available",
             ),
         ):
             await create_expiry_messenger("12345")
+
+    @pytest.mark.asyncio
+    async def test_draining_lifecycle_raises_messenger_error(self):
+        from wappa.core.expiry.context_helpers import (
+            MessengerCreationError,
+            create_expiry_messenger,
+        )
+        from wappa.core.lifecycle import SessionLifecycle
+
+        client = SessionLifecycle._default_client_factory()
+        lifecycle = SessionLifecycle(client)
+        lifecycle.begin_drain()
+
+        mock_app = MagicMock()
+        mock_app.state.session_lifecycle = lifecycle
+
+        mock_context = MagicMock()
+        mock_context.get_app.return_value = mock_app
+
+        with (
+            patch(
+                "wappa.core.expiry.context_helpers.get_app_context",
+                return_value=mock_context,
+            ),
+            pytest.raises(MessengerCreationError),
+        ):
+            await create_expiry_messenger("12345")
+
+        await client.aclose()
 
 
 # --- WappaContextFactory ---
@@ -153,11 +180,11 @@ class TestExpiryMessengerSessionGuard:
 
 class TestContextFactorySessionGuard:
     @pytest.mark.asyncio
-    async def test_returns_none_for_closed_session(self, closed_session):
+    async def test_returns_none_when_no_session_lifecycle(self):
         from wappa.schemas.core.types import PlatformType
 
         mock_app = MagicMock()
-        mock_app.state.http_session = closed_session
+        mock_app.state.session_lifecycle = None
 
         from wappa.core.context import WappaContextFactory
 
@@ -172,51 +199,60 @@ class TestContextFactorySessionGuard:
 
 
 class TestSessionRecreation:
-    @pytest.mark.asyncio
-    async def test_recreate_replaces_session(self):
+    def _make_plugin_with_lifecycle(self, old_session: httpx.AsyncClient):
+        """Return a WappaCorePlugin pre-wired with a SessionLifecycle (simulates post-startup)."""
+        from wappa.core.lifecycle import SessionLifecycle
         from wappa.core.plugins.wappa_core_plugin import WappaCorePlugin
         from wappa.core.types import CacheType
 
         plugin = WappaCorePlugin(cache_type=CacheType.MEMORY)
+        plugin._session_lifecycle = SessionLifecycle(old_session)
+        return plugin
+
+    @pytest.mark.asyncio
+    async def test_recreate_replaces_session(self):
+        from wappa.core.lifecycle import SessionLifecycle
+
+        old_session = SessionLifecycle._default_client_factory()
+        await old_session.aclose()
+        assert old_session.is_closed
+
         mock_app = MagicMock(spec=["state"])
         mock_app.state = MagicMock()
 
-        old_session = AsyncMock(spec=httpx.AsyncClient)
-        old_session.is_closed = False
-        mock_app.state.http_session = old_session
-
+        plugin = self._make_plugin_with_lifecycle(old_session)
         await plugin.recreate_http_session(mock_app)
 
-        old_session.aclose.assert_awaited_once()
-        # New session should be a real httpx.AsyncClient
         new_session = mock_app.state.http_session
         assert isinstance(new_session, httpx.AsyncClient)
         assert not new_session.is_closed
+        assert new_session is not old_session
 
-        # Provider should work
-        provider = mock_app.state.get_http_session
-        assert provider() is new_session
-
-        # Cleanup
         await new_session.aclose()
 
     @pytest.mark.asyncio
-    async def test_recreate_handles_already_closed(self):
+    async def test_recreate_before_startup_raises(self):
         from wappa.core.plugins.wappa_core_plugin import WappaCorePlugin
         from wappa.core.types import CacheType
 
         plugin = WappaCorePlugin(cache_type=CacheType.MEMORY)
         mock_app = MagicMock(spec=["state"])
+
+        with pytest.raises(RuntimeError, match="called before startup"):
+            await plugin.recreate_http_session(mock_app)
+
+    @pytest.mark.asyncio
+    async def test_recreate_handles_already_closed(self):
+        from wappa.core.lifecycle import SessionLifecycle
+
+        old_session = SessionLifecycle._default_client_factory()
+        await old_session.aclose()
+
+        mock_app = MagicMock(spec=["state"])
         mock_app.state = MagicMock()
 
-        old_session = MagicMock(spec=httpx.AsyncClient)
-        old_session.is_closed = True
-        mock_app.state.http_session = old_session
-
+        plugin = self._make_plugin_with_lifecycle(old_session)
         await plugin.recreate_http_session(mock_app)
-
-        # Should not attempt to close an already-closed session
-        old_session.aclose.assert_not_called()
 
         new_session = mock_app.state.http_session
         assert isinstance(new_session, httpx.AsyncClient)

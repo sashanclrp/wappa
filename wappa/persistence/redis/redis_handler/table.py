@@ -151,7 +151,9 @@ class RedisTable(InboxCache, ITableCache):
         inbox:df:*:pkid:safe_pkid
         """
         safe_pkid = pkid.replace(":", "_")
-        pattern = f"{self.inbox}:{self.keys.table_prefix}:*:{self.keys.pk_marker}:{safe_pkid}"
+        pattern = (
+            f"{self.inbox}:{self.keys.table_prefix}:*:{self.keys.pk_marker}:{safe_pkid}"
+        )
 
         logger.info(
             f"Deleting all table data with pkid '{pkid}' (pattern: '{pattern}')"

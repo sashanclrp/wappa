@@ -25,7 +25,9 @@ class InboxBase(BaseModel):
 
     # Core inbox identification
     inbox_id: str = Field(description="Unique inbox ID (e.g. business phone number ID)")
-    display_address: str = Field(description="Business display address (e.g. phone number)")
+    display_address: str = Field(
+        description="Business display address (e.g. phone number)"
+    )
 
     # Platform-specific account ID (WhatsApp Business Account ID, Teams tenant ID, etc.)
     platform_account_id: str = Field(description="Platform-specific account identifier")

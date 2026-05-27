@@ -481,9 +481,7 @@ class Wappa:
 
         return self
 
-    def set_inbox_credential_store(
-        self, store: "IInboxCredentialStore"
-    ) -> "Wappa":
+    def set_inbox_credential_store(self, store: "IInboxCredentialStore") -> "Wappa":
         """
         Register the credential store used to resolve inbox credentials.
 

@@ -5,6 +5,7 @@ Wraps fastapi-crons to provide scheduled background tasks that fire events
 into the WappaEventHandler pipeline with full infrastructure access.
 """
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -127,22 +128,13 @@ class CronPlugin:
         return self
 
     def configure(self, builder: "WappaBuilder") -> None:
-        """
-        Configure the cron plugin with WappaBuilder.
-
-        Registers startup/shutdown hooks at priority 30 (after core=10,
-        infra=20, listeners=25).
-
-        Args:
-            builder: WappaBuilder instance
-        """
+        """Configure the cron plugin. Startup priority 30, shutdown priority 85."""
         builder.add_startup_hook(self._startup_hook, priority=30)
-        builder.add_shutdown_hook(self._shutdown_hook, priority=30)
+        # Priority 85 shutdown — stop scheduler before drain at 70
+        builder.add_shutdown_hook(self._shutdown_hook, priority=85)
 
         logger = get_app_logger()
-        logger.debug(
-            f"CronPlugin configured with {len(self._cron_registrations)} cron(s)"
-        )
+        logger.debug("CronPlugin configured with %d cron(s)", len(self._cron_registrations))
 
     async def _startup_hook(self, app: "FastAPI") -> None:
         """
@@ -180,7 +172,7 @@ class CronPlugin:
         app.state.cron_plugin = self
 
         logger = get_app_logger()
-        logger.info(f"CronPlugin started with {len(self._cron_registrations)} cron(s)")
+        logger.info("CronPlugin started with %d cron(s)", len(self._cron_registrations))
 
     def _register_cron_job(self, reg: _CronRegistration) -> None:
         """
@@ -233,15 +225,13 @@ class CronPlugin:
 
             if not result.get("success"):
                 logger.error(
-                    f"Cron event dispatch failed for {reg.cron_id}: "
-                    f"{result.get('error')}"
+                    "Cron event dispatch failed for %s: %s",
+                    reg.cron_id,
+                    result.get("error"),
                 )
 
         except Exception as e:
-            logger.error(
-                f"Error firing cron event {reg.cron_id}: {e}",
-                exc_info=True,
-            )
+            logger.error("Error firing cron event %s: %s", reg.cron_id, e, exc_info=True)
 
     async def _create_request_handler(
         self, reg: _CronRegistration
@@ -288,12 +278,18 @@ class CronPlugin:
         )
 
     async def _shutdown_hook(self, app: "FastAPI") -> None:
-        """Stop the cron scheduler and clean up app.state."""
+        """Stop the cron scheduler with bounded drain and clean up app.state."""
         logger = get_app_logger()
 
         if self._crons:
-            await self._crons.stop()
-            logger.info("CronPlugin scheduler stopped")
+            try:
+                await asyncio.wait_for(self._crons.stop(), timeout=15.0)
+                logger.info("CronPlugin scheduler drained and stopped")
+            except TimeoutError:
+                logger.warning(
+                    "CronPlugin drain timed out after 15s — "
+                    "in-flight cron callbacks may have been interrupted"
+                )
 
         if hasattr(app.state, "cron_plugin"):
             del app.state.cron_plugin

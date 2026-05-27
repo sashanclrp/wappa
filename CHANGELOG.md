@@ -5,6 +5,57 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.1] - 2026-05-27
+
+Graceful background work drain and HTTP session lifecycle completion. Wappa now
+stops accepting new background work, drains in-flight tasks with bounded
+timeouts, and only then closes HTTP sessions, database pools, and Redis
+connections. All fire-and-forget `asyncio.create_task()` calls in framework code
+are replaced by a tracked `BackgroundWorkTracker`. A unified `SessionLifecycle`
+service provides draining-aware session access with serialized recreation.
+
+### Added
+- `BackgroundWorkTracker` — lifecycle-aware task tracking with `track()`,
+  `begin_drain()`, and `drain(timeout)`. Stored on `app.state.background_work_tracker`.
+- `SessionLifecycle` — unified session acquisition with three states (active,
+  recoverable, draining). Provides `get_session()`, `recreate()` (lock-serialized),
+  and `begin_drain()`. Stored on `app.state.session_lifecycle`.
+- `RuntimeDrainingError` — raised when session access is attempted during
+  shutdown. Exported from `wappa.domain.interfaces.session_provider`.
+- `MessengerFactory` accepts `session_provider` keyword argument — a callable
+  returning `httpx.AsyncClient`, replacing direct session references.
+- ADR-0004: Graceful Shutdown and Background Work Drain.
+- 21 new tests: `test_background_work_tracker.py`, `test_session_lifecycle.py`,
+  `test_shutdown_lifecycle.py`.
+
+### Changed
+- **Shutdown priority reordering** — HTTP session now closes at priority 10
+  (last) instead of 90 (first). Cron stops at 85, expiry at 80, background
+  drain at 70, infrastructure cleanup at ≤25.
+- `ExpiryPlugin` now calls `AppContext.clear()` on shutdown.
+- `CronPlugin` shutdown wraps `stop()` in a 15-second bounded timeout.
+- `ExpiryDispatcher` requires `BackgroundWorkTracker` — no fallback to raw
+  `asyncio.create_task()`.
+- `InboundRuntime.accept_webhook()` dispatches through `BackgroundWorkTracker`.
+- `WebhookPlugin._handle_webhook()` dispatches through `BackgroundWorkTracker`.
+- `InboundRuntimeDependencies.background_work_tracker` is now required (non-optional).
+- All messenger construction paths (`context_helpers`, `WappaContextFactory`,
+  `whatsapp_dependencies`) use `SessionLifecycle.get_session` — no direct
+  `app.state.http_session` reads in framework code.
+- `WappaCorePlugin.recreate_http_session()` delegates to `SessionLifecycle.recreate()`
+  with lock serialization and draining guard.
+
+### Fixed
+- All messenger construction paths (`create_expiry_messenger`, `WappaContextFactory`,
+  `redis_pubsub_example`) now propagate `credential_store` to `MessengerFactory`.
+- `whatsapp_dependencies.get_whatsapp_client()` and `WebhookPlugin._handle_webhook()`
+  use explicit checks with actionable errors instead of bare `app.state` access.
+- Plugin shutdown docstrings updated to reflect new priority scheme.
+
+### Removed
+- Backward-compat fallbacks for missing `BackgroundWorkTracker` or `SessionLifecycle`
+  on `app.state`. Framework code requires both — clean break.
+
 ## [0.14.0] - 2026-05-27
 
 HTTP client lifecycle ownership and actionable error messages across the entire

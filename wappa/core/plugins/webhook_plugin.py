@@ -7,7 +7,6 @@ Uses IWebhookProcessor for full Wappa infrastructure access.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Request
@@ -106,8 +105,10 @@ class WebhookPlugin:
         builder.add_startup_hook(self._init_dependencies, priority=30)
 
         logger.debug(
-            f"WebhookPlugin configured for {self.external_source} - "
-            f"Prefix: {self.prefix}, Methods: {self.methods}"
+            "WebhookPlugin configured for %s - Prefix: %s, Methods: %s",
+            self.external_source,
+            self.prefix,
+            self.methods,
         )
 
     async def _init_dependencies(self, app: FastAPI) -> None:
@@ -121,7 +122,7 @@ class WebhookPlugin:
         self._external_dispatcher = ExternalEventDispatcher()
 
         get_app_logger().info(
-            f"WebhookPlugin processor initialized for {self.external_source}"
+            "WebhookPlugin processor initialized for %s", self.external_source
         )
 
     async def _handle_webhook(
@@ -137,7 +138,17 @@ class WebhookPlugin:
 
         await request.body()
 
-        asyncio.create_task(self._process_webhook_async(request, inbox_id))
+        tracker = getattr(request.app.state, "background_work_tracker", None)
+        if not tracker:
+            raise RuntimeError(
+                "BackgroundWorkTracker not available in app.state — "
+                "WappaCorePlugin must be configured and started before "
+                "processing external webhooks"
+            )
+        tracker.track(
+            self._process_webhook_async(request, inbox_id),
+            name=f"webhook:{self.external_source}:{inbox_id}",
+        )
         return {"status": "accepted"}
 
     async def _process_webhook_async(
@@ -150,8 +161,10 @@ class WebhookPlugin:
         try:
             event = await self.processor.parse_event(request, inbox_id)
             logger.info(
-                f"Parsed external event: {event.source}/{event.event_type} "
-                f"(inbox={inbox_id})"
+                "Parsed external event: %s/%s (inbox=%s)",
+                event.source,
+                event.event_type,
+                inbox_id,
             )
 
             ctx = await self._context_factory.create_context(inbox_id)
@@ -179,29 +192,30 @@ class WebhookPlugin:
 
             if not result.get("success"):
                 logger.error(
-                    f"External event dispatch failed for {self.external_source}: "
-                    f"{result.get('error')}"
+                    "External event dispatch failed for %s: %s",
+                    self.external_source,
+                    result.get("error"),
                 )
 
         except Exception as e:
             logger.error(
-                f"Error processing external webhook for {self.external_source}, "
-                f"inbox={inbox_id}: {e}",
+                "Error processing external webhook for %s, inbox=%s: %s",
+                self.external_source,
+                inbox_id,
+                e,
                 exc_info=True,
             )
 
     async def startup(self, app: FastAPI) -> None:
         url_pattern = (
-            f"{self.prefix}/{{inbox_id}}"
-            if self.include_inbox_id
-            else f"{self.prefix}/"
+            f"{self.prefix}/{{inbox_id}}" if self.include_inbox_id else f"{self.prefix}/"
         )
         get_app_logger().info(
-            f"WebhookPlugin for {self.external_source} ready - "
-            f"URL pattern: {url_pattern}, Methods: {self.methods}"
+            "WebhookPlugin for %s ready - URL pattern: %s, Methods: %s",
+            self.external_source,
+            url_pattern,
+            self.methods,
         )
 
     async def shutdown(self, app: FastAPI) -> None:
-        get_app_logger().debug(
-            f"WebhookPlugin for {self.external_source} shutting down"
-        )
+        get_app_logger().debug("WebhookPlugin for %s shutting down", self.external_source)

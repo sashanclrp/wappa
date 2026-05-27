@@ -4,13 +4,18 @@ Expiry Dispatcher - Dispatches handlers asynchronously for expired keys.
 Single Responsibility: Fire-and-forget handler dispatch with completion tracking.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
-from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from wappa.core.sse.context import classify_meta_identifier, sse_event_scope
 
 from .parser import ExpiryEvent
+
+if TYPE_CHECKING:
+    from wappa.core.lifecycle import BackgroundWorkTracker
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +27,6 @@ async def _run_with_sse_scope(event: ExpiryEvent) -> None:
     ``identifier`` by shape into bsuid/phone; apps can refine via
     ``update_identity`` / ``update_metadata`` once they load cache state.
     """
-    # Lazy import — context_helpers imports listener which imports this
-    # module, so anchor the dep at call time instead of import time.
     from wappa.core.expiry.context_helpers import parse_inbox_from_expired_key
 
     inbox_id = parse_inbox_from_expired_key(event.expired_key) or "unknown"
@@ -37,39 +40,26 @@ async def _run_with_sse_scope(event: ExpiryEvent) -> None:
         await event.handler(event.identifier, event.expired_key)
 
 
-@dataclass
 class ExpiryDispatcher:
-    """
-    Dispatches expiry handlers asynchronously.
+    """Dispatches expiry handlers via BackgroundWorkTracker for lifecycle-safe execution."""
 
-    Responsibilities:
-        - Create async tasks for handlers (fire-and-forget)
-        - Track task completion via callbacks
-        - Log handler execution status
-
-    Pattern:
-        Fire-and-forget: Handlers run independently without blocking the listener.
-        Completion callbacks provide observability into handler success/failure.
-
-    Usage:
-        dispatcher = ExpiryDispatcher()
-        dispatcher.dispatch(event)  # Non-blocking
-    """
+    def __init__(self, tracker: BackgroundWorkTracker) -> None:
+        self._tracker = tracker
 
     def dispatch(self, event: ExpiryEvent) -> asyncio.Task:
-        """
-        Dispatch handler as async task.
+        """Dispatch handler as a tracked async task."""
+        coro = _run_with_sse_scope(event)
+        task_name = f"{event.handler_name}:{event.identifier}"
 
-        Args:
-            event: Parsed expiry event with handler and metadata
-
-        Returns:
-            Created asyncio.Task for optional monitoring
-        """
-        task = asyncio.create_task(
-            _run_with_sse_scope(event),
-            name=f"{event.handler_name}:{event.identifier}",
-        )
+        try:
+            task = self._tracker.track(coro, name=task_name)
+        except RuntimeError:
+            logger.warning(
+                "Runtime draining — dropping expiry handler %s for %s",
+                event.handler_name,
+                event.identifier,
+            )
+            raise
 
         logger.info(
             "Dispatched handler: %s (action=%s, identifier=%s)",

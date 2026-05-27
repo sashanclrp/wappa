@@ -2,7 +2,6 @@
 
 from typing import TYPE_CHECKING
 
-import httpx
 from fastapi import FastAPI
 
 from wappa.api.middleware.error_handler import ErrorHandlerMiddleware
@@ -10,7 +9,7 @@ from wappa.api.middleware.inbox import InboxMiddleware
 from wappa.api.middleware.request_logging import RequestLoggingMiddleware
 from wappa.api.routes.health import router as health_router
 from wappa.api.routes.whatsapp_combined import whatsapp_router
-from wappa.domain.interfaces.session_provider import validate_session
+from wappa.core.lifecycle import BackgroundWorkTracker, SessionLifecycle
 
 from ..config.settings import settings
 from ..logging.logger import get_app_logger, setup_app_logging
@@ -25,6 +24,8 @@ class WappaCorePlugin:
 
     def __init__(self, cache_type: CacheType = CacheType.MEMORY) -> None:
         self.cache_type = cache_type
+        self._session_lifecycle: SessionLifecycle | None = None
+        self._background_work_tracker: BackgroundWorkTracker | None = None
 
     def configure(self, builder: "WappaBuilder") -> None:
         logger = get_app_logger()
@@ -39,18 +40,24 @@ class WappaCorePlugin:
         builder.add_router(whatsapp_router)
 
         builder.add_startup_hook(self._core_startup, priority=10)
-        builder.add_shutdown_hook(self._core_shutdown, priority=90)
+        # Shutdown phases (highest priority runs first):
+        # 90: mark draining — reject new background work
+        # 70: drain tracked background tasks
+        # 10: close HTTP session and clean up app state
+        builder.add_shutdown_hook(self._begin_drain, priority=90)
+        builder.add_shutdown_hook(self._drain_background_work, priority=70)
+        builder.add_shutdown_hook(self._core_shutdown, priority=10)
 
         logger.debug(
-            f"✅ WappaCorePlugin configured - cache_type: {self.cache_type.value}, "
-            f"middleware: 3, routes: 2, hooks: 2"
+            "✅ WappaCorePlugin configured - cache_type: %s, middleware: 3, routes: 2, hooks: 4",
+            self.cache_type.value,
         )
 
     async def startup(self, app: FastAPI) -> None:
-        await self._core_startup(app)
+        """No-op — lifecycle managed by hooks registered in configure()."""
 
     async def shutdown(self, app: FastAPI) -> None:
-        await self._core_shutdown(app)
+        """No-op — lifecycle managed by hooks registered in configure()."""
 
     async def _core_startup(self, app: FastAPI) -> None:
         logger = None
@@ -58,26 +65,30 @@ class WappaCorePlugin:
             setup_app_logging()
             logger = get_app_logger()
 
-            logger.info(f"🚀 Starting Wappa Framework v{settings.version}")
-            logger.info(f"📊 Environment: {settings.environment}")
-            logger.info(f"📥 Inbox ID: {settings.inbox_id}")
-            logger.info(f"📝 Log level: {settings.log_level}")
-            logger.info(f"💾 Cache type: {self.cache_type.value}")
+            logger.info("🚀 Starting Wappa Framework v%s", settings.version)
+            logger.info("📊 Environment: %s", settings.environment)
+            logger.info("📥 Inbox ID: %s", settings.inbox_id)
+            logger.info("📝 Log level: %s", settings.log_level)
+            logger.info("💾 Cache type: %s", self.cache_type.value)
 
             if settings.is_development:
-                logger.info(f"🔧 Development mode - logs: {settings.log_dir}")
+                logger.info("🔧 Development mode - logs: %s", settings.log_dir)
 
             app.state.wappa_cache_type = self.cache_type.value
-            logger.debug(f"💾 Set app.state.wappa_cache_type = {self.cache_type.value}")
+            logger.debug("💾 Set app.state.wappa_cache_type = %s", self.cache_type.value)
 
             logger.info("🌐 Creating persistent HTTP client...")
-            app.state.http_session = self._new_http_client()
-            app.state.get_http_session = lambda: validate_session(
-                app.state.http_session
-            )
+            client = SessionLifecycle._default_client_factory()
+            self._session_lifecycle = SessionLifecycle(client)
+            app.state.session_lifecycle = self._session_lifecycle
+            app.state.http_session = client
+            app.state.get_http_session = self._session_lifecycle.get_session
             logger.info(
                 "✅ Persistent HTTP client created - connections: 100, keepalive: 20"
             )
+
+            self._background_work_tracker = BackgroundWorkTracker()
+            app.state.background_work_tracker = self._background_work_tracker
 
             base_url = (
                 f"http://localhost:{settings.port}"
@@ -85,14 +96,13 @@ class WappaCorePlugin:
                 else "https://your-domain.com"
             )
             logger.info("=== AVAILABLE ENDPOINTS ===")
-            logger.info(f"🏥 Health Check: {base_url}/health")
-            logger.info(f"📊 Detailed Health: {base_url}/health/detailed")
-            logger.info(f"📱 WhatsApp API: {base_url}/api/whatsapp/...")
-            logger.info(
-                f"📖 API Documentation: {base_url}/docs"
-                if settings.is_development
-                else "📖 API docs disabled in production"
-            )
+            logger.info("🏥 Health Check: %s/health", base_url)
+            logger.info("📊 Detailed Health: %s/health/detailed", base_url)
+            logger.info("📱 WhatsApp API: %s/api/whatsapp/...", base_url)
+            if settings.is_development:
+                logger.info("📖 API Documentation: %s/docs", base_url)
+            else:
+                logger.info("📖 API docs disabled in production")
             logger.info("============================")
 
             await self._display_webhook_urls(logger, base_url)
@@ -101,18 +111,33 @@ class WappaCorePlugin:
 
         except Exception as e:
             if logger:
-                logger.error(f"❌ Error during Wappa core startup: {e}", exc_info=True)
+                logger.error("❌ Error during Wappa core startup: %s", e, exc_info=True)
             else:
-                print(f"💥 Critical error during logging setup: {e}")
+                print(f"💥 Critical error during logging setup: {e}")  # noqa: T201
             raise
 
-    async def _core_shutdown(self, app: FastAPI) -> None:
+    async def _begin_drain(self, app: FastAPI) -> None:
+        """Phase 1 (priority 90): mark runtime as draining."""
         logger = get_app_logger()
-        logger.info("🛑 Starting Wappa core shutdown...")
+        logger.info("🛑 Wappa shutdown — marking runtime as draining")
+        if self._session_lifecycle:
+            self._session_lifecycle.begin_drain()
+        if self._background_work_tracker:
+            self._background_work_tracker.begin_drain()
+
+    async def _drain_background_work(self, app: FastAPI) -> None:
+        """Phase 2 (priority 70): drain remaining tracked background tasks."""
+        if self._background_work_tracker:
+            await self._background_work_tracker.drain(timeout=30.0)
+
+    async def _core_shutdown(self, app: FastAPI) -> None:
+        """Phase 3 (priority 10): close HTTP session and clean up app state."""
+        logger = get_app_logger()
+        logger.info("🛑 Closing Wappa core resources...")
 
         try:
-            if hasattr(app.state, "http_session"):
-                await app.state.http_session.aclose()
+            if self._session_lifecycle:
+                await self._session_lifecycle.close()
                 logger.info("🌐 Persistent HTTP client closed cleanly")
 
             if hasattr(app.state, "wappa_cache_type"):
@@ -122,32 +147,22 @@ class WappaCorePlugin:
             logger.info("✅ Wappa core shutdown completed")
 
         except Exception as e:
-            logger.error(f"❌ Error during Wappa core shutdown: {e}", exc_info=True)
+            logger.error("❌ Error during Wappa core shutdown: %s", e, exc_info=True)
 
     async def recreate_http_session(self, app: FastAPI) -> None:
         """Recreate the HTTP session after hot-reload or session failure.
 
-        Closes the existing session (if still open) and creates a fresh one.
-        All subsequent calls through get_http_session() will use the new session.
+        Serialized via lock — concurrent callers produce exactly one
+        replacement session.  Raises RuntimeDrainingError if shutdown
+        has begun.
         """
-        logger = get_app_logger()
-
-        old_session = getattr(app.state, "http_session", None)
-        if old_session and not old_session.is_closed:
-            await old_session.aclose()
-            logger.info("Closed existing HTTP session for recreation")
-
-        app.state.http_session = self._new_http_client()
-        app.state.get_http_session = lambda: validate_session(app.state.http_session)
-        logger.info("HTTP session recreated successfully")
-
-    @staticmethod
-    def _new_http_client() -> httpx.AsyncClient:
-        """Create a new httpx.AsyncClient with the standard Wappa transport settings."""
-        transport = httpx.AsyncHTTPTransport(
-            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
-        )
-        return httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(30.0))
+        if self._session_lifecycle is None:
+            raise RuntimeError(
+                "WappaCorePlugin.recreate_http_session() called before startup — "
+                "ensure the plugin has started before requesting session recreation"
+            )
+        new_session = await self._session_lifecycle.recreate()
+        app.state.http_session = new_session
 
     async def _display_webhook_urls(self, logger, base_url: str) -> None:
         try:
@@ -165,7 +180,7 @@ class WappaCorePlugin:
             logger.info("")
 
         except Exception as e:
-            logger.warning(f"⚠️ Could not generate webhook URL: {e}")
+            logger.warning("⚠️ Could not generate webhook URL: %s", e)
 
     def get_cache_type(self) -> CacheType:
         return self.cache_type

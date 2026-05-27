@@ -253,9 +253,7 @@ class MemoryAIState(IAIStateCache):
             Remaining TTL in seconds, -1 if no expiry, -2 if doesn't exist
         """
         key = self._key(agent_name)
-        return await storage_manager.get_ttl(
-            "ai_states", self.inbox, self.user_id, key
-        )
+        return await storage_manager.get_ttl("ai_states", self.inbox, self.user_id, key)
 
     async def renew_ttl(self, agent_name: str, ttl: int) -> bool:
         """
@@ -292,9 +290,7 @@ class MemoryAIState(IAIStateCache):
         count = 0
         for key in list(all_keys):
             if key.startswith(key_prefix) and key.endswith(key_suffix):
-                await storage_manager.delete(
-                    "ai_states", self.inbox, self.user_id, key
-                )
+                await storage_manager.delete("ai_states", self.inbox, self.user_id, key)
                 count += 1
         return count
 

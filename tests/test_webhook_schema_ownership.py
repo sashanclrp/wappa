@@ -181,7 +181,9 @@ async def test_whatsapp_system_payload_parses_to_pydantic_universal_model() -> N
 
 
 @pytest.mark.asyncio
-async def test_whatsapp_custom_field_payload_parses_to_pydantic_universal_model() -> None:
+async def test_whatsapp_custom_field_payload_parses_to_pydantic_universal_model() -> (
+    None
+):
     class TemplateStatusUpdate(BaseModel):
         event: str
         message_template_id: str

@@ -162,6 +162,7 @@ class WebhookController:
             inbox_credential_store=self._get_inbox_credential_store(request),
             messenger_middleware=getattr(app_state, "messenger_middleware", ()),
             cache_type=getattr(app_state, "wappa_cache_type", "memory"),
+            background_work_tracker=app_state.background_work_tracker,
             redis_manager=getattr(app_state, "redis_manager", None),
             postgres_session_manager=getattr(
                 app_state, "postgres_session_manager", None

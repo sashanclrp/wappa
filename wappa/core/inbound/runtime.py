@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
@@ -67,6 +66,7 @@ class InboundRuntimeDependencies:
     inbox_credential_store: IInboxCredentialStore
     messenger_middleware: Sequence[Any]
     cache_type: str
+    background_work_tracker: Any
     redis_manager: Any | None = None
     postgres_session_manager: Any | None = None
 
@@ -110,7 +110,10 @@ class InboundRuntime:
             payload=payload,
             dependencies=dependencies,
         )
-        asyncio.create_task(self.dispatch(dispatch_context))
+        dependencies.background_work_tracker.track(
+            self.dispatch(dispatch_context),
+            name=f"inbound:{dispatch_context.inbox_id}:{dispatch_context.user_id}",
+        )
         return {"status": "accepted"}
 
     async def build_dispatch_context(

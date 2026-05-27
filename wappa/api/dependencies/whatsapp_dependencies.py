@@ -23,7 +23,6 @@ from wappa.domain.interfaces.inbox_credential_store import (
     InboxCredentials,
 )
 from wappa.domain.interfaces.messaging_interface import IMessenger
-from wappa.domain.interfaces.session_provider import validate_session
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
     WhatsAppInteractiveHandler,
@@ -81,7 +80,14 @@ async def get_whatsapp_client(request: Request) -> WhatsAppClient:
     Raises:
         ValueError: If inbox credentials are invalid
     """
-    session = validate_session(request.app.state.http_session)
+    session_lifecycle = getattr(request.app.state, "session_lifecycle", None)
+    if not session_lifecycle:
+        raise RuntimeError(
+            "SessionLifecycle not available in app.state — "
+            "WappaCorePlugin must be configured and started before "
+            "handling WhatsApp API requests"
+        )
+    session = session_lifecycle.get_session()
 
     # Get inbox ID from context (set by webhook processing or API middleware)
     inbox_id = require_inbox_context()

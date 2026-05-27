@@ -661,9 +661,5 @@ class CustomWebhook(BaseModel):
 
 # Type union for all universal webhook interfaces
 UniversalWebhook = (
-    InboundMessageWebhook
-    | StatusWebhook
-    | ErrorWebhook
-    | SystemWebhook
-    | CustomWebhook
+    InboundMessageWebhook | StatusWebhook | ErrorWebhook | SystemWebhook | CustomWebhook
 )

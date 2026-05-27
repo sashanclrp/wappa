@@ -161,9 +161,7 @@ class DefaultMessageHandler:
 
         # Track by inbox
         inbox_id = webhook.inbox.get_inbox_key() if webhook.inbox else "unknown"
-        self._stats["by_inbox"][inbox_id] = (
-            self._stats["by_inbox"].get(inbox_id, 0) + 1
-        )
+        self._stats["by_inbox"][inbox_id] = self._stats["by_inbox"].get(inbox_id, 0) + 1
 
         # Check for sensitive content
         if self.mask_sensitive_data:

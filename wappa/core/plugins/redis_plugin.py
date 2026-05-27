@@ -157,11 +157,9 @@ class RedisPlugin:
 
     async def _redis_shutdown(self, app: "FastAPI") -> None:
         """
-        Redis cleanup hook - runs before core Wappa shutdown.
+        Redis cleanup hook — closes pools after background work drain.
 
-        This hook is registered with priority 20, ensuring it runs before
-        core Wappa cleanup (priority 90) to properly close Redis connections
-        while logging is still available.
+        Priority 20: runs after drain (70) and before core HTTP close (10).
 
         Args:
             app: FastAPI application instance

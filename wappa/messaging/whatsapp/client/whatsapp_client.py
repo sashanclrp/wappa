@@ -360,7 +360,5 @@ class WhatsAppClient:
                 )
                 yield response
         except httpx.HTTPError as e:
-            self.logger.error(
-                "Streaming GET failed for inbox %s: %s", self.inbox_id, e
-            )
+            self.logger.error("Streaming GET failed for inbox %s: %s", self.inbox_id, e)
             raise

@@ -282,11 +282,9 @@ class PostgresDatabasePlugin:
 
     async def _db_shutdown(self, app: FastAPI) -> None:
         """
-        Database cleanup hook - runs before core Wappa shutdown.
+        Database cleanup hook — disposes engine after background work drain.
 
-        This hook is registered with priority 25, ensuring it runs before
-        core Wappa cleanup (priority 90) to properly close database connections
-        while logging is still available.
+        Priority 25: runs after drain (70) and before core HTTP close (10).
 
         Args:
             app: FastAPI application instance

@@ -153,8 +153,10 @@ def create_wappa_application() -> Wappa:
                 logger.error("❌ HTTP session not available - cannot start subscriber")
                 return
 
+            credential_store = getattr(app._app.state, "inbox_credential_store", None)
+
             # Start subscriber as background task
-            asyncio.create_task(start_pubsub_listener(http_session))
+            asyncio.create_task(start_pubsub_listener(http_session, credential_store))
 
             logger.info("✅ Redis PubSub subscriber started")
 

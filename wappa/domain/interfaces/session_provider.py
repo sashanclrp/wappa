@@ -11,6 +11,12 @@ class HTTPSessionClosedError(RuntimeError):
     pass
 
 
+class RuntimeDrainingError(RuntimeError):
+    """Raised when session access is attempted during runtime shutdown."""
+
+    pass
+
+
 def validate_session(session: httpx.AsyncClient) -> httpx.AsyncClient:
     """Check that a session is open; raise HTTPSessionClosedError if closed.
 

@@ -57,9 +57,7 @@ class MemoryUser(IUserCache):
             User data dictionary or BaseModel instance, None if not found
         """
         key = self._key()
-        return await storage_manager.get(
-            "users", self.inbox, self.user_id, key, models
-        )
+        return await storage_manager.get("users", self.inbox, self.user_id, key, models)
 
     async def upsert(
         self, data: dict[str, Any] | BaseModel, ttl: int | None = None

@@ -24,10 +24,6 @@ from wappa.core.logging.logger import get_logger
 from wappa.domain.factories.messenger_factory import MessengerFactory
 from wappa.domain.interfaces.cache_factory import ICacheFactory
 from wappa.domain.interfaces.messaging_interface import IMessenger
-from wappa.domain.interfaces.session_provider import (
-    HTTPSessionClosedError,
-    validate_session,
-)
 from wappa.persistence.cache_factory import create_cache_factory
 from wappa.schemas.core.types import PlatformType
 
@@ -94,41 +90,29 @@ async def create_expiry_messenger(inbox_id: str) -> IMessenger:
             "FastAPI app not registered - ensure ExpiryPlugin is configured"
         )
 
-    # Get shared HTTP session from app state (for connection pooling)
-    http_session = getattr(app.state, "http_session", None)
-    if not http_session:
-        logger.error("HTTP session not available in app state")
+    session_lifecycle = getattr(app.state, "session_lifecycle", None)
+    if not session_lifecycle:
         raise HTTPSessionNotAvailableError(
-            "HTTP session not available - ensure http_session is set in app.state during startup"
+            "SessionLifecycle not available in app.state — ensure "
+            "WappaCorePlugin is configured and has started"
         )
 
-    try:
-        validate_session(http_session)
-    except HTTPSessionClosedError as e:
-        logger.error(
-            "HTTP session closed during expiry handler for inbox %s — "
-            "app may be shutting down or was hot-reloaded while an expiry action was in-flight",
-            inbox_id,
-            exc_info=True,
-        )
-        raise HTTPSessionNotAvailableError(
-            f"HTTP session is closed — expiry handler for inbox '{inbox_id}' "
-            f"cannot send messages. If this occurs after hot-reload, call "
-            f"WappaCorePlugin.recreate_http_session() to restore the transport."
-        ) from e
+    credential_store = getattr(app.state, "inbox_credential_store", None)
 
-    # Create messenger factory with shared HTTP session
     try:
-        messenger_factory = MessengerFactory(http_session)
+        messenger_factory = MessengerFactory(
+            credential_store=credential_store,
+            session_provider=session_lifecycle.get_session,
+        )
         messenger = await messenger_factory.create_messenger(
             platform=PlatformType.WHATSAPP,
             inbox_id=inbox_id,
         )
-        logger.debug(f"Created expiry messenger for inbox: {inbox_id}")
+        logger.debug("Created expiry messenger for inbox: %s", inbox_id)
         return messenger
 
     except Exception as e:
-        logger.error(f"Failed to create messenger for inbox {inbox_id}: {e}")
+        logger.error("Failed to create messenger for inbox %s: %s", inbox_id, e)
         raise MessengerCreationError(
             f"Messenger creation failed for inbox {inbox_id}: {e}"
         ) from e
@@ -165,19 +149,17 @@ def create_expiry_cache_factory(inbox_id: str, user_id: str) -> ICacheFactory:
     try:
         cache_factory_class = create_cache_factory("redis")
         cache_factory = cache_factory_class(inbox_id=inbox_id, user_id=user_id)
-        logger.debug(
-            f"Created expiry cache factory for inbox: {inbox_id}, user: {user_id}"
-        )
+        logger.debug("Created expiry cache factory for inbox: %s, user: %s", inbox_id, user_id)
         return cache_factory
 
     except ImportError as e:
-        logger.error(f"Redis dependencies not available: {e}")
+        logger.error("Redis dependencies not available: %s", e)
         raise CacheFactoryCreationError(
             f"Redis cache factory creation failed - ensure redis dependencies are installed: {e}"
         ) from e
 
     except Exception as e:
-        logger.error(f"Failed to create cache factory: {e}")
+        logger.error("Failed to create cache factory: %s", e)
         raise CacheFactoryCreationError(
             f"Cache factory creation failed for inbox {inbox_id}, user {user_id}: {e}"
         ) from e

@@ -1,11 +1,6 @@
 """
 Expiry Listener - Redis KEYSPACE notification listener for expiry events.
 
-Refactored for SOLID compliance:
-- Single Responsibility: Orchestrates components, doesn't implement details
-- Open/Closed: Components can be extended without modifying listener
-- Dependency Inversion: Depends on abstractions (interfaces), not concretions
-
 Components:
 - RedisConnectionManager: Connection lifecycle
 - ExpiryEventParser: Key parsing (delegates to registry.resolve)
@@ -13,14 +8,20 @@ Components:
 - ReconnectionStrategy: Backoff logic
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
 from .connection import ConnectionConfig, RedisConnectionManager
 from .dispatcher import ExpiryDispatcher
 from .parser import ExpiryEventParser
 from .reconnection import ReconnectionConfig, ReconnectionStrategy
 from .registry import expiry_registry
+
+if TYPE_CHECKING:
+    from wappa.core.lifecycle import BackgroundWorkTracker
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ async def run_expiry_listener(
     alias: str = "expiry",
     reconnect_delay: int = 10,
     max_reconnect_attempts: int | None = None,
+    background_work_tracker: BackgroundWorkTracker,
 ) -> None:
     """
     Run long-running expiry listener task.
@@ -61,7 +63,7 @@ async def run_expiry_listener(
     # Initialize components with configuration
     connection_manager = RedisConnectionManager(config=ConnectionConfig(alias=alias))
     parser = ExpiryEventParser(registry=expiry_registry)
-    dispatcher = ExpiryDispatcher()
+    dispatcher = ExpiryDispatcher(tracker=background_work_tracker)
     reconnection = ReconnectionStrategy(
         config=ReconnectionConfig(
             base_delay=reconnect_delay,

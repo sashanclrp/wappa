@@ -109,9 +109,12 @@ class WappaContextFactory:
         )
 
         self.logger.debug(
-            f"Created WappaContext: inbox={inbox_id}, user={user_id}, "
-            f"db={'yes' if db else 'no'}, cache={'yes' if cache_factory else 'no'}, "
-            f"messenger={'yes' if messenger else 'no'}"
+            "Created WappaContext: inbox=%s, user=%s, db=%s, cache=%s, messenger=%s",
+            inbox_id,
+            user_id,
+            "yes" if db else "no",
+            "yes" if cache_factory else "no",
+            "yes" if messenger else "no",
         )
 
         return ctx
@@ -137,7 +140,7 @@ class WappaContextFactory:
             return factory_class(inbox_id=inbox_id, user_id=user_id)
 
         except Exception as e:
-            self.logger.error(f"Cache factory creation failed: {e}")
+            self.logger.error("Cache factory creation failed: %s", e)
             return None
 
     async def _create_messenger(
@@ -146,34 +149,29 @@ class WappaContextFactory:
         user_id: str | None,
         platform: PlatformType,
     ) -> IMessenger | None:
-        """Create messenger using same logic as WebhookController."""
+        """Create messenger using SessionLifecycle provider."""
         try:
             from wappa.domain.factories.messenger_factory import MessengerFactory
 
-            http_session = getattr(self._app.state, "http_session", None)
-            if not http_session:
-                self.logger.warning("No HTTP session in app.state, skipping messenger")
-                return None
-
-            if http_session.is_closed:
+            session_lifecycle = getattr(self._app.state, "session_lifecycle", None)
+            if not session_lifecycle:
                 self.logger.warning(
-                    "HTTP session is closed — cannot create messenger for inbox '%s'. "
-                    "App may be shutting down or needs session recreation via "
-                    "WappaCorePlugin.recreate_http_session()",
-                    inbox_id,
+                    "SessionLifecycle not available, skipping messenger"
                 )
                 return None
 
-            messenger_factory = MessengerFactory(http_session)
+            credential_store = getattr(
+                self._app.state, "inbox_credential_store", None
+            )
+            messenger_factory = MessengerFactory(
+                credential_store=credential_store,
+                session_provider=session_lifecycle.get_session,
+            )
             raw_messenger = await messenger_factory.create_messenger(
                 platform=platform,
                 inbox_id=inbox_id,
             )
 
-            # Apply the app-level messenger middleware pipeline. Identity
-            # and metadata are read from the active ``SSEEventContext`` at
-            # handle time, so middleware works uniformly across webhook,
-            # API, and expiry entry points without per-site branching.
             from wappa.core.messaging.pipeline import MessengerPipeline
 
             messenger_middleware = getattr(self._app.state, "messenger_middleware", ())
@@ -183,5 +181,5 @@ class WappaContextFactory:
             )
 
         except Exception as e:
-            self.logger.error(f"Messenger creation failed: {e}")
+            self.logger.error("Messenger creation failed: %s", e)
             return None

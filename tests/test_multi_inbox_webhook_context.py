@@ -282,7 +282,9 @@ async def test_inbound_runtime_rejects_payload_inbox_mismatch() -> None:
         http_session=_RecordingHTTPSession(),
     )
 
-    with pytest.raises(PayloadInboxMismatchError, match="does not match routed inbox_id"):
+    with pytest.raises(
+        PayloadInboxMismatchError, match="does not match routed inbox_id"
+    ):
         await runtime.build_dispatch_context(
             platform=runtime_platform(),
             inbox_id=INBOX_1,
@@ -333,11 +335,14 @@ def _runtime_dependencies(
     credential_store: IInboxCredentialStore,
     http_session: _RecordingHTTPSession,
 ) -> InboundRuntimeDependencies:
+    from wappa.core.lifecycle import BackgroundWorkTracker
+
     return InboundRuntimeDependencies(
         http_session=http_session,
         inbox_credential_store=credential_store,
         messenger_middleware=[],
         cache_type="memory",
+        background_work_tracker=BackgroundWorkTracker(),
     )
 
 
@@ -348,6 +353,8 @@ def _controller_request(
 ):
     from types import SimpleNamespace
 
+    from wappa.core.lifecycle import BackgroundWorkTracker
+
     return SimpleNamespace(
         app=SimpleNamespace(
             state=SimpleNamespace(
@@ -355,6 +362,7 @@ def _controller_request(
                 inbox_credential_store=credential_store,
                 messenger_middleware=[],
                 wappa_cache_type="memory",
+                background_work_tracker=BackgroundWorkTracker(),
             )
         )
     )

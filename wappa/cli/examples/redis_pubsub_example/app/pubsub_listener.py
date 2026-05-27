@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-async def start_pubsub_listener(http_session) -> None:
+async def start_pubsub_listener(http_session, credential_store) -> None:
     """
     Start Redis PubSub subscriber in background with MULTI-TENANT support.
 
@@ -41,6 +41,7 @@ async def start_pubsub_listener(http_session) -> None:
 
     Args:
         http_session: HTTP session for creating messenger (from app.state)
+        credential_store: IInboxCredentialStore for resolving inbox credentials
     """
     redis = None
     messenger_cache = {}  # Cache messengers by inbox {inbox_id: IMessenger}
@@ -48,8 +49,7 @@ async def start_pubsub_listener(http_session) -> None:
     try:
         logger.info("🔄 Creating messenger factory for MULTI-TENANT subscriber...")
 
-        # Create messenger factory (creates messengers dynamically per inbox)
-        messenger_factory = MessengerFactory(http_session)
+        messenger_factory = MessengerFactory(http_session, credential_store)
 
         logger.info("✅ Messenger factory ready for multi-inbox support")
         logger.info("🔄 Connecting to Redis for PubSub subscription...")

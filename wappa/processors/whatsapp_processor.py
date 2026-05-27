@@ -132,7 +132,9 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             return is_valid
 
         except Exception as e:
-            self.logger.error("Error validating webhook signature: %s", e, exc_info=True)
+            self.logger.error(
+                "Error validating webhook signature: %s", e, exc_info=True
+            )
             return False
 
     def parse_webhook_container(self, payload: dict[str, Any], **kwargs) -> BaseWebhook:
@@ -355,7 +357,9 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             return universal_webhook
 
         except Exception as e:
-            self.logger.error("Failed to create universal webhook: %s", e, exc_info=True)
+            self.logger.error(
+                "Failed to create universal webhook: %s", e, exc_info=True
+            )
             raise ProcessorError(
                 f"Failed to transform WhatsApp webhook to universal interface: {e}",
                 ErrorCode.PROCESSING_ERROR,
