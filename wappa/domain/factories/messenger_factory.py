@@ -8,10 +8,7 @@ from typing import TYPE_CHECKING
 from wappa.core.logging.logger import get_logger
 from wappa.domain.interfaces.inbox_credential_store import IInboxCredentialStore
 from wappa.domain.interfaces.messaging_interface import IMessenger
-from wappa.domain.interfaces.session_provider import (
-    HTTPSessionClosedError,
-    validate_session,
-)
+from wappa.domain.interfaces.session_provider import HTTPSessionClosedError
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
     WhatsAppInteractiveHandler,
@@ -37,30 +34,17 @@ class MessengerFactory:
 
     def __init__(
         self,
-        http_session: httpx.AsyncClient | None = None,
+        session_provider: Callable[[], httpx.AsyncClient],
         credential_store: IInboxCredentialStore | None = None,
-        *,
-        session_provider: Callable[[], httpx.AsyncClient] | None = None,
     ) -> None:
-        self._http_session = http_session
         self._session_provider = session_provider
         self._credential_store = credential_store
         self.logger = get_logger(__name__)
         self._messenger_cache: dict[str, IMessenger] = {}
 
     def _get_session(self) -> httpx.AsyncClient:
-        """Return the HTTP session after validating it is open."""
-        if self._session_provider is not None:
-            return self._session_provider()
-
-        if self._http_session is None:
-            raise RuntimeError(
-                "MessengerFactory has no session source — constructed without "
-                "an httpx.AsyncClient or session_provider. Ensure "
-                "app.state.http_session is passed when creating the factory "
-                "(check WappaCorePlugin startup and InboundRuntime wiring)."
-            )
-        return validate_session(self._http_session)
+        """Return the HTTP session via the lifecycle-aware provider."""
+        return self._session_provider()
 
     async def create_messenger(
         self, platform: PlatformType, inbox_id: str, force_recreate: bool = False

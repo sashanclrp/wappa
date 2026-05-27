@@ -27,9 +27,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-async def start_pubsub_listener(http_session, credential_store) -> None:
+async def start_pubsub_listener(session_provider, credential_store) -> None:
     """
-    Start Redis PubSub subscriber in background with MULTI-TENANT support.
+    Start Redis PubSub subscriber in background with multi-inbox support.
 
     This subscriber dynamically creates messengers per inbox as notifications
     arrive, supporting unlimited WhatsApp accounts/inboxes.
@@ -40,16 +40,16 @@ async def start_pubsub_listener(http_session, credential_store) -> None:
     - Each inbox uses its own WhatsApp credentials
 
     Args:
-        http_session: HTTP session for creating messenger (from app.state)
+        session_provider: Callable returning httpx.AsyncClient (from SessionLifecycle)
         credential_store: IInboxCredentialStore for resolving inbox credentials
     """
     redis = None
     messenger_cache = {}  # Cache messengers by inbox {inbox_id: IMessenger}
 
     try:
-        logger.info("🔄 Creating messenger factory for MULTI-TENANT subscriber...")
+        logger.info("🔄 Creating messenger factory for multi-inbox subscriber...")
 
-        messenger_factory = MessengerFactory(http_session, credential_store)
+        messenger_factory = MessengerFactory(session_provider, credential_store)
 
         logger.info("✅ Messenger factory ready for multi-inbox support")
         logger.info("🔄 Connecting to Redis for PubSub subscription...")

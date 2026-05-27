@@ -147,16 +147,25 @@ def create_wappa_application() -> Wappa:
             """Start background PubSub subscriber."""
             logger.info("🔄 Starting Redis PubSub subscriber...")
 
-            # Get HTTP session from app state (for messenger creation)
-            http_session = getattr(fastapi_app.state, "http_session", None)
-            if not http_session:
-                logger.error("❌ HTTP session not available - cannot start subscriber")
+            session_lifecycle = getattr(fastapi_app.state, "session_lifecycle", None)
+            if not session_lifecycle:
+                logger.error(
+                    "❌ SessionLifecycle not available - cannot start subscriber"
+                )
                 return
 
-            credential_store = getattr(app._app.state, "inbox_credential_store", None)
+            credential_store = getattr(
+                fastapi_app.state, "inbox_credential_store", None
+            )
+            tracker = getattr(fastapi_app.state, "background_work_tracker", None)
 
-            # Start subscriber as background task
-            asyncio.create_task(start_pubsub_listener(http_session, credential_store))
+            coro = start_pubsub_listener(
+                session_lifecycle.get_session, credential_store
+            )
+            if tracker:
+                tracker.track(coro, name="pubsub_listener")
+            else:
+                asyncio.create_task(coro)
 
             logger.info("✅ Redis PubSub subscriber started")
 

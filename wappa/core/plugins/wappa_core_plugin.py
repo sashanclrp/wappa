@@ -138,6 +138,17 @@ class WappaCorePlugin:
         logger.info("🛑 Closing Wappa core resources...")
 
         try:
+            if self.cache_type == CacheType.MEMORY:
+                try:
+                    from wappa.persistence.memory.handlers.utils.memory_store import (
+                        get_memory_store,
+                    )
+
+                    get_memory_store().stop_cleanup_task()
+                    logger.debug("🧹 Memory store cleanup task stopped")
+                except Exception as e:
+                    logger.warning("Memory store cleanup stop failed: %s", e)
+
             if self._session_lifecycle:
                 await self._session_lifecycle.close()
                 logger.info("🌐 Persistent HTTP client closed cleanly")

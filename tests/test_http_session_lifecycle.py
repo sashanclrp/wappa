@@ -55,24 +55,20 @@ def closed_session():
 
 
 class TestMessengerFactorySessionGuard:
-    def test_get_session_none_raises(self):
+    def test_provider_raises_propagates(self, closed_session):
         from wappa.domain.factories.messenger_factory import MessengerFactory
 
-        factory = MessengerFactory(http_session=None)
-        with pytest.raises(RuntimeError, match="no session source"):
-            factory._get_session()
+        def bad_provider():
+            raise HTTPSessionClosedError("session closed")
 
-    def test_get_session_closed_raises(self, closed_session):
-        from wappa.domain.factories.messenger_factory import MessengerFactory
-
-        factory = MessengerFactory(http_session=closed_session)
+        factory = MessengerFactory(session_provider=bad_provider)
         with pytest.raises(HTTPSessionClosedError):
             factory._get_session()
 
-    def test_get_session_open_returns(self, open_session):
+    def test_provider_returns_session(self, open_session):
         from wappa.domain.factories.messenger_factory import MessengerFactory
 
-        factory = MessengerFactory(http_session=open_session)
+        factory = MessengerFactory(session_provider=lambda: open_session)
         result = factory._get_session()
         assert result is open_session
 
@@ -83,8 +79,11 @@ class TestMessengerFactorySessionGuard:
         from wappa.domain.factories.messenger_factory import MessengerFactory
         from wappa.schemas.core.types import PlatformType
 
+        def bad_provider():
+            raise HTTPSessionClosedError("session closed")
+
         factory = MessengerFactory(
-            http_session=closed_session, credential_store=mock_credential_store
+            session_provider=bad_provider, credential_store=mock_credential_store
         )
         with pytest.raises(RuntimeError, match="Messenger creation failed"):
             await factory.create_messenger(
@@ -99,15 +98,17 @@ class TestMessengerFactorySessionGuard:
         from wappa.schemas.core.types import PlatformType
 
         factory = MessengerFactory(
-            http_session=open_session, credential_store=mock_credential_store
+            session_provider=lambda: open_session,
+            credential_store=mock_credential_store,
         )
 
-        # Create and cache a messenger
         await factory.create_messenger(platform=PlatformType.WHATSAPP, inbox_id="12345")
         assert "whatsapp:12345" in factory._messenger_cache
 
-        # Close the session — next access should evict + fail
-        open_session.is_closed = True
+        # Provider now raises — next access should evict + fail
+        factory._session_provider = lambda: (_ for _ in ()).throw(
+            HTTPSessionClosedError("closed")
+        )
         with pytest.raises(RuntimeError, match="Messenger creation failed"):
             await factory.create_messenger(
                 platform=PlatformType.WHATSAPP, inbox_id="12345"

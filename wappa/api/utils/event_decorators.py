@@ -5,7 +5,7 @@ Provides decorator-based event dispatch for WhatsApp API routes,
 eliminating repetitive dispatch_api_message_event calls across route files.
 
 The decorator automatically dispatches API events after successful route execution,
-using fire-and-forget pattern (asyncio.create_task) to avoid blocking responses.
+using BackgroundWorkTracker to avoid blocking responses.
 
 Database Session Support:
     When PostgresDatabasePlugin is configured, process_api_message() handlers
@@ -13,10 +13,12 @@ Database Session Support:
     the FastAPI Request from route parameters to enable this injection.
 """
 
-import asyncio
+import logging
 from collections.abc import Awaitable, Callable
 from functools import wraps
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
+
+logger = logging.getLogger(__name__)
 
 from fastapi import Request as FastAPIRequest
 
@@ -161,7 +163,22 @@ def dispatch_message_event(
                 inbox_id=get_current_inbox_context() or "unknown",
                 platform=platform,
             )
-            asyncio.create_task(dispatcher.dispatch(event, fastapi_request))
+            tracker = (
+                getattr(fastapi_request.app.state, "background_work_tracker", None)
+                if fastapi_request
+                else None
+            )
+            if tracker is None:
+                raise RuntimeError(
+                    "BackgroundWorkTracker not available — cannot dispatch event"
+                )
+            try:
+                tracker.track(
+                    dispatcher.dispatch(event, fastapi_request),
+                    name="api_event_dispatch",
+                )
+            except RuntimeError:
+                logger.warning("API event dispatch skipped: runtime is draining")
 
             return result
 
@@ -221,4 +238,16 @@ def fire_api_event(
         )
         await dispatcher.dispatch(event, fastapi_request)
 
-    asyncio.create_task(_build_and_dispatch())
+    tracker = (
+        getattr(fastapi_request.app.state, "background_work_tracker", None)
+        if fastapi_request
+        else None
+    )
+    if tracker is None:
+        raise RuntimeError(
+            "BackgroundWorkTracker not available — cannot fire API event"
+        )
+    try:
+        tracker.track(_build_and_dispatch(), name="fire_api_event")
+    except RuntimeError:
+        logger.warning("API event fire skipped: runtime is draining")

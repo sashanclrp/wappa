@@ -8,7 +8,7 @@ Important: Pass the FastAPI Request object to dispatch functions to enable
 database session injection in process_api_message() handlers.
 """
 
-import asyncio
+import logging
 from typing import TYPE_CHECKING
 
 from fastapi import Request
@@ -20,6 +20,8 @@ from wappa.domain.events.api_message_event import APIMessageEvent
 
 if TYPE_CHECKING:
     from wappa.messaging.whatsapp.models.basic_models import MessageResult
+
+logger = logging.getLogger(__name__)
 
 
 def get_api_event_dispatcher(request: Request) -> APIEventDispatcher | None:
@@ -87,6 +89,15 @@ async def dispatch_api_message_event(
         platform=platform,
     )
 
-    # Fire and forget - don't block the API response
-    # Pass request to enable DB session injection in handler
-    asyncio.create_task(dispatcher.dispatch(event, request))
+    tracker = (
+        getattr(request.app.state, "background_work_tracker", None) if request else None
+    )
+    if tracker is None:
+        raise RuntimeError(
+            "BackgroundWorkTracker not available — cannot dispatch API event "
+            "outside framework lifecycle"
+        )
+    try:
+        tracker.track(dispatcher.dispatch(event, request), name="api_event_dispatch")
+    except RuntimeError:
+        logger.warning("API event dispatch skipped: runtime is draining")
