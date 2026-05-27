@@ -93,25 +93,33 @@ class APIEventDispatcher:
             if bsuid is None:
                 bsuid, _ = classify_meta_identifier(canonical_user_id)
 
+            _tracker = (
+                getattr(request.app.state, "background_work_tracker", None)
+                if request
+                else None
+            )
             async with sse_event_scope(
                 inbox_id=event.inbox_id or "unknown",
                 user_id=canonical_user_id,
                 bsuid=bsuid,
                 phone_number=phone,
                 platform=event.platform or "whatsapp",
+                tracker=_tracker,
             ):
                 await request_handler.handle_api_message(event)
 
             self.logger.debug(
-                f"API event dispatched: {event.message_type} to {event.recipient} "
-                f"(handler: {request_handler.__class__.__name__}, "
-                f"db_available: {request_handler.db is not None})"
+                "API event dispatched: %s to %s (handler: %s, db_available: %s)",
+                event.message_type,
+                event.recipient,
+                request_handler.__class__.__name__,
+                request_handler.db is not None,
             )
 
             return {"success": True}
 
         except Exception as e:
-            self.logger.error(f"Error dispatching API event: {e}", exc_info=True)
+            self.logger.error("Error dispatching API event: %s", e, exc_info=True)
             return {"success": False, "error": str(e)}
 
     def _create_api_request_handler(
@@ -148,7 +156,9 @@ class APIEventDispatcher:
                 db_read = session_manager.get_read_session
 
         self.logger.debug(
-            f"API handler context: inbox={event.inbox_id}, db_available={db is not None}"
+            "API handler context: inbox=%s, db_available=%s",
+            event.inbox_id,
+            db is not None,
         )
 
         # Clone handler with context for this API event.

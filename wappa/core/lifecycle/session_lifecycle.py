@@ -75,10 +75,6 @@ class SessionLifecycle:
             if self._session and not self._session.is_closed:
                 return self._session
 
-            old = self._session
-            if old and not old.is_closed:
-                await old.aclose()
-
             self._session = self._client_factory()
             logger.info("HTTP session recreated successfully")
             return self._session

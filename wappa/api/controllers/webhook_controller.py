@@ -157,8 +157,14 @@ class WebhookController:
         request: Request,
     ) -> InboundRuntimeDependencies:
         app_state = request.app.state
+        session_lifecycle = getattr(app_state, "session_lifecycle", None)
+        if session_lifecycle is None:
+            raise RuntimeError(
+                "app.state.session_lifecycle is not set — WappaCorePlugin "
+                "must run startup before handling webhooks"
+            )
         return InboundRuntimeDependencies(
-            http_session=getattr(app_state, "http_session", None),
+            session_provider=session_lifecycle.get_session,
             inbox_credential_store=self._get_inbox_credential_store(request),
             messenger_middleware=getattr(app_state, "messenger_middleware", ()),
             cache_type=getattr(app_state, "wappa_cache_type", "memory"),

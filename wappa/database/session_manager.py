@@ -274,10 +274,10 @@ class PostgresSessionManager:
                 try:
                     await read_engine.dispose()
                 except Exception as e:
-                    logger.warning(f"Error disposing failed replica {idx + 1}: {e}")
+                    logger.warning("Error disposing failed replica %d: %s", idx + 1, e)
                 logger.warning(
-                    f"Read replica {idx + 1} failed health check after retries - "
-                    f"removed from read pool"
+                    "Read replica %d failed health check after retries — removed from read pool",
+                    idx + 1,
                 )
 
         # Replace with healthy replicas only
@@ -288,9 +288,12 @@ class PostgresSessionManager:
         self._initialized = True
 
         logger.info(
-            f"PostgresSessionManager initialized successfully "
-            f"(pool_size={self.pool_size}, max_overflow={self.max_overflow}, "
-            f"read_replicas={len(healthy_engines)}/{total_replicas})"
+            "PostgresSessionManager initialized successfully "
+            "(pool_size=%d, max_overflow=%d, read_replicas=%d/%d)",
+            self.pool_size,
+            self.max_overflow,
+            len(healthy_engines),
+            total_replicas,
         )
 
     async def cleanup(self) -> None:
@@ -306,7 +309,7 @@ class PostgresSessionManager:
             try:
                 await engine.dispose(close=False)
             except Exception as e:
-                logger.warning(f"Error disposing read engine: {e}")
+                logger.warning("Error disposing read engine: %s", e)
 
         self._read_engines.clear()
         self._read_session_makers.clear()
@@ -317,7 +320,7 @@ class PostgresSessionManager:
                 await self._write_engine.dispose(close=False)
                 logger.info("Write engine disposed successfully")
             except Exception as e:
-                logger.warning(f"Error disposing write engine: {e}")
+                logger.warning("Error disposing write engine: %s", e)
             self._write_engine = None
             self._write_session_maker = None
 
@@ -392,23 +395,25 @@ class PostgresSessionManager:
                     if result.scalar() == 1:
                         if attempt > 0:
                             logger.info(
-                                f"{db_type.capitalize()} connection established "
-                                f"on attempt {attempt + 1}/{self.max_retries}"
+                                "%s connection established on attempt %d/%d",
+                                db_type.capitalize(),
+                                attempt + 1,
+                                self.max_retries,
                             )
                         return True
 
                 # Health check returned unexpected result
-                error_msg = (
-                    f"{db_type.capitalize()} health check returned unexpected result"
-                )
                 logger.warning(
-                    f"{error_msg} (attempt {attempt + 1}/{self.max_retries})"
+                    "%s health check returned unexpected result (attempt %d/%d)",
+                    db_type.capitalize(),
+                    attempt + 1,
+                    self.max_retries,
                 )
 
                 # Treat unexpected result as transient
                 if attempt < self.max_retries - 1:
                     delay = self._calculate_backoff(attempt)
-                    logger.info(f"Retrying {db_type} in {delay:.2f}s...")
+                    logger.info("Retrying %s in %.2fs...", db_type, delay)
                     await asyncio.sleep(delay)
 
             except Exception as e:
@@ -416,24 +421,29 @@ class PostgresSessionManager:
 
                 # Check if error is transient
                 if not self._is_transient_error(e):
-                    logger.error(f"Non-transient error connecting to {db_type}: {e}")
+                    logger.error("Non-transient error connecting to %s: %s", db_type, e)
                     return False
 
                 # Log and retry for transient errors
                 if attempt < self.max_retries - 1:
                     delay = self._calculate_backoff(attempt)
                     logger.warning(
-                        f"{db_type.capitalize()} connection failed "
-                        f"(attempt {attempt + 1}/{self.max_retries}): {e}. "
-                        f"Retrying in {delay:.2f}s..."
+                        "%s connection failed (attempt %d/%d): %s. Retrying in %.2fs...",
+                        db_type.capitalize(),
+                        attempt + 1,
+                        self.max_retries,
+                        e,
+                        delay,
                     )
                     await asyncio.sleep(delay)
 
         # All retries exhausted
         if last_exception:
             logger.error(
-                f"{db_type.capitalize()} connection failed after "
-                f"{self.max_retries} attempts: {last_exception}"
+                "%s connection failed after %d attempts: %s",
+                db_type.capitalize(),
+                self.max_retries,
+                last_exception,
             )
 
         return False
@@ -471,7 +481,7 @@ class PostgresSessionManager:
                     try:
                         await session.execute(text("SELECT 1"))
                     except Exception as e:
-                        logger.warning(f"Connection validation failed: {e}")
+                        logger.warning("Connection validation failed: %s", e)
                         raise
 
                     try:
@@ -493,13 +503,20 @@ class PostgresSessionManager:
                 if attempt < self.max_retries - 1:
                     delay = self._calculate_backoff(attempt)
                     logger.warning(
-                        f"{operation_name} operation failed (attempt {attempt + 1}/{self.max_retries}): {e}. "
-                        f"Retrying in {delay:.2f}s"
+                        "%s operation failed (attempt %d/%d): %s. Retrying in %.2fs",
+                        operation_name,
+                        attempt + 1,
+                        self.max_retries,
+                        e,
+                        delay,
                     )
                     await asyncio.sleep(delay)
                 else:
                     logger.error(
-                        f"{operation_name} operation failed after {self.max_retries} attempts: {e}"
+                        "%s operation failed after %d attempts: %s",
+                        operation_name,
+                        self.max_retries,
+                        e,
                     )
 
         raise TransientDatabaseError(
@@ -574,7 +591,7 @@ class PostgresSessionManager:
                 result = await conn.execute(text("SELECT 1"))
                 return result.scalar() == 1
         except Exception as e:
-            logger.error(f"Database health check failed: {e}")
+            logger.error("Database health check failed: %s", e)
             return False
 
     def get_health_status(self) -> dict:

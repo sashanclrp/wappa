@@ -57,6 +57,7 @@ class SSEEventContext:
     metadata: dict[str, Any] = field(default_factory=dict)
     _pending_incoming: dict[str, Any] | None = None
     _pending_flush: Callable[[dict[str, Any]], Awaitable[None]] | None = None
+    _tracker: Any = None
 
 
 _sse_event_context: ContextVar[SSEEventContext | None] = ContextVar(
@@ -84,10 +85,17 @@ def flush_incoming_sse() -> None:
     flush = ctx._pending_flush
     ctx._pending_incoming = None
     ctx._pending_flush = None
-    try:
-        asyncio.create_task(flush(pending))
-    except RuntimeError:
-        logger.debug("SSE flush skipped: no running event loop")
+    tracker = ctx._tracker
+    if tracker is not None:
+        try:
+            tracker.track(flush(pending), name="sse_flush_incoming")
+        except RuntimeError:
+            logger.debug("SSE flush skipped: runtime is draining")
+    else:
+        try:
+            asyncio.create_task(flush(pending))
+        except RuntimeError:
+            logger.debug("SSE flush skipped: no running event loop")
 
 
 def update_metadata(**kwargs: Any) -> None:
@@ -163,6 +171,7 @@ async def sse_event_scope(
     phone_number: str | None = None,
     platform: str = "whatsapp",
     metadata: dict[str, Any] | None = None,
+    tracker: Any = None,
 ) -> AsyncIterator[SSEEventContext]:
     """Install an ``SSEEventContext`` for the duration of the ``async with``.
 
@@ -178,6 +187,7 @@ async def sse_event_scope(
         phone_number=phone_number,
         platform=platform,
         metadata=dict(metadata) if metadata else {},
+        _tracker=tracker,
     )
     token = _sse_event_context.set(ctx)
     try:

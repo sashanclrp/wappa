@@ -160,9 +160,7 @@ class WappaContextFactory:
                 )
                 return None
 
-            credential_store = getattr(
-                self._app.state, "inbox_credential_store", None
-            )
+            credential_store = getattr(self._app.state, "inbox_credential_store", None)
             messenger_factory = MessengerFactory(
                 credential_store=credential_store,
                 session_provider=session_lifecycle.get_session,

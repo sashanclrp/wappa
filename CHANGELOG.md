@@ -5,6 +5,55 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-05-27
+
+Lifecycle contract completion and Symphonai compatibility patch removal. This
+release closes the remaining gaps identified in the v0.15.1 integration audit:
+template pipeline keyword-only argument forwarding, JWT clock-skew leeway,
+complete `SessionLifecycle` adoption across all messenger creation paths, tracked
+background work for API event dispatch and SSE flush, and resource shutdown
+ownership for memory cache and read-replica disposal.
+
+### Breaking Changes
+- **`MessengerFactory` signature changed** — the `http_session` positional
+  parameter is removed. Constructor is now
+  `MessengerFactory(session_provider, credential_store)` where `session_provider`
+  is a `Callable[[], httpx.AsyncClient]`.
+- **`InboundRuntimeDependencies.http_session` replaced** with `session_provider:
+  Callable[[], httpx.AsyncClient]` — a required field.
+- **`WebhookController`** reads `app.state.session_lifecycle.get_session` instead
+  of `app.state.http_session`.
+
+### Added
+- `JWTStrategy` accepts `leeway: int | float = 0` keyword argument, forwarded to
+  `jwt.decode()`. Negative values raise `ValueError`.
+- `MessengerPipeline._invoke()` accepts `keyword_only` parameter to separate
+  keyword-only arguments from positional dispatch.
+- `SSEEventContext._tracker` field and `sse_event_scope(tracker=...)` parameter
+  for lifecycle-aware SSE flush.
+- 11 new tests: `test_template_pipeline.py` (4), `test_jwt_leeway.py` (7).
+
+### Changed
+- Template pipeline methods (`send_text_template`, `send_media_template`,
+  `send_location_template`) pass `template_type`/`override` as kwargs, fixing
+  `TypeError` when the raw messenger enforces keyword-only signatures.
+- `dispatch_api_message_event()`, `dispatch_message_event()`, `fire_api_event()`
+  use `BackgroundWorkTracker.track()` instead of raw `asyncio.create_task()`.
+- `flush_incoming_sse()` uses tracker when available, falls back to raw task.
+- `DispatchContext` carries `background_work_tracker` for SSE tracker propagation.
+- Redis pub/sub example uses `session_lifecycle.get_session` and tracked tasks.
+- Logger calls in `api_event_dispatcher`, `session_manager`, and
+  `wappa_core_plugin` converted from f-strings to `%s` lazy evaluation.
+
+### Fixed
+- Failed read-replica disposal during `PostgresSessionManager.initialize()` now
+  uses `dispose(close=False)` — non-blocking, matching shutdown behavior.
+- Memory store TTL cleanup task stopped during `WappaCorePlugin._core_shutdown()`.
+- `tests/test_session_lifecycle.py` fixtures converted to async — fixes teardown
+  under Python 3.12 with pytest-asyncio 1.3.0.
+- Removed `_template_options` dead helper from pipeline.
+- Removed unreachable code in `SessionLifecycle.recreate()`.
+
 ## [0.15.1] - 2026-05-27
 
 Graceful background work drain and HTTP session lifecycle completion. Wappa now

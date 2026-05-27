@@ -20,7 +20,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def _run_with_sse_scope(event: ExpiryEvent) -> None:
+async def _run_with_sse_scope(
+    event: ExpiryEvent, tracker: BackgroundWorkTracker | None = None
+) -> None:
     """Wrap the handler so any SSE emitted from inside carries coherent identity.
 
     The expiry key only gives us ``(inbox, identifier)``. We classify
@@ -36,6 +38,7 @@ async def _run_with_sse_scope(event: ExpiryEvent) -> None:
         user_id=event.identifier,
         bsuid=bsuid,
         phone_number=phone,
+        tracker=tracker,
     ):
         await event.handler(event.identifier, event.expired_key)
 
@@ -48,7 +51,7 @@ class ExpiryDispatcher:
 
     def dispatch(self, event: ExpiryEvent) -> asyncio.Task:
         """Dispatch handler as a tracked async task."""
-        coro = _run_with_sse_scope(event)
+        coro = _run_with_sse_scope(event, tracker=self._tracker)
         task_name = f"{event.handler_name}:{event.identifier}"
 
         try:

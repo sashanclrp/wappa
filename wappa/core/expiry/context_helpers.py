@@ -149,7 +149,9 @@ def create_expiry_cache_factory(inbox_id: str, user_id: str) -> ICacheFactory:
     try:
         cache_factory_class = create_cache_factory("redis")
         cache_factory = cache_factory_class(inbox_id=inbox_id, user_id=user_id)
-        logger.debug("Created expiry cache factory for inbox: %s, user: %s", inbox_id, user_id)
+        logger.debug(
+            "Created expiry cache factory for inbox: %s, user: %s", inbox_id, user_id
+        )
         return cache_factory
 
     except ImportError as e:

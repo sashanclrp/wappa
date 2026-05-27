@@ -75,7 +75,9 @@ class WappaCorePlugin:
                 logger.info("🔧 Development mode - logs: %s", settings.log_dir)
 
             app.state.wappa_cache_type = self.cache_type.value
-            logger.debug("💾 Set app.state.wappa_cache_type = %s", self.cache_type.value)
+            logger.debug(
+                "💾 Set app.state.wappa_cache_type = %s", self.cache_type.value
+            )
 
             logger.info("🌐 Creating persistent HTTP client...")
             client = SessionLifecycle._default_client_factory()
@@ -172,7 +174,7 @@ class WappaCorePlugin:
             whatsapp_webhook_url = webhook_url_factory.generate_whatsapp_webhook_url()
 
             logger.info("=== WHATSAPP WEBHOOK URL ===")
-            logger.info(f"📍 Primary Webhook URL: {whatsapp_webhook_url}")
+            logger.info("📍 Primary Webhook URL: %s", whatsapp_webhook_url)
             logger.info("   • Use this single URL in WhatsApp Business settings")
             logger.info("   • Handles both verification (GET) and webhooks (POST)")
             logger.info("   • Auto-configured with your WP_PHONE_ID from .env")

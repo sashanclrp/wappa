@@ -29,7 +29,7 @@ from wappa.webhooks.core.webhook_interfaces import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
     import httpx
 
@@ -62,7 +62,7 @@ class ProcessorFailureError(InboundRuntimeError):
 class InboundRuntimeDependencies:
     """Dependencies needed to build a Dispatch Context for one inbound event."""
 
-    http_session: httpx.AsyncClient | None
+    session_provider: Callable[[], httpx.AsyncClient]
     inbox_credential_store: IInboxCredentialStore
     messenger_middleware: Sequence[Any]
     cache_type: str
@@ -84,6 +84,7 @@ class DispatchContext:
     sse_bsuid: str | None
     sse_phone_number: str | None
     sse_platform: str
+    background_work_tracker: Any = None
 
 
 class InboundRuntime:
@@ -177,6 +178,7 @@ class InboundRuntime:
             sse_bsuid=sse_bsuid,
             sse_phone_number=sse_phone_number,
             sse_platform=sse_platform,
+            background_work_tracker=dependencies.background_work_tracker,
         )
 
     async def dispatch(self, dispatch_context: DispatchContext) -> None:
@@ -193,6 +195,7 @@ class InboundRuntime:
                 bsuid=dispatch_context.sse_bsuid,
                 phone_number=dispatch_context.sse_phone_number,
                 platform=dispatch_context.sse_platform,
+                tracker=dispatch_context.background_work_tracker,
             ):
                 dispatch_result = (
                     await self.event_dispatcher.dispatch_universal_webhook(
@@ -269,8 +272,8 @@ class InboundRuntime:
     ) -> WappaEventHandler:
         try:
             messenger_factory = MessengerFactory(
-                dependencies.http_session,
-                dependencies.inbox_credential_store,
+                session_provider=dependencies.session_provider,
+                credential_store=dependencies.inbox_credential_store,
             )
             raw_messenger = await messenger_factory.create_messenger(
                 platform=platform,

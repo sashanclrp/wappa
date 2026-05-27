@@ -79,7 +79,9 @@ class MessengerFactory:
                 del self._messenger_cache[cache_key]
 
         self.logger.debug(
-            "Creating new messenger for platform: %s, inbox: %s", platform.value, inbox_id
+            "Creating new messenger for platform: %s, inbox: %s",
+            platform.value,
+            inbox_id,
         )
 
         try:
@@ -135,7 +137,9 @@ class MessengerFactory:
             inbox_id=inbox_id,
         )
 
-        self.logger.info("✅ WhatsApp messenger created successfully for inbox: %s", inbox_id)
+        self.logger.info(
+            "✅ WhatsApp messenger created successfully for inbox: %s", inbox_id
+        )
         return messenger
 
     def get_supported_platforms(self) -> list[PlatformType]:
@@ -159,7 +163,9 @@ class MessengerFactory:
             ]
             for key in to_remove:
                 del self._messenger_cache[key]
-            self.logger.debug("Cleared messenger cache for platform: %s", platform.value)
+            self.logger.debug(
+                "Cleared messenger cache for platform: %s", platform.value
+            )
         elif inbox_id:
             to_remove = [
                 key for key in self._messenger_cache if key.endswith(f":{inbox_id}")

@@ -206,35 +206,32 @@ class MessengerPipeline(IMessenger):
         message_type: str,
         recipient: str,
         arguments: Mapping[str, Any],
+        *,
+        keyword_only: Mapping[str, Any] | None = None,
     ) -> Awaitable[MessageResult]:
         """Build the :class:`SendInvocation` and hand it to the pre-composed chain.
 
         ``args`` is derived from ``arguments.values()``; each ``send_*``
         method defines ``arguments`` in positional order so the tuple matches
-        what the raw messenger expects. This keeps the 15 wrapper methods to
-        a single line of dispatch each while preserving static signatures.
+        what the raw messenger expects.
+
+        ``keyword_only``, when provided, names arguments that must be passed
+        as **kwargs** to the raw messenger (keyword-only parameters after
+        ``*``). Those keys are excluded from the positional ``args`` tuple
+        but remain in ``arguments`` for middleware inspection.
         """
+        kw = keyword_only or {}
+        positional = {k: v for k, v in arguments.items() if k not in kw}
         return self._entrypoint(
             SendInvocation(
                 method_name=method_name,
                 message_type=message_type,
                 recipient=recipient,
-                args=tuple(arguments.values()),
+                args=tuple(positional.values()),
+                kwargs=kw,
                 arguments=arguments,
             )
         )
-
-    @staticmethod
-    def _template_options(
-        language_code: str,
-        template_type: str,
-        override: bool | None,
-    ) -> dict[str, str | bool | None]:
-        return {
-            "language_code": language_code,
-            "template_type": template_type,
-            "override": override,
-        }
 
     # ------------------------------------------------------------------ #
     # IMessenger basic messaging.
@@ -458,6 +455,7 @@ class MessengerPipeline(IMessenger):
         template_type: str,
         override: bool | None = None,
     ) -> MessageResult:
+        kw = {"template_type": template_type, "override": override}
         return await self._invoke(
             "send_text_template",
             "text_template",
@@ -466,8 +464,10 @@ class MessengerPipeline(IMessenger):
                 "template_name": template_name,
                 "recipient": recipient,
                 "body_parameters": body_parameters,
-                **self._template_options(language_code, template_type, override),
+                "language_code": language_code,
+                **kw,
             },
+            keyword_only=kw,
         )
 
     async def send_media_template(
@@ -483,6 +483,7 @@ class MessengerPipeline(IMessenger):
         template_type: str,
         override: bool | None = None,
     ) -> MessageResult:
+        kw = {"template_type": template_type, "override": override}
         return await self._invoke(
             "send_media_template",
             "media_template",
@@ -494,8 +495,10 @@ class MessengerPipeline(IMessenger):
                 "media_id": media_id,
                 "media_url": media_url,
                 "body_parameters": body_parameters,
-                **self._template_options(language_code, template_type, override),
+                "language_code": language_code,
+                **kw,
             },
+            keyword_only=kw,
         )
 
     async def send_location_template(
@@ -512,6 +515,7 @@ class MessengerPipeline(IMessenger):
         template_type: str,
         override: bool | None = None,
     ) -> MessageResult:
+        kw = {"template_type": template_type, "override": override}
         return await self._invoke(
             "send_location_template",
             "location_template",
@@ -524,8 +528,10 @@ class MessengerPipeline(IMessenger):
                 "name": name,
                 "address": address,
                 "body_parameters": body_parameters,
-                **self._template_options(language_code, template_type, override),
+                "language_code": language_code,
+                **kw,
             },
+            keyword_only=kw,
         )
 
     # ------------------------------------------------------------------ #

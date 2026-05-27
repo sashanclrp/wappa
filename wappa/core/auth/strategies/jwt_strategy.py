@@ -25,12 +25,19 @@ class JWTStrategy:
 
     Exactly one of ``secret`` or ``jwks_url`` must be provided.
 
+    Use ``leeway`` (seconds) to tolerate small clock skew between the token
+    issuer and your server. A leeway of 10–30 seconds is typical for
+    distributed environments.
+
     Raises ImportError at instantiation if PyJWT is not installed,
     so importing this module without PyJWT won't break other strategies.
 
     Examples:
         # Shared secret (existing usage — unchanged)
         strategy = JWTStrategy(secret="my-secret", algorithms=["HS256"])
+
+        # Shared secret with clock-skew tolerance
+        strategy = JWTStrategy(secret="my-secret", leeway=10)
 
         # JWKS URL for asymmetric verification
         strategy = JWTStrategy(
@@ -49,6 +56,7 @@ class JWTStrategy:
         audience: str | None = None,
         issuer: str | None = None,
         jwks_cache_ttl: int = 300,
+        leeway: int | float = 0,
     ) -> None:
         try:
             from jwt import PyJWKClient
@@ -61,10 +69,14 @@ class JWTStrategy:
         if has_secret == has_jwks:
             raise ValueError("Exactly one of 'secret' or 'jwks_url' must be provided.")
 
+        if leeway < 0:
+            raise ValueError("leeway must be non-negative")
+
         self._secret = secret
         self._algorithms = algorithms or (["HS256"] if has_secret else ["RS256"])
         self._audience = audience
         self._issuer = issuer
+        self._leeway = leeway
 
         self._jwks_client: PyJWKClient | None = None
         if has_jwks:
@@ -98,6 +110,7 @@ class JWTStrategy:
                 algorithms=self._algorithms,
                 audience=self._audience,
                 issuer=self._issuer,
+                leeway=self._leeway,
             )
         except jwt.ExpiredSignatureError:
             return AuthResult(authenticated=False, error="Token has expired")

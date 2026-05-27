@@ -338,7 +338,7 @@ def _runtime_dependencies(
     from wappa.core.lifecycle import BackgroundWorkTracker
 
     return InboundRuntimeDependencies(
-        http_session=http_session,
+        session_provider=lambda: http_session,
         inbox_credential_store=credential_store,
         messenger_middleware=[],
         cache_type="memory",
@@ -353,12 +353,14 @@ def _controller_request(
 ):
     from types import SimpleNamespace
 
-    from wappa.core.lifecycle import BackgroundWorkTracker
+    from wappa.core.lifecycle import BackgroundWorkTracker, SessionLifecycle
+
+    lifecycle = SessionLifecycle(http_session)
 
     return SimpleNamespace(
         app=SimpleNamespace(
             state=SimpleNamespace(
-                http_session=http_session,
+                session_lifecycle=lifecycle,
                 inbox_credential_store=credential_store,
                 messenger_middleware=[],
                 wappa_cache_type="memory",

@@ -208,7 +208,9 @@ class WebhookPlugin:
 
     async def startup(self, app: FastAPI) -> None:
         url_pattern = (
-            f"{self.prefix}/{{inbox_id}}" if self.include_inbox_id else f"{self.prefix}/"
+            f"{self.prefix}/{{inbox_id}}"
+            if self.include_inbox_id
+            else f"{self.prefix}/"
         )
         get_app_logger().info(
             "WebhookPlugin for %s ready - URL pattern: %s, Methods: %s",
@@ -218,4 +220,6 @@ class WebhookPlugin:
         )
 
     async def shutdown(self, app: FastAPI) -> None:
-        get_app_logger().debug("WebhookPlugin for %s shutting down", self.external_source)
+        get_app_logger().debug(
+            "WebhookPlugin for %s shutting down", self.external_source
+        )

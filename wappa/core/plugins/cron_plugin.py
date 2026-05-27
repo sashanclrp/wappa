@@ -134,7 +134,9 @@ class CronPlugin:
         builder.add_shutdown_hook(self._shutdown_hook, priority=85)
 
         logger = get_app_logger()
-        logger.debug("CronPlugin configured with %d cron(s)", len(self._cron_registrations))
+        logger.debug(
+            "CronPlugin configured with %d cron(s)", len(self._cron_registrations)
+        )
 
     async def _startup_hook(self, app: "FastAPI") -> None:
         """
@@ -231,7 +233,9 @@ class CronPlugin:
                 )
 
         except Exception as e:
-            logger.error("Error firing cron event %s: %s", reg.cron_id, e, exc_info=True)
+            logger.error(
+                "Error firing cron event %s: %s", reg.cron_id, e, exc_info=True
+            )
 
     async def _create_request_handler(
         self, reg: _CronRegistration
