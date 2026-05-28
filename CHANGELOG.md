@@ -5,6 +5,17 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.3] - 2026-05-28
+
+Adds a debug-only SSE publish endpoint for testing event delivery without a live
+WhatsApp webhook. The endpoint is excluded from the OpenAPI schema and intended
+for local development and integration debugging.
+
+### Added
+- `POST /sse/debug/publish` — debug endpoint that publishes a test SSE event
+  with configurable `event_type`, `payload`, `inbox_id`, and `user_id`.
+  Hidden from the public schema (`include_in_schema=False`).
+
 ## [0.17.2] - 2026-05-27
 
 Adds a pooled unauthenticated HTTP client for public/third-party media downloads,

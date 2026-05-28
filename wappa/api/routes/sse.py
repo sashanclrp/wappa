@@ -148,3 +148,37 @@ async def sse_status(request: Request) -> dict[str, object]:
         "supported_event_types": sorted(SUPPORTED_SSE_EVENT_TYPES),
         "hub": event_hub.get_stats(),
     }
+
+
+@router.post(
+    "/debug/publish",
+    summary="[DEBUG] Publish a test SSE event",
+    include_in_schema=False,
+)
+async def debug_publish_event(request: Request) -> dict[str, str]:
+    """Publish a fake agent_run_completed event for debugging."""
+    from uuid import uuid4
+    from wappa.core.sse.context import SSEEventContext, set_sse_context
+
+    body = await request.json()
+    event_type = body.get("event_type", "agent_run_completed")
+    payload = body.get("payload", {})
+    inbox_id = body.get("inbox_id", "")
+    user_id = body.get("user_id", "")
+
+    ctx = SSEEventContext(
+        inbox_id=inbox_id,
+        user_id=user_id,
+        bsuid=user_id,
+        phone_number=body.get("phone_number", ""),
+        platform="whatsapp",
+    )
+    set_sse_context(ctx)
+
+    event_hub = _get_event_hub(request)
+    delivered = await event_hub.publish(
+        event_type=event_type,
+        source="debug",
+        payload=payload,
+    )
+    return {"delivered": str(delivered), "event_type": event_type}
