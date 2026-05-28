@@ -25,9 +25,16 @@ from wappa.schemas.core.types import PlatformType
 class WhatsAppMediaHandler(IMediaHandler):
     """WhatsApp implementation of the media handler interface."""
 
-    def __init__(self, client: WhatsAppClient, inbox_id: str):
+    def __init__(
+        self,
+        client: WhatsAppClient,
+        inbox_id: str,
+        *,
+        media_download_client: httpx.AsyncClient | None = None,
+    ):
         self.client = client
         self._inbox_id = inbox_id
+        self._media_download_client = media_download_client
         self.logger = get_logger(__name__)
 
     @property
@@ -238,60 +245,66 @@ class WhatsAppMediaHandler(IMediaHandler):
         try:
             self.logger.debug(f"Downloading media from URL for re-upload: {url}")
 
-            async with (
-                httpx.AsyncClient(timeout=httpx.Timeout(timeout)) as client,
-                client.stream("GET", url) as response,
-            ):
-                if response.status_code != 200:
-                    return MediaUploadResult(
-                        success=False,
-                        error=f"Download failed: HTTP {response.status_code} from {url}",
-                        error_code="DOWNLOAD_FAILED",
-                        inbox_id=self._inbox_id,
-                    )
-
-                content_type = (
-                    response.headers.get("content-type", "").split(";")[0].strip()
-                )
-
-                if not content_type or content_type == "application/octet-stream":
-                    return MediaUploadResult(
-                        success=False,
-                        error=f"Source URL did not provide a usable Content-Type header: {url}",
-                        error_code="MIME_TYPE_UNKNOWN",
-                        inbox_id=self._inbox_id,
-                    )
-
-                if not self.validate_media_type(content_type):
-                    return MediaUploadResult(
-                        success=False,
-                        error=f"Unsupported MIME type '{content_type}' from source URL. Supported types: {sorted(self.supported_media_types)}",
-                        error_code="MIME_TYPE_UNSUPPORTED",
-                        inbox_id=self._inbox_id,
-                    )
-
-                max_size = self._get_max_size_for_mime_type(content_type)
-
-                if (
-                    content_length_str := response.headers.get("content-length")
-                ) and int(content_length_str) > max_size:
-                    return MediaUploadResult(
-                        success=False,
-                        error=f"Source file size ({content_length_str} bytes) exceeds the limit ({max_size} bytes) for type {content_type}",
-                        error_code="FILE_SIZE_EXCEEDED",
-                        inbox_id=self._inbox_id,
-                    )
-
-                data = bytearray()
-                async for chunk in response.aiter_bytes(8192):
-                    data.extend(chunk)
-                    if len(data) > max_size:
+            owns_client = self._media_download_client is None
+            download_client = (
+                self._media_download_client
+                or httpx.AsyncClient(timeout=httpx.Timeout(timeout))
+            )
+            try:
+                async with download_client.stream("GET", url) as response:
+                    if response.status_code != 200:
                         return MediaUploadResult(
                             success=False,
-                            error=f"Download aborted: file size exceeded {max_size} bytes for type {content_type}",
+                            error=f"Download failed: HTTP {response.status_code} from {url}",
+                            error_code="DOWNLOAD_FAILED",
+                            inbox_id=self._inbox_id,
+                        )
+
+                    content_type = (
+                        response.headers.get("content-type", "").split(";")[0].strip()
+                    )
+
+                    if not content_type or content_type == "application/octet-stream":
+                        return MediaUploadResult(
+                            success=False,
+                            error=f"Source URL did not provide a usable Content-Type header: {url}",
+                            error_code="MIME_TYPE_UNKNOWN",
+                            inbox_id=self._inbox_id,
+                        )
+
+                    if not self.validate_media_type(content_type):
+                        return MediaUploadResult(
+                            success=False,
+                            error=f"Unsupported MIME type '{content_type}' from source URL. Supported types: {sorted(self.supported_media_types)}",
+                            error_code="MIME_TYPE_UNSUPPORTED",
+                            inbox_id=self._inbox_id,
+                        )
+
+                    max_size = self._get_max_size_for_mime_type(content_type)
+
+                    if (
+                        content_length_str := response.headers.get("content-length")
+                    ) and int(content_length_str) > max_size:
+                        return MediaUploadResult(
+                            success=False,
+                            error=f"Source file size ({content_length_str} bytes) exceeds the limit ({max_size} bytes) for type {content_type}",
                             error_code="FILE_SIZE_EXCEEDED",
                             inbox_id=self._inbox_id,
                         )
+
+                    data = bytearray()
+                    async for chunk in response.aiter_bytes(8192):
+                        data.extend(chunk)
+                        if len(data) > max_size:
+                            return MediaUploadResult(
+                                success=False,
+                                error=f"Download aborted: file size exceeded {max_size} bytes for type {content_type}",
+                                error_code="FILE_SIZE_EXCEEDED",
+                                inbox_id=self._inbox_id,
+                            )
+            finally:
+                if owns_client:
+                    await download_client.aclose()
 
             extension_map = self._get_extension_map()
             ext = extension_map.get(content_type, "")

@@ -69,6 +69,7 @@ class InboundRuntimeDependencies:
     background_work_tracker: Any
     redis_manager: Any | None = None
     postgres_session_manager: Any | None = None
+    media_download_client_provider: Callable[[], httpx.AsyncClient] | None = None
 
 
 @dataclass(frozen=True)
@@ -274,6 +275,7 @@ class InboundRuntime:
             messenger_factory = MessengerFactory(
                 session_provider=dependencies.session_provider,
                 credential_store=dependencies.inbox_credential_store,
+                media_download_client_provider=dependencies.media_download_client_provider,
             )
             raw_messenger = await messenger_factory.create_messenger(
                 platform=platform,

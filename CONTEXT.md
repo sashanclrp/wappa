@@ -84,6 +84,16 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **Expiry Action** | A time-triggered handler that fires when a Redis key expires. Registered via decorator. |
 | **Expiry Key** | Redis key with TTL. Format: `{inbox_id}:EXPTRIGGER:{action}:{identifier}`. Parsed on expiration to route to the correct handler. |
 
+## HTTP Client Lifecycle
+
+| Term | Definition |
+|------|-----------|
+| **SessionLifecycle** | Owns the authenticated HTTP session used for platform API calls and the unauthenticated media download client. Provides drain-aware access, serialized recreation, and clean shutdown for both clients. |
+| `get_session()` | Returns the authenticated `httpx.AsyncClient` for platform API calls (Meta Graph API). Carries Bearer token. Raises `RuntimeDrainingError` during shutdown. |
+| `get_media_download_client()` | Returns the pooled unauthenticated `httpx.AsyncClient` for downloading public/third-party media. Never carries auth headers. Lazily created on first access. |
+| **BackgroundWorkTracker** | Tracks all fire-and-forget `asyncio.Task` instances created by framework code (event dispatch, SSE flush, expiry handlers). Rejects new work during drain; awaits in-flight tasks with bounded timeout during shutdown. |
+| **Three-Phase Shutdown** | Priority 90: mark draining (reject new work). Priority 70: drain tracked background tasks. Priority 10: stop memory cleanup, close HTTP clients, clear app state. |
+
 ## Anti-Language (Do NOT Use)
 
 | Forbidden Term | Use Instead |

@@ -36,15 +36,23 @@ class MessengerFactory:
         self,
         session_provider: Callable[[], httpx.AsyncClient],
         credential_store: IInboxCredentialStore | None = None,
+        *,
+        media_download_client_provider: Callable[[], httpx.AsyncClient] | None = None,
     ) -> None:
         self._session_provider = session_provider
         self._credential_store = credential_store
+        self._media_download_client_provider = media_download_client_provider
         self.logger = get_logger(__name__)
         self._messenger_cache: dict[str, IMessenger] = {}
 
     def _get_session(self) -> httpx.AsyncClient:
         """Return the HTTP session via the lifecycle-aware provider."""
         return self._session_provider()
+
+    def _get_media_download_client(self) -> httpx.AsyncClient | None:
+        if self._media_download_client_provider is None:
+            return None
+        return self._media_download_client_provider()
 
     async def create_messenger(
         self, platform: PlatformType, inbox_id: str, force_recreate: bool = False
@@ -110,7 +118,11 @@ class MessengerFactory:
 
         messenger = WhatsAppMessenger(
             client=client,
-            media_handler=WhatsAppMediaHandler(client=client, inbox_id=inbox_id),
+            media_handler=WhatsAppMediaHandler(
+                client=client,
+                inbox_id=inbox_id,
+                media_download_client=self._get_media_download_client(),
+            ),
             interactive_handler=WhatsAppInteractiveHandler(
                 client=client, inbox_id=inbox_id
             ),

@@ -139,6 +139,41 @@ Host's process_message():
 └─────────────────────────────────┘
 ```
 
+## HTTP Client Lifecycle
+
+Wappa manages two separate HTTP client pools, both owned by `SessionLifecycle`:
+
+```
+┌───────────────────────────────────────────────────────┐
+│  SessionLifecycle                                     │
+│                                                       │
+│  Authenticated Client (get_session)                   │
+│  ├── 100 max connections, 20 keepalive                │
+│  ├── Bearer token injected by WhatsAppClient          │
+│  ├── Used for: Meta Graph API calls                   │
+│  └── ⚠️  NEVER used for third-party URLs              │
+│                                                       │
+│  Media Download Client (get_media_download_client)    │
+│  ├── 20 max connections, 5 keepalive                  │
+│  ├── No auth headers — credential isolation enforced  │
+│  ├── Lazily created on first access                   │
+│  └── Used for: public/third-party media downloads     │
+│                                                       │
+│  Lifecycle: startup → active → drain → close          │
+│  Both clients closed during three-phase shutdown      │
+└───────────────────────────────────────────────────────┘
+```
+
+**Credential isolation rule:** The authenticated client carries Meta/WhatsApp Bearer tokens. The media download client never carries auth headers. These clients must not be consolidated. This prevents accidental credential leakage to third-party hosts when downloading public media URLs for re-upload.
+
+**Three-phase shutdown:**
+
+| Phase | Priority | Action |
+|-------|----------|--------|
+| Drain mark | 90 | `SessionLifecycle.begin_drain()` + `BackgroundWorkTracker.begin_drain()` — reject new work |
+| Background drain | 70 | `BackgroundWorkTracker.drain(timeout=30s)` — await in-flight tasks |
+| Resource close | 10 | Stop memory cleanup, close both HTTP clients, clear app state |
+
 ## Layer Dependencies
 
 ```

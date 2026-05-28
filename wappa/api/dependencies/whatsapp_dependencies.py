@@ -112,18 +112,24 @@ async def get_whatsapp_client(request: Request) -> WhatsAppClient:
 
 
 async def get_whatsapp_media_handler(
+    request: Request,
     client: WhatsAppClient = Depends(get_whatsapp_client),
 ) -> WhatsAppMediaHandler:
     """Get configured WhatsApp media handler with inbox-specific context.
 
     Args:
+        request: FastAPI request for accessing pooled media download client
         client: Configured WhatsApp client with persistent session
 
     Returns:
         Configured WhatsApp media handler for upload/download operations
     """
     inbox_id = require_inbox_context()
-    return WhatsAppMediaHandler(client=client, inbox_id=inbox_id)
+    media_client_provider = getattr(request.app.state, "media_download_client", None)
+    media_client = media_client_provider() if media_client_provider else None
+    return WhatsAppMediaHandler(
+        client=client, inbox_id=inbox_id, media_download_client=media_client
+    )
 
 
 async def get_whatsapp_interactive_handler(

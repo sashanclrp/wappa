@@ -77,7 +77,7 @@ wappa/core/plugins/
 | Class | Role |
 |-------|------|
 | `WappaPlugin` (protocol) | Structural interface. Plugins satisfy it without inheriting from it. |
-| `WappaCorePlugin` | Mandatory first plugin. Sets up HTTP client, logging, core routes, and core middleware stack. |
+| `WappaCorePlugin` | Mandatory first plugin. Sets up authenticated HTTP client + pooled media download client via `SessionLifecycle`, `BackgroundWorkTracker`, logging, core routes, and core middleware stack. Owns three-phase shutdown: drain mark (90) → background drain (70) → resource close (10). |
 | `RedisPlugin` | Infra plugin that initialises connection pools before any feature plugin that requires Redis. |
 | `PostgresDatabasePlugin` | Infra plugin that creates the async SQLAlchemy engine and injects `db`/`db_read` into handlers. |
 | `ExpiryPlugin` | Depends on `RedisPlugin`. Owns the long-running expiry listener task lifecycle. |

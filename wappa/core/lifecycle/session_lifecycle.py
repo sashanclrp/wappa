@@ -40,6 +40,7 @@ class SessionLifecycle:
         self._client_factory = client_factory or self._default_client_factory
         self._draining = False
         self._recreation_lock = asyncio.Lock()
+        self._media_client: httpx.AsyncClient | None = None
 
     def get_session(self) -> httpx.AsyncClient:
         """Return the current session.
@@ -84,8 +85,28 @@ class SessionLifecycle:
         self._draining = True
         logger.info("Session lifecycle entering drain state")
 
+    def get_media_download_client(self) -> httpx.AsyncClient:
+        """Return the unauthenticated media download client.
+
+        Lazily created on first access. Never carries auth headers.
+        Raises RuntimeDrainingError if the runtime is shutting down.
+        """
+        if self._draining:
+            raise RuntimeDrainingError(
+                "Wappa runtime is draining — media downloads are no longer "
+                "accepted. This occurs during server shutdown."
+            )
+        if self._media_client is None or self._media_client.is_closed:
+            self._media_client = self._media_download_client_factory()
+        return self._media_client
+
     async def close(self) -> None:
-        """Close the underlying HTTP session."""
+        """Close all managed HTTP clients."""
+        if self._media_client and not self._media_client.is_closed:
+            await self._media_client.aclose()
+            logger.info("Media download client closed")
+        self._media_client = None
+
         if self._session and not self._session.is_closed:
             await self._session.aclose()
             logger.info("HTTP session closed")
@@ -106,3 +127,10 @@ class SessionLifecycle:
             limits=httpx.Limits(max_connections=100, max_keepalive_connections=20),
         )
         return httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(30.0))
+
+    @staticmethod
+    def _media_download_client_factory() -> httpx.AsyncClient:
+        transport = httpx.AsyncHTTPTransport(
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=5),
+        )
+        return httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(60.0))

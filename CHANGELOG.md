@@ -5,6 +5,37 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.2] - 2026-05-27
+
+Adds a pooled unauthenticated HTTP client for public/third-party media downloads,
+strictly isolated from the authenticated WhatsApp API client. Connection reuse
+reduces overhead under volume while enforcing credential isolation. Updates DDD
+documentation (CONTEXT.md, ARCHITECTURE.md, messaging and plugins architecture)
+to reflect the lifecycle and credential boundary patterns established since v0.16.0.
+
+### Added
+- `SessionLifecycle.get_media_download_client()` — lazily-created pooled
+  `httpx.AsyncClient` (20 connections, 5 keepalive, 60s timeout) with no auth
+  headers, for downloading public/third-party media URLs.
+- `WhatsAppMediaHandler` accepts optional `media_download_client` kwarg; uses
+  pooled client when available, falls back to per-call client otherwise.
+- Media download client wired through both injection paths: API route DI
+  (`whatsapp_dependencies.py`) and inbound dispatch (`MessengerFactory` →
+  `InboundRuntimeDependencies` → `WebhookController`).
+- `tests/test_media_download_client_isolation.py` (10 tests): lazy creation,
+  instance isolation, drain rejection, shutdown closure, no-auth-headers,
+  pooled vs fallback handler paths.
+- DDD documentation updates: lifecycle terms in CONTEXT.md, HTTP client
+  lifecycle section in root ARCHITECTURE.md, credential isolation in messaging
+  ARCHITECTURE.md, shutdown phases in plugins ARCHITECTURE.md.
+
+### Changed
+- `SessionLifecycle.close()` now closes both authenticated and media download
+  clients.
+- `InboundRuntimeDependencies` gained `media_download_client_provider` field.
+- Existing `test_media_upload_from_url.py` mock updated for the new client
+  construction pattern (no longer context-manager-wrapped).
+
 ## [0.17.1] - 2026-05-27
 
 Removes the last `asyncio.create_task` fallback from the Redis pub/sub example

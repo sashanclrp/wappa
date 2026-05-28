@@ -64,11 +64,8 @@ def _mock_response(
 def _mock_client(response_ctx):
     client = MagicMock()
     client.stream = MagicMock(return_value=response_ctx)
-
-    client_ctx = AsyncMock()
-    client_ctx.__aenter__ = AsyncMock(return_value=client)
-    client_ctx.__aexit__ = AsyncMock(return_value=False)
-    return client_ctx
+    client.aclose = AsyncMock()
+    return client
 
 
 @pytest.mark.asyncio

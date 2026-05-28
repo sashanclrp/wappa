@@ -96,6 +96,22 @@ WhatsAppMessenger._resolve_media_object(path, ...)
 → WhatsAppClient.post_request(message payload)
 ```
 
+## Media Download — Credential Isolation
+
+`WhatsAppMediaHandler` handles two categories of HTTP traffic with strictly separate clients:
+
+| Operation | Client | Auth | Pool |
+|-----------|--------|------|------|
+| `get_media_info()`, `download_media()`, `stream_media()` | Authenticated `WhatsAppClient` | Bearer token | SessionLifecycle main pool (100 conn) |
+| `upload_media_from_url()` — download from public URL | Unauthenticated pooled client | None | SessionLifecycle media pool (20 conn) |
+
+The media download client is injected via `media_download_client` kwarg at construction. When absent (backward compat), `upload_media_from_url()` creates a throwaway `httpx.AsyncClient` per call. The pooled client is wired through both injection paths:
+
+1. **API routes**: `get_whatsapp_media_handler()` reads `app.state.media_download_client` provider
+2. **Inbound dispatch**: `MessengerFactory` receives `media_download_client_provider` via `InboundRuntimeDependencies`
+
+**Invariant:** The media download client must never carry `Authorization` headers. Tests enforce this.
+
 ## inbox_id Mapping
 
 `WhatsAppClient.phone_number_id` is the `inbox_id` for the WhatsApp platform. It flows into every `MessageResult` and `MediaUploadResult` as `inbox_id`. The mapping is explicit: `inbox_id == phone_number_id` for all WhatsApp operations.

@@ -89,6 +89,10 @@ class WappaCorePlugin:
                 "✅ Persistent HTTP client created - connections: 100, keepalive: 20"
             )
 
+            app.state.media_download_client = (
+                self._session_lifecycle.get_media_download_client
+            )
+
             self._background_work_tracker = BackgroundWorkTracker()
             app.state.background_work_tracker = self._background_work_tracker
 
