@@ -5,6 +5,18 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.4] - 2026-05-28
+
+Fixes a broken import in the v0.17.3 debug SSE endpoint. The endpoint referenced
+a nonexistent `set_sse_context` function; now uses the public `sse_event_scope`
+context manager, which also ensures the ContextVar is properly cleaned up after
+each request.
+
+### Fixed
+- Debug SSE publish endpoint: replaced broken `set_sse_context` import with the
+  public `sse_event_scope` async context manager, fixing the import error and
+  adding proper ContextVar cleanup.
+
 ## [0.17.3] - 2026-05-28
 
 Adds a debug-only SSE publish endpoint for testing event delivery without a live
