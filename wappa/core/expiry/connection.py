@@ -17,6 +17,25 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _disable_pubsub_read_timeout(pubsub: "PubSub") -> None:
+    """
+    Make the dedicated expiry PubSub connection block indefinitely while idle.
+
+    redis-py 8 may configure a finite socket read timeout by default. That is
+    useful for command connections, but expiry keyspace notifications are sparse
+    by design, so an idle PubSub listen must not be treated as a failure.
+    """
+    connection = getattr(pubsub, "connection", None)
+    if connection is None:
+        logger.warning(
+            "Redis PubSub connection is unavailable after subscribe; "
+            "expiry listener read timeout could not be disabled"
+        )
+        return
+
+    connection.socket_timeout = None
+
+
 @dataclass
 class ConnectionConfig:
     """Configuration for Redis connection."""
@@ -73,6 +92,7 @@ class RedisConnectionManager:
 
         self._pubsub = self._redis.pubsub(ignore_subscribe_messages=True)
         await self._pubsub.subscribe(self._channel)
+        _disable_pubsub_read_timeout(self._pubsub)
 
         logger.info("Expiry listener active and listening")
 
@@ -105,7 +125,7 @@ class RedisConnectionManager:
         """Extract database number from Redis connection pool."""
         if not self._redis:
             return 0
-        return self._redis.connection_pool.connection_kwargs.get("db", 0)
+        return int(self._redis.connection_pool.connection_kwargs.get("db", 0))
 
     async def _configure_keyspace_notifications(self) -> None:
         """
