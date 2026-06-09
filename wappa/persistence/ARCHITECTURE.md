@@ -10,6 +10,7 @@ This context owns:
 - Multi-pool Redis client management (lifecycle, fork-safety, health checks)
 - Redis key namespace generation via `KeyFactory`
 - Context-bound cache repositories for each data domain
+- Typed table-cache ergonomics over the existing `ITableCache` contract
 - `ICacheFactory` implementation that creates those repositories
 - PubSub channel construction and subscription helpers
 - Backend selection between Redis, JSON-file, and in-memory backends
@@ -25,6 +26,7 @@ This context does NOT own:
 ```
 wappa/persistence/
 ├── cache_factory.py              # Selects backend (redis / memory / json)
+├── typed_table_cache.py          # TypedTableCache[T] convenience wrapper over ITableCache
 │
 ├── redis/                        # Primary production backend
 │   ├── redis_client.py           # 5-pool, fork-safe async Redis client
@@ -126,6 +128,12 @@ pubsub_subscriber.py
 ## Design Patterns
 
 **Repository per domain** — Each data domain is a discrete class with a focused public API (`get`, `upsert`, `delete`, etc.) rather than a single generic cache adapter. This keeps callers from coupling to raw Redis commands.
+
+**Typed wrapper over table repositories** — `TypedTableCache[T]` binds an
+existing `ITableCache` to a table name and Pydantic model. It validates table
+names and primary keys, forwards TTLs, and returns typed rows without changing
+backend key shapes. Inbox scoping still comes from the `ICacheFactory` /
+`ITableCache` instance.
 
 **Hybrid context pattern** — `RedisCacheFactory` is constructed once per request with `(inbox_id, user_id)` defaults. Any `create_*_cache()` call can override either dimension without constructing a new factory. This avoids threading context through every call site while still supporting API-event scenarios where the canonical user differs from the sender.
 

@@ -14,6 +14,8 @@ that belong to it.
 - Fan out SSE Event Envelopes to in-process Subscribers via the `SSEEventHub`.
 - Guarantee `incoming_message` is emitted before `outgoing_bot_message` within
   a single request, using the staged-flush (Pending Incoming) mechanism.
+- Validate public SSE event types in the best-effort `publish_sse_event()`
+  wrapper before events reach the low-level hub.
 - Publish compact Redis PubSub Notifications for lightweight inter-process
   wakeups after outgoing sends and incoming webhooks.
 - Register custom SSE event types for host-application events.
@@ -60,6 +62,7 @@ wappa/core/messaging/middleware/
 | `sse_event_scope` | Async context manager that installs and clears `SSEEventContext` via `ContextVar`. Used by every framework entry point. |
 | `update_identity` / `update_metadata` | Enrich the active context and trigger a Pending Incoming flush as a side-effect. Called from pipeline middleware after a cache lookup resolves `user_id`. |
 | `SSEEventHub` | Singleton async fan-out bus. `subscribe` / `unsubscribe` manage Subscriptions; `publish` fans out to matching ones using a drop-oldest queue policy. |
+| `publish_sse_event` | Public best-effort publisher. Rejects unknown event types, logs hub failures, and returns `0` instead of affecting the caller's main flow. |
 | `SSESubscription` | Immutable dataclass: `subscriber_id`, bounded `asyncio.Queue`, and optional filters (`inbox_id`, `user_id`, `event_types`). |
 | `SSEMessageHandler` | Decorator over `DefaultMessageHandler`. Stages the `incoming_message` envelope as a Pending Incoming on the context rather than publishing immediately. |
 | `SSEStatusHandler` / `SSEErrorHandler` | Decorators over their Default counterparts. Publish `status_change` / `webhook_error` envelopes directly (no staging needed). |
@@ -78,6 +81,9 @@ wappa/core/messaging/middleware/
 - **Staged flush** — `incoming_message` is held as a Pending Incoming and emitted
   on the first enrichment call or outgoing send, guaranteeing event ordering
   without requiring the webhook handler to know when identity will be resolved.
+- **Validated public publisher** — `publish_sse_event()` owns public event-type
+  validation and best-effort failure handling. `SSEEventHub.publish()` stays a
+  low-level fan-out primitive for already-validated events.
 - **Decorator / inner-handler** — `SSEMessageHandler`, `SSEStatusHandler`, and
   their PubSub counterparts wrap existing `DefaultXxxHandler` instances,
   preserving all logging stats and strategies while adding publication as a

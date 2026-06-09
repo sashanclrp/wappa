@@ -24,7 +24,7 @@ from .cron_plugin import CronPlugin
 from .custom_middleware_plugin import CustomMiddlewarePlugin
 from .expiry_plugin import ExpiryPlugin
 from .postgres_database_plugin import PostgresDatabasePlugin
-from .rate_limit_plugin import RateLimitPlugin
+from .rate_limit_plugin import RateLimitPlugin, RateLimitProfile, rate_limit
 from .redis_plugin import RedisPlugin
 from .redis_pubsub_plugin import RedisPubSubPlugin
 from .sse_events_plugin import SSEEventsPlugin
@@ -45,6 +45,8 @@ __all__ = [
     "CORSPlugin",
     "AuthPlugin",
     "RateLimitPlugin",
+    "RateLimitProfile",
+    "rate_limit",
     "CustomMiddlewarePlugin",
     # Auth strategies and contracts
     "AuthStrategy",

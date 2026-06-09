@@ -142,7 +142,7 @@ Full guide: [MessengerMiddleware.md](./MessengerMiddleware.md).
 ### HTTP Middleware Wrappers
 - **AuthPlugin** -- strategy-based authentication (Bearer, Basic, JWT, custom)
 - **CORSPlugin** -- Cross-Origin Resource Sharing configuration
-- **RateLimitPlugin** -- bring-your-own rate limiting middleware
+- **RateLimitPlugin** -- local named profiles for route-level rate-limit dependencies
 - **CustomMiddlewarePlugin** -- generic wrapper for any user-defined middleware
 
 ### Outbound Messaging

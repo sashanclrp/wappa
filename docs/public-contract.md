@@ -64,6 +64,140 @@ removed. No compatibility import path is provided.
 
 Webhook processors are translation-only adapters. They return Universal Models and do not mutate ContextVars, construct messengers, construct cache factories, open DB sessions, clone handlers, or dispatch events. Those responsibilities belong to the Inbound Runtime and its Dispatch Context.
 
+## External Webhook Sources
+
+Host applications may register non-messaging webhooks through `WebhookPlugin`
+and an `IWebhookProcessor`. External Webhook Sources include payment systems,
+CRMs, operational tools, and other systems that are not messaging Platforms.
+
+Public imports include:
+
+- `from wappa import ExternalEvent`
+- `from wappa import IWebhookProcessor`
+- `from wappa.core.plugins import WebhookPlugin`
+
+An `IWebhookProcessor` must provide:
+
+- `get_source_name() -> str`
+- `parse_event(request, inbox_id) -> ExternalEvent`
+- `resolve_user_id(event, db) -> str | None`
+
+`WebhookPlugin` processor mode requires an `inbox_id`. With the default route
+shape, external webhooks are accepted at:
+
+- `POST {prefix}/{inbox_id}`
+- `GET {prefix}/{inbox_id}/status`
+
+`include_inbox_id=False` is not valid for processor mode and incoming webhooks
+are rejected with HTTP 400. Wappa needs the Inbox to scope Dispatch Context,
+Messenger, Cache Factory, SSE identity, and event handling.
+
+Accepted external webhooks return `{"status": "accepted"}` after Wappa snapshots
+the request body and submits tracked background work. This means the event was
+accepted for local processing, not that the Host Application handler completed
+successfully.
+
+The External Webhook Runtime then:
+
+- calls `processor.parse_event(request, inbox_id)`
+- rejects dispatch when `event.inbox_id` does not match the routed Inbox
+- creates a DB-capable Dispatch Context for identity lookup
+- calls `processor.resolve_user_id(event, db)`
+- creates a user-bound Dispatch Context with Messenger and Cache Factory when a
+  `user_id` is resolved
+- dispatches to `WappaEventHandler.process_external_event(event)`
+
+If no `user_id` is resolved, Wappa still dispatches the event as an inbox-level
+external event. In that path, `self.messenger` and `self.cache_factory` may be
+`None`; Host Applications must check them before sending messages or writing
+user-scoped cache data.
+
+External webhook delivery is best-effort by default. Processor and handler
+failures are logged after the accepted response. Wappa does not currently
+provide a retry policy, dead-letter store, event delivery ledger, or duplicate
+suppression contract for External Webhook Sources. Host Applications that need
+payment-grade reliability should enforce idempotency and persistence in their
+own processor or handler until those behaviors are promoted through a separate
+public contract.
+
+`ExternalWebhookRuntime.process()` returns an internal
+`ExternalWebhookProcessResult` for tests and observability. Status values are:
+
+- `accepted_dispatch`
+- `inbox_mismatch`
+- `parse_failure`
+- `unresolved_user`
+- `dispatch_failure`
+
+The result does not change HTTP delivery semantics: an accepted route response
+still means "queued locally", not "handled successfully".
+
+## Server-Sent Events
+
+`publish_sse_event()` is the public best-effort SSE publisher. Host
+applications may publish built-in event types or custom event types registered
+with `register_sse_event_type(event_type)`.
+
+Built-in event types are:
+
+- `incoming_message`
+- `outgoing_api_message`
+- `outgoing_bot_message`
+- `status_change`
+- `webhook_error`
+
+Unknown event types are rejected by `publish_sse_event()`: the function returns
+`0`, logs a warning, and does not deliver an envelope. Hub publish failures are
+also best-effort: the function logs and returns `0`.
+
+`SSEEventHub.publish()` remains a low-level fan-out primitive. It does not own
+event-type validation; callers should use `publish_sse_event()` unless they are
+inside Wappa internals.
+
+SSE Event Envelopes preserve the active SSE identity scope:
+
+- `inbox_id`
+- `user_id`
+- `bsuid`
+- `phone_number`
+- `platform`
+- `metadata`
+
+## Rate Limiting
+
+Wappa provides local per-process route-level rate limiting through:
+
+- `RateLimitProfile(name, limit, window_seconds, key_by="client_ip")`
+- `RateLimitPlugin(profiles=[...])`
+- `rate_limit(profile_name)`
+
+Supported `key_by` values are:
+
+- `client_ip`
+- `inbox_id`
+- `inbox_id_and_client_ip`
+
+`RateLimitPlugin` stores an in-memory limiter on
+`app.state.wappa_rate_limiter` during startup. Routes opt in explicitly with
+FastAPI dependencies, for example:
+
+```python
+from fastapi import Depends
+from wappa.core.plugins import rate_limit
+
+@router.post(
+    "/webhook/{inbox_id}",
+    dependencies=[Depends(rate_limit("webhook"))],
+)
+async def webhook(inbox_id: str):
+    ...
+```
+
+When the limit is exceeded, Wappa raises HTTP 429 with a `Retry-After` header.
+An unknown profile or missing `RateLimitPlugin` is a configuration error, not
+fail-open behavior. Wappa does not provide Redis-backed or distributed rate
+limiting in this contract.
+
 ## Messenger
 
 `IMessenger` is Wappa's public outbound message interface. Host applications use it to send text, media, interactive, template, and specialized messages through an Inbox.
@@ -108,8 +242,22 @@ Internal module paths (`wappa.core.*`, `wappa.persistence.redis.redis_handler.*`
 ### Persistence (`from wappa.persistence import ...`)
 
 - `create_cache_factory`, `get_cache_factory`, `ICacheFactory`
+- `TypedTableCache`, `ITableCache`
 - `RedisCacheFactory`, `RedisClient`, `redis_ops`
 - `IStateRepository`, `IUserRepository`, `IExpiryRepository`, `ISharedStateRepository`
+
+`TypedTableCache[T]` is a convenience wrapper over an existing `ITableCache`:
+
+- `TypedTableCache(cache, table_name, model, default_ttl=None)`
+- `get(pkid) -> T | None`
+- `upsert(pkid, data, ttl=None) -> bool`
+- `delete(pkid) -> int`
+- `exists(pkid) -> bool`
+- `update_field(pkid, field, value, ttl=None) -> bool`
+
+Inbox scoping still comes from the `ICacheFactory` / `ITableCache` that creates
+the underlying table cache. Wappa does not expose `cache_space` or versioned
+table cache semantics.
 
 ### Webhooks (`from wappa.webhooks import ...`)
 

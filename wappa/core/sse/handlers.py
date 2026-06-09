@@ -49,7 +49,10 @@ SUPPORTED_SSE_EVENT_TYPES: set[str] = set(_BUILTIN_SSE_EVENT_TYPES)
 
 def register_sse_event_type(event_type: str) -> None:
     """Register a custom SSE event type for app-level events."""
-    SUPPORTED_SSE_EVENT_TYPES.add(event_type)
+    normalized = event_type.strip()
+    if not normalized:
+        raise ValueError("event_type must be a non-empty string")
+    SUPPORTED_SSE_EVENT_TYPES.add(normalized)
 
 
 def _normalized_webhook_payload(
@@ -84,6 +87,9 @@ async def publish_sse_event(
     supply only event-specific fields.
     """
     if event_hub is None:
+        return 0
+    if event_type not in SUPPORTED_SSE_EVENT_TYPES:
+        logger.warning("Skipping unknown SSE event type: %s", event_type)
         return 0
 
     try:

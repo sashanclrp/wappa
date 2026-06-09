@@ -57,6 +57,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **Messenger** | The outbound message interface. Sends text, media, interactive, template, and specialized messages to a User on a Platform via an Inbox. |
 | **Messenger Pipeline** | Composable middleware stack wrapping outbound message calls (SSE lifecycle, PubSub notification, etc.). |
 | **External Webhook Source** | A non-messaging system that sends webhooks into Wappa, such as MercadoPago, Stripe, Wompi, GitHub, or a CRM. |
+| **External Webhook Runtime** | The Wappa module that turns an accepted External Webhook Source request into a context-bound `process_external_event()` dispatch. It owns Inbox mismatch checks, Dispatch Context creation, handler cloning, and event dispatch. |
 | **Payment Provider** | A payment-specific External Webhook Source, such as MercadoPago, Stripe, or Wompi. This term is allowed for payment integrations, not for messaging platforms. |
 
 ## Persistence

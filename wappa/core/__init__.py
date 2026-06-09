@@ -38,10 +38,12 @@ from .plugins import (
     CORSPlugin,
     CustomMiddlewarePlugin,
     RateLimitPlugin,
+    RateLimitProfile,
     RedisPlugin,
     RedisPubSubPlugin,
     WappaCorePlugin,
     WebhookPlugin,
+    rate_limit,
 )
 
 # PubSub System
@@ -86,6 +88,8 @@ __all__ = [
     "RedisPlugin",
     "RedisPubSubPlugin",
     "RateLimitPlugin",
+    "RateLimitProfile",
+    "rate_limit",
     "CustomMiddlewarePlugin",
     "WebhookPlugin",
     # PubSub System

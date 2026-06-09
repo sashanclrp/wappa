@@ -5,6 +5,41 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0] - 2026-06-09
+
+Adds Wappa-native runtime primitives for External Webhook Sources, typed
+best-effort SSE publishing, Inbox-scoped typed table caches, and local
+route-level rate limiting.
+
+### Breaking Changes
+- `RateLimitPlugin` now accepts named `RateLimitProfile` objects and stores a
+  local per-process limiter on application state. The previous
+  bring-your-own-middleware constructor is removed.
+
+### Added
+- `ExternalWebhookRuntime` returns typed internal process outcomes for accepted
+  dispatch, Inbox mismatch, parse failure, unresolved User, and dispatch
+  failure while preserving accepted HTTP delivery semantics.
+- `TypedTableCache[T]` binds an existing Inbox-scoped `ITableCache` to a table
+  name and Pydantic model with typed reads, validated writes, and default TTL
+  forwarding.
+- `RateLimitProfile`, `RateLimitPlugin`, and `rate_limit()` provide opt-in local
+  fixed-window limits keyed by client IP, Inbox, or both.
+- SSE publishers deliver registered custom event types and reject unknown event
+  types before reaching the low-level event hub.
+
+### Changed
+- External Webhook Source route handling delegates parsing, context creation,
+  user resolution, and dispatch to `ExternalWebhookRuntime`.
+- `publish_sse_event()` is the official best-effort publisher and returns `0`
+  when the event type is unknown or the hub fails.
+- API event background dispatch avoids creating unawaited coroutines while the
+  runtime is draining.
+
+### Fixed
+- Memory table caches now fully implement `ITableCache.delete_table()` and
+  `ITableCache.list_pkids()`.
+
 ## [0.17.5] - 2026-06-02
 
 Fix Redis expiry PubSub listener reconnection storm under redis-py 8's finite default socket timeout.

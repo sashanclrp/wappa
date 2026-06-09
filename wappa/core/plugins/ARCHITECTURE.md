@@ -56,16 +56,16 @@ wappa/core/plugins/
 ├── auth_plugin.py               # AuthPlugin: registers AuthMiddleware with a pluggable
 │                                #   AuthStrategy; supports exclude-mode and protect-mode.
 │                                #   Configure-only (no startup/shutdown work).
-├── rate_limit_plugin.py         # RateLimitPlugin: registers any rate-limiter middleware class
-│                                #   via the builder. Configure-only.
+├── rate_limit_plugin.py         # RateLimitPlugin: registers local named
+│                                #   route-level limiter profiles on app.state.
+│                                #   Routes opt in via rate_limit(profile).
 ├── custom_middleware_plugin.py  # CustomMiddlewarePlugin: generic wrapper to register any
 │                                #   user-provided middleware class. Configure-only.
 │
 │   ── Integrations ──
-├── webhook_plugin.py            # WebhookPlugin: mounts a named webhook endpoint.
-│                                #   Raw mode (v1): plain callable handler.
-│                                #   Processor mode (v2): IWebhookProcessor + WappaEventHandler,
-│                                #   full Wappa context (messenger, cache, db). Priority 30.
+├── webhook_plugin.py            # WebhookPlugin: mounts a named External Webhook
+│                                #   Source endpoint and delegates accepted work
+│                                #   to ExternalWebhookRuntime. Priority 30.
 └── cron_plugin.py               # CronPlugin: wraps fastapi-crons to schedule recurring jobs
                                  #   that fire CronEvent into the WappaEventHandler pipeline
                                  #   with full or db-only context depending on inbox_id scope.
@@ -84,7 +84,8 @@ wappa/core/plugins/
 | `RedisPubSubPlugin` | Depends on `RedisPlugin`. Decorates handlers and messenger at startup to fan out Redis notifications. |
 | `SSEEventsPlugin` | Self-contained real-time streaming plugin. Constructs `SSEEventHub` at configure time so the messenger middleware can be registered before the app is built. |
 | `AuthPlugin` | Stateless configure-only plugin. Delegates all auth logic to `AuthStrategy` + `AuthMiddleware`. |
-| `WebhookPlugin` | Mounts a third-party webhook route. Processor mode provides the full `WappaContextFactory` → `with_context()` pipeline. |
+| `RateLimitPlugin` | Local per-process route limiter. Stores named `RateLimitProfile` policies on `app.state`; route modules opt in with `rate_limit(profile_name)`. |
+| `WebhookPlugin` | Mounts a third-party webhook route, snapshots the request body, and submits accepted work to `BackgroundWorkTracker`. |
 | `CronPlugin` | Wraps `fastapi-crons` scheduler. Bridges each fired cron into the `WappaEventHandler.process_cron_event()` pipeline. |
 
 ## Plugin Lifecycle
@@ -116,3 +117,22 @@ shutdown hooks reverse priority    ← async; connections closed, state cleaned 
 - **Priority-based ordering**: Startup hooks run low → high (10 → 90); shutdown hooks run high → low (90 → 10). This guarantees infra teardown happens before core teardown.
 - **Messenger middleware pipeline**: Cross-cutting outbound concerns (SSE, PubSub, caching, retry) are registered as `MessengerMiddleware` entries rather than subclassing the messenger. Priority bands: 10 reliability, 30 notifications, 50 cache, 70 lifecycle/SSE, 90 observability.
 - **Fail-fast startup, fault-tolerant shutdown**: Startup hooks re-raise on error; shutdown hooks log and continue so one bad plugin cannot prevent others from cleaning up.
+
+## External Webhook Source Dispatch
+
+`WebhookPlugin` intentionally stays shallow at the HTTP edge: it mounts the
+route, validates that processor mode has an `inbox_id`, snapshots the request
+body, and submits tracked background work. The deeper dispatch behavior lives in
+[`wappa/core/external_webhooks/ARCHITECTURE.md`](../external_webhooks/ARCHITECTURE.md).
+
+## Route-Level Rate Limiting
+
+`RateLimitPlugin` is Wappa-owned local infrastructure, not a bring-your-own
+middleware adapter. It registers named `RateLimitProfile` objects on
+`app.state.wappa_rate_limiter` during startup. Individual API routes opt in by
+adding `Depends(rate_limit("profile_name"))`.
+
+The limiter is intentionally in-process and fixed-window. It can key by client
+IP, by `inbox_id`, or by the pair of `inbox_id` and client IP. Distributed
+storage, Redis-backed counters, and global quotas are outside this module's
+current responsibility.

@@ -12,15 +12,19 @@ These tests exercise:
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Iterator
 from dataclasses import dataclass
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
 from wappa.core.sse import (
+    SUPPORTED_SSE_EVENT_TYPES,
     SSEEventHub,
     SSEMessageHandler,
     publish_sse_event,
+    register_sse_event_type,
 )
 from wappa.core.sse.context import (
     get_sse_context,
@@ -40,6 +44,15 @@ async def _drain(subscription, timeout: float = 0.5) -> list[dict]:
             )
         except TimeoutError:
             return events
+
+
+@pytest.fixture
+def custom_sse_event_type() -> Iterator[str]:
+    """Provide a custom event type without leaking registry state between tests."""
+    event_type = "host_custom_test_event"
+    SUPPORTED_SSE_EVENT_TYPES.discard(event_type)
+    yield event_type
+    SUPPORTED_SSE_EVENT_TYPES.discard(event_type)
 
 
 @pytest.mark.asyncio
@@ -137,6 +150,69 @@ async def test_publish_sse_event_without_scope_yields_defaults():
     assert env["bsuid"] is None
     assert env["phone_number"] is None
     assert env["metadata"] is None
+
+
+@pytest.mark.asyncio
+async def test_publish_sse_event_rejects_unknown_event_type() -> None:
+    hub = SSEEventHub()
+    sub = await hub.subscribe()
+
+    delivered = await publish_sse_event(
+        hub,
+        event_type="not_registered",
+        source="test",
+        payload={"ok": True},
+    )
+
+    assert delivered == 0
+    assert await _drain(sub, timeout=0.05) == []
+
+
+@pytest.mark.asyncio
+async def test_publish_sse_event_delivers_registered_custom_event_type(
+    custom_sse_event_type: str,
+) -> None:
+    register_sse_event_type(custom_sse_event_type)
+    hub = SSEEventHub()
+    sub = await hub.subscribe(event_types={custom_sse_event_type})
+
+    async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
+        delivered = await publish_sse_event(
+            hub,
+            event_type=custom_sse_event_type,
+            source="host",
+            payload={"value": 42},
+        )
+
+    events = await _drain(sub, timeout=0.1)
+    assert delivered == 1
+    assert len(events) == 1
+    assert events[0]["event_type"] == custom_sse_event_type
+    assert events[0]["inbox_id"] == "inbox-1"
+    assert events[0]["user_id"] == "user-1"
+    assert events[0]["payload"] == {"value": 42}
+
+
+@pytest.mark.asyncio
+async def test_publish_sse_event_hub_failure_returns_zero() -> None:
+    class FailingHub(SSEEventHub):
+        async def publish(
+            self,
+            *,
+            event_type: str,
+            source: str,
+            payload: dict[str, Any],
+        ) -> int:
+            raise RuntimeError("hub unavailable")
+
+    delivered = await publish_sse_event(
+        FailingHub(),
+        event_type="incoming_message",
+        source="test",
+        payload={"ok": True},
+    )
+
+    assert delivered == 0
 
 
 @dataclass

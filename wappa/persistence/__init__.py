@@ -22,6 +22,7 @@ Usage (User Request: Quick access to create_cache_factory):
 # Cache Factory Functions (User Request: Quick access to create_cache_factory)
 # Cache Interfaces
 from ..domain.interfaces.cache_factory import ICacheFactory
+from ..domain.interfaces.cache_interfaces import ITableCache
 from ..domain.interfaces.expiry_repository import IExpiryRepository
 from ..domain.interfaces.pubsub_repository import IPubSubRepository
 
@@ -37,6 +38,7 @@ from .cache_factory import create_cache_factory, get_cache_factory
 from .redis import RedisClient
 from .redis import ops as redis_ops
 from .redis.redis_cache_factory import RedisCacheFactory
+from .typed_table_cache import TypedTableCache
 
 __all__ = [
     # Cache Factory Functions (User Request: Main access point)
@@ -44,6 +46,8 @@ __all__ = [
     "get_cache_factory",
     # Core Interfaces
     "ICacheFactory",
+    "ITableCache",
+    "TypedTableCache",
     "IRepositoryFactory",
     # Repository Interfaces
     "IStateRepository",

@@ -81,11 +81,14 @@ When a webhook arrives:
 ```
 POST /webhook/payment/{inbox_id}
     │
+    ├── Reads and snapshots the request body
     ├── Returns {"status": "accepted"} immediately (200)
     │
     └── Background task:
+        ├── ExternalWebhookRuntime.process(snapshot, inbox_id)
         ├── processor.parse_event(request, inbox_id) → ExternalEvent
         │   (your Pydantic schema validates the raw payload here)
+        ├── validate event.inbox_id matches the routed Inbox
         ├── WappaContextFactory.create_context(inbox_id) → DB-only context
         ├── processor.resolve_user_id(event, db) → user_id
         ├── WappaContextFactory.create_context(inbox_id, user_id, include_messenger=True)
@@ -98,6 +101,10 @@ External webhooks identify an external resource such as a payment, subscription,
 
 1. DB-only context to look up the user from the external payload.
 2. Full context with Messenger and Cache Factory once the user is known.
+
+If `include_inbox_id=False`, processor mode rejects incoming webhooks with
+HTTP 400. External Webhook Source processing needs an Inbox because Wappa scopes
+Messenger, Cache Factory, SSE, and dispatch identity by `inbox_id`.
 
 ## IWebhookProcessor interface
 

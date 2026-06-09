@@ -98,7 +98,7 @@ class WappaEventHandler(ABC):
             results = await session.exec(select(User))
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize event handler as a prototype (dependencies injected via with_context)."""
         # Per-request context (set via with_context() - NOT mutable on prototype)
         self.inbox_id: str | None = None
@@ -134,8 +134,8 @@ class WappaEventHandler(ABC):
         self,
         inbox_id: str,
         user_id: str,
-        messenger: "IMessenger",
-        cache_factory: "ICacheFactory",
+        messenger: "IMessenger | None",
+        cache_factory: "ICacheFactory | None",
         db: Callable[[], AbstractAsyncContextManager["AsyncSession"]] | None = None,
         db_read: Callable[[], AbstractAsyncContextManager["AsyncSession"]]
         | None = None,
@@ -556,11 +556,11 @@ class WappaEventHandler(ABC):
 
     def configure_default_handlers(
         self,
-        message_handler: DefaultMessageHandler = None,
-        status_handler: DefaultStatusHandler = None,
-        error_handler: DefaultErrorHandler = None,
-        system_handler: DefaultSystemHandler = None,
-    ):
+        message_handler: DefaultMessageHandler | None = None,
+        status_handler: DefaultStatusHandler | None = None,
+        error_handler: DefaultErrorHandler | None = None,
+        system_handler: DefaultSystemHandler | None = None,
+    ) -> None:
         """
         Configure the default handlers used for message, status, error and system webhooks.
 
@@ -581,23 +581,23 @@ class WappaEventHandler(ABC):
         if system_handler:
             self._default_system_handler = system_handler
 
-    def get_message_stats(self):
+    def get_message_stats(self) -> dict[str, Any]:
         """Get message processing statistics from default handler."""
         return self._default_message_handler.get_stats()
 
-    def get_status_stats(self):
+    def get_status_stats(self) -> dict[str, Any]:
         """Get status processing statistics from default handler."""
         return self._default_status_handler.get_stats()
 
-    def get_error_stats(self):
+    def get_error_stats(self) -> dict[str, Any]:
         """Get error processing statistics from default handler."""
         return self._default_error_handler.get_stats()
 
-    def get_system_stats(self):
+    def get_system_stats(self) -> dict[str, Any]:
         """Get system event processing statistics from default handler."""
         return self._default_system_handler.get_stats()
 
-    def get_all_stats(self):
+    def get_all_stats(self) -> dict[str, Any]:
         """Get all webhook processing statistics."""
         return {
             "messages": self.get_message_stats(),

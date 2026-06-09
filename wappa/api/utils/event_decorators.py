@@ -16,9 +16,7 @@ Database Session Support:
 import logging
 from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
-
-logger = logging.getLogger(__name__)
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 
 from fastapi import Request as FastAPIRequest
 
@@ -27,6 +25,8 @@ from wappa.core.logging.context import get_current_inbox_context
 from wappa.domain.events.api_message_event import APIMessageEvent
 from wappa.domain.interfaces.identity_resolver import IIdentityResolver
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
+
+logger = logging.getLogger(__name__)
 
 
 async def resolve_event_user_id(
@@ -111,7 +111,10 @@ def dispatch_message_event(
             result = await func(*args, **kwargs)
 
             # Extract dispatcher from kwargs
-            dispatcher: APIEventDispatcher | None = kwargs.get(dispatcher_param)
+            dispatcher = cast(
+                APIEventDispatcher | None,
+                kwargs.get(dispatcher_param),
+            )
             if dispatcher is None:
                 return result
 
@@ -122,11 +125,13 @@ def dispatch_message_event(
 
             # Extract FastAPI Request for DB session injection (fall back to
             # any Request-typed kwarg when the named parameter is absent).
-            fastapi_request: FastAPIRequest | None = kwargs.get(
-                fastapi_request_param
-            ) or next(
-                (v for v in kwargs.values() if isinstance(v, FastAPIRequest)),
-                None,
+            fastapi_request = cast(
+                FastAPIRequest | None,
+                kwargs.get(fastapi_request_param)
+                or next(
+                    (v for v in kwargs.values() if isinstance(v, FastAPIRequest)),
+                    None,
+                ),
             )
 
             # Extract MessageResult (either directly or via extractor)
@@ -172,12 +177,17 @@ def dispatch_message_event(
                 raise RuntimeError(
                     "BackgroundWorkTracker not available — cannot dispatch event"
                 )
+            if tracker.is_draining:
+                logger.warning("API event dispatch skipped: runtime is draining")
+                return result
+            dispatch_coro = dispatcher.dispatch(event, fastapi_request)
             try:
                 tracker.track(
-                    dispatcher.dispatch(event, fastapi_request),
+                    dispatch_coro,
                     name="api_event_dispatch",
                 )
             except RuntimeError:
+                dispatch_coro.close()
                 logger.warning("API event dispatch skipped: runtime is draining")
 
             return result
@@ -247,7 +257,12 @@ def fire_api_event(
         raise RuntimeError(
             "BackgroundWorkTracker not available — cannot fire API event"
         )
+    if tracker.is_draining:
+        logger.warning("API event fire skipped: runtime is draining")
+        return
+    dispatch_coro = _build_and_dispatch()
     try:
-        tracker.track(_build_and_dispatch(), name="fire_api_event")
+        tracker.track(dispatch_coro, name="fire_api_event")
     except RuntimeError:
+        dispatch_coro.close()
         logger.warning("API event fire skipped: runtime is draining")

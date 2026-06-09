@@ -97,7 +97,12 @@ async def dispatch_api_message_event(
             "BackgroundWorkTracker not available — cannot dispatch API event "
             "outside framework lifecycle"
         )
+    if tracker.is_draining:
+        logger.warning("API event dispatch skipped: runtime is draining")
+        return
+    dispatch_coro = dispatcher.dispatch(event, request)
     try:
-        tracker.track(dispatcher.dispatch(event, request), name="api_event_dispatch")
+        tracker.track(dispatch_coro, name="api_event_dispatch")
     except RuntimeError:
+        dispatch_coro.close()
         logger.warning("API event dispatch skipped: runtime is draining")
