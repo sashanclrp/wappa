@@ -72,32 +72,6 @@ class RedisPlugin:
         logger = get_app_logger()
         logger.debug("🔧 RedisPlugin configured - registered startup/shutdown hooks")
 
-    async def startup(self, app: "FastAPI") -> None:
-        """
-        Plugin startup method required by WappaPlugin protocol.
-
-        Delegates to _redis_startup hook method for actual implementation.
-        This maintains compatibility with both the plugin protocol and
-        the hook-based architecture.
-
-        Args:
-            app: FastAPI application instance
-        """
-        await self._redis_startup(app)
-
-    async def shutdown(self, app: "FastAPI") -> None:
-        """
-        Plugin shutdown method required by WappaPlugin protocol.
-
-        Delegates to _redis_shutdown hook method for actual implementation.
-        This maintains compatibility with both the plugin protocol and
-        the hook-based architecture.
-
-        Args:
-            app: FastAPI application instance
-        """
-        await self._redis_shutdown(app)
-
     async def _redis_startup(self, app: "FastAPI") -> None:
         """
         Redis initialization hook - runs after core Wappa startup.

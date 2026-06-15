@@ -108,7 +108,7 @@ class WebhookPlugin:
                 "methods": self.methods,
             }
 
-        builder.add_router(self.router, prefix=self.prefix)
+        builder.add_router(self.router, prefix=self.prefix, public=True)
         builder.add_startup_hook(self._init_dependencies, priority=30)
 
         logger.debug(
@@ -177,20 +177,3 @@ class WebhookPlugin:
         )
         return {"status": "accepted"}
 
-    async def startup(self, app: FastAPI) -> None:
-        url_pattern = (
-            f"{self.prefix}/{{inbox_id}}"
-            if self.include_inbox_id
-            else f"{self.prefix}/"
-        )
-        get_app_logger().info(
-            "WebhookPlugin for %s ready - URL pattern: %s, Methods: %s",
-            self.external_source,
-            url_pattern,
-            self.methods,
-        )
-
-    async def shutdown(self, app: FastAPI) -> None:
-        get_app_logger().debug(
-            "WebhookPlugin for %s shutting down", self.external_source
-        )

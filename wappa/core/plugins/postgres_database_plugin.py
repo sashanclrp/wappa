@@ -156,32 +156,6 @@ class PostgresDatabasePlugin:
             "🔧 PostgresDatabasePlugin configured - registered startup/shutdown hooks"
         )
 
-    async def startup(self, app: FastAPI) -> None:
-        """
-        Plugin startup method required by WappaPlugin protocol.
-
-        Delegates to _db_startup hook method for actual implementation.
-        This maintains compatibility with both the plugin protocol and
-        the hook-based architecture.
-
-        Args:
-            app: FastAPI application instance
-        """
-        await self._db_startup(app)
-
-    async def shutdown(self, app: FastAPI) -> None:
-        """
-        Plugin shutdown method required by WappaPlugin protocol.
-
-        Delegates to _db_shutdown hook method for actual implementation.
-        This maintains compatibility with both the plugin protocol and
-        the hook-based architecture.
-
-        Args:
-            app: FastAPI application instance
-        """
-        await self._db_shutdown(app)
-
     async def _db_startup(self, app: FastAPI) -> None:
         """
         Database initialization hook - runs after core Wappa and Redis startup.

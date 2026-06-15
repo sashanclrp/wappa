@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING, Any
 from ...core.logging.logger import get_app_logger
 
 if TYPE_CHECKING:
-    from fastapi import FastAPI
-
     from ...core.factory.wappa_builder import WappaBuilder
 
 
@@ -107,22 +105,3 @@ class CORSPlugin:
             f"Methods: {self.allow_methods}, Credentials: {self.allow_credentials}"
         )
 
-    async def startup(self, app: "FastAPI") -> None:
-        """
-        CORS plugin startup - no startup tasks needed.
-
-        Args:
-            app: FastAPI application instance
-        """
-        logger = get_app_logger()
-        logger.debug("CORSPlugin startup completed")
-
-    async def shutdown(self, app: "FastAPI") -> None:
-        """
-        CORS plugin shutdown - no cleanup tasks needed.
-
-        Args:
-            app: FastAPI application instance
-        """
-        logger = get_app_logger()
-        logger.debug("CORSPlugin shutdown completed")

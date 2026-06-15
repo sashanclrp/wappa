@@ -110,14 +110,6 @@ class RedisPubSubPlugin:
 
         get_app_logger().debug("RedisPubSubPlugin configured")
 
-    async def startup(self, app: FastAPI) -> None:
-        """Plugin startup method required by WappaPlugin protocol."""
-        await self._startup_hook(app)
-
-    async def shutdown(self, app: FastAPI) -> None:
-        """Plugin shutdown method required by WappaPlugin protocol."""
-        await self._shutdown_hook(app)
-
     async def _startup_hook(self, app: FastAPI) -> None:
         """Inject PubSub-publishing handlers and hooks."""
         app_logger = get_app_logger()

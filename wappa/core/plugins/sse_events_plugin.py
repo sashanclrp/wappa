@@ -78,14 +78,6 @@ class SSEEventsPlugin:
 
         get_app_logger().debug("SSEEventsPlugin configured")
 
-    async def startup(self, app: FastAPI) -> None:
-        """Plugin startup method required by WappaPlugin protocol."""
-        await self._startup_hook(app)
-
-    async def shutdown(self, app: FastAPI) -> None:
-        """Plugin shutdown method required by WappaPlugin protocol."""
-        await self._shutdown_hook(app)
-
     async def _startup_hook(self, app: FastAPI) -> None:
         """Publish event hub to app.state and wrap inbound handlers."""
         app_logger = get_app_logger()

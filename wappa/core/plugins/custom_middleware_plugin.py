@@ -10,8 +10,6 @@ from typing import TYPE_CHECKING, Any
 from ...core.logging.logger import get_app_logger
 
 if TYPE_CHECKING:
-    from fastapi import FastAPI
-
     from ...core.factory.wappa_builder import WappaBuilder
 
 
@@ -81,22 +79,3 @@ class CustomMiddlewarePlugin:
             f"(priority: {self.priority})"
         )
 
-    async def startup(self, app: "FastAPI") -> None:
-        """
-        Custom middleware plugin startup.
-
-        Args:
-            app: FastAPI application instance
-        """
-        logger = get_app_logger()
-        logger.debug(f"CustomMiddlewarePlugin startup - {self.name}")
-
-    async def shutdown(self, app: "FastAPI") -> None:
-        """
-        Custom middleware plugin shutdown.
-
-        Args:
-            app: FastAPI application instance
-        """
-        logger = get_app_logger()
-        logger.debug(f"CustomMiddlewarePlugin shutdown - {self.name}")

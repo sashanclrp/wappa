@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from ...core.logging.logger import get_app_logger
 
 if TYPE_CHECKING:
-    from fastapi import FastAPI
+    from fastapi import APIRouter, FastAPI
     from fastapi_crons import CronConfig, Crons
 
     from ...core.context import WappaContextFactory
@@ -76,6 +76,7 @@ class CronPlugin:
         self.config = config
 
         self._cron_registrations: list[_CronRegistration] = []
+        self._cron_router: APIRouter | None = None
 
         # Set at startup
         self._crons: Crons | None = None
@@ -129,8 +130,13 @@ class CronPlugin:
 
     def configure(self, builder: "WappaBuilder") -> None:
         """Configure the cron plugin. Startup priority 30, shutdown priority 85."""
+        if self.include_router:
+            from fastapi import APIRouter
+
+            self._cron_router = APIRouter()
+            builder.add_router(self._cron_router, prefix="/crons", tags=["Cron Jobs"])
+
         builder.add_startup_hook(self._startup_hook, priority=30)
-        # Priority 85 shutdown — stop scheduler before drain at 70
         builder.add_shutdown_hook(self._shutdown_hook, priority=85)
 
         logger = get_app_logger()
@@ -149,28 +155,27 @@ class CronPlugin:
         from ...core.context import WappaContextFactory
         from ...core.events.cron_event_dispatcher import CronEventDispatcher
 
-        # Init/reuse WappaContextFactory on app.state
         if not hasattr(app.state, "wappa_context_factory"):
             app.state.wappa_context_factory = WappaContextFactory(app)
         self._context_factory = app.state.wappa_context_factory
         self._dispatcher = CronEventDispatcher()
 
-        # Initialize fastapi-crons
         self._crons = Crons(app, config=self.config)
 
-        # Register each cron as an internal job
         for reg in self._cron_registrations:
             self._register_cron_job(reg)
 
-        # Start the scheduler
         await self._crons.start()
 
-        # Optionally mount monitoring router
-        if self.include_router:
-            cron_router = get_cron_router()
-            app.include_router(cron_router, prefix="/crons", tags=["Cron Jobs"])
+        # Populate the pre-registered router shell with fastapi-crons routes.
+        # The router was included in the app's route tree during build() — with
+        # FastAPI 0.137+ the tree preserves the original router reference, so
+        # routes added here become routable without a second include_router call.
+        if self._cron_router is not None:
+            source_router = get_cron_router()
+            for route in source_router.routes:
+                self._cron_router.routes.append(route)
 
-        # Store on app.state for monitoring
         app.state.cron_plugin = self
 
         logger = get_app_logger()
@@ -298,8 +303,3 @@ class CronPlugin:
         if hasattr(app.state, "cron_plugin"):
             del app.state.cron_plugin
 
-    async def startup(self, app: "FastAPI") -> None:
-        """No-op — lifecycle managed by startup/shutdown hooks registered in configure()."""
-
-    async def shutdown(self, app: "FastAPI") -> None:
-        """No-op — lifecycle managed by startup/shutdown hooks registered in configure()."""

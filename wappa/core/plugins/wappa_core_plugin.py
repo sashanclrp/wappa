@@ -36,7 +36,7 @@ class WappaCorePlugin:
         builder.add_middleware(ErrorHandlerMiddleware, priority=80)
         builder.add_middleware(RequestLoggingMiddleware, priority=70)
 
-        builder.add_router(health_router)
+        builder.add_router(health_router, public=True)
         builder.add_router(whatsapp_router)
 
         builder.add_startup_hook(self._core_startup, priority=10)
@@ -52,12 +52,6 @@ class WappaCorePlugin:
             "✅ WappaCorePlugin configured - cache_type: %s, middleware: 3, routes: 2, hooks: 4",
             self.cache_type.value,
         )
-
-    async def startup(self, app: FastAPI) -> None:
-        """No-op — lifecycle managed by hooks registered in configure()."""
-
-    async def shutdown(self, app: FastAPI) -> None:
-        """No-op — lifecycle managed by hooks registered in configure()."""
 
     async def _core_startup(self, app: FastAPI) -> None:
         logger = None

@@ -79,12 +79,6 @@ class ExpiryPlugin:
         builder.add_shutdown_hook(self._shutdown_hook, priority=80)
         logger.debug("🔧 ExpiryPlugin configured - registered startup/shutdown hooks")
 
-    async def startup(self, app: "FastAPI") -> None:
-        await self._startup_hook(app)
-
-    async def shutdown(self, app: "FastAPI") -> None:
-        await self._shutdown_hook(app)
-
     async def _startup_hook(self, app: "FastAPI") -> None:
         logger.info("=== EXPIRY ACTIONS INITIALIZATION ===")
 

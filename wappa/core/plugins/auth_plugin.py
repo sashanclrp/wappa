@@ -12,8 +12,6 @@ from ..auth.middleware import AuthMiddleware
 from ..auth.strategy import AuthStrategy
 
 if TYPE_CHECKING:
-    from fastapi import FastAPI
-
     from ...core.factory.wappa_builder import WappaBuilder
 
 
@@ -51,10 +49,7 @@ class AuthPlugin:
     """
 
     DEFAULT_EXCLUDES = [
-        "/health",
         "/api/sse/status",
-        "/webhook/messenger",
-        "/webhook/inboxes",
         "/docs",
         "/openapi.json",
         "/redoc",
@@ -115,8 +110,3 @@ class AuthPlugin:
             f"mode: {mode}, {mode} paths: {path_count}, priority: {self.priority}"
         )
 
-    async def startup(self, app: "FastAPI") -> None:
-        """No-op startup. Auth is configured entirely via middleware."""
-
-    async def shutdown(self, app: "FastAPI") -> None:
-        """No-op shutdown. No resources to clean up."""
