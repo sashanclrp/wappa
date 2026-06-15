@@ -221,24 +221,21 @@ class Wappa:
             redoc_url="/redoc" if settings.is_development else None,
         )
 
-        # Use WappaBuilder.build() - creates app with lifespan,
-        # defers plugin configuration to startup hooks
-        app = self._builder.build()
-
         # Wire the registry into the shared processor singleton so Pydantic
         # validation accepts registered field values alongside the built-ins.
         whatsapp_processor = processor_factory.get_processor(PlatformType.WHATSAPP)
         whatsapp_processor.set_field_registry(self._builder.field_registry)
 
-        # Create both dispatchers for the event handler
+        # Create dispatchers and register webhook router through the builder
+        # so the builder owns the complete route tree.
         webhook_dispatcher = WappaEventDispatcher(
             self._event_handler, field_registry=self._builder.field_registry
         )
         api_dispatcher = APIEventDispatcher(self._event_handler)
-
-        # Add webhook routes to the built app
         webhook_router = create_webhook_router(webhook_dispatcher)
-        app.include_router(webhook_router)
+        self._builder.add_router(webhook_router, public=True)
+
+        app = self._builder.build()
 
         # Store API dispatcher in app.state for dependency injection
         app.state.api_event_dispatcher = api_dispatcher

@@ -98,16 +98,16 @@ class RateLimitPlugin:
         self.profiles = profiles
 
     def configure(self, builder: WappaBuilder) -> None:
-        builder.add_startup_hook(self.startup, priority=30)
-        builder.add_shutdown_hook(self.shutdown, priority=30)
+        builder.add_startup_hook(self._startup, priority=30)
+        builder.add_shutdown_hook(self._shutdown, priority=30)
 
-    async def startup(self, app: FastAPI) -> None:
+    async def _startup(self, app: FastAPI) -> None:
         app.state.wappa_rate_limiter = LocalRateLimiter(self.profiles)
         get_app_logger().debug(
             "RateLimitPlugin registered %s local profile(s)", len(self.profiles)
         )
 
-    async def shutdown(self, app: FastAPI) -> None:
+    async def _shutdown(self, app: FastAPI) -> None:
         if hasattr(app.state, "wappa_rate_limiter"):
             delattr(app.state, "wappa_rate_limiter")
 

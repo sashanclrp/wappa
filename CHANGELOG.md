@@ -5,6 +5,21 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0] - 2026-06-14
+
+Upgrades to FastAPI 0.137 (router-tree architecture), deepens the plugin system with public route prefixes and lazy route registration, and slims the WappaPlugin protocol to a single method.
+
+### Changed
+- FastAPI minimum version bumped from 0.135.1 to 0.137.0, adopting the preserved router-tree architecture where `include_router` stores relationships as tree nodes instead of flat clones.
+- `WappaBuilder.add_router()` accepts `public=True` to declare router prefixes as unauthenticated. Public prefixes are exposed on `app.state.public_route_prefixes` and checked by `AuthMiddleware` at request time.
+- `AuthPlugin.DEFAULT_EXCLUDES` reduced from 7 to 4 entries — `/health` and `/webhook/*` paths are now declared as public by their owning plugins instead of being hardcoded in the auth exclude list.
+- `AuthMiddleware._requires_auth()` reads `app.state.public_route_prefixes` in addition to static excludes, so adding a new public router no longer requires updating the auth configuration.
+- `WappaBuilder` now owns all route composition — the webhook router is registered through the builder instead of being included directly on the app after build.
+- `CronPlugin` uses lazy route registration: registers an empty router shell in `configure()` and populates it with fastapi-crons monitoring routes during startup, eliminating the builder bypass.
+- `WappaPlugin` protocol slimmed to a single `configure()` method. The framework never called `startup()`/`shutdown()` directly on plugins — lifecycle is managed entirely through hooks registered in `configure()`.
+- Dead `startup()`/`shutdown()` implementations removed from 11 plugin files (~200 lines).
+- `RateLimitPlugin` startup/shutdown hooks made private; tests exercise `LocalRateLimiter` directly.
+
 ## [0.18.0] - 2026-06-09
 
 Adds Wappa-native runtime primitives for External Webhook Sources, typed

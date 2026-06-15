@@ -61,6 +61,7 @@ class WappaBuilder:
         self.inbox_credential_store: IInboxCredentialStore = (
             SettingsInboxCredentialStore()
         )
+        self._public_prefixes: list[str] = []
 
     def add_plugin(self, plugin: "WappaPlugin") -> "WappaBuilder":
         """
@@ -100,18 +101,28 @@ class WappaBuilder:
         self.middlewares.append((middleware_class, kwargs, priority))
         return self
 
-    def add_router(self, router: Any, **kwargs: Any) -> "WappaBuilder":
+    def add_router(
+        self, router: Any, *, public: bool = False, **kwargs: Any
+    ) -> "WappaBuilder":
         """
         Add a router to the application.
 
         Args:
             router: FastAPI router to include
+            public: Mark this router's prefix as public (excluded from auth).
+                Plugins that serve unauthenticated routes (health checks,
+                webhook ingress) should set this to ``True`` so the auth
+                middleware automatically skips them.
             **kwargs: Arguments for app.include_router()
 
         Returns:
             Self for method chaining
         """
         self.routers.append((router, kwargs))
+        if public:
+            prefix = kwargs.get("prefix", "") or getattr(router, "prefix", "") or ""
+            if prefix:
+                self._public_prefixes.append(prefix)
         return self
 
     def add_startup_hook(self, hook: Callable, priority: int = 50) -> "WappaBuilder":
@@ -406,6 +417,7 @@ class WappaBuilder:
             app.state.identity_resolver = self.identity_resolver
 
         app.state.inbox_credential_store = self.inbox_credential_store
+        app.state.public_route_prefixes = tuple(self._public_prefixes)
 
         # Step 3: Add all middleware via app.add_middleware()
         # Sort by priority (reverse order because FastAPI adds middleware in reverse)

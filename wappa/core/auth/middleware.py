@@ -60,23 +60,27 @@ class AuthMiddleware(BaseHTTPMiddleware):
         self.sse_token_param = sse_token_param
         self.expose_user = expose_user
 
-    def _requires_auth(self, path: str) -> bool:
+    def _requires_auth(self, path: str, request: Request | None = None) -> bool:
         """Determine whether the given path requires authentication."""
         if self.protect is not None:
-            # Protect mode: auth required only if path matches a protect prefix
             return any(path.startswith(prefix) for prefix in self.protect)
 
-        # Exclude mode: auth required unless path matches an exclude prefix
-        return not (
-            self.exclude and any(path.startswith(prefix) for prefix in self.exclude)
-        )
+        if self.exclude and any(path.startswith(prefix) for prefix in self.exclude):
+            return False
+
+        if request is not None:
+            public = getattr(request.app.state, "public_route_prefixes", ())
+            if any(path.startswith(prefix) for prefix in public):
+                return False
+
+        return True
 
     async def dispatch(self, request: Request, call_next) -> Response:  # noqa: ANN001
         """Authenticate the request or pass through based on path rules."""
         logger = get_app_logger()
         path = request.url.path
 
-        if not self._requires_auth(path):
+        if not self._requires_auth(path, request):
             return await call_next(request)
 
         # SSE token promotion: read ?token= param and inject as Bearer header

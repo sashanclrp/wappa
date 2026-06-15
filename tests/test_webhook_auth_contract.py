@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 import pytest
 from fastapi import FastAPI
+from starlette.requests import Request
 
 from wappa.api.routes.webhooks import create_webhook_router
 from wappa.core.auth.middleware import AuthMiddleware
@@ -69,14 +70,29 @@ async def test_auth_excludes_canonical_webhook_and_verify_only_routes(
     assert verify_response.status_code == 405
 
 
-def test_auth_plugin_default_excludes_webhook_inboxes() -> None:
+def test_auth_skips_public_route_prefixes_from_builder() -> None:
+    app = FastAPI()
+    app.state.public_route_prefixes = ("/webhook", "/health")
+
     middleware = AuthMiddleware(
         app=lambda scope, receive, send: None,
         strategy=BearerTokenStrategy(token="api-token"),
         exclude=AuthPlugin.DEFAULT_EXCLUDES,
     )
 
-    assert middleware._requires_auth("/webhook/inboxes/123/whatsapp") is False
+    request = Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/webhook/inboxes/123/whatsapp",
+            "headers": [],
+            "query_string": b"",
+            "app": app,
+        }
+    )
+    assert middleware._requires_auth("/webhook/inboxes/123/whatsapp", request) is False
+    assert middleware._requires_auth("/health", request) is False
+    assert middleware._requires_auth("/api/whatsapp/send", request) is True
 
 
 @pytest.mark.asyncio
@@ -198,6 +214,7 @@ def _build_authenticated_webhook_app(inbox_id: str) -> FastAPI:
     app.state.http_session = _NoopHTTPSession()
     app.state.messenger_middleware = []
     app.state.wappa_cache_type = "memory"
+    app.state.public_route_prefixes = ("/webhook",)
     app.add_middleware(
         AuthMiddleware,
         strategy=BearerTokenStrategy(token="api-token"),
@@ -212,6 +229,9 @@ def _methods_for_path(routes: Iterable[Any], path: str) -> set[str]:
     for route in routes:
         if getattr(route, "path", None) == path:
             methods.update(getattr(route, "methods", set()))
+        router = getattr(route, "original_router", None)
+        if router is not None:
+            methods.update(_methods_for_path(router.routes, path))
     methods.discard("HEAD")
     methods.discard("OPTIONS")
     return methods

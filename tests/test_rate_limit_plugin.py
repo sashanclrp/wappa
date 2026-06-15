@@ -4,7 +4,8 @@ import httpx
 import pytest
 from fastapi import Depends, FastAPI
 
-from wappa.core.plugins import RateLimitPlugin, RateLimitProfile, rate_limit
+from wappa.core.plugins import RateLimitProfile, rate_limit
+from wappa.core.plugins.rate_limit_plugin import LocalRateLimiter
 
 
 @pytest.mark.asyncio
@@ -85,13 +86,12 @@ async def test_rate_limit_can_key_by_inbox_id() -> None:
 @pytest.mark.asyncio
 async def test_rate_limit_profiles_have_independent_windows() -> None:
     app = FastAPI()
-    plugin = RateLimitPlugin(
+    app.state.wappa_rate_limiter = LocalRateLimiter(
         [
             RateLimitProfile("one", limit=1, window_seconds=60),
             RateLimitProfile("two", limit=1, window_seconds=60),
         ]
     )
-    await plugin.startup(app)
 
     @app.get("/one/{inbox_id}", dependencies=[Depends(rate_limit("one"))])
     async def one(inbox_id: str) -> dict[str, str]:
@@ -115,8 +115,7 @@ async def test_rate_limit_profiles_have_independent_windows() -> None:
 
 async def _app_with_route(profile_name: str, *profiles: RateLimitProfile) -> FastAPI:
     app = FastAPI()
-    plugin = RateLimitPlugin(list(profiles))
-    await plugin.startup(app)
+    app.state.wappa_rate_limiter = LocalRateLimiter(list(profiles))
 
     @app.get("/items/{inbox_id}", dependencies=[Depends(rate_limit(profile_name))])
     async def endpoint(inbox_id: str) -> dict[str, str]:

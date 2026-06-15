@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wappa"
-version = "0.18.0"
+version = "0.19.0"
 description = "Open Source Framework to develop smart Workflows, Agents and full chat applications through WhatsApp"
 authors = [
     {name = "Sasha Canal", email = "contact@mimeia.com"},
@@ -28,7 +28,7 @@ classifiers = [
 # All dependencies included by default for simplicity
 dependencies = [
     # Core framework
-    "fastapi>=0.135.1",
+    "fastapi>=0.137.0",
     "uvicorn[standard]>=0.24.0",
     "hypercorn>=0.17.0",
     "pydantic>=2.8.0",
