@@ -404,3 +404,17 @@ class SystemEventDetail(BaseModel):
     preference_value: str | None = Field(
         default=None, description="Preference value (e.g., opt-in/opt-out)"
     )
+
+    # Coexistence account-level fields (account_offboarded / account_reconnected).
+    # WABA-scoped, not user-scoped.
+    waba_id: str | None = Field(
+        default=None, description="WhatsApp Business Account ID for account events"
+    )
+    phone_number_id: str | None = Field(
+        default=None,
+        description="Phone number ID that reconnected (account_reconnected)",
+    )
+    reason: str | None = Field(
+        default=None,
+        description="Reason for an account status change (account_offboarded)",
+    )

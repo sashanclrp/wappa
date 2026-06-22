@@ -17,6 +17,7 @@ from wappa.webhooks.core.webhook_interfaces import (
     InboundMessageWebhook,
     InboxBase,
     StatusWebhook,
+    SystemEventType,
     SystemWebhook,
     UserBase,
 )
@@ -309,3 +310,48 @@ def test_future_platform_payload_can_map_to_same_universal_model_shape() -> None
     assert universal.message.message_type == MessageType.TEXT
     assert universal.get_message_text() == ""
     assert universal.inbox.inbox_id == "telegram-bot-123"
+
+
+@pytest.mark.asyncio
+async def test_whatsapp_account_offboarded_parses_to_system_webhook() -> None:
+    """Coexistence account_offboarded → SystemWebhook (WABA-scoped, no user)."""
+    processor = WhatsAppWebhookProcessor()
+    webhook = await processor.create_universal_webhook(
+        _payload(
+            "account_offboarded",
+            {
+                "waba_id": "2068060904064070",
+                "reason": "USER_INITIATED",
+                "timestamp": 1655913600,
+            },
+        )
+    )
+
+    assert isinstance(webhook, SystemWebhook)
+    assert webhook.system_event_type == SystemEventType.ACCOUNT_OFFBOARDED
+    assert webhook.event_detail.waba_id == "2068060904064070"
+    assert webhook.event_detail.reason == "USER_INITIATED"
+    # Account event has no user context.
+    assert webhook.user is None
+
+
+@pytest.mark.asyncio
+async def test_whatsapp_account_reconnected_parses_to_system_webhook() -> None:
+    """Coexistence account_reconnected → SystemWebhook with phone_number_id."""
+    processor = WhatsAppWebhookProcessor()
+    webhook = await processor.create_universal_webhook(
+        _payload(
+            "account_reconnected",
+            {
+                "waba_id": "2068060904064070",
+                "phone_number_id": "123456789012345",
+                "timestamp": 1655914000,
+            },
+        )
+    )
+
+    assert isinstance(webhook, SystemWebhook)
+    assert webhook.system_event_type == SystemEventType.ACCOUNT_RECONNECTED
+    assert webhook.event_detail.waba_id == "2068060904064070"
+    assert webhook.event_detail.phone_number_id == "123456789012345"
+    assert webhook.user is None
