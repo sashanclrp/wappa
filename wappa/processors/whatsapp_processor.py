@@ -654,55 +654,25 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                         webhook, update.wa_id
                     )
 
-            case "account_offboarded":
-                from wappa.webhooks.whatsapp.system_events import (
-                    AccountOffboardedValue,
-                )
-
-                raw_offboarded = webhook.get_raw_account_offboarded()
-                if not raw_offboarded:
+            case "account_offboarded" | "account_reconnected":
+                # Coexistence account-level events share one flat WABA-scoped
+                # shape (AccountWebhookValue); the field name maps 1:1 to the
+                # SystemEventType. Account-scoped: no user context, user stays None.
+                account = webhook.get_account_event(field)
+                if account is None:
                     raise ProcessorError(
-                        "No account_offboarded found in system webhook",
+                        f"No {field} found in system webhook",
                         ErrorCode.PROCESSING_ERROR,
                         PlatformType.WHATSAPP,
                     )
 
-                offboarded = AccountOffboardedValue.model_validate(raw_offboarded)
-
-                system_event_type = SystemEventType.ACCOUNT_OFFBOARDED
+                system_event_type = SystemEventType(field)
                 event_detail = SystemEventDetail(
-                    waba_id=offboarded.waba_id,
-                    reason=offboarded.reason,
+                    waba_id=account.waba_id,
+                    phone_number_id=account.phone_number_id,
+                    reason=account.reason,
                 )
-                event_timestamp = datetime.fromtimestamp(
-                    offboarded.timestamp, tz=UTC
-                )
-                # Account-scoped event: no user context (no wa_id), user stays None.
-
-            case "account_reconnected":
-                from wappa.webhooks.whatsapp.system_events import (
-                    AccountReconnectedValue,
-                )
-
-                raw_reconnected = webhook.get_raw_account_reconnected()
-                if not raw_reconnected:
-                    raise ProcessorError(
-                        "No account_reconnected found in system webhook",
-                        ErrorCode.PROCESSING_ERROR,
-                        PlatformType.WHATSAPP,
-                    )
-
-                reconnected = AccountReconnectedValue.model_validate(raw_reconnected)
-
-                system_event_type = SystemEventType.ACCOUNT_RECONNECTED
-                event_detail = SystemEventDetail(
-                    waba_id=reconnected.waba_id,
-                    phone_number_id=reconnected.phone_number_id,
-                )
-                event_timestamp = datetime.fromtimestamp(
-                    reconnected.timestamp, tz=UTC
-                )
-                # Account-scoped event: no user context, user stays None.
+                event_timestamp = datetime.fromtimestamp(account.timestamp, tz=UTC)
 
             case "messages":
                 # System messages from the messages field (type=="system")

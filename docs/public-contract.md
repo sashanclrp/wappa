@@ -265,6 +265,12 @@ table cache semantics.
 - `BaseMessage`, `InboxBase`, `SystemEventDetail`
 - `WhatsAppWebhook`, `WhatsAppMetadata`, `PlatformType`, `SystemEventType`
 
+`SystemEventType` members: `NUMBER_CHANGE`, `USER_ID_CHANGE`, `MARKETING_PREFERENCE`,
+and the account-scoped coexistence events `ACCOUNT_OFFBOARDED`, `ACCOUNT_RECONNECTED`.
+Account-scoped events populate `SystemEventDetail.waba_id` (and `phone_number_id` /
+`reason` where applicable) and dispatch with `SystemWebhook.user is None` — they target a
+Platform Account (WABA), not a User. Consumers handle them in `process_system_webhook`.
+
 ### Domain Interfaces (`from wappa.domain.interfaces import ...`)
 
 - `IMessenger`, `IMediaHandler`, `ICacheFactory`

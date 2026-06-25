@@ -74,34 +74,7 @@ class UserIdUpdateEntry(BaseModel):
     timestamp: str = Field(..., description="Unix timestamp when the webhook was sent")
 
 
-class AccountOffboardedValue(BaseModel):
-    """The ``value`` object of an ``account_offboarded`` webhook change.
-
-    Coexistence event fired when a WhatsApp Business Account (WABA) is
-    disconnected/removed from the Cloud API. Account-level (WABA), not
-    user-level — there is no wa_id.
-    """
-
-    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
-
-    waba_id: str = Field(..., description="WhatsApp Business Account ID (required)")
-    reason: str | None = Field(
-        None, description="Why offboarding happened (e.g. USER_INITIATED, policy)"
-    )
-    timestamp: int = Field(..., description="Unix timestamp of the event")
-
-
-class AccountReconnectedValue(BaseModel):
-    """The ``value`` object of an ``account_reconnected`` webhook change.
-
-    Coexistence event fired when a previously disconnected WABA reconnects
-    successfully (e.g. the client re-registered their WhatsApp Business app).
-    """
-
-    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
-
-    waba_id: str = Field(..., description="WhatsApp Business Account ID (required)")
-    phone_number_id: str | None = Field(
-        None, description="Phone number ID that reconnected"
-    )
-    timestamp: int = Field(..., description="Unix timestamp of the reconnection")
+# NOTE: Coexistence account-level events (account_offboarded / account_reconnected)
+# are modeled by ``AccountWebhookValue`` in ``webhook_container.py``, alongside the
+# other strict change-value models. Their value is a flat change ``value`` (not a
+# sub-array like the entries above), so it lives with the routing/union logic.

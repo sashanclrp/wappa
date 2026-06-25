@@ -12,6 +12,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | `PlatformType` | The enum of supported platforms. Values: `whatsapp`, `telegram`, `instagram`, `teams`. |
 | **Platform Account** | Platform-side account metadata that groups one or more Inboxes. For WhatsApp this is the WABA (WhatsApp Business Account). |
 | `platform_account_id` | The identifier of the Platform Account. For WhatsApp, this is the WABA ID (`entry[].id` in Meta's webhook payload). |
+| **Coexistence** | Meta capability (for verified Tech Providers) that connects a client's existing WhatsApp number to the Cloud API. It emits account-scoped webhooks — `account_offboarded` / `account_reconnected` — that target a Platform Account (WABA), carry no User context, and surface as `SystemWebhook`. |
 
 ## User Identity
 
@@ -38,7 +39,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | `process_message(webhook)` | Fires when a User sends a message to an Inbox. Input: `InboundMessageWebhook`. |
 | `process_status(webhook)` | Fires on message delivery status changes (sent, delivered, read, failed). Input: `StatusWebhook`. |
 | `process_error(webhook)` | Fires when the platform reports an error. Input: `ErrorWebhook`. |
-| `process_system_webhook(webhook)` | Fires on system events: phone number change, BSUID update, marketing preference change. Input: `SystemWebhook`. |
+| `process_system_webhook(webhook)` | Fires on system events. User-scoped: phone number change, BSUID update, marketing preference change. Account-scoped (Platform Account / WABA, no User): coexistence `account_offboarded` / `account_reconnected`. Input: `SystemWebhook`. |
 | `process_external_event(event)` | Fires when a third-party webhook (MercadoPago, Stripe, CRM) is routed through Wappa. Input: `ExternalEvent`. |
 | `process_api_message(event)` | Fires after a message is sent via Wappa's REST API. Used for tracking, DB writes, analytics. Input: `APIMessageEvent`. |
 | `process_cron_event(event)` | Fires when a scheduled cron triggers. Input: `CronEvent`. |

@@ -49,7 +49,8 @@ wappa/webhooks/
     ├── base_models.py          # WhatsAppMetadata, WhatsAppContact, ContactProfile,
     │                           # MessageContext, AdReferral, Conversation, Pricing, MessageError
     ├── webhook_container.py    # WhatsAppWebhook (BaseWebhook impl), WebhookEntry,
-    │                           # WebhookChange, WebhookValue, CustomWebhookValue,
+    │                           # WebhookChange, WebhookValue, AccountWebhookValue,
+    │                           # CustomWebhookValue, ACCOUNT_EVENT_FIELDS,
     │                           # WhatsAppContactAdapter, WhatsAppWebhookMetadata
     ├── status_models.py        # WhatsApp status update Pydantic models
     ├── system_events.py        # user_preferences and user_id_update event models
@@ -106,9 +107,14 @@ forms under `wappa/schemas`.
 - **Registry + Factory**: `MessageSchemaRegistry` and `WebhookSchemaRegistry` decouple schema
   lookup from instantiation. `SchemaFactory` is the single entry point; callers never
   import message-type classes directly.
-- **Strict / Permissive Split**: Built-in Meta fields use the strict `WebhookValue` model;
+- **Strict / Permissive Split**: Built-in Meta fields validate against strict models;
   app-registered custom fields use `CustomWebhookValue` (extra fields allowed). The gate lives
-  in `WebhookChange._route_field` using Pydantic's `ValidationInfo` context.
+  in `WebhookChange._route_field` using Pydantic's `ValidationInfo` context. There are two
+  strict built-in shapes: phone-scoped fields (`messages`, `user_preferences`,
+  `user_id_update`) use `WebhookValue`; account-scoped coexistence fields (the
+  `ACCOUNT_EVENT_FIELDS` set: `account_offboarded`, `account_reconnected`) carry a flat,
+  WABA-scoped value with no `metadata`, so they use the strict `AccountWebhookValue` model
+  instead. Built-in fields never fall through to the permissive path.
 
 ## Data Flow
 
@@ -119,7 +125,7 @@ HTTP POST (raw JSON)
   wappa/api/ route handler
         │  model_validate(payload, context={"field_registry": ...})
         ▼
-  WhatsAppWebhook          ← WebhookEntry → WebhookChange → WebhookValue | CustomWebhookValue
+  WhatsAppWebhook          ← WebhookEntry → WebhookChange → WebhookValue | AccountWebhookValue | CustomWebhookValue
         │
         │  webhook.is_incoming_message / .is_status_update / .is_system_event / .is_custom_field
         ▼

@@ -8,6 +8,7 @@ import pytest
 from pydantic import BaseModel
 
 from wappa.core.events.field_registry import FieldHandlerRegistry
+from wappa.processors.base_processor import ProcessorError
 from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.schemas.core.types import MessageType, PlatformType
 from wappa.webhooks.core.base_message import BaseMessage, BaseMessageContext
@@ -355,3 +356,21 @@ async def test_whatsapp_account_reconnected_parses_to_system_webhook() -> None:
     assert webhook.event_detail.waba_id == "2068060904064070"
     assert webhook.event_detail.phone_number_id == "123456789012345"
     assert webhook.user is None
+
+
+@pytest.mark.asyncio
+async def test_account_event_value_is_strictly_validated() -> None:
+    """A malformed account payload (missing required waba_id) is rejected.
+
+    Account events route through the strict ``AccountWebhookValue`` model, so a
+    missing required field surfaces as a validation error at parse time rather
+    than slipping through a permissive container.
+    """
+    processor = WhatsAppWebhookProcessor()
+    with pytest.raises(ProcessorError):
+        await processor.create_universal_webhook(
+            _payload(
+                "account_offboarded",
+                {"reason": "USER_INITIATED", "timestamp": 1655913600},
+            )
+        )
