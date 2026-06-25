@@ -5,6 +5,19 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0] - 2026-06-25
+
+Adds first-class parsing for Meta's Coexistence account-level webhooks, surfaced as typed `SystemWebhook` events so any consumer receives them without registering a custom field. These fire on WABAs connected via Embedded Signup + Coexistence (now available to verified Tech Providers).
+
+### Added
+- `SystemEventType.ACCOUNT_OFFBOARDED` and `SystemEventType.ACCOUNT_RECONNECTED` — account-scoped (Platform Account / WABA) coexistence events. They dispatch through `process_system_webhook` with `SystemWebhook.user is None`.
+- `SystemEventDetail` gains `waba_id`, `phone_number_id`, and `reason` fields for account-scoped events.
+- Strict `AccountWebhookValue` model parsing the flat, WABA-scoped change value (`waba_id`/`timestamp` required, `reason`/`phone_number_id` optional, `extra="ignore"` for forward compatibility).
+
+### Changed
+- Account-level coexistence fields validate against the strict `AccountWebhookValue` model instead of the permissive custom-field path — malformed payloads now surface as clear validation errors. `WebhookValue` is unchanged.
+- `ACCOUNT_EVENT_FIELDS` is the single source of truth in `field_registry`; `BUILTIN_WEBHOOK_FIELDS` composes from it.
+
 ## [0.19.0] - 2026-06-14
 
 Upgrades to FastAPI 0.137 (router-tree architecture), deepens the plugin system with public route prefixes and lazy route registration, and slims the WappaPlugin protocol to a single method.

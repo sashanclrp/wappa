@@ -16,7 +16,10 @@ from pydantic import (
     model_validator,
 )
 
-from wappa.core.events.field_registry import BUILTIN_WEBHOOK_FIELDS
+from wappa.core.events.field_registry import (
+    ACCOUNT_EVENT_FIELDS,
+    BUILTIN_WEBHOOK_FIELDS,
+)
 from wappa.schemas.core.types import PlatformType, WebhookType
 from wappa.webhooks.core.base_webhook import (
     BaseContact,
@@ -25,13 +28,11 @@ from wappa.webhooks.core.base_webhook import (
 )
 from wappa.webhooks.whatsapp.base_models import WhatsAppContact, WhatsAppMetadata
 
-# Built-in coexistence fields whose ``value`` is a flat, WABA-scoped object
-# (``waba_id``/``reason``/``phone_number_id``/``timestamp``) rather than the
-# phone-scoped :class:`WebhookValue` shape. Single source of truth — referenced
-# by ``_route_field`` (routing) and ``is_system_event`` (classification) so the
-# field set lives in exactly one place.
-ACCOUNT_EVENT_FIELDS: frozenset[str] = frozenset(
-    {"account_offboarded", "account_reconnected"}
+# Pre-computed union used by ``is_system_event`` to identify fields that are
+# system events by their field name alone (as opposed to system messages that
+# surface via field="messages" with type="system").
+_DIRECT_SYSTEM_EVENT_FIELDS: frozenset[str] = (
+    frozenset({"user_preferences", "user_id_update"}) | ACCOUNT_EVENT_FIELDS
 )
 
 
@@ -417,10 +418,7 @@ class WhatsAppWebhook(BaseWebhook):
         for entry in self.entry:
             for change in entry.changes:
                 # Direct system event fields
-                if (
-                    change.field in ("user_preferences", "user_id_update")
-                    or change.field in ACCOUNT_EVENT_FIELDS
-                ):
+                if change.field in _DIRECT_SYSTEM_EVENT_FIELDS:
                     return True
                 # System messages within the messages field
                 messages = getattr(change.value, "messages", None)

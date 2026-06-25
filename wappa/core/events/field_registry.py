@@ -35,14 +35,20 @@ if TYPE_CHECKING:
     from wappa.webhooks.core.webhook_interfaces import CustomWebhook
 
 
-BUILTIN_WEBHOOK_FIELDS: frozenset[str] = frozenset(
-    {
-        "messages",
-        "user_preferences",
-        "user_id_update",
-        "account_offboarded",
-        "account_reconnected",
-    }
+ACCOUNT_EVENT_FIELDS: frozenset[str] = frozenset(
+    {"account_offboarded", "account_reconnected"}
+)
+"""Account-level coexistence fields whose ``value`` is a flat WABA-scoped object.
+
+Their value shape (``waba_id``/``reason``/``phone_number_id``/``timestamp``) differs
+from the phone-scoped :class:`WebhookValue` used by all other built-in fields.
+Defined here so :data:`BUILTIN_WEBHOOK_FIELDS` can compose from it — one place to
+extend when Meta adds a new account-level event.
+"""
+
+BUILTIN_WEBHOOK_FIELDS: frozenset[str] = (
+    frozenset({"messages", "user_preferences", "user_id_update"})
+    | ACCOUNT_EVENT_FIELDS
 )
 """Field values handled natively by the framework — reserved from registration."""
 
