@@ -1,0 +1,58 @@
+name: Publish to PyPI
+
+# Publishes wappa to PyPI whenever a release tag (vX.Y.Z) is pushed.
+# Authentication uses PyPI Trusted Publishing (OIDC) — no API token is stored
+# in the repo or in .env. The one-time PyPI setup is documented in
+# .github/workflows/PUBLISHING.md.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    name: Build and publish
+    runs-on: ubuntu-latest
+
+    # OIDC: mint a short-lived identity token PyPI trusts. Required for
+    # trusted publishing; without it uv would fall back to looking for a token.
+    permissions:
+      id-token: write
+      contents: read
+
+    # Binds this run to a named environment, which PyPI can require in the
+    # trusted-publisher config for an extra layer of scoping.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/wappa/
+
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Verify tag matches package version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(grep -E '^version = ' pyproject.toml | head -1 | sed -E 's/version = "(.*)"/\1/')"
+          echo "tag=$tag  pyproject=$pkg"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match pyproject version $pkg"
+            exit 1
+          fi
+
+      - name: Build sdist and wheel
+        run: |
+          rm -rf dist
+          uv build
+
+      # uv detects the GitHub Actions OIDC environment automatically
+      # (--trusted-publishing automatic is the default) and publishes without
+      # a token. Requires the id-token: write permission above.
+      - name: Publish to PyPI
+        run: uv publish

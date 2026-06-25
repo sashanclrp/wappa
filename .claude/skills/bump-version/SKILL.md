@@ -101,15 +101,26 @@ git tag vNEW_VERSION
 
 Match the project's existing release commit style (look at `git log --oneline | grep "^.* \[REL\]"` for examples — current convention is `[REL] vX.Y.Z — summary`).
 
-Do **not** push. The user pushes manually when they're ready. Tell them the tag was created locally and remind them: `git push && git push --tags`.
+Do **not** push, and do **not** publish to PyPI from here. Publishing is automated:
+pushing the tag triggers `.github/workflows/publish.yml`, which rebuilds and
+publishes to PyPI via Trusted Publishing (OIDC — no token). Tell the user the
+commit and tag were created locally and that pushing the tag ships the release:
+
+```bash
+git push && git push --tags
+```
+
+Then they can watch the run under the repo's **Actions** tab. Never run
+`uv publish` locally or read a PyPI token from `.env` — that path is deprecated in
+favor of CI trusted publishing (see `.github/workflows/PUBLISHING.md`).
 
 ## Why this order matters
 
 - **Simplifier before everything** — its edits must land in the release commit, not as a follow-up.
 - **Delete `/dist` before build** — stale artifacts from a previous version would otherwise ship inside the new wheel.
 - **CHANGELOG before version bump** — the changelog entry references the new version number, so we need to know it; but we write the prose before the mechanical version-string sweep so we don't conflate the two.
-- **Build before commit** — if the build is broken, we want to know before we've made a tagged commit that promises a working artifact.
-- **Tag at the end** — a tag is a public promise. Only create it once everything else is verified.
+- **Build before commit** — if the build is broken, we want to know before we've made a tagged commit that promises a working artifact. (The build here is a local sanity check; CI rebuilds from the tag before publishing.)
+- **Tag at the end** — a tag is a public promise, and here it's also the publish trigger: pushing it makes CI ship to PyPI. Only create it once everything else is verified.
 
 ## What to report at the end
 
@@ -118,4 +129,6 @@ One short summary:
 - Whether simplifier ran
 - New CHANGELOG entry headline
 - Files touched by the version sweep
-- Reminder: `git push && git push --tags` to publish
+- Reminder: `git push && git push --tags` — pushing the tag triggers the CI
+  workflow that publishes to PyPI (Trusted Publishing, no token). Nothing is
+  published until the tag is pushed.
