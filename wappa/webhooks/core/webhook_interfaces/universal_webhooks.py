@@ -39,6 +39,9 @@ class SystemEventType(str, Enum):
     NUMBER_CHANGE = "number_change"
     USER_ID_CHANGE = "user_id_change"
     MARKETING_PREFERENCE = "marketing_preference"
+    # Coexistence account-level events (WABA scope, not user scope).
+    ACCOUNT_OFFBOARDED = "account_offboarded"
+    ACCOUNT_RECONNECTED = "account_reconnected"
 
 
 class WhatsAppIncomingWebhookData(BaseModel):

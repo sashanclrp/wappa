@@ -36,7 +36,13 @@ if TYPE_CHECKING:
 
 
 BUILTIN_WEBHOOK_FIELDS: frozenset[str] = frozenset(
-    {"messages", "user_preferences", "user_id_update"}
+    {
+        "messages",
+        "user_preferences",
+        "user_id_update",
+        "account_offboarded",
+        "account_reconnected",
+    }
 )
 """Field values handled natively by the framework — reserved from registration."""
 

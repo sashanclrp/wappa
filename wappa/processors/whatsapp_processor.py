@@ -654,6 +654,56 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                         webhook, update.wa_id
                     )
 
+            case "account_offboarded":
+                from wappa.webhooks.whatsapp.system_events import (
+                    AccountOffboardedValue,
+                )
+
+                raw_offboarded = webhook.get_raw_account_offboarded()
+                if not raw_offboarded:
+                    raise ProcessorError(
+                        "No account_offboarded found in system webhook",
+                        ErrorCode.PROCESSING_ERROR,
+                        PlatformType.WHATSAPP,
+                    )
+
+                offboarded = AccountOffboardedValue.model_validate(raw_offboarded)
+
+                system_event_type = SystemEventType.ACCOUNT_OFFBOARDED
+                event_detail = SystemEventDetail(
+                    waba_id=offboarded.waba_id,
+                    reason=offboarded.reason,
+                )
+                event_timestamp = datetime.fromtimestamp(
+                    offboarded.timestamp, tz=UTC
+                )
+                # Account-scoped event: no user context (no wa_id), user stays None.
+
+            case "account_reconnected":
+                from wappa.webhooks.whatsapp.system_events import (
+                    AccountReconnectedValue,
+                )
+
+                raw_reconnected = webhook.get_raw_account_reconnected()
+                if not raw_reconnected:
+                    raise ProcessorError(
+                        "No account_reconnected found in system webhook",
+                        ErrorCode.PROCESSING_ERROR,
+                        PlatformType.WHATSAPP,
+                    )
+
+                reconnected = AccountReconnectedValue.model_validate(raw_reconnected)
+
+                system_event_type = SystemEventType.ACCOUNT_RECONNECTED
+                event_detail = SystemEventDetail(
+                    waba_id=reconnected.waba_id,
+                    phone_number_id=reconnected.phone_number_id,
+                )
+                event_timestamp = datetime.fromtimestamp(
+                    reconnected.timestamp, tz=UTC
+                )
+                # Account-scoped event: no user context, user stays None.
+
             case "messages":
                 # System messages from the messages field (type=="system")
                 raw_messages = webhook.get_raw_messages()

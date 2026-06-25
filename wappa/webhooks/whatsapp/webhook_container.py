@@ -25,6 +25,13 @@ from wappa.webhooks.core.base_webhook import (
 )
 from wappa.webhooks.whatsapp.base_models import WhatsAppContact, WhatsAppMetadata
 
+# Built-in fields whose ``value`` is a flat, WABA-scoped object rather than the
+# phone-scoped WebhookValue shape. They are framework-native (emitted as
+# SystemWebhook) but their value is routed through the permissive model.
+_PERMISSIVE_BUILTIN_FIELDS: frozenset[str] = frozenset(
+    {"account_offboarded", "account_reconnected"}
+)
+
 
 class WebhookValue(BaseModel):
     """
@@ -160,6 +167,15 @@ class WebhookChange(BaseModel):
 
         field = data.get("field")
         raw_value = data.get("value")
+
+        # Account-level coexistence events are built-in but their value is a
+        # flat WABA-scoped object (waba_id/reason/timestamp), not the
+        # phone-scoped WebhookValue shape — route them through the permissive
+        # model and let the processor read the flat fields.
+        if field in _PERMISSIVE_BUILTIN_FIELDS:
+            if isinstance(raw_value, dict):
+                return {**data, "value": CustomWebhookValue.model_validate(raw_value)}
+            return data
 
         if field in BUILTIN_WEBHOOK_FIELDS:
             if isinstance(raw_value, dict):
@@ -373,7 +389,12 @@ class WhatsAppWebhook(BaseWebhook):
         for entry in self.entry:
             for change in entry.changes:
                 # Direct system event fields
-                if change.field in ("user_preferences", "user_id_update"):
+                if change.field in (
+                    "user_preferences",
+                    "user_id_update",
+                    "account_offboarded",
+                    "account_reconnected",
+                ):
                     return True
                 # System messages within the messages field
                 messages = getattr(change.value, "messages", None)
@@ -491,6 +512,27 @@ class WhatsAppWebhook(BaseWebhook):
                 if updates:
                     items.extend(updates)
         return items
+
+    def _get_account_event_value(self, field_name: str) -> dict[str, Any] | None:
+        """Return the flat ``value`` dict of an account-level coexistence event.
+
+        Account events (account_offboarded/account_reconnected) carry their
+        fields flat in the value (CustomWebhookValue, extra=allow), not in a
+        sub-array. Returns the value as a dict, or None if the field is absent.
+        """
+        for entry in self.entry:
+            for change in entry.changes:
+                if change.field == field_name:
+                    return change.value.model_dump(exclude_none=True)
+        return None
+
+    def get_raw_account_offboarded(self) -> dict[str, Any] | None:
+        """Flat value dict of the account_offboarded event, or None."""
+        return self._get_account_event_value("account_offboarded")
+
+    def get_raw_account_reconnected(self) -> dict[str, Any] | None:
+        """Flat value dict of the account_reconnected event, or None."""
+        return self._get_account_event_value("account_reconnected")
 
     def get_raw_messages(self) -> list[dict[str, Any]]:
         """
