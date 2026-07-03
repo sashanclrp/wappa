@@ -5,6 +5,17 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.1] - 2026-07-02
+
+Makes `wappa init` scaffolding produce a project that actually boots. The generated `.env` used legacy variable names that `settings.py` no longer reads, so a freshly scaffolded project failed startup credential validation. Ships the fixes merged in #7.
+
+### Fixed
+- **Scaffolded `.env` now boots.** `cli/templates/env.template` used legacy names that `settings.py` no longer reads — the required WhatsApp credentials came back empty and startup validation failed. Renamed to the canonical names: `WHATSAPP_WEBHOOK_VERIFY_TOKEN` → `WP_WEBHOOK_VERIFY_TOKEN`; `TIME_ZONE`/`LOG_LEVEL`/`LOG_DIR`/`ENVIRONMENT` → `SYSTEM_TIME_ZONE`/`SYSTEM_LOG_LEVEL`/`SYSTEM_LOG_DIR`/`SYSTEM_ENVIRONMENT`; `BASE_URL`/`API_VERSION` → `META_BASE_URL`/`META_API_VERSION`.
+- **Scaffolded `master_event.py` `mark_as_read` call.** The template passed `webhook.user.user_id` (a phone string) as the second positional argument, which is `typing: bool` — not a recipient. Corrected to `mark_as_read(webhook.message.message_id)`.
+
+### Changed
+- `CLAUDE.md` setup examples now document the real API — `Wappa(cache=...)`, `add_plugin()`, `set_event_handler()`, and the builder's `add_plugin()/configure()/build()` — replacing a fictional `WappaBuilder` fluent API (`.with_whatsapp()`, `.with_redis_cache()`, …) and `Wappa(whatsapp_token=...)`/`register_handler()` that had propagated into the docs site.
+
 ## [0.21.0] - 2026-07-02
 
 Closes a proven database connection-leak and hardens the PostgreSQL session manager against the transaction-hold pattern that can exhaust a Supavisor/pgBouncer pool and hang the whole app. Under any cancellation source (edge proxy aborts, statement timeouts, worker shutdown), a request wrapped in an anyio cancel scope — which every Starlette `BaseHTTPMiddleware` creates — no longer orphans its server-side backend `idle in transaction`.
