@@ -54,8 +54,6 @@ class InboxMiddleware(BaseHTTPMiddleware):
             elif not self._is_public_endpoint(request.url.path):
                 set_request_context(inbox_id=settings.inbox_id)
 
-            return await call_next(request)
-
         except HTTPException:
             raise
         except Exception as e:
@@ -67,6 +65,11 @@ class InboxMiddleware(BaseHTTPMiddleware):
                     f"path '{request.url.path}': {type(e).__name__}: {e}"
                 ),
             ) from e
+
+        # Inbox resolution succeeded — run the downstream app OUTSIDE the guard
+        # so route/handler exceptions surface with their true origin instead of
+        # being re-labeled as an inbox-resolution failure.
+        return await call_next(request)
 
     def _is_valid_inbox_id(self, inbox_id: str) -> bool:
         """Validate inbox ID format."""

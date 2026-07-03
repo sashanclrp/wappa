@@ -5,6 +5,13 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.2] - 2026-07-02
+
+Fixes `InboxMiddleware` mislabeling downstream errors. The middleware wrapped the entire downstream request inside the try block that guards inbox resolution, so any exception raised by a route or handler below it was re-wrapped as a `500: InboxMiddleware failed while resolving inbox context…` — stealing attribution from the real error (e.g. a Pydantic `ValidationError`) and making 500s much harder to diagnose.
+
+### Fixed
+- **`InboxMiddleware` no longer re-labels downstream exceptions.** `return await call_next(request)` moved out of the inbox-resolution `try` block to after the `except` handlers. Inbox resolution (path parsing, `set_request_context`, invalid-ID handling) is still guarded and still surfaces as a `400`/`500` inbox error; but route and handler exceptions now propagate with their true origin to the app's own exception/validation handlers instead of being misattributed to the middleware.
+
 ## [0.21.1] - 2026-07-02
 
 Makes `wappa init` scaffolding produce a project that actually boots. The generated `.env` used legacy variable names that `settings.py` no longer reads, so a freshly scaffolded project failed startup credential validation. Ships the fixes merged in #7.
