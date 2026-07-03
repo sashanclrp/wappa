@@ -187,35 +187,80 @@ The refactored library provides clean, minimal setup:
 ```python
 from wappa import Wappa, WappaEventHandler
 
+
 class MasterEventHandler(WappaEventHandler):
-    async def handle_message(self, message):
-        # Your business logic here
-        await self.messenger.send_text("Hello!", message.sender_phone)
+    async def handle_message(self, webhook):
+        # Your business logic here. `self.messenger` is injected per request.
+        await self.messenger.send_text(
+            recipient=webhook.user.user_id,
+            text="Hello!",
+        )
 
-# Minimal application setup
-app = Wappa(
-    whatsapp_token="your_token",
-    whatsapp_phone_id="your_phone_id", 
-    whatsapp_business_id="your_business_id"
-)
 
-# Register event handler
-app.register_handler(MasterEventHandler())
+# Minimal application setup. Credentials are read from the environment
+# (.env): WP_ACCESS_TOKEN, WP_PHONE_ID, WP_BID. The constructor only
+# selects the cache backend ("memory" | "redis" | "json").
+app = Wappa(cache="memory")
+
+# Register the event handler
+app.set_event_handler(MasterEventHandler())
+
+if __name__ == "__main__":
+    app.run()
 ```
 
 ### Advanced Setup with Builder Pattern
 
-For complex applications with plugins and custom configuration:
+For complex applications with plugins and custom configuration, use
+`WappaBuilder` directly. `build()` returns a configured FastAPI app
+(synchronous); wire it back into `Wappa` for event handling and running.
+Plugins are real classes imported from `wappa.core.plugins` and added via
+`add_plugin(...)`. WhatsApp credentials still come from the environment
+(.env: `WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID`).
 
 ```python
-from wappa import WappaBuilder
+from wappa import Wappa, WappaBuilder
+from wappa.core.plugins import (
+    CORSPlugin,
+    RateLimitPlugin,
+    RateLimitProfile,
+    RedisPlugin,
+)
 
-app = (WappaBuilder()
-       .with_whatsapp(token="...", phone_id="...", business_id="...")
-       .with_redis_cache("redis://localhost:6379")
-       .with_cors_enabled()
-       .with_rate_limiting()
-       .build())
+# Assemble the FastAPI app via the builder (build() is synchronous).
+fastapi_app = (
+    WappaBuilder()
+    .add_plugin(RedisPlugin())            # Redis cache/session infrastructure
+    .add_plugin(CORSPlugin(allow_origins=["*"]))
+    .add_plugin(
+        RateLimitPlugin(
+            [RateLimitProfile(name="default", limit=100, window_seconds=60)]
+        )
+    )
+    .configure(title="My Wappa App", version="2.0.0")
+    .build()
+)
+
+# Use the Wappa class for event handling and running.
+app = Wappa()
+app.set_app(fastapi_app)
+app.set_event_handler(MasterEventHandler())
+
+if __name__ == "__main__":
+    app.run()
+```
+
+Alternatively, for plugin extensibility without dropping to the builder,
+add plugins straight on the `Wappa` instance:
+
+```python
+from wappa import Wappa
+from wappa.core.plugins import PostgresDatabasePlugin
+
+app = Wappa(cache="redis")
+app.add_plugin(PostgresDatabasePlugin("postgresql://..."))
+app.set_event_handler(MasterEventHandler())
+app.run()
 ```
 
 ### CLI Project Scaffolding
@@ -228,11 +273,12 @@ wappa init my-bot
 # my-bot/
 #   app/
 #     __init__.py
-#     main.py          # Wappa app instance
-#     master_event.py  # Event handler
-#   scores/            # Empty directory for business logic
-#   .env              # Environment variables template
-#   .gitignore        # Git ignore file
+#     main.py          # Wappa app instance (Wappa() + set_event_handler)
+#     master_event.py  # Event handler (WappaEventHandler subclass)
+#     scores/          # Empty package for business logic
+#       __init__.py
+#   .env               # Environment variables template (WP_* credentials)
+#   .gitignore         # Git ignore file
 ```
 
 ### Example Projects Available
