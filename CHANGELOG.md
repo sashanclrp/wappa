@@ -5,6 +5,22 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0] - 2026-07-02
+
+Closes a proven database connection-leak and hardens the PostgreSQL session manager against the transaction-hold pattern that can exhaust a Supavisor/pgBouncer pool and hang the whole app. Under any cancellation source (edge proxy aborts, statement timeouts, worker shutdown), a request wrapped in an anyio cancel scope — which every Starlette `BaseHTTPMiddleware` creates — no longer orphans its server-side backend `idle in transaction`.
+
+### Fixed
+- **Cancellation-safe session teardown.** `PostgresSessionManager` session teardown now catches `BaseException` (not `Exception`), so `asyncio.CancelledError` — which derives from `BaseException` — can no longer slip past the rollback. Commit/rollback/close run inside a shielded, 10s-bounded scope (`anyio.move_on_after(shield=True)`) so the ROLLBACK/DISCARD reaches Postgres even while the enclosing cancel scope is being torn down. Previously the app-side pool silently discarded the connection while the server backend leaked mid-transaction until the pool exhausted.
+- **Pool-exhaustion is no longer retried.** SQLAlchemy's `QueuePool` checkout timeout (`sqlalchemy.exc.TimeoutError`, message contains "connection timed out") is now classified as non-transient and fails fast instead of being retried 3× with backoff, which previously amplified saturation and could stall even DB-free endpoints like `/health`.
+- **`connect_args=None` startup crash.** `connect_args` is now always a dict, never `None` — `create_async_engine(connect_args=None)` raised `TypeError: 'NoneType' object is not iterable` for any consumer that didn't set `statement_cache_size`.
+
+### Added
+- `command_timeout` (default `30.0`) on `PostgresSessionManager` and `PostgresDatabasePlugin`, threaded to asyncpg as a per-statement deadline so a stalled query cannot pin its connection indefinitely. Set to `None` to disable.
+- `tests/test_session_cancel_rollback.py` — regression coverage for the leak: deterministic cancellation/teardown unit tests plus real-Postgres integration tests asserting zero `idle in transaction` backends and `pool_checked_out == 0` after mid-query cancellation (auto-skipped when PostgreSQL server binaries are absent).
+
+### Changed
+- **Session path no longer retries, and the eager `SELECT 1` validation is removed** (intentional semantics change). The session's transaction now begins on the first real query instead of at checkout, shrinking the transaction window from the whole request to actual query time. Dead-connection-at-checkout is covered by `pool_pre_ping`; startup connectivity is still covered by `_initialize_with_retry`. Use + teardown is a single shielded, non-retryable path. `TransientDatabaseError` remains exported for backwards compatibility but is no longer raised by the session path.
+
 ## [0.20.0] - 2026-06-25
 
 Adds first-class parsing for Meta's Coexistence account-level webhooks, surfaced as typed `SystemWebhook` events so any consumer receives them without registering a custom field. These fire on WABAs connected via Embedded Signup + Coexistence (now available to verified Tech Providers).

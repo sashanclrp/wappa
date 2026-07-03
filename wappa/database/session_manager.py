@@ -10,10 +10,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable
 from contextlib import asynccontextmanager
 
+import anyio
 from sqlalchemy import text
+from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -36,7 +38,8 @@ class PostgresSessionManager:
     - Connection pooling with configurable parameters (pool_size, max_overflow, pool_timeout)
     - Exponential backoff retry for transient failures
     - Write/read replica support with round-robin selection
-    - Connection validation with SELECT 1
+    - Connection validation at checkout via pool_pre_ping (no eager SELECT 1)
+    - Cancellation-safe session teardown (shielded rollback/close)
     - Health check capabilities
     - Configurable auto-commit behavior
 
@@ -99,6 +102,7 @@ class PostgresSessionManager:
         auto_commit: bool = True,
         echo: bool = False,
         statement_cache_size: int | None = None,
+        command_timeout: float | None = 30.0,
     ):
         """
         Initialize PostgreSQL session manager.
@@ -119,6 +123,11 @@ class PostgresSessionManager:
             statement_cache_size: Asyncpg prepared statement cache size.
                 Set to 0 to disable (required for pgBouncer transaction mode).
                 None (default) uses asyncpg's default behavior.
+            command_timeout: Per-statement timeout in seconds passed to asyncpg
+                (default: 30.0). Bounds how long a single query can pin its
+                connection, so a stalled query (e.g. blocked on a slow upstream
+                lock) cannot hold a server-side transaction open indefinitely.
+                Set to None to disable the client-side statement deadline.
         """
         self.write_url = self._normalize_url(write_url)
         self.read_urls = [self._normalize_url(url) for url in (read_urls or [])]
@@ -131,6 +140,7 @@ class PostgresSessionManager:
         self.pool_pre_ping = pool_pre_ping
         self.echo = echo
         self.statement_cache_size = statement_cache_size
+        self.command_timeout = command_timeout
 
         # Retry configuration
         self.max_retries = max_retries
@@ -183,13 +193,15 @@ class PostgresSessionManager:
         Returns:
             Configured AsyncEngine instance
         """
-        # Build connect_args from configuration
-        connect_args = {}
-        if (
-            hasattr(self, "statement_cache_size")
-            and self.statement_cache_size is not None
-        ):
+        # Build connect_args from configuration.
+        # NOTE: always pass a dict (never None). create_async_engine chokes on
+        # connect_args=None (TypeError: 'NoneType' object is not iterable), so an
+        # empty dict must stay an empty dict.
+        connect_args: dict = {}
+        if self.statement_cache_size is not None:
             connect_args["statement_cache_size"] = self.statement_cache_size
+        if self.command_timeout is not None:
+            connect_args["command_timeout"] = self.command_timeout
 
         return create_async_engine(
             url,
@@ -199,7 +211,7 @@ class PostgresSessionManager:
             pool_recycle=self.pool_recycle,
             pool_pre_ping=self.pool_pre_ping,
             echo=self.echo,
-            connect_args=connect_args if connect_args else None,
+            connect_args=connect_args,
         )
 
     def _create_session_maker(
@@ -337,6 +349,14 @@ class PostgresSessionManager:
         Returns:
             True if error is likely transient and retryable
         """
+        # Pool exhaustion (QueuePool checkout timeout) is NOT transient: the pool
+        # is drained, so retrying just parks the request and saturates the pooler
+        # further. SQLAlchemy raises exc.TimeoutError with a message containing
+        # "connection timed out", which would otherwise match the patterns below —
+        # classify it as non-transient explicitly and fail fast.
+        if isinstance(error, SQLAlchemyTimeoutError):
+            return False
+
         # Check error type
         if isinstance(error, self._TRANSIENT_ERROR_TYPES):
             return True
@@ -448,18 +468,52 @@ class PostgresSessionManager:
 
         return False
 
+    @staticmethod
+    async def _shielded(coro: Awaitable[None], *, timeout: float = 10.0) -> None:
+        """
+        Run a teardown coroutine shielded from outer cancellation.
+
+        Session teardown (rollback/close) must reach Postgres even when the
+        request is being cancelled — otherwise the server-side backend is left
+        orphaned mid-transaction (``idle in transaction``) and the pool leaks.
+
+        ``asyncio.CancelledError`` derives from ``BaseException`` (not
+        ``Exception``), and every ``BaseHTTPMiddleware`` layer wraps the request
+        in an anyio cancel scope, so a plain ``await session.rollback()`` gets
+        cancelled before the ROLLBACK/DISCARD is sent. ``move_on_after(shield=True)``
+        protects the teardown; the timeout bounds it so a dead connection cannot
+        wedge cleanup forever (pairs with ``command_timeout``).
+
+        Args:
+            coro: Teardown coroutine to run (e.g. ``session.rollback()``).
+            timeout: Maximum seconds to spend on teardown before giving up.
+        """
+        try:
+            with anyio.move_on_after(timeout, shield=True):
+                await coro
+        except Exception as e:  # noqa: BLE001 - teardown must never mask the real error
+            logger.warning("Session teardown failed (ignored): %s", e)
+
     @asynccontextmanager
-    async def _session_with_retry(
+    async def _managed_session(
         self,
         session_maker: async_sessionmaker[AsyncSession],
         operation_name: str = "Database",
     ) -> AsyncIterator[AsyncSession]:
         """
-        Shared retry logic for session management.
+        Yield a session with cancellation-safe commit/rollback/close.
 
-        Uses exponential backoff for transient failures.
-        Validates connection before yielding session.
-        Auto-commits on success if auto_commit=True.
+        This path is intentionally **non-retrying**. The session's transaction
+        begins on the first real query, so once the handler is using the session
+        it cannot be safely retried. Dead-connection-at-checkout is covered by
+        ``pool_pre_ping``; startup connectivity is covered by
+        ``_initialize_with_retry``. There is no longer an eager ``SELECT 1``
+        validation, so the transaction window shrinks to actual query time
+        instead of spanning the whole request.
+
+        Teardown runs under ``_shielded`` so cancellation (anyio cancel scope /
+        ``asyncio.CancelledError``, both ``BaseException``) cannot prevent the
+        ROLLBACK/DISCARD from reaching Postgres.
 
         Args:
             session_maker: Session factory to use
@@ -467,82 +521,38 @@ class PostgresSessionManager:
 
         Yields:
             AsyncSession for database operations
-
-        Raises:
-            TransientDatabaseError: After max retries exceeded
-            Exception: For non-transient database errors
         """
-        last_exception: Exception | None = None
-
-        for attempt in range(self.max_retries):
-            try:
-                async with session_maker() as session:
-                    # Connection validation (30x pattern)
-                    try:
-                        await session.execute(text("SELECT 1"))
-                    except Exception as e:
-                        logger.warning("Connection validation failed: %s", e)
-                        raise
-
-                    try:
-                        yield session
-                        if self.auto_commit:
-                            await session.commit()
-                    except Exception:
-                        await session.rollback()
-                        raise
-                    return
-
-            except Exception as e:
-                last_exception = e
-
-                if not self._is_transient_error(e):
-                    # Non-transient error - don't retry
-                    raise
-
-                if attempt < self.max_retries - 1:
-                    delay = self._calculate_backoff(attempt)
-                    logger.warning(
-                        "%s operation failed (attempt %d/%d): %s. Retrying in %.2fs",
-                        operation_name,
-                        attempt + 1,
-                        self.max_retries,
-                        e,
-                        delay,
-                    )
-                    await asyncio.sleep(delay)
-                else:
-                    logger.error(
-                        "%s operation failed after %d attempts: %s",
-                        operation_name,
-                        self.max_retries,
-                        e,
-                    )
-
-        raise TransientDatabaseError(
-            f"{operation_name} operation failed after {self.max_retries} attempts"
-        ) from last_exception
+        session = session_maker()
+        try:
+            yield session
+            if self.auto_commit:
+                await self._shielded(session.commit())
+        except BaseException:
+            # Catch BaseException (not Exception) so cancellation still rolls back.
+            await self._shielded(session.rollback())
+            raise
+        finally:
+            await self._shielded(session.close())
 
     @asynccontextmanager
     async def get_session(self) -> AsyncIterator[AsyncSession]:
         """
-        Get write session with retry logic.
+        Get write session with cancellation-safe teardown.
 
-        Uses exponential backoff for transient failures.
-        Validates connection before yielding session.
-        Auto-commits on success if auto_commit=True.
+        Auto-commits on success if auto_commit=True. Commit/rollback/close run
+        shielded from cancellation so the transaction is always resolved on the
+        server (see ``_managed_session``). This path does not retry.
 
         Yields:
             AsyncSession for write operations
 
         Raises:
-            TransientDatabaseError: After max retries exceeded
-            Exception: For non-transient database errors
+            Exception: Propagated unchanged from database operations.
         """
         if not self._initialized or not self._write_session_maker:
             raise RuntimeError("PostgresSessionManager not initialized")
 
-        async with self._session_with_retry(
+        async with self._managed_session(
             self._write_session_maker, "Database"
         ) as session:
             yield session
@@ -573,7 +583,7 @@ class PostgresSessionManager:
         ]
         self._read_index += 1
 
-        async with self._session_with_retry(session_maker, "Read database") as session:
+        async with self._managed_session(session_maker, "Read database") as session:
             yield session
 
     async def health_check(self) -> bool:

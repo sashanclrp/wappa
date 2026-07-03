@@ -87,6 +87,7 @@ class PostgresDatabasePlugin:
         max_delay: float = 30.0,
         echo: bool = False,
         statement_cache_size: int | None = None,
+        command_timeout: float | None = 30.0,
     ):
         """
         Initialize PostgreSQL database plugin.
@@ -110,6 +111,9 @@ class PostgresDatabasePlugin:
             statement_cache_size: Asyncpg prepared statement cache size.
                 Set to 0 to disable (required for pgBouncer transaction mode).
                 None (default) uses asyncpg's default behavior.
+            command_timeout: Per-statement timeout in seconds passed to asyncpg
+                (default: 30.0). Bounds how long a single query can pin its
+                connection. Set to None to disable the client-side deadline.
         """
         self.url = url
         self.read_urls = read_urls or []
@@ -130,6 +134,7 @@ class PostgresDatabasePlugin:
             "auto_commit": auto_commit,
             "echo": echo,
             "statement_cache_size": statement_cache_size,
+            "command_timeout": command_timeout,
         }
 
         # Runtime state
