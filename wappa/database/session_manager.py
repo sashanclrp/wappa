@@ -39,6 +39,10 @@ class PostgresSessionManager:
     - Exponential backoff retry for transient failures
     - Write/read replica support with round-robin selection
     - Connection validation at checkout via pool_pre_ping (no eager SELECT 1)
+    - Bounded retry of transient connection *establishment* (DNS blips, refused
+      connections) before the caller runs any query — see ``_acquire_session``
+    - Fast-fail connect timeout so a stalled/unroutable host cannot hang a
+      request on asyncpg's ~60s default connect deadline
     - Cancellation-safe session teardown (shielded rollback/close)
     - Health check capabilities
     - Configurable auto-commit behavior
@@ -103,6 +107,8 @@ class PostgresSessionManager:
         echo: bool = False,
         statement_cache_size: int | None = None,
         command_timeout: float | None = 30.0,
+        connect_timeout: float | None = 10.0,
+        connect_max_retries: int = 2,
     ):
         """
         Initialize PostgreSQL session manager.
@@ -128,6 +134,19 @@ class PostgresSessionManager:
                 connection, so a stalled query (e.g. blocked on a slow upstream
                 lock) cannot hold a server-side transaction open indefinitely.
                 Set to None to disable the client-side statement deadline.
+            connect_timeout: Per-attempt connect timeout in seconds passed to
+                asyncpg (default: 10.0). Without it, a fresh connection to an
+                unroutable/stalled host hangs on asyncpg's ~60s default before
+                failing, turning a transient network blip into a ~60s zombie
+                request. Set to None to fall back to the driver default.
+            connect_max_retries: Number of *additional* attempts to establish a
+                new connection when checkout raises a transient error — DNS
+                blips, connection refused/reset, network unreachable (default:
+                2, i.e. 3 attempts total). This retries connection
+                *establishment only*, before the caller runs any query, so it is
+                safe to replay; the query/transaction path itself never retries.
+                Set to 0 to restore fully-lazy acquisition (no eager checkout,
+                minimal transaction window) and disable connect retries.
         """
         self.write_url = self._normalize_url(write_url)
         self.read_urls = [self._normalize_url(url) for url in (read_urls or [])]
@@ -141,6 +160,8 @@ class PostgresSessionManager:
         self.echo = echo
         self.statement_cache_size = statement_cache_size
         self.command_timeout = command_timeout
+        self.connect_timeout = connect_timeout
+        self.connect_max_retries = connect_max_retries
 
         # Retry configuration
         self.max_retries = max_retries
@@ -202,6 +223,8 @@ class PostgresSessionManager:
             connect_args["statement_cache_size"] = self.statement_cache_size
         if self.command_timeout is not None:
             connect_args["command_timeout"] = self.command_timeout
+        if self.connect_timeout is not None:
+            connect_args["timeout"] = self.connect_timeout
 
         return create_async_engine(
             url,
@@ -494,6 +517,89 @@ class PostgresSessionManager:
         except Exception as e:  # noqa: BLE001 - teardown must never mask the real error
             logger.warning("Session teardown failed (ignored): %s", e)
 
+    async def _acquire_session(
+        self,
+        session_maker: async_sessionmaker[AsyncSession],
+        operation_name: str,
+    ) -> AsyncSession:
+        """
+        Create a session and eagerly establish its connection, retrying only
+        transient *connection-establishment* failures.
+
+        The failure this closes is a **brand-new** connection failing to open —
+        a DNS blip, connection refused/reset, or unroutable host while the pool
+        is growing. ``pool_pre_ping`` already recycles a *stale* pooled
+        connection transparently; what it cannot do is retry a fresh connect
+        that never succeeds, and that error would otherwise escape into the
+        caller's first query where retry is unsafe.
+
+        Retrying here is safe precisely because it happens **before the caller
+        runs anything**: no user query has executed, so tearing down a
+        half-open session and creating a fresh one is indistinguishable from the
+        first attempt. Once the connection is live we return the session and
+        never retry again — an in-flight transaction cannot be replayed (that is
+        why ``_managed_session`` / ``get_session`` remain non-retrying).
+
+        Forcing the checkout with ``session.connection()`` adds no extra
+        round-trip: ``pool_pre_ping`` validates the connection either way; we
+        only move the checkout earlier so a connect failure is catchable and
+        retryable instead of surfacing mid-handler. Transient classification and
+        backoff reuse ``_is_transient_error`` / ``_calculate_backoff``.
+
+        When ``connect_max_retries == 0`` this collapses to fully-lazy
+        acquisition (no eager checkout), preserving the minimal transaction
+        window and disabling connect retries.
+
+        Args:
+            session_maker: Session factory to use.
+            operation_name: Name for logging (e.g. "Database", "Read database").
+
+        Returns:
+            An ``AsyncSession`` whose connection is already established (or a
+            fresh, not-yet-connected session when ``connect_max_retries == 0``).
+
+        Raises:
+            Exception: The last transient error after retries are exhausted, or
+                immediately for any non-transient / non-``Exception`` failure
+                (e.g. ``CancelledError``).
+        """
+        if self.connect_max_retries <= 0:
+            return session_maker()
+
+        attempt = 0
+        while True:
+            session = session_maker()
+            try:
+                # Force pool checkout + pre_ping now so a failing connect raises
+                # here (retryable) rather than inside the caller's first query.
+                await session.connection()
+                return session
+            except BaseException as exc:
+                # Always release the half-open session before retrying/raising.
+                await self._shielded(session.close())
+
+                # Never retry cancellation (BaseException, not Exception),
+                # non-transient errors (bad creds, SQL), or once exhausted.
+                if (
+                    not isinstance(exc, Exception)
+                    or not self._is_transient_error(exc)
+                    or attempt >= self.connect_max_retries
+                ):
+                    raise
+
+                delay = self._calculate_backoff(attempt)
+                logger.warning(
+                    "%s connection acquisition failed (attempt %d/%d): %s. "
+                    "Retrying in %.2fs...",
+                    operation_name,
+                    attempt + 1,
+                    self.connect_max_retries + 1,
+                    exc,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+                attempt += 1
+
     @asynccontextmanager
     async def _managed_session(
         self,
@@ -503,13 +609,15 @@ class PostgresSessionManager:
         """
         Yield a session with cancellation-safe commit/rollback/close.
 
-        This path is intentionally **non-retrying**. The session's transaction
-        begins on the first real query, so once the handler is using the session
-        it cannot be safely retried. Dead-connection-at-checkout is covered by
-        ``pool_pre_ping``; startup connectivity is covered by
-        ``_initialize_with_retry``. There is no longer an eager ``SELECT 1``
-        validation, so the transaction window shrinks to actual query time
-        instead of spanning the whole request.
+        Connection *establishment* is retried once per transient failure via
+        ``_acquire_session`` (bounded by ``connect_max_retries``), before the
+        caller runs any query. Beyond that this path is intentionally
+        **non-retrying**: the session's transaction begins on the first real
+        query, so once the handler is using the session it cannot be safely
+        replayed. Dead-connection-at-checkout is covered by ``pool_pre_ping``;
+        startup connectivity by ``_initialize_with_retry``. There is no eager
+        ``SELECT 1``, so the transaction window still tracks actual query time
+        rather than spanning the whole request.
 
         Teardown runs under ``_shielded`` so cancellation (anyio cancel scope /
         ``asyncio.CancelledError``, both ``BaseException``) cannot prevent the
@@ -522,7 +630,7 @@ class PostgresSessionManager:
         Yields:
             AsyncSession for database operations
         """
-        session = session_maker()
+        session = await self._acquire_session(session_maker, operation_name)
         try:
             yield session
             if self.auto_commit:

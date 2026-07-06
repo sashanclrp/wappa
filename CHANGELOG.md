@@ -5,6 +5,17 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.3] - 2026-07-05
+
+Hardens the PostgreSQL session manager against a fresh-connection hang. When a brand-new asyncpg connection could not be established — a WSL2/dev DNS blip, an unroutable or stalled host — the request hung on asyncpg's ~60s default connect deadline, and the transient failure surfaced mid-handler where retry is unsafe. Both are now bounded and recoverable, without touching the non-retrying query/transaction invariant introduced in 0.21.0.
+
+### Added
+- **`connect_timeout` (default `10.0`)** on `PostgresSessionManager` and `PostgresDatabasePlugin`, threaded to asyncpg as the connect-arg `timeout`. A stalled/unroutable host now fails per-attempt in ~10s instead of hanging ~60s on the driver default. Set to `None` to fall back to the driver default.
+- **`connect_max_retries` (default `2`, i.e. 3 attempts total)** on both classes. `_acquire_session` now forces the pool checkout (`session.connection()`) *before* yielding to the caller, wrapped in a bounded retry that replays only transient connection-*establishment* errors (DNS blips, connection refused/reset, network unreachable — reusing the existing `_is_transient_error` / `_calculate_backoff`). Because no user query has run yet, replaying a fresh connect is safe. `CancelledError`, non-transient errors (bad credentials, SQL), and exhausted attempts are never retried; the half-open session is shielded-closed before each retry/raise. Set to `0` to restore fully-lazy acquisition (no eager checkout) and disable connect retries.
+
+### Changed
+- No new round-trips: `pool_pre_ping` already validated the connection at checkout; the checkout was only moved earlier so a connect failure is catchable and retryable instead of escaping into the caller's first query. The query/transaction path remains non-retrying — the 0.21.0 core invariant is untouched, and `connect_max_retries=0` reproduces today's exact fully-lazy behavior.
+
 ## [0.21.2] - 2026-07-02
 
 Fixes `InboxMiddleware` mislabeling downstream errors. The middleware wrapped the entire downstream request inside the try block that guards inbox resolution, so any exception raised by a route or handler below it was re-wrapped as a `500: InboxMiddleware failed while resolving inbox context…` — stealing attribution from the real error (e.g. a Pydantic `ValidationError`) and making 500s much harder to diagnose.

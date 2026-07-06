@@ -88,6 +88,8 @@ class PostgresDatabasePlugin:
         echo: bool = False,
         statement_cache_size: int | None = None,
         command_timeout: float | None = 30.0,
+        connect_timeout: float | None = 10.0,
+        connect_max_retries: int = 2,
     ):
         """
         Initialize PostgreSQL database plugin.
@@ -114,6 +116,13 @@ class PostgresDatabasePlugin:
             command_timeout: Per-statement timeout in seconds passed to asyncpg
                 (default: 30.0). Bounds how long a single query can pin its
                 connection. Set to None to disable the client-side deadline.
+            connect_timeout: Per-attempt connect timeout in seconds (default:
+                10.0). Fail-fast on unroutable/stalled hosts instead of hanging
+                on asyncpg's ~60s default. Set to None for the driver default.
+            connect_max_retries: Additional attempts to establish a new
+                connection on transient checkout failures — DNS blips, refused/
+                reset connections (default: 2). Retries connection establishment
+                only, before any caller query. Set to 0 to disable.
         """
         self.url = url
         self.read_urls = read_urls or []
@@ -135,6 +144,8 @@ class PostgresDatabasePlugin:
             "echo": echo,
             "statement_cache_size": statement_cache_size,
             "command_timeout": command_timeout,
+            "connect_timeout": connect_timeout,
+            "connect_max_retries": connect_max_retries,
         }
 
         # Runtime state
