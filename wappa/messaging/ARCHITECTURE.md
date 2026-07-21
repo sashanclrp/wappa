@@ -5,7 +5,8 @@
 - Implement `IMessenger` for the WhatsApp platform.
 - Own the `WhatsAppClient` HTTP adapter: token auth, JSON and multipart POST, GET, DELETE, and streaming GET against the Meta Graph API.
 - Own media lifecycle: upload (path / bytes / stream / URL re-upload), download (to disk, temp file, or bytes), stream, delete, and MIME/size validation.
-- Own outbound message construction for all WhatsApp message types: text, media, interactive, templates, contacts, locations.
+- Own outbound message construction for all WhatsApp message types: text, media,
+  interactive, templates, contacts, locations, and contact-information requests.
 - Own recipient normalization (phone → E.164, BSUID detection) via `schemas.core.recipient`.
 - Own read-only template metadata queries against the WABA-level Graph API.
 - Keep `Messenger` / `IMessenger` as the public outbound seam for Host Applications.
@@ -30,7 +31,7 @@ messaging/
       whatsapp_client.py          # HTTP session wrapper; WhatsAppUrlBuilder, WhatsAppManagementUrlBuilder
     handlers/
       whatsapp_media_handler.py   # IMediaHandler impl: upload/download/stream/delete
-      whatsapp_interactive_handler.py  # Button menus, list menus, CTA-URL messages
+      whatsapp_interactive_handler.py  # Menus, CTA URLs, contact-info requests
       whatsapp_template_handler.py     # Text, media-header, location-header templates
       whatsapp_specialized_handler.py  # Contact cards, locations, location requests
     messenger/

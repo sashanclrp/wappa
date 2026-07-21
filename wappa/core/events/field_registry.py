@@ -18,8 +18,8 @@ The registry is consulted in two places:
    ``CustomWebhook`` for any registered field, and ``WappaEventDispatcher``
    then awaits the registered handler.
 
-Built-in field values (``messages``, ``user_preferences``, ``user_id_update``)
-are reserved — apps cannot override them through the registry.
+Built-in field values are reserved — apps cannot override native message,
+identity, Calling, group, account, or Coexistence contracts through the registry.
 """
 
 from __future__ import annotations
@@ -38,7 +38,13 @@ if TYPE_CHECKING:
 ACCOUNT_EVENT_FIELDS: frozenset[str] = frozenset(
     {"account_offboarded", "account_reconnected"}
 )
-"""Account-level coexistence fields whose ``value`` is a flat WABA-scoped object.
+BUSINESS_USERNAME_EVENT_FIELDS: frozenset[str] = frozenset(
+    {"business_username_updates"}
+)
+COEXISTENCE_EVENT_FIELDS: frozenset[str] = frozenset(
+    {"history", "smb_message_echoes", "smb_app_state_sync"}
+)
+"""Account-level Coexistence fields whose ``value`` is a flat WABA-scoped object.
 
 Their value shape (``waba_id``/``reason``/``phone_number_id``/``timestamp``) differs
 from the phone-scoped :class:`WebhookValue` used by all other built-in fields.
@@ -47,8 +53,18 @@ extend when Meta adds a new account-level event.
 """
 
 BUILTIN_WEBHOOK_FIELDS: frozenset[str] = (
-    frozenset({"messages", "user_preferences", "user_id_update"})
+    frozenset(
+        {
+            "messages",
+            "user_preferences",
+            "user_id_update",
+            "group_participants_update",
+            "calls",
+        }
+    )
     | ACCOUNT_EVENT_FIELDS
+    | BUSINESS_USERNAME_EVENT_FIELDS
+    | COEXISTENCE_EVENT_FIELDS
 )
 """Field values handled natively by the framework — reserved from registration."""
 

@@ -52,6 +52,27 @@ class WhatsAppMessageStatus(BaseMessageStatus):
         alias="recipient_user_id",
         description="Business Scoped User ID (BSUID) - stable recipient identifier from webhook",
     )
+    recipient_parent_bsuid: str | None = Field(
+        None,
+        alias="recipient_parent_user_id",
+        description="Parent BSUID of the recipient when enabled",
+    )
+    recipient_type: Literal["individual", "group"] | None = Field(
+        None, description="Recipient type for individual or group messages"
+    )
+    recipient_participant_id: str | None = Field(
+        None, description="Group participant phone number when available"
+    )
+    recipient_participant_bsuid: str | None = Field(
+        None,
+        alias="recipient_participant_user_id",
+        description="Group participant BSUID",
+    )
+    recipient_participant_parent_bsuid: str | None = Field(
+        None,
+        alias="recipient_participant_parent_user_id",
+        description="Group participant parent BSUID when enabled",
+    )
 
     # Optional fields
     recipient_identity_key_hash: str | None = Field(
@@ -208,6 +229,7 @@ class WhatsAppMessageStatus(BaseMessageStatus):
             if self.has_recipient_phone
             else None,
             "recipient_bsuid": self.recipient_bsuid,
+            "recipient_parent_bsuid": self.recipient_parent_bsuid,
             "message_id": self.id,
         }
 
@@ -239,6 +261,11 @@ class WhatsAppMessageStatus(BaseMessageStatus):
             "timestamp": self.timestamp,
             "recipient_id": self.recipient_id,
             "recipient_bsuid": self.recipient_bsuid,
+            "recipient_parent_bsuid": self.recipient_parent_bsuid,
+            "recipient_type": self.recipient_type,
+            "recipient_participant_id": self.recipient_participant_id,
+            "recipient_participant_bsuid": self.recipient_participant_bsuid,
+            "recipient_participant_parent_bsuid": self.recipient_participant_parent_bsuid,
             "recipient_phone": self.wa_recipient_id
             if self.has_recipient_phone
             else None,

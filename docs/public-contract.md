@@ -40,6 +40,7 @@ Wappa also does not process platform webhooks on `/webhook/messenger/*` paths.
 Public inbound imports include:
 
 - `from wappa.webhooks import InboundMessageWebhook`
+- `from wappa.webhooks import CallWebhook`
 - `from wappa.webhooks.core.webhook_interfaces import InboundMessageWebhook`
 - `from wappa.webhooks import StatusWebhook`
 - `from wappa.webhooks import ErrorWebhook`
@@ -49,7 +50,29 @@ Public inbound imports include:
 - `from wappa.webhooks.whatsapp import WhatsAppWebhook`
 - `from wappa.webhooks.whatsapp.*` platform payload schemas
 
+WhatsApp built-in payload schemas are strict (`extra="forbid"`).
+`MessageContext.from_bsuid` maps Meta's `context.from_user_id` reply identifier.
+Incoming WhatsApp models also retain optional portfolio-parent identifiers,
+group identifiers, username-only contacts, and call-permission replies. Status
+Universal Models expose portfolio and parent BSUIDs plus group participant
+identity when Meta sends them.
+For incoming group messages, `conversation_id` is the Meta `group_id` and
+`conversation_type` is `group`; `sender_id` remains the participant's BSUID or
+phone fallback. Group status `user_id` resolves from the participant identity,
+not the group ID.
+Consumer `edit` and `revoke` messages use `MessageType.EDIT` and
+`MessageType.REVOKE`. Coexistence `history`, `smb_message_echoes`, and
+`smb_app_state_sync` values dispatch through `SystemWebhook`; the validated
+Meta value is retained at `event_detail.coexistence_payload`.
+Unknown built-in fields remain HTTP 400 contract failures and emit the stable
+critical log signature `WHATSAPP_WEBHOOK_CONTRACT_DRIFT`; production hosts are
+expected to alert on that signature.
+
 `InboundMessageWebhook` is the only public inbound-message Universal Model name. Wappa does not provide a compatibility alias for previous inbound-message model names.
+
+`CallWebhook` dispatches WhatsApp Calling connect, terminate, and status events
+to `WappaEventHandler.process_call(webhook)`. The default hook is a no-op so
+existing Host Applications remain source-compatible.
 
 The old inbound schema paths under `wappa.schemas.whatsapp`,
 `wappa.schemas.factory`, and `wappa.schemas.core.base_*` are intentionally
@@ -208,6 +231,11 @@ limiting in this contract.
 - All `send_*` methods and `mark_as_read` on the interface
 - `MessageResult` as the uniform return type
 
+`IMessenger.send_contact_request(body, recipient, reply_to_message_id=None)` is
+the capability-aware contact-information request. WhatsApp implements it with
+Meta's `request_contact_info` interactive payload; platforms that don't support
+the feature raise `NotImplementedError` unless their Messenger overrides it.
+
 **Design commitment:**
 
 - The interface stays as a single seam until the split threshold documented in `wappa/messaging/ARCHITECTURE.md` is met.
@@ -262,6 +290,7 @@ table cache semantics.
 ### Webhooks (`from wappa.webhooks import ...`)
 
 - `InboundMessageWebhook`, `StatusWebhook`, `ErrorWebhook`, `SystemWebhook`, `CustomWebhook`
+- `CallWebhook`
 - `BaseMessage`, `InboxBase`, `SystemEventDetail`
 - `WhatsAppWebhook`, `WhatsAppMetadata`, `PlatformType`, `SystemEventType`
 

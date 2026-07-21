@@ -17,7 +17,11 @@ from wappa.schemas.core.types import (
     UniversalMessageData,
 )
 from wappa.webhooks.core.base_message import BaseDocumentMessage, BaseMessageContext
-from wappa.webhooks.whatsapp.base_models import AdReferral, MessageContext
+from wappa.webhooks.whatsapp.base_models import (
+    AdReferral,
+    MessageContext,
+    WhatsAppMessageIdentity,
+)
 
 
 class DocumentContent(BaseModel):
@@ -94,7 +98,7 @@ class DocumentContent(BaseModel):
         return v
 
 
-class WhatsAppDocumentMessage(BaseDocumentMessage):
+class WhatsAppDocumentMessage(WhatsAppMessageIdentity, BaseDocumentMessage):
     """
     WhatsApp document message model.
 
@@ -321,11 +325,11 @@ class WhatsAppDocumentMessage(BaseDocumentMessage):
 
     @property
     def conversation_id(self) -> str:
-        return self.from_
+        return self.group_id or self.sender_id
 
     @property
     def conversation_type(self) -> ConversationType:
-        return ConversationType.PRIVATE
+        return ConversationType.GROUP if self.group_id else ConversationType.PRIVATE
 
     def has_context(self) -> bool:
         return self.context is not None

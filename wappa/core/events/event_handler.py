@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from wappa.domain.interfaces.cache_factory import ICacheFactory
     from wappa.domain.interfaces.messaging_interface import IMessenger
     from wappa.webhooks import (
+        CallWebhook,
         ErrorWebhook,
         InboundMessageWebhook,
         StatusWebhook,
@@ -323,6 +324,15 @@ class WappaEventHandler(ABC):
                         # Update marketing opt-in/out status
                         ...
         """
+        _ = webhook
+        return None
+
+    async def handle_call(self, webhook: "CallWebhook") -> None:
+        """Dispatch a WhatsApp Calling event to the host hook."""
+        await self.process_call(webhook)
+
+    async def process_call(self, webhook: "CallWebhook") -> None:
+        """Override to handle connected, terminated, and call-status events."""
         _ = webhook
         return None
 

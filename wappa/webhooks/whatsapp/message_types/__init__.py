@@ -27,6 +27,7 @@ from .interactive import (
     ListReply,
     WhatsAppInteractiveMessage,
 )
+from .lifecycle import EditContent, RevokeContent, WhatsAppLifecycleMessage
 from .location import LocationContent, WhatsAppLocationMessage
 from .order import OrderContent, OrderProductItem, WhatsAppOrderMessage
 from .reaction import ReactionContent, WhatsAppReactionMessage
@@ -69,6 +70,10 @@ __all__ = [
     # Location message schemas
     "LocationContent",
     "WhatsAppLocationMessage",
+    # Edit and revoke message schemas
+    "EditContent",
+    "RevokeContent",
+    "WhatsAppLifecycleMessage",
     # Order message schemas
     "OrderProductItem",
     "OrderContent",

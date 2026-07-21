@@ -50,6 +50,7 @@ class MessageSchemaRegistry:
             from .whatsapp.message_types.document import WhatsAppDocumentMessage
             from .whatsapp.message_types.image import WhatsAppImageMessage
             from .whatsapp.message_types.interactive import WhatsAppInteractiveMessage
+            from .whatsapp.message_types.lifecycle import WhatsAppLifecycleMessage
             from .whatsapp.message_types.location import WhatsAppLocationMessage
             from .whatsapp.message_types.order import WhatsAppOrderMessage
             from .whatsapp.message_types.reaction import WhatsAppReactionMessage
@@ -71,6 +72,8 @@ class MessageSchemaRegistry:
                 MessageType.LOCATION: WhatsAppLocationMessage,
                 MessageType.STICKER: WhatsAppStickerMessage,
                 MessageType.SYSTEM: WhatsAppSystemMessage,
+                MessageType.EDIT: WhatsAppLifecycleMessage,
+                MessageType.REVOKE: WhatsAppLifecycleMessage,
                 MessageType.REACTION: WhatsAppReactionMessage,
                 # Additional WhatsApp-specific types (now with proper enum values)
                 MessageType.BUTTON: WhatsAppButtonMessage,

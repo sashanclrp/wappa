@@ -74,6 +74,38 @@ class UserIdUpdateEntry(BaseModel):
     timestamp: str = Field(..., description="Unix timestamp when the webhook was sent")
 
 
+class GroupParticipantIdentity(BaseModel):
+    """Participant identity used by Meta group membership events."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    input: str | None = None
+    wa_id: str | None = None
+    user_id: str | None = None
+    parent_user_id: str | None = None
+    username: str | None = None
+
+
+class GroupParticipantsUpdateEntry(BaseModel):
+    """One group_participants_update event."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    timestamp: int
+    group_id: str
+    type: str
+    request_id: str | None = None
+    initiated_by: str | None = None
+    reason: str | None = None
+    join_request_id: str | None = None
+    wa_id: str | None = None
+    user_id: str | None = None
+    parent_user_id: str | None = None
+    username: str | None = None
+    removed_participants: list[GroupParticipantIdentity] | None = None
+    added_participants: list[GroupParticipantIdentity] | None = None
+
+
 # NOTE: Coexistence account-level events (account_offboarded / account_reconnected)
 # are modeled by ``AccountWebhookValue`` in ``webhook_container.py``, alongside the
 # other strict change-value models. Their value is a flat change ``value`` (not a

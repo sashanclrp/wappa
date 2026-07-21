@@ -16,7 +16,7 @@ from wappa.schemas.core.types import (
     UniversalMessageData,
 )
 from wappa.webhooks.core.base_message import BaseInteractiveMessage, BaseMessageContext
-from wappa.webhooks.whatsapp.base_models import MessageContext
+from wappa.webhooks.whatsapp.base_models import MessageContext, WhatsAppMessageIdentity
 
 
 class ButtonReply(BaseModel):
@@ -78,6 +78,18 @@ class ListReply(BaseModel):
         return v
 
 
+class CallPermissionReply(BaseModel):
+    """User response to a WhatsApp call permission request."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    response: str = Field(..., description="Permission response returned by Meta")
+    expiration_timestamp: str = Field(
+        ..., description="Unix timestamp when the permission response expires"
+    )
+    response_source: str = Field(..., description="Source of the permission response")
+
+
 class InteractiveContent(BaseModel):
     """
     Interactive message content.
@@ -87,7 +99,7 @@ class InteractiveContent(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    type: Literal["button_reply", "list_reply"] = Field(
+    type: Literal["button_reply", "list_reply", "call_permission_reply"] = Field(
         ..., description="Type of interactive reply"
     )
     button_reply: ButtonReply | None = Field(
@@ -95,6 +107,10 @@ class InteractiveContent(BaseModel):
     )
     list_reply: ListReply | None = Field(
         None, description="List reply data (only if type='list_reply')"
+    )
+    call_permission_reply: CallPermissionReply | None = Field(
+        None,
+        description="Call permission reply data",
     )
 
     @model_validator(mode="after")
@@ -110,11 +126,20 @@ class InteractiveContent(BaseModel):
                 raise ValueError("list_reply is required when type='list_reply'")
             if self.button_reply is not None:
                 raise ValueError("button_reply must be None when type='list_reply'")
+        elif self.type == "call_permission_reply":
+            if self.call_permission_reply is None:
+                raise ValueError(
+                    "call_permission_reply is required when type='call_permission_reply'"
+                )
+            if self.button_reply is not None or self.list_reply is not None:
+                raise ValueError(
+                    "button_reply and list_reply must be None for call permission replies"
+                )
 
         return self
 
 
-class WhatsAppInteractiveMessage(BaseInteractiveMessage):
+class WhatsAppInteractiveMessage(WhatsAppMessageIdentity, BaseInteractiveMessage):
     """
     WhatsApp interactive message reply model.
 
@@ -221,6 +246,11 @@ class WhatsAppInteractiveMessage(BaseInteractiveMessage):
         return self.interactive.type == "list_reply"
 
     @property
+    def is_call_permission_reply(self) -> bool:
+        """Check if this is a reply to a call permission request."""
+        return self.interactive.type == "call_permission_reply"
+
+    @property
     def sender_phone(self) -> str:
         """Get the sender's phone number (clean accessor)."""
         return self.from_
@@ -277,6 +307,8 @@ class WhatsAppInteractiveMessage(BaseInteractiveMessage):
             return self.interactive.button_reply.id
         elif self.is_list_reply and self.interactive.list_reply:
             return self.interactive.list_reply.id
+        elif self.is_call_permission_reply and self.interactive.call_permission_reply:
+            return self.interactive.call_permission_reply.response
         return None
 
     def get_selected_option_title(self) -> str | None:
@@ -290,6 +322,8 @@ class WhatsAppInteractiveMessage(BaseInteractiveMessage):
             return self.interactive.button_reply.title
         elif self.is_list_reply and self.interactive.list_reply:
             return self.interactive.list_reply.title
+        elif self.is_call_permission_reply and self.interactive.call_permission_reply:
+            return self.interactive.call_permission_reply.response
         return None
 
     def to_summary_dict(self) -> dict[str, str | bool | int]:
@@ -311,6 +345,7 @@ class WhatsAppInteractiveMessage(BaseInteractiveMessage):
             "selected_option_title": self.get_selected_option_title(),
             "is_button_reply": self.is_button_reply,
             "is_list_reply": self.is_list_reply,
+            "is_call_permission_reply": self.is_call_permission_reply,
         }
 
         # Add type-specific data
@@ -340,12 +375,12 @@ class WhatsAppInteractiveMessage(BaseInteractiveMessage):
     @property
     def conversation_id(self) -> str:
         """Get the conversation/chat identifier."""
-        return self.from_
+        return self.group_id or self.sender_id
 
     @property
     def conversation_type(self) -> ConversationType:
         """Get the type of conversation."""
-        return ConversationType.PRIVATE
+        return ConversationType.GROUP if self.group_id else ConversationType.PRIVATE
 
     def has_context(self) -> bool:
         """Check if this message has context."""
@@ -411,6 +446,8 @@ class WhatsAppInteractiveMessage(BaseInteractiveMessage):
             return InteractiveType.BUTTON_REPLY
         elif self.interactive.type == "list_reply":
             return InteractiveType.LIST_REPLY
+        elif self.interactive.type == "call_permission_reply":
+            return InteractiveType.CALL_PERMISSION_REPLY
         else:
             return InteractiveType.BUTTON_REPLY  # Default fallback
 

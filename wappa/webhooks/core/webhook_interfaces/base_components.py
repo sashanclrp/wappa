@@ -68,6 +68,10 @@ class UserBase(BaseModel):
         default=None,
         description="Business Scoped User ID - stable identifier across phone changes",
     )
+    parent_bsuid: str | None = Field(
+        default=None,
+        description="Parent Business Scoped User ID when enabled for the portfolio",
+    )
     username: str | None = Field(
         default=None,
         description="Platform username (e.g., WhatsApp username)",
@@ -417,4 +421,28 @@ class SystemEventDetail(BaseModel):
     reason: str | None = Field(
         default=None,
         description="Reason for an account status change (account_offboarded)",
+    )
+
+    # Business username updates (Inbox-scoped, no User).
+    username: str | None = Field(default=None, description="Business username")
+    username_status: str | None = Field(
+        default=None,
+        description="Business username status: approved, reserved, or deleted",
+    )
+    display_phone_number: str | None = Field(
+        default=None,
+        description="Business display phone number from the username event",
+    )
+
+    # Group participant updates.
+    group_id: str | None = Field(default=None, description="WhatsApp group ID")
+    group_event_type: str | None = Field(
+        default=None, description="Meta group participant event type"
+    )
+    group_update: dict | None = Field(
+        default=None, description="Typed group update serialized for host handling"
+    )
+    coexistence_payload: dict | None = Field(
+        default=None,
+        description="Typed Meta Coexistence value serialized without field loss",
     )

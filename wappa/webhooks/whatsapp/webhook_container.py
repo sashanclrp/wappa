@@ -19,6 +19,8 @@ from pydantic import (
 from wappa.core.events.field_registry import (
     ACCOUNT_EVENT_FIELDS,
     BUILTIN_WEBHOOK_FIELDS,
+    BUSINESS_USERNAME_EVENT_FIELDS,
+    COEXISTENCE_EVENT_FIELDS,
 )
 from wappa.schemas.core.types import PlatformType, WebhookType
 from wappa.webhooks.core.base_webhook import (
@@ -27,12 +29,22 @@ from wappa.webhooks.core.base_webhook import (
     BaseWebhookMetadata,
 )
 from wappa.webhooks.whatsapp.base_models import WhatsAppContact, WhatsAppMetadata
+from wappa.webhooks.whatsapp.call_events import CallsWebhookValue
+from wappa.webhooks.whatsapp.coexistence_events import (
+    CoexistenceWebhookValue,
+    HistoryWebhookValue,
+    SmbAppStateSyncWebhookValue,
+    SmbMessageEchoesWebhookValue,
+)
 
 # Pre-computed union used by ``is_system_event`` to identify fields that are
 # system events by their field name alone (as opposed to system messages that
 # surface via field="messages" with type="system").
 _DIRECT_SYSTEM_EVENT_FIELDS: frozenset[str] = (
-    frozenset({"user_preferences", "user_id_update"}) | ACCOUNT_EVENT_FIELDS
+    frozenset({"user_preferences", "user_id_update", "group_participants_update"})
+    | ACCOUNT_EVENT_FIELDS
+    | BUSINESS_USERNAME_EVENT_FIELDS
+    | COEXISTENCE_EVENT_FIELDS
 )
 
 
@@ -71,6 +83,9 @@ class WebhookValue(BaseModel):
     user_id_update: list[dict[str, Any]] | None = Field(
         None, description="User BSUID change notifications"
     )
+    groups: list[dict[str, Any]] | None = Field(
+        None, description="WhatsApp group participant updates"
+    )
 
     @model_validator(mode="after")
     def validate_webhook_content(self):
@@ -84,6 +99,7 @@ class WebhookValue(BaseModel):
         has_user_id_update = (
             self.user_id_update is not None and len(self.user_id_update) > 0
         )
+        has_groups = self.groups is not None and len(self.groups) > 0
 
         if not (
             has_messages
@@ -91,23 +107,36 @@ class WebhookValue(BaseModel):
             or has_errors
             or has_user_prefs
             or has_user_id_update
+            or has_groups
         ):
             raise ValueError(
-                "Webhook must contain either messages, statuses, errors, user_preferences, or user_id_update"
+                "Webhook must contain messages, statuses, errors, user preferences, user ID updates, or groups"
             )
 
         # Messages and statuses should not be present together
         if has_messages and has_statuses:
             raise ValueError("Webhook cannot contain both messages and statuses")
 
-        # If we have messages, we should have contacts
-        if has_messages and (self.contacts is None or len(self.contacts) == 0):
+        # User-authored messages carry contacts. Meta system messages do not.
+        has_only_system_messages = has_messages and all(
+            message.get("type") == "system" for message in self.messages or []
+        )
+        if (
+            has_messages
+            and not has_only_system_messages
+            and (self.contacts is None or len(self.contacts) == 0)
+        ):
             raise ValueError("Incoming messages must include contact information")
 
         return self
 
     @field_validator(
-        "messages", "statuses", "errors", "user_preferences", "user_id_update"
+        "messages",
+        "statuses",
+        "errors",
+        "user_preferences",
+        "user_id_update",
+        "groups",
     )
     @classmethod
     def validate_arrays_not_empty(cls, v: list[dict] | None) -> list[dict] | None:
@@ -121,8 +150,7 @@ class CustomWebhookValue(BaseModel):
     """
     Permissive value container for app-registered custom webhook fields.
 
-    Built-in fields (``messages``, ``user_preferences``, ``user_id_update``)
-    use the strict :class:`WebhookValue` model. App-registered fields
+    Built-in fields use strict, field-appropriate models. App-registered fields
     (e.g. ``message_template_status_update``) use this permissive model —
     the framework never imposes a schema; the app's registered parser does
     that downstream in the processor.
@@ -139,11 +167,11 @@ class AccountWebhookValue(BaseModel):
     phone-scoped :class:`WebhookValue` shape, so they get their own typed model
     instead of being forced through the permissive ``CustomWebhookValue`` path.
 
-    ``extra="ignore"`` (not ``forbid``) because these fields are new and Meta may
-    extend the payload; unknown keys are dropped rather than rejected.
+    Unknown keys are rejected so Meta additions produce the same contract-drift
+    signal as every other built-in field.
     """
 
-    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     waba_id: str = Field(..., description="WhatsApp Business Account ID (required)")
     timestamp: int = Field(..., description="Unix timestamp of the event")
@@ -156,15 +184,23 @@ class AccountWebhookValue(BaseModel):
     )
 
 
+class BusinessUsernameWebhookValue(BaseModel):
+    """Strict value for Meta's business_username_updates field."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    display_phone_number: str = Field(..., description="Business display number")
+    username: str | None = Field(None, description="Current business username")
+    status: Literal["approved", "deleted", "reserved"]
+
+
 class WebhookChange(BaseModel):
     """
     Change object describing what changed in the webhook.
 
-    WhatsApp Business webhooks use different field values. Three are handled
-    natively by the framework:
-    - 'messages': incoming messages, status updates, and errors
-    - 'user_preferences': marketing preference changes
-    - 'user_id_update': BSUID change notifications
+    WhatsApp Business webhooks use different field values. Wappa handles its
+    native message, identity, group, Calling, account, and Coexistence fields
+    with typed value models.
 
     Any other field value (e.g. ``message_template_status_update``) is only
     accepted when the app has registered a typed handler for it via
@@ -176,9 +212,14 @@ class WebhookChange(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     field: str = Field(..., description="Webhook field type")
-    value: WebhookValue | AccountWebhookValue | CustomWebhookValue = Field(
-        ..., description="The webhook payload data"
-    )
+    value: (
+        WebhookValue
+        | AccountWebhookValue
+        | BusinessUsernameWebhookValue
+        | CallsWebhookValue
+        | CoexistenceWebhookValue
+        | CustomWebhookValue
+    ) = Field(..., description="The webhook payload data")
 
     @model_validator(mode="before")
     @classmethod
@@ -204,6 +245,30 @@ class WebhookChange(BaseModel):
         if field in ACCOUNT_EVENT_FIELDS:
             if isinstance(raw_value, dict):
                 return {**data, "value": AccountWebhookValue.model_validate(raw_value)}
+            return data
+
+        if field in BUSINESS_USERNAME_EVENT_FIELDS:
+            if isinstance(raw_value, dict):
+                return {
+                    **data,
+                    "value": BusinessUsernameWebhookValue.model_validate(raw_value),
+                }
+            return data
+
+        if field == "calls":
+            if isinstance(raw_value, dict):
+                return {**data, "value": CallsWebhookValue.model_validate(raw_value)}
+            return data
+
+        coexistence_models = {
+            "history": HistoryWebhookValue,
+            "smb_message_echoes": SmbMessageEchoesWebhookValue,
+            "smb_app_state_sync": SmbAppStateSyncWebhookValue,
+        }
+        coexistence_model = coexistence_models.get(field)
+        if coexistence_model is not None:
+            if isinstance(raw_value, dict):
+                return {**data, "value": coexistence_model.model_validate(raw_value)}
             return data
 
         if field in BUILTIN_WEBHOOK_FIELDS:
@@ -237,6 +302,10 @@ class WebhookEntry(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     id: str = Field(..., description="WhatsApp Business Account ID")
+    time: int | None = Field(
+        None,
+        description="Webhook trigger timestamp used by account-scoped fields",
+    )
     changes: list[WebhookChange] = Field(
         ..., description="Array of changes (typically contains one change)"
     )
@@ -338,6 +407,11 @@ class WhatsAppContactAdapter(BaseContact):
         return self._contact.bsuid
 
     @property
+    def parent_bsuid(self) -> str | None:
+        """Get the parent BSUID when the portfolio is enrolled for one."""
+        return self._contact.parent_bsuid
+
+    @property
     def wa_id(self) -> str:
         """Get the WhatsApp numeric user ID / phone number if available."""
         return self._contact.wa_id
@@ -366,6 +440,7 @@ class WhatsAppContactAdapter(BaseContact):
             "whatsapp_data": {
                 "wa_id": self._contact.wa_id,
                 "bsuid": self._contact.bsuid,
+                "parent_bsuid": self.parent_bsuid,
                 "username": self.username,
                 "country_code": self.country_code,
                 "profile": self._contact.profile.model_dump()
@@ -455,6 +530,13 @@ class WhatsAppWebhook(BaseWebhook):
         return False
 
     @property
+    def is_call_event(self) -> bool:
+        """Check if this webhook carries a native WhatsApp Calling event."""
+        return any(
+            change.field == "calls" for entry in self.entry for change in entry.changes
+        )
+
+    @property
     def has_errors(self) -> bool:
         """Check if this webhook contains errors."""
         if not self.entry:
@@ -537,6 +619,16 @@ class WhatsAppWebhook(BaseWebhook):
                     items.extend(updates)
         return items
 
+    def get_raw_group_updates(self) -> list[dict[str, Any]]:
+        """Return group participant update entries."""
+        items: list[dict[str, Any]] = []
+        for entry in self.entry:
+            for change in entry.changes:
+                groups = getattr(change.value, "groups", None)
+                if groups:
+                    items.extend(groups)
+        return items
+
     def get_account_event(self, field_name: str) -> "AccountWebhookValue | None":
         """Return the typed ``value`` of an account-level coexistence event.
 
@@ -549,6 +641,41 @@ class WhatsAppWebhook(BaseWebhook):
             for change in entry.changes:
                 if change.field == field_name and isinstance(
                     change.value, AccountWebhookValue
+                ):
+                    return change.value
+        return None
+
+    def get_business_username_event(self) -> "BusinessUsernameWebhookValue | None":
+        """Return the typed business username update value, when present."""
+        for entry in self.entry:
+            for change in entry.changes:
+                if change.field == "business_username_updates" and isinstance(
+                    change.value, BusinessUsernameWebhookValue
+                ):
+                    return change.value
+        return None
+
+    def get_call_event(self) -> "CallsWebhookValue | None":
+        """Return the typed calls value, when present."""
+        for entry in self.entry:
+            for change in entry.changes:
+                if change.field == "calls" and isinstance(
+                    change.value, CallsWebhookValue
+                ):
+                    return change.value
+        return None
+
+    def get_coexistence_event(self) -> "CoexistenceWebhookValue | None":
+        """Return a typed history, SMB echo, or app-state value."""
+        for entry in self.entry:
+            for change in entry.changes:
+                if change.field in COEXISTENCE_EVENT_FIELDS and isinstance(
+                    change.value,
+                    (
+                        HistoryWebhookValue,
+                        SmbMessageEchoesWebhookValue,
+                        SmbAppStateSyncWebhookValue,
+                    ),
                 ):
                     return change.value
         return None

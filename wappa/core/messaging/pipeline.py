@@ -441,6 +441,23 @@ class MessengerPipeline(IMessenger):
             },
         )
 
+    async def send_contact_request(
+        self,
+        body: str,
+        recipient: str,
+        reply_to_message_id: str | None = None,
+    ) -> MessageResult:
+        return await self._invoke(
+            "send_contact_request",
+            "request_contact_info",
+            recipient,
+            {
+                "body": body,
+                "recipient": recipient,
+                "reply_to_message_id": reply_to_message_id,
+            },
+        )
+
     # ------------------------------------------------------------------ #
     # IMessenger templates.
     # ------------------------------------------------------------------ #

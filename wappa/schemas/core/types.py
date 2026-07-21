@@ -34,6 +34,8 @@ class MessageType(str, Enum):
     STICKER = "sticker"
     REACTION = "reaction"
     SYSTEM = "system"  # System notifications, member joins, etc.
+    EDIT = "edit"  # A user replaced the contents of an earlier message
+    REVOKE = "revoke"  # A user removed an earlier message
     UNSUPPORTED = "unsupported"  # Unsupported message types
 
 
@@ -64,6 +66,7 @@ class InteractiveType(str, Enum):
 
     BUTTON_REPLY = "button_reply"
     LIST_REPLY = "list_reply"
+    CALL_PERMISSION_REPLY = "call_permission_reply"
     QUICK_REPLY = "quick_reply"
     INLINE_KEYBOARD = "inline_keyboard"  # Telegram inline keyboards
     CAROUSEL = "carousel"
@@ -161,6 +164,8 @@ PLATFORM_CAPABILITIES = {
             MessageType.STICKER,
             MessageType.REACTION,
             MessageType.SYSTEM,
+            MessageType.EDIT,
+            MessageType.REVOKE,
             MessageType.UNSUPPORTED,
         },
         "interactive_types": {InteractiveType.BUTTON_REPLY, InteractiveType.LIST_REPLY},

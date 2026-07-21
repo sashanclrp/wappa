@@ -505,6 +505,19 @@ class WhatsAppMessenger(IMessenger):
             reply_to_message_id=reply_to_message_id,
         )
 
+    async def send_contact_request(
+        self,
+        body: str,
+        recipient: str,
+        reply_to_message_id: str | None = None,
+    ) -> MessageResult:
+        """Request a user's phone number through Meta's contact-info flow."""
+        return await self.interactive_handler.send_contact_request(
+            recipient=recipient,
+            body=body,
+            reply_to_message_id=reply_to_message_id,
+        )
+
     # Templates
 
     async def send_text_template(

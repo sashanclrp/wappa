@@ -21,6 +21,7 @@ from .core.base_message import BaseMessage
 from .core.base_webhook import BaseContact, BaseWebhook, BaseWebhookMetadata
 from .core.webhook_interfaces.base_components import InboxBase, SystemEventDetail
 from .core.webhook_interfaces.universal_webhooks import (
+    CallWebhook,
     CustomWebhook,
     ErrorWebhook,
     InboundMessageWebhook,
@@ -44,6 +45,7 @@ from .whatsapp.webhook_container import WhatsAppWebhook
 __all__ = [
     "UniversalWebhook",
     "InboundMessageWebhook",
+    "CallWebhook",
     "StatusWebhook",
     "ErrorWebhook",
     "SystemWebhook",

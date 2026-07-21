@@ -20,7 +20,8 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 |------|-----------|
 | **User** | The end-user/contact inside a platform conversation. A User talks to an Inbox. |
 | `user_id` | The canonical stable user identifier inside Wappa. Prefers BSUID when available; falls back to phone number. Used for cache scoping and state lookups. |
-| **BSUID** | Business Scoped User ID. Meta's stable user identifier (v24.0+) that persists across phone number changes. Format: `^[A-Z]{2}\.[A-Za-z0-9]{1,128}$`. |
+| **BSUID** | Business Scoped User ID. Meta's user identifier scoped to one business portfolio (v24.0+). It survives username changes but Meta regenerates it when the user changes phone number; `user_id_update` carries the previous/current mapping. Format: `CC.<alphanumeric>`. |
+| **Parent BSUID** | Optional enterprise identity for businesses enrolled in a parent BSUID account. It uses `CC.ENT.<alphanumeric>` and can be addressed by Inboxes across the enrolled portfolios. Keep it distinct from the portfolio BSUID. |
 | `phone_number` | The raw E.164 phone number of the user. May change; not stable for identity. Retained for marketing and PII use cases. |
 
 ## Host Integration
@@ -38,6 +39,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **WappaEventHandler** | Abstract base class the Host Application implements. Receives dispatched events with Dispatch Context dependencies (`inbox_id`, `user_id`, `messenger`, `cache_factory`, `db`) already injected. |
 | `process_message(webhook)` | Fires when a User sends a message to an Inbox. Input: `InboundMessageWebhook`. |
 | `process_status(webhook)` | Fires on message delivery status changes (sent, delivered, read, failed). Input: `StatusWebhook`. |
+| `process_call(webhook)` | Fires on WhatsApp Calling connect, terminate, and call-status events. Input: `CallWebhook`. |
 | `process_error(webhook)` | Fires when the platform reports an error. Input: `ErrorWebhook`. |
 | `process_system_webhook(webhook)` | Fires on system events. User-scoped: phone number change, BSUID update, marketing preference change. Account-scoped (Platform Account / WABA, no User): coexistence `account_offboarded` / `account_reconnected`. Input: `SystemWebhook`. |
 | `process_external_event(event)` | Fires when a third-party webhook (MercadoPago, Stripe, CRM) is routed through Wappa. Input: `ExternalEvent`. |

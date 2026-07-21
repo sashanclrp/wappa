@@ -75,15 +75,26 @@ async def test_whatsapp_message_payload_parses_to_pydantic_universal_model() -> 
                 "metadata": _metadata(),
                 "contacts": [
                     {
-                        "profile": {"name": "Sasha Nicolai Canal"},
-                        "wa_id": "573168227670",
+                        "profile": {
+                            "name": "Sasha Nicolai Canal",
+                            "username": "sashanicolai",
+                        },
                         "user_id": "CO.2186878922080769",
+                        "parent_user_id": "CO.ENT.2186878922080769",
                     }
                 ],
                 "messages": [
                     {
                         "from": "573168227670",
                         "from_user_id": "CO.2186878922080769",
+                        "from_parent_user_id": "CO.ENT.2186878922080769",
+                        "group_id": "120363001234567890@g.us",
+                        "context": {
+                            "from": "573168227670",
+                            "from_user_id": "CO.1057044516887193",
+                            "from_parent_user_id": "CO.ENT.1057044516887193",
+                            "id": "wamid.original-message-001",
+                        },
                         "id": "wamid.test-message-001",
                         "timestamp": "1776696189",
                         "text": {"body": "Hola"},
@@ -97,7 +108,60 @@ async def test_whatsapp_message_payload_parses_to_pydantic_universal_model() -> 
     assert isinstance(webhook, InboundMessageWebhook)
     assert isinstance(webhook, BaseModel)
     assert webhook.user.user_id == "CO.2186878922080769"
+    assert webhook.user.phone_number == ""
+    assert webhook.user.parent_bsuid == "CO.ENT.2186878922080769"
+    assert webhook.user.username == "@sashanicolai"
     assert webhook.message.message_type == MessageType.TEXT
+    assert webhook.message.from_parent_bsuid == "CO.ENT.2186878922080769"
+    assert webhook.message.group_id == "120363001234567890@g.us"
+    assert webhook.message.conversation_id == "120363001234567890@g.us"
+    assert webhook.message.conversation_type.value == "group"
+    assert webhook.message.context is not None
+    assert webhook.message.context.from_bsuid == "CO.1057044516887193"
+    assert webhook.message.context.from_parent_bsuid == "CO.ENT.1057044516887193"
+
+
+@pytest.mark.asyncio
+async def test_whatsapp_unknown_context_field_trips_loud_contract_guard(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    processor = WhatsAppWebhookProcessor()
+    payload = _payload(
+        "messages",
+        {
+            "messaging_product": "whatsapp",
+            "metadata": _metadata(),
+            "contacts": [
+                {
+                    "profile": {"name": "Sasha Nicolai Canal"},
+                    "wa_id": "573168227670",
+                    "user_id": "CO.2186878922080769",
+                }
+            ],
+            "messages": [
+                {
+                    "from": "573168227670",
+                    "from_user_id": "CO.2186878922080769",
+                    "context": {
+                        "from": "573168227670",
+                        "future_meta_identifier": "future-value",
+                        "id": "wamid.original-message-001",
+                    },
+                    "id": "wamid.test-message-001",
+                    "timestamp": "1776696189",
+                    "text": {"body": "Hola"},
+                    "type": "text",
+                }
+            ],
+        },
+    )
+
+    with caplog.at_level("CRITICAL"), pytest.raises(ProcessorError):
+        await processor.create_universal_webhook(payload)
+
+    assert "WHATSAPP_WEBHOOK_CONTRACT_DRIFT" in caplog.text
+    assert "error_type=extra_forbidden" in caplog.text
+    assert "context.future_meta_identifier" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -109,13 +173,23 @@ async def test_whatsapp_status_payload_parses_to_pydantic_universal_model() -> N
             {
                 "messaging_product": "whatsapp",
                 "metadata": _metadata(),
+                "contacts": [
+                    {
+                        "profile": {
+                            "name": "Sasha Nicolai Canal",
+                            "username": "sashanicolai",
+                        },
+                        "user_id": "CO.2186878922080769",
+                        "parent_user_id": "CO.ENT.2186878922080769",
+                    }
+                ],
                 "statuses": [
                     {
                         "id": "wamid.test-status-001",
                         "status": "delivered",
                         "timestamp": "1776696189",
-                        "recipient_id": "573168227670",
                         "recipient_user_id": "CO.2186878922080769",
+                        "recipient_parent_user_id": "CO.ENT.2186878922080769",
                     }
                 ],
             },
@@ -125,7 +199,44 @@ async def test_whatsapp_status_payload_parses_to_pydantic_universal_model() -> N
     assert isinstance(webhook, StatusWebhook)
     assert isinstance(webhook, BaseModel)
     assert webhook.user_id == "CO.2186878922080769"
-    assert webhook.recipient_phone_id == "573168227670"
+    assert webhook.recipient_phone_id == ""
+    assert webhook.recipient_parent_bsuid == "CO.ENT.2186878922080769"
+    assert webhook.user is not None
+    assert webhook.user.username == "@sashanicolai"
+    assert webhook.user.parent_bsuid == "CO.ENT.2186878922080769"
+
+
+@pytest.mark.asyncio
+async def test_whatsapp_group_status_exposes_participant_bsuid() -> None:
+    processor = WhatsAppWebhookProcessor()
+    webhook = await processor.create_universal_webhook(
+        _payload(
+            "messages",
+            {
+                "messaging_product": "whatsapp",
+                "metadata": _metadata(),
+                "statuses": [
+                    {
+                        "id": "wamid.test-group-status-001",
+                        "status": "read",
+                        "timestamp": "1776696189",
+                        "recipient_id": "120363001234567890@g.us",
+                        "recipient_type": "group",
+                        "recipient_participant_user_id": "CO.2186878922080769",
+                        "recipient_participant_parent_user_id": (
+                            "CO.ENT.2186878922080769"
+                        ),
+                    }
+                ],
+            },
+        )
+    )
+
+    assert isinstance(webhook, StatusWebhook)
+    assert webhook.recipient_type == "group"
+    assert webhook.user_id == "CO.2186878922080769"
+    assert webhook.recipient_participant_bsuid == "CO.2186878922080769"
+    assert webhook.recipient_participant_parent_bsuid == "CO.ENT.2186878922080769"
 
 
 @pytest.mark.asyncio

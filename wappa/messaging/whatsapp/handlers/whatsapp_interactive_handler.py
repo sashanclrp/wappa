@@ -432,3 +432,37 @@ class WhatsAppInteractiveHandler:
                 inbox_id=self._inbox_id,
                 logger=self.logger,
             )
+
+    async def send_contact_request(
+        self,
+        recipient: str,
+        body: str,
+        reply_to_message_id: str | None = None,
+    ) -> MessageResult:
+        """Ask a username-only user to share their phone number."""
+        try:
+            if not body or len(body) > 4096:
+                return self._validation_error(
+                    "Body text must contain 1 to 4096 characters",
+                    "INVALID_BODY",
+                    recipient,
+                )
+
+            payload = self._build_interactive_payload(
+                recipient=recipient,
+                interactive_data={
+                    "type": "request_contact_info",
+                    "body": {"text": body},
+                    "action": {"name": "request_contact_info"},
+                },
+                reply_to_message_id=reply_to_message_id,
+            )
+            return await self._send_message_payload(payload, recipient)
+        except Exception as e:
+            return handle_whatsapp_error(
+                error=e,
+                operation="send contact information request",
+                recipient=recipient,
+                inbox_id=self._inbox_id,
+                logger=self.logger,
+            )

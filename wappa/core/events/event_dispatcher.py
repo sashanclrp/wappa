@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Any
 
 from wappa.core.logging.logger import get_logger
 from wappa.webhooks import (
+    CallWebhook,
     CustomWebhook,
     ErrorWebhook,
     InboundMessageWebhook,
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
 
 _WEBHOOK_EMOJI = {
     "InboundMessageWebhook": "💬",
+    "CallWebhook": "📞",
     "StatusWebhook": "📊",
     "ErrorWebhook": "🚨",
     "SystemWebhook": "⚙️",
@@ -85,6 +87,8 @@ class WappaEventDispatcher:
                     result = await self._handle_message_webhook(
                         universal_webhook, handler
                     )
+                case CallWebhook():
+                    result = await self._handle_call_webhook(universal_webhook, handler)
                 case StatusWebhook():
                     result = await self._handle_status_webhook(
                         universal_webhook, handler
@@ -186,6 +190,29 @@ class WappaEventDispatcher:
 
         except Exception as e:
             self.logger.error(f"Error in status handler: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "action": "handler_error",
+            }
+
+    async def _handle_call_webhook(
+        self,
+        webhook: "CallWebhook",
+        handler: "WappaEventHandler",
+    ) -> dict[str, Any]:
+        try:
+            await handler.handle_call(webhook)
+            return {
+                "success": True,
+                "action": "call_processed",
+                "call_id": webhook.call_id,
+                "event": webhook.event,
+                "user_id": webhook.user_id,
+                "inbox_id": handler.inbox_id,
+            }
+        except Exception as e:
+            self.logger.error("Error in call handler: %s", e, exc_info=True)
             return {
                 "success": False,
                 "error": str(e),

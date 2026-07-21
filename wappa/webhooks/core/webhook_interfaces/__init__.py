@@ -6,10 +6,11 @@ must adapt to, using WhatsApp as the comprehensive template. The system uses
 5 universal webhook types that work across all platforms:
 
 1. InboundMessageWebhook - All incoming messages from users
-2. StatusWebhook - Message delivery status updates (includes "outgoing" status)
-3. ErrorWebhook - System, app, and account-level errors
-4. SystemWebhook - Platform-level account/identity events (phone changes, BSUID updates, preferences)
-5. CustomWebhook - Framework-defined custom event payload envelope
+2. CallWebhook - Connected, terminated, and call-status events
+3. StatusWebhook - Message delivery status updates (includes "outgoing" status)
+4. ErrorWebhook - System, app, and account-level errors
+5. SystemWebhook - Platform-level account/identity events
+6. CustomWebhook - App-registered custom event payload envelope
 
 Note: "Outgoing message" webhooks are actually status updates that use StatusWebhook.
 
@@ -28,6 +29,7 @@ from .base_components import (
     UserBase,
 )
 from .universal_webhooks import (
+    CallWebhook,
     CustomWebhook,
     ErrorWebhook,
     InboundMessageWebhook,
@@ -50,6 +52,7 @@ __all__ = [
     "SystemEventDetail",
     # Universal webhook interfaces
     "InboundMessageWebhook",
+    "CallWebhook",
     "WhatsAppIncomingWebhookData",
     "StatusWebhook",
     "ErrorWebhook",

@@ -9,6 +9,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from wappa.schemas.core.recipient import looks_like_bsuid
 from wappa.schemas.core.types import (
     ConversationType,
     MessageType,
@@ -16,7 +17,7 @@ from wappa.schemas.core.types import (
     UniversalMessageData,
 )
 from wappa.webhooks.core.base_message import BaseMessage, BaseMessageContext
-from wappa.webhooks.whatsapp.base_models import MessageContext
+from wappa.webhooks.whatsapp.base_models import MessageContext, WhatsAppMessageIdentity
 
 
 class SystemContent(BaseModel):
@@ -31,6 +32,10 @@ class SystemContent(BaseModel):
     user_id: str | None = Field(
         None,
         description="Business Scoped User ID (BSUID) - for user_changed_user_id events",
+    )
+    parent_user_id: str | None = Field(
+        None,
+        description="Parent BSUID for a user_changed_user_id event when enabled",
     )
     type: Literal["user_changed_number", "user_changed_user_id"] = Field(
         ...,
@@ -57,7 +62,7 @@ class SystemContent(BaseModel):
                 raise ValueError("WhatsApp ID must be at least 8 characters")
         return v
 
-    @field_validator("user_id")
+    @field_validator("user_id", "parent_user_id")
     @classmethod
     def validate_user_id(cls, v: str | None) -> str | None:
         """Validate BSUID if present."""
@@ -65,13 +70,14 @@ class SystemContent(BaseModel):
             v = v.strip()
             if not v:
                 return None
-            # BSUID format: user.XXXXXXX...
-            if not v.startswith("user."):
-                raise ValueError("User ID (BSUID) should start with 'user.'")
+            if not looks_like_bsuid(v):
+                raise ValueError(
+                    "User ID must use Meta's CC.<id> or CC.ENT.<id> format"
+                )
         return v
 
 
-class WhatsAppSystemMessage(BaseMessage):
+class WhatsAppSystemMessage(WhatsAppMessageIdentity, BaseMessage):
     """
     WhatsApp system message model.
 
@@ -285,11 +291,11 @@ class WhatsAppSystemMessage(BaseMessage):
 
     @property
     def conversation_id(self) -> str:
-        return self.from_
+        return self.group_id or self.sender_id
 
     @property
     def conversation_type(self) -> ConversationType:
-        return ConversationType.PRIVATE
+        return ConversationType.GROUP if self.group_id else ConversationType.PRIVATE
 
     def has_context(self) -> bool:
         return self.context is not None

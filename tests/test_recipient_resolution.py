@@ -31,6 +31,14 @@ def test_resolve_recipient_routes_bsuid_to_recipient_field() -> None:
     assert looks_like_bsuid("us.13491208655302741918") is True
 
 
+def test_resolve_recipient_routes_parent_bsuid_to_recipient_field() -> None:
+    resolved = resolve_recipient("us.ent.11815799212886844830")
+
+    assert resolved.transport_field == "recipient"
+    assert resolved.transport_value == "US.ENT.11815799212886844830"
+    assert looks_like_bsuid("US.ENT.11815799212886844830") is True
+
+
 def test_apply_recipient_to_payload_replaces_conflicting_fields() -> None:
     payload = {"to": "+123", "recipient": "CO.old", "type": "text"}
 

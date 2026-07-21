@@ -5,11 +5,12 @@ This module defines the universal webhook types that all messaging platforms
 must transform their webhooks into:
 
 1. InboundMessageWebhook - All user-sent messages (text, media, interactive, etc.)
-2. StatusWebhook - Message delivery status updates (sent, delivered, read, failed)
-3. ErrorWebhook - System, app, and account-level errors
-4. SystemWebhook - Platform-level account/identity events (phone changes, BSUID updates, preferences)
+2. CallWebhook - WhatsApp Calling connect, terminate, and status events
+3. StatusWebhook - Message delivery status updates (sent, delivered, read, failed)
+4. ErrorWebhook - System, app, and account-level errors
+5. SystemWebhook - Platform-level account, identity, group, and sync events
 
-These interfaces represent the "universal standard" based on WhatsApp's comprehensive
+These interfaces represent the "universal standard" based on WhatsApp's detailed
 webhook structure. All platforms (Teams, Telegram, Instagram) must adapt to these.
 """
 
@@ -42,6 +43,11 @@ class SystemEventType(str, Enum):
     # Coexistence account-level events (WABA scope, not user scope).
     ACCOUNT_OFFBOARDED = "account_offboarded"
     ACCOUNT_RECONNECTED = "account_reconnected"
+    BUSINESS_USERNAME_UPDATE = "business_username_update"
+    GROUP_PARTICIPANTS_UPDATE = "group_participants_update"
+    HISTORY_SYNC = "history_sync"
+    SMB_MESSAGE_ECHO = "smb_message_echo"
+    SMB_APP_STATE_SYNC = "smb_app_state_sync"
 
 
 class WhatsAppIncomingWebhookData(BaseModel):
@@ -58,6 +64,10 @@ class WhatsAppIncomingWebhookData(BaseModel):
     bsuid: str | None = Field(
         default=None,
         description="Business Scoped User ID if available",
+    )
+    parent_bsuid: str | None = Field(
+        default=None,
+        description="Parent Business Scoped User ID if available",
     )
     username: str | None = Field(
         default=None,
@@ -249,6 +259,41 @@ class InboundMessageWebhook(BaseModel):
         }
 
 
+class CallWebhook(BaseModel):
+    """Universal Model for connected, terminated, and status call events."""
+
+    model_config = ConfigDict(
+        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+    )
+
+    inbox: InboxBase
+    user: UserBase | None = None
+    call_id: str
+    event: str
+    direction: str
+    timestamp: datetime
+    status: str | None = None
+    duration: int | None = None
+    phone_number: str | None = None
+    bsuid: str | None = None
+    parent_bsuid: str | None = None
+    business_opaque_data: str | None = None
+    session: dict | None = None
+    platform: PlatformType
+    webhook_id: str
+    raw_call: dict = Field(default_factory=dict)
+    raw_webhook_data: dict | None = Field(default=None, exclude=True)
+
+    @property
+    def user_id(self) -> str:
+        if self.user:
+            return self.user.user_id
+        return self.bsuid or self.phone_number or ""
+
+    def set_raw_webhook_data(self, raw_data: dict) -> None:
+        self.raw_webhook_data = raw_data
+
+
 class StatusWebhook(BaseModel):
     """
     Universal interface for message delivery status updates.
@@ -283,11 +328,36 @@ class StatusWebhook(BaseModel):
         default=None,
         description="Business Scoped User ID of the recipient - stable identifier",
     )
+    recipient_parent_bsuid: str | None = Field(
+        default=None,
+        description="Parent Business Scoped User ID of the recipient",
+    )
+    user: UserBase | None = Field(
+        default=None,
+        description="Recipient profile supplied in Meta status contacts, when present",
+    )
+    recipient_type: str | None = Field(
+        default=None,
+        description="Recipient type such as group",
+    )
+    recipient_participant_phone_id: str | None = Field(
+        default=None,
+        description="Group participant phone number, when available",
+    )
+    recipient_participant_bsuid: str | None = Field(
+        default=None,
+        description="Group participant BSUID, when available",
+    )
+    recipient_participant_parent_bsuid: str | None = Field(
+        default=None,
+        description="Group participant parent BSUID, when available",
+    )
     user_id: str | None = Field(
         default=None,
         description=(
             "Canonical domain identifier for the recipient. Populated by the "
-            "webhook pipeline: defaults to `recipient_id` (BSUID > phone), and "
+            "webhook pipeline: uses the participant BSUID or phone for group "
+            "delivery events, otherwise `recipient_id` (BSUID > phone), and "
             "may be enriched via persistence lookup when Meta sends only a "
             "wa_id but a canonical user exists in the store. Use this as the "
             "state/cache key in status handlers."
@@ -528,6 +598,7 @@ class SystemWebhook(BaseModel):
     - Phone number changes (user_changed_number)
     - BSUID changes (user_changed_user_id, user_id_update)
     - Marketing preference changes (user_preferences)
+    - Group, business username, account, and Coexistence sync events
 
     All platforms must transform their system webhooks to this format.
     """
@@ -664,5 +735,10 @@ class CustomWebhook(BaseModel):
 
 # Type union for all universal webhook interfaces
 UniversalWebhook = (
-    InboundMessageWebhook | StatusWebhook | ErrorWebhook | SystemWebhook | CustomWebhook
+    InboundMessageWebhook
+    | CallWebhook
+    | StatusWebhook
+    | ErrorWebhook
+    | SystemWebhook
+    | CustomWebhook
 )

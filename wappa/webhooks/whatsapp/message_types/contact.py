@@ -16,7 +16,11 @@ from wappa.schemas.core.types import (
     UniversalMessageData,
 )
 from wappa.webhooks.core.base_message import BaseContactMessage, BaseMessageContext
-from wappa.webhooks.whatsapp.base_models import AdReferral, MessageContext
+from wappa.webhooks.whatsapp.base_models import (
+    AdReferral,
+    MessageContext,
+    WhatsAppMessageIdentity,
+)
 
 
 class ContactAddress(BaseModel):
@@ -149,7 +153,10 @@ class ContactInfo(BaseModel):
     emails: list[ContactEmail] | None = Field(
         None, description="List of contact emails"
     )
-    name: ContactName = Field(..., description="Contact name information")
+    name: ContactName | None = Field(
+        None,
+        description="Contact name information; omitted by contact_request webhooks",
+    )
     org: ContactOrganization | None = Field(
         None, description="Contact organization information"
     )
@@ -157,9 +164,17 @@ class ContactInfo(BaseModel):
         None, description="List of contact phone numbers"
     )
     urls: list[ContactUrl] | None = Field(None, description="List of contact URLs")
+    vcard: str | None = Field(
+        None,
+        description="vCard payload when a user shares a contact directly",
+    )
+    origin: Literal["contact_request", "other"] | None = Field(
+        None,
+        description="How the contact information was shared",
+    )
 
 
-class WhatsAppContactMessage(BaseContactMessage):
+class WhatsAppContactMessage(WhatsAppMessageIdentity, BaseContactMessage):
     """
     WhatsApp contact message model.
 
@@ -285,7 +300,11 @@ class WhatsAppContactMessage(BaseContactMessage):
 
     def get_contact_names(self) -> list[str]:
         """Get a list of all contact formatted names."""
-        return [contact.name.formatted_name for contact in self.contacts]
+        return [
+            contact.name.formatted_name
+            for contact in self.contacts
+            if contact.name is not None
+        ]
 
     def get_whatsapp_contacts(self) -> list[ContactInfo]:
         """Get contacts that have WhatsApp numbers."""
@@ -381,11 +400,11 @@ class WhatsAppContactMessage(BaseContactMessage):
 
     @property
     def conversation_id(self) -> str:
-        return self.from_
+        return self.group_id or self.sender_id
 
     @property
     def conversation_type(self) -> ConversationType:
-        return ConversationType.PRIVATE
+        return ConversationType.GROUP if self.group_id else ConversationType.PRIVATE
 
     def has_context(self) -> bool:
         return self.context is not None
@@ -408,7 +427,7 @@ class WhatsAppContactMessage(BaseContactMessage):
             "has_context": self.has_context(),
             "contact_count": self.contact_count,
             "contact_names": self.get_contact_names(),
-            "primary_contact_name": self.get_primary_contact().name.formatted_name,
+            "primary_contact_name": self.contact_name,
             "whatsapp_data": {
                 "whatsapp_id": self.id,
                 "from": self.from_,
@@ -441,7 +460,7 @@ class WhatsAppContactMessage(BaseContactMessage):
     @property
     def contact_name(self) -> str:
         """Get the primary contact's name (first contact in the list)."""
-        if self.contacts:
+        if self.contacts and self.contacts[0].name:
             return self.contacts[0].name.formatted_name
         return "Unknown Contact"
 

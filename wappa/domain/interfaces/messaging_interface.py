@@ -126,6 +126,17 @@ class IMessenger(ABC):
         reply_to_message_id: str | None = None,
     ) -> MessageResult: ...
 
+    async def send_contact_request(
+        self,
+        body: str,
+        recipient: str,
+        reply_to_message_id: str | None = None,
+    ) -> MessageResult:
+        """Request contact information when supported by the Platform."""
+        raise NotImplementedError(
+            f"{self.platform.value} does not support contact information requests"
+        )
+
     # Templates
     @abstractmethod
     async def send_text_template(

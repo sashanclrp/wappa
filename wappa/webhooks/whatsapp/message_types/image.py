@@ -16,7 +16,11 @@ from wappa.schemas.core.types import (
     UniversalMessageData,
 )
 from wappa.webhooks.core.base_message import BaseImageMessage, BaseMessageContext
-from wappa.webhooks.whatsapp.base_models import AdReferral, MessageContext
+from wappa.webhooks.whatsapp.base_models import (
+    AdReferral,
+    MessageContext,
+    WhatsAppMessageIdentity,
+)
 
 
 class ImageContent(BaseModel):
@@ -79,7 +83,7 @@ class ImageContent(BaseModel):
         return v
 
 
-class WhatsAppImageMessage(BaseImageMessage):
+class WhatsAppImageMessage(WhatsAppMessageIdentity, BaseImageMessage):
     """
     WhatsApp image message model.
 
@@ -333,12 +337,12 @@ class WhatsAppImageMessage(BaseImageMessage):
     @property
     def conversation_id(self) -> str:
         """Get the conversation/chat identifier."""
-        return self.from_
+        return self.group_id or self.sender_id
 
     @property
     def conversation_type(self) -> ConversationType:
         """Get the type of conversation."""
-        return ConversationType.PRIVATE
+        return ConversationType.GROUP if self.group_id else ConversationType.PRIVATE
 
     def has_context(self) -> bool:
         """Check if this message has context."""

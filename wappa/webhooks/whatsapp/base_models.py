@@ -57,7 +57,10 @@ class ContactProfile(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    name: str = Field(..., description="WhatsApp user's display name")
+    name: str | None = Field(
+        None,
+        description="WhatsApp user's display name; omitted in some call webhooks",
+    )
     username: str | None = Field(
         None,
         description="WhatsApp username (e.g., @username) if user has enabled username feature",
@@ -68,8 +71,10 @@ class ContactProfile(BaseModel):
 
     @field_validator("name")
     @classmethod
-    def validate_name(cls, v: str) -> str:
+    def validate_name(cls, v: str | None) -> str | None:
         """Validate user name is not empty."""
+        if v is None:
+            return None
         if not v.strip():
             raise ValueError("Contact name cannot be empty")
         return v.strip()
@@ -111,6 +116,11 @@ class WhatsAppContact(BaseModel):
         None,
         alias="user_id",
         description="Business Scoped User ID (BSUID) - stable identifier from webhook",
+    )
+    parent_bsuid: str | None = Field(
+        None,
+        alias="parent_user_id",
+        description="Parent BSUID for businesses enrolled in a parent BSUID account",
     )
     profile: ContactProfile | None = Field(
         None,
@@ -189,6 +199,16 @@ class MessageContext(BaseModel):
     from_: str | None = Field(
         None, alias="from", description="Original message sender (for replies)"
     )
+    from_bsuid: str | None = Field(
+        None,
+        alias="from_user_id",
+        description="Business Scoped User ID (BSUID) of the original sender",
+    )
+    from_parent_bsuid: str | None = Field(
+        None,
+        alias="from_parent_user_id",
+        description="Parent BSUID of the original sender when enabled",
+    )
     id: str | None = Field(
         None, description="ID of the original message being replied to or referenced"
     )
@@ -213,6 +233,22 @@ class MessageContext(BaseModel):
         if v is not None and not v.strip():
             raise ValueError("Message ID cannot be empty string")
         return v
+
+
+class WhatsAppMessageIdentity(BaseModel):
+    """Identity companions Meta adds to every incoming message object."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    from_parent_bsuid: str | None = Field(
+        None,
+        alias="from_parent_user_id",
+        description="Parent BSUID of the sender when enabled",
+    )
+    group_id: str | None = Field(
+        None,
+        description="WhatsApp group ID for a message received in a group",
+    )
 
 
 class WelcomeMessage(BaseModel):

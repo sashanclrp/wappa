@@ -16,7 +16,11 @@ from wappa.schemas.core.types import (
     UniversalMessageData,
 )
 from wappa.webhooks.core.base_message import BaseMessageContext, BaseTextMessage
-from wappa.webhooks.whatsapp.base_models import AdReferral, MessageContext
+from wappa.webhooks.whatsapp.base_models import (
+    AdReferral,
+    MessageContext,
+    WhatsAppMessageIdentity,
+)
 
 
 class TextContent(BaseModel):
@@ -59,7 +63,9 @@ class WhatsAppMessageContext(BaseMessageContext):
     @property
     def original_sender_id(self) -> str | None:
         """Get the sender ID of the original message."""
-        return self._context.from_ if self._context else None
+        if not self._context:
+            return None
+        return self._context.from_bsuid or self._context.from_
 
     @property
     def is_reply(self) -> bool:
@@ -93,6 +99,9 @@ class WhatsAppMessageContext(BaseMessageContext):
             "is_reply": self.is_reply,
             "is_forward": self.is_forward,
             "whatsapp_data": {
+                "original_sender_phone": self._context.from_,
+                "original_sender_bsuid": self._context.from_bsuid,
+                "original_sender_parent_bsuid": self._context.from_parent_bsuid,
                 "forwarded": self._context.forwarded,
                 "frequently_forwarded": self._context.frequently_forwarded,
                 "referred_product": self._context.referred_product.model_dump()
@@ -102,7 +111,7 @@ class WhatsAppMessageContext(BaseMessageContext):
         }
 
 
-class WhatsAppTextMessage(BaseTextMessage):
+class WhatsAppTextMessage(WhatsAppMessageIdentity, BaseTextMessage):
     """
     WhatsApp text message model.
 
@@ -364,12 +373,12 @@ class WhatsAppTextMessage(BaseTextMessage):
     def conversation_id(self) -> str:
         """Get the conversation/chat identifier."""
         # For WhatsApp, use sender ID as conversation ID for 1-on-1 chats
-        return self.from_
+        return self.group_id or self.sender_id
 
     @property
     def conversation_type(self) -> ConversationType:
         """Get the type of conversation."""
-        return ConversationType.PRIVATE  # WhatsApp messages are typically private
+        return ConversationType.GROUP if self.group_id else ConversationType.PRIVATE
 
     def has_context(self) -> bool:
         """Check if this message has context (reply, forward, etc.)."""

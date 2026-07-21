@@ -5,6 +5,44 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.0] - 2026-07-21
+
+Updates Wappa's WhatsApp identity contract for Meta's 2026 BSUID and username
+rollout. The production trigger, exact payload changes, host migration work,
+Meta restrictions, and API-family boundaries are recorded in
+[META-CHANGELOGS.md](META-CHANGELOGS.md#2026-07-21-bsuids-usernames-and-optional-phone-numbers).
+
+### Added
+- Parent BSUID and username-only webhook coverage for inbound messages,
+  reply contexts, contacts, statuses, group participant statuses, and system
+  identity events.
+- Parent BSUID outbound routing through Meta's `recipient` field.
+- `WhatsAppMessenger.send_contact_request()` and parsing for the returned
+  contact `origin` / `vcard` fields.
+- Critical `WHATSAPP_WEBHOOK_CONTRACT_DRIFT` log events for strict
+  `extra_forbidden` failures, with field paths and no payload values.
+- Native typed webhook coverage for business username changes, group
+  participants, Calling, Coexistence history, SMB message echoes, SMB app-state
+  sync, and consumer message edits and revokes.
+- `CallWebhook` and the optional `WappaEventHandler.process_call()` hook.
+
+### Fixed
+- `MessageContext` now accepts Meta's `context.from_user_id`; this was the
+  missing field that caused production webhook retries and dropped messages.
+- System message webhooks no longer require a `contacts` array, matching Meta's
+  `user_changed_user_id` shape.
+
+### Changed
+- Phone identifiers remain optional attributes. Canonical user and recipient
+  accessors prefer BSUIDs when Meta supplies them.
+- Built-in webhook models keep `extra="forbid"`. Unknown Meta fields still
+  return `HTTP 400`; operators must alert on the drift signature above.
+- `AccountWebhookValue` now uses `extra="forbid"`, replacing the narrow
+  forward-compatibility exception introduced in 0.20.0.
+- Coexistence history, echo, and app-state values dispatch as `SystemWebhook`
+  events with their typed payload retained in
+  `event_detail.coexistence_payload`.
+
 ## [0.21.3] - 2026-07-05
 
 Hardens the PostgreSQL session manager against a fresh-connection hang. When a brand-new asyncpg connection could not be established — a WSL2/dev DNS blip, an unroutable or stalled host — the request hung on asyncpg's ~60s default connect deadline, and the transient failure surfaced mid-handler where retry is unsafe. Both are now bounded and recoverable, without touching the non-retrying query/transaction invariant introduced in 0.21.0.

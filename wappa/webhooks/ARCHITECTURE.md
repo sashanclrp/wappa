@@ -3,13 +3,16 @@
 ## Responsibilities
 
 - Parse and validate raw HTTP payloads from messaging platforms into typed Pydantic models.
-- Produce `UniversalWebhook` instances (`InboundMessageWebhook`, `StatusWebhook`,
-  `ErrorWebhook`, `SystemWebhook`, `CustomWebhook`) for downstream dispatch.
+- Produce `UniversalWebhook` instances (`InboundMessageWebhook`, `CallWebhook`,
+  `StatusWebhook`, `ErrorWebhook`, `SystemWebhook`, `CustomWebhook`) for downstream dispatch.
 - Validate the platform payload's inbox identifier against the URL `inbox_id` when
   the platform provides one.
 - Own every inbound webhook Pydantic schema, including platform payload schemas
   and Universal Model forms.
 - Gate unknown Meta `change.field` values against a runtime registry; reject unregistered fields.
+- Emit the stable critical-log event `WHATSAPP_WEBHOOK_CONTRACT_DRIFT` when a
+  strict built-in Meta schema rejects an `extra_forbidden` field. Deployments
+  must alert on this event so deliberate contract rejection is operationally loud.
 - Expose platform-agnostic inspection (`is_incoming_message`, `is_status_update`, etc.)
   through the `BaseWebhook` interface.
 - Register and look up per-platform, per-message-type schema classes.
@@ -42,8 +45,8 @@ wappa/webhooks/
 │   └── webhook_interfaces/
 │       ├── base_components.py  # InboxBase, UserBase, BusinessContextBase, ForwardContextBase,
 │       │                       # AdReferralBase, ConversationBase, ErrorDetailBase, SystemEventDetail
-│       └── universal_webhooks.py  # InboundMessageWebhook, StatusWebhook, ErrorWebhook,
-│                                  # SystemWebhook, CustomWebhook, UniversalWebhook union
+│       └── universal_webhooks.py  # InboundMessageWebhook, CallWebhook, StatusWebhook,
+│                                  # ErrorWebhook, SystemWebhook, CustomWebhook, union
 │
 └── whatsapp/
     ├── base_models.py          # WhatsAppMetadata, WhatsAppContact, ContactProfile,
@@ -53,6 +56,8 @@ wappa/webhooks/
     │                           # CustomWebhookValue, ACCOUNT_EVENT_FIELDS,
     │                           # WhatsAppContactAdapter, WhatsAppWebhookMetadata
     ├── status_models.py        # WhatsApp status update Pydantic models
+    ├── call_events.py          # WhatsApp Calling connect/terminate/status models
+    ├── coexistence_events.py   # History, SMB echo, and app-state sync models
     ├── system_events.py        # user_preferences and user_id_update event models
     ├── validators.py           # WhatsApp-specific field validators
     └── message_types/
@@ -69,6 +74,7 @@ wappa/webhooks/
         ├── button.py           # WhatsAppButtonMessage (template quick-reply)
         ├── order.py            # WhatsAppOrderMessage
         ├── system.py           # WhatsAppSystemMessage (system message type within messages field)
+        ├── lifecycle.py        # WhatsApp edit and revoke message types
         ├── unsupported.py      # WhatsAppUnsupportedMessage
         └── errors.py           # WhatsApp message-level error models
 ```
@@ -81,9 +87,10 @@ wappa/webhooks/
 | `WhatsAppWebhook` | Concrete `BaseWebhook` for Meta's `whatsapp_business_account` envelope. Owns routing between built-in and custom field paths via `WebhookChange._route_field`. |
 | `WebhookChange` | Routes `change.field` to `WebhookValue` (strict) or `CustomWebhookValue` (permissive). Rejects unknown unregistered fields at Pydantic validation time. |
 | `InboundMessageWebhook` | Canonical Universal Webhook Schema for user→business messages. Carries `InboxBase`, `UserBase`, and a `BaseMessage` subclass. |
+| `CallWebhook` | Universal form for WhatsApp Calling events; dispatches to `WappaEventHandler.process_call()`. |
 | `StatusWebhook` | Universal outbound model for delivery status events. `user_id` field is populated by the processors layer (BSUID > phone fallback). |
 | `SchemaFactory` | Singleton (`schema_factory`). Entry point for creating platform-specific containers (`create_webhook_instance`) and per-type messages (`create_message_instance`). Delegates universal webhook assembly to `wappa/processors/`. |
-| `MessageSchemaRegistry` | Holds `{PlatformType: {MessageType: BaseMessage subclass}}`. Pre-loaded with all 14 WhatsApp message types at startup. |
+| `MessageSchemaRegistry` | Holds `{PlatformType: {MessageType: BaseMessage subclass}}`. Pre-loaded with Wappa's WhatsApp message types at startup. |
 
 ## Relationship to `wappa/schemas`
 
@@ -111,10 +118,15 @@ forms under `wappa/schemas`.
   app-registered custom fields use `CustomWebhookValue` (extra fields allowed). The gate lives
   in `WebhookChange._route_field` using Pydantic's `ValidationInfo` context. There are two
   strict built-in shapes: phone-scoped fields (`messages`, `user_preferences`,
-  `user_id_update`) use `WebhookValue`; account-scoped coexistence fields (the
+  `user_id_update`) use `WebhookValue`; Calling and Coexistence sync fields use
+  field-specific typed value models; account-scoped coexistence fields (the
   `ACCOUNT_EVENT_FIELDS` set: `account_offboarded`, `account_reconnected`) carry a flat,
   WABA-scoped value with no `metadata`, so they use the strict `AccountWebhookValue` model
   instead. Built-in fields never fall through to the permissive path.
+- **Contract-drift tripwire**: Known built-in payloads retain `extra="forbid"`.
+  A rejected extra field emits `WHATSAPP_WEBHOOK_CONTRACT_DRIFT` at critical
+  level with field paths but no payload values. Production log aggregation must
+  page the owning team on this signature.
 
 ## Data Flow
 
@@ -125,7 +137,7 @@ HTTP POST (raw JSON)
   wappa/api/ route handler
         │  model_validate(payload, context={"field_registry": ...})
         ▼
-  WhatsAppWebhook          ← WebhookEntry → WebhookChange → WebhookValue | AccountWebhookValue | CustomWebhookValue
+  WhatsAppWebhook          ← WebhookEntry → WebhookChange → typed built-in value | CustomWebhookValue
         │
         │  webhook.is_incoming_message / .is_status_update / .is_system_event / .is_custom_field
         ▼

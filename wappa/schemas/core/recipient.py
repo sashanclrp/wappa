@@ -279,11 +279,22 @@ ISO_ALPHA2_CODES = frozenset(
 )
 
 BSUID_PATTERN = re.compile(
-    r"^(?P<country_code>[A-Z]{2})\.(?P<body>[A-Za-z0-9]{1,128})$",
+    r"^(?P<country_code>[A-Z]{2})\.(?:(?P<enterprise>ENT)\.)?"
+    r"(?P<body>[A-Za-z0-9]{1,128})$",
     re.IGNORECASE,
 )
 PHONE_SANITIZE_PATTERN = re.compile(r"[\s\-\(\)]")
 PHONE_PATTERN = re.compile(r"^\+?[1-9]\d{6,20}$")
+
+
+def _normalize_bsuid(value: str) -> str:
+    """Normalize the country and optional enterprise marker."""
+    normalized = value.strip()
+    if len(normalized) >= 2:
+        normalized = normalized[:2].upper() + normalized[2:]
+    if normalized[2:7].lower() == ".ent.":
+        normalized = normalized[:3] + "ENT" + normalized[6:]
+    return normalized
 
 
 class ResolvedRecipient(BaseModel):
@@ -315,8 +326,7 @@ class ResolvedRecipient(BaseModel):
         if value is None:
             return value
 
-        stripped = value.strip()
-        normalized = stripped[:2].upper() + stripped[2:]
+        normalized = _normalize_bsuid(value)
         match = BSUID_PATTERN.fullmatch(normalized)
         if match is None:
             raise ValueError(f"Invalid BSUID format: {value}")
@@ -351,8 +361,7 @@ class ResolvedRecipient(BaseModel):
 
 def looks_like_bsuid(value: str) -> bool:
     """Return True when the identifier matches the BSUID public shape."""
-    stripped = value.strip()
-    normalized = stripped[:2].upper() + stripped[2:] if len(stripped) >= 2 else stripped
+    normalized = _normalize_bsuid(value)
     match = BSUID_PATTERN.fullmatch(normalized)
     return bool(match and match.group("country_code").upper() in ISO_ALPHA2_CODES)
 

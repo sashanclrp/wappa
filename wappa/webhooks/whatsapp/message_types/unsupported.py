@@ -18,13 +18,17 @@ from wappa.schemas.core.types import (
     UniversalMessageData,
 )
 from wappa.webhooks.core.base_message import BaseMessage, BaseMessageContext
-from wappa.webhooks.whatsapp.base_models import MessageContext, MessageError
+from wappa.webhooks.whatsapp.base_models import (
+    MessageContext,
+    MessageError,
+    WhatsAppMessageIdentity,
+)
 
 # WhatsApp error code for unknown/unsupported message subtypes.
 _UNKNOWN_TYPE_ERROR_CODE = 131051
 
 
-class WhatsAppUnsupportedMessage(BaseMessage):
+class WhatsAppUnsupportedMessage(WhatsAppMessageIdentity, BaseMessage):
     """
     WhatsApp unsupported message model.
 
@@ -168,11 +172,11 @@ class WhatsAppUnsupportedMessage(BaseMessage):
 
     @property
     def conversation_id(self) -> str:
-        return self.from_
+        return self.group_id or self.sender_id
 
     @property
     def conversation_type(self) -> ConversationType:
-        return ConversationType.PRIVATE
+        return ConversationType.GROUP if self.group_id else ConversationType.PRIVATE
 
     def has_context(self) -> bool:
         return self.context is not None

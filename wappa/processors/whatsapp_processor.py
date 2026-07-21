@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from wappa.webhooks.core.webhook_interfaces import (
         AdReferralBase,
         BusinessContextBase,
+        CallWebhook,
         ConversationBase,
         CustomWebhook,
         ErrorDetailBase,
@@ -60,6 +61,8 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 MessageType.STICKER,
                 MessageType.REACTION,
                 MessageType.SYSTEM,
+                MessageType.EDIT,
+                MessageType.REVOKE,
                 # WhatsApp-specific types mapped to closest standard types
                 MessageType("button"),  # Interactive button responses
                 MessageType("order"),  # Product orders
@@ -87,6 +90,19 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         """Attach (or clear) the app-supplied custom webhook field registry."""
         self._field_registry = registry
 
+    def _log_contract_drift(self, error: ValidationError) -> None:
+        """Emit a stable, page-worthy signal for strict Meta schema drift."""
+        extra_fields = [
+            ".".join(str(part) for part in item["loc"])
+            for item in error.errors(include_input=False)
+            if item["type"] == "extra_forbidden"
+        ]
+        if extra_fields:
+            self.logger.critical(
+                "WHATSAPP_WEBHOOK_CONTRACT_DRIFT error_type=extra_forbidden fields=%s",
+                ",".join(extra_fields),
+            )
+
     def _register_message_handlers(self) -> None:
         self.register_message_handler("text", self._create_text_message)
         self.register_message_handler("interactive", self._create_interactive_message)
@@ -102,6 +118,8 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         self.register_message_handler("reaction", self._create_reaction_message)
         self.register_message_handler("button", self._create_button_message)
         self.register_message_handler("order", self._create_order_message)
+        self.register_message_handler("edit", self._create_lifecycle_message)
+        self.register_message_handler("revoke", self._create_lifecycle_message)
 
     def validate_webhook_signature(
         self, payload: bytes, signature: str, **kwargs
@@ -151,6 +169,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             return webhook
 
         except ValidationError as e:
+            self._log_contract_drift(e)
             error_msg = f"Failed to parse WhatsApp webhook structure: {e}"
             self.logger.error(error_msg)
             raise ValueError(error_msg) from e
@@ -292,6 +311,15 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
         return WhatsAppOrderMessage.model_validate(message_data)
 
+    def _create_lifecycle_message(
+        self, message_data: dict[str, Any], **kwargs
+    ) -> BaseMessage:
+        from wappa.webhooks.whatsapp.message_types.lifecycle import (
+            WhatsAppLifecycleMessage,
+        )
+
+        return WhatsAppLifecycleMessage.model_validate(message_data)
+
     # ===== Universal Webhook Interface Creation Methods =====
 
     async def create_universal_webhook(
@@ -307,6 +335,10 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             # messages (type=="system") arrive in the messages field.
             if webhook.is_system_event:
                 universal_webhook = await self._create_system_webhook(
+                    webhook, inbox_base, **kwargs
+                )
+            elif webhook.is_call_event:
+                universal_webhook = await self._create_call_webhook(
                     webhook, inbox_base, **kwargs
                 )
             elif webhook.is_incoming_message:
@@ -357,6 +389,8 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             return universal_webhook
 
         except Exception as e:
+            if isinstance(e, ValidationError):
+                self._log_contract_drift(e)
             self.logger.error(
                 "Failed to create universal webhook: %s", e, exc_info=True
             )
@@ -437,6 +471,82 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             webhook_id=webhook.get_webhook_id(),
         )
 
+    async def _create_call_webhook(
+        self, webhook: BaseWebhook, inbox_base: "InboxBase", **kwargs
+    ) -> "CallWebhook":
+        from wappa.webhooks.core.webhook_interfaces import CallWebhook
+
+        value = webhook.get_call_event()
+        if value is None:
+            raise ProcessorError(
+                "No calls value found in calls webhook",
+                ErrorCode.PROCESSING_ERROR,
+                PlatformType.WHATSAPP,
+            )
+
+        if value.calls:
+            call = value.calls[0]
+            if call.direction == "USER_INITIATED":
+                phone_number = call.from_
+                bsuid = call.from_user_id
+                parent_bsuid = call.from_parent_user_id
+            else:
+                phone_number = call.to
+                bsuid = call.to_user_id
+                parent_bsuid = call.to_parent_user_id
+            event = call.event
+            direction = call.direction
+            status = call.status
+            duration = call.duration
+            business_opaque_data = call.biz_opaque_callback_data
+            session = call.session.model_dump() if call.session else None
+            raw_call = call.model_dump(by_alias=True)
+            call_id = call.id
+            timestamp = call.timestamp
+        elif value.statuses:
+            call_status = value.statuses[0]
+            phone_number = call_status.recipient_id
+            bsuid = call_status.recipient_user_id
+            parent_bsuid = call_status.recipient_parent_user_id
+            event = "status"
+            direction = "BUSINESS_INITIATED"
+            status = call_status.status
+            duration = None
+            business_opaque_data = call_status.biz_opaque_callback_data
+            session = None
+            raw_call = call_status.model_dump()
+            call_id = call_status.id
+            timestamp = call_status.timestamp
+        else:
+            raise ProcessorError(
+                "Calls webhook contains neither calls nor statuses",
+                ErrorCode.PROCESSING_ERROR,
+                PlatformType.WHATSAPP,
+            )
+
+        canonical_user_id = bsuid or phone_number or ""
+        user = self._create_user_base_from_contacts(webhook, canonical_user_id)
+        user.parent_bsuid = parent_bsuid or user.parent_bsuid
+
+        return CallWebhook(
+            inbox=inbox_base,
+            user=user if user.user_id else None,
+            call_id=call_id,
+            event=event,
+            direction=direction,
+            timestamp=datetime.fromtimestamp(int(timestamp), tz=UTC),
+            status=status,
+            duration=duration,
+            phone_number=phone_number,
+            bsuid=bsuid,
+            parent_bsuid=parent_bsuid,
+            business_opaque_data=business_opaque_data,
+            session=session,
+            platform=PlatformType.WHATSAPP,
+            webhook_id=webhook.get_webhook_id(),
+            raw_call=raw_call,
+        )
+
     async def _create_status_webhook(
         self, webhook: BaseWebhook, inbox_base: "InboxBase", **kwargs
     ) -> "StatusWebhook":
@@ -460,11 +570,19 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
         recipient_phone_id = getattr(status, "wa_recipient_id", "")
         recipient_bsuid = getattr(status, "recipient_bsuid", None)
+        recipient_parent_bsuid = getattr(status, "recipient_parent_bsuid", None)
         # Default canonical user_id to BSUID when available, else phone. The
         # webhook controller performs a best-effort phone → BSUID lookup when
         # BSUID is absent and persistence is configured.
+        participant_phone_id = getattr(status, "recipient_participant_id", None)
+        participant_bsuid = getattr(status, "recipient_participant_bsuid", None)
         bsuid_clean = recipient_bsuid.strip() if recipient_bsuid else ""
-        canonical_user_id = bsuid_clean or recipient_phone_id or None
+        if getattr(status, "recipient_type", None) == "group":
+            canonical_user_id = participant_bsuid or participant_phone_id or None
+            contact_identity = canonical_user_id or recipient_phone_id or ""
+        else:
+            canonical_user_id = bsuid_clean or recipient_phone_id or None
+            contact_identity = status.recipient_id
 
         return StatusWebhook(
             inbox=inbox_base,
@@ -472,6 +590,18 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             status=getattr(status, "status", "unknown"),
             recipient_phone_id=recipient_phone_id,
             recipient_bsuid=recipient_bsuid,
+            recipient_parent_bsuid=recipient_parent_bsuid,
+            user=self._create_status_user_from_contacts(webhook, contact_identity),
+            recipient_type=getattr(status, "recipient_type", None),
+            recipient_participant_phone_id=getattr(
+                status, "recipient_participant_id", None
+            ),
+            recipient_participant_bsuid=getattr(
+                status, "recipient_participant_bsuid", None
+            ),
+            recipient_participant_parent_bsuid=getattr(
+                status, "recipient_participant_parent_bsuid", None
+            ),
             user_id=canonical_user_id,
             timestamp=datetime.fromtimestamp(getattr(status, "timestamp", 0)),
             conversation=conversation,
@@ -578,7 +708,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     async def _create_system_webhook(
         self, webhook: BaseWebhook, inbox_base: "InboxBase", **kwargs
     ) -> "SystemWebhook":
-        # Handles three source types:
+        # Handles direct fields and system messages carried by messages[].
         # - field: "user_preferences"           → MARKETING_PREFERENCE
         # - field: "user_id_update"             → USER_ID_CHANGE
         # - field: "messages" (type=="system")  → NUMBER_CHANGE or USER_ID_CHANGE
@@ -674,6 +804,137 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 )
                 event_timestamp = datetime.fromtimestamp(account.timestamp, tz=UTC)
 
+            case "business_username_updates":
+                username_event = webhook.get_business_username_event()
+                if username_event is None:
+                    raise ProcessorError(
+                        "No business_username_updates value found in system webhook",
+                        ErrorCode.PROCESSING_ERROR,
+                        PlatformType.WHATSAPP,
+                    )
+
+                system_event_type = SystemEventType.BUSINESS_USERNAME_UPDATE
+                event_detail = SystemEventDetail(
+                    username=username_event.username,
+                    username_status=username_event.status,
+                    display_phone_number=username_event.display_phone_number,
+                )
+                entry_time = webhook.entry[0].time
+                if entry_time is not None:
+                    event_timestamp = datetime.fromtimestamp(entry_time, tz=UTC)
+
+            case "group_participants_update":
+                from wappa.webhooks.core.webhook_interfaces import UserBase
+                from wappa.webhooks.whatsapp.system_events import (
+                    GroupParticipantsUpdateEntry,
+                )
+
+                raw_group_updates = webhook.get_raw_group_updates()
+                if not raw_group_updates:
+                    raise ProcessorError(
+                        "No groups found in group_participants_update webhook",
+                        ErrorCode.PROCESSING_ERROR,
+                        PlatformType.WHATSAPP,
+                    )
+
+                group_update = GroupParticipantsUpdateEntry.model_validate(
+                    raw_group_updates[0]
+                )
+                participant = None
+                if group_update.added_participants:
+                    participant = group_update.added_participants[0]
+                elif group_update.removed_participants:
+                    participant = group_update.removed_participants[0]
+
+                wa_id = group_update.wa_id or (
+                    participant.wa_id if participant else None
+                )
+                user_id = group_update.user_id or (
+                    participant.user_id if participant else None
+                )
+                parent_user_id = group_update.parent_user_id or (
+                    participant.parent_user_id if participant else None
+                )
+                username = group_update.username or (
+                    participant.username if participant else None
+                )
+
+                system_event_type = SystemEventType.GROUP_PARTICIPANTS_UPDATE
+                event_detail = SystemEventDetail(
+                    wa_id=wa_id,
+                    user_id=user_id,
+                    parent_user_id=parent_user_id,
+                    group_id=group_update.group_id,
+                    group_event_type=group_update.type,
+                    group_update=group_update.model_dump(mode="json"),
+                )
+                event_timestamp = datetime.fromtimestamp(group_update.timestamp, tz=UTC)
+                if wa_id or user_id:
+                    user_base = UserBase(
+                        phone_number=wa_id or "",
+                        bsuid=user_id,
+                        parent_bsuid=parent_user_id,
+                        username=username,
+                    )
+
+            case "history" | "smb_message_echoes" | "smb_app_state_sync":
+                from wappa.webhooks.core.webhook_interfaces import UserBase
+                from wappa.webhooks.whatsapp.coexistence_events import (
+                    HistoryWebhookValue,
+                    SmbAppStateSyncWebhookValue,
+                    SmbMessageEchoesWebhookValue,
+                )
+
+                coexistence = webhook.get_coexistence_event()
+                if coexistence is None:
+                    raise ProcessorError(
+                        f"No typed {field} value found in system webhook",
+                        ErrorCode.PROCESSING_ERROR,
+                        PlatformType.WHATSAPP,
+                    )
+
+                event_types = {
+                    "history": SystemEventType.HISTORY_SYNC,
+                    "smb_message_echoes": SystemEventType.SMB_MESSAGE_ECHO,
+                    "smb_app_state_sync": SystemEventType.SMB_APP_STATE_SYNC,
+                }
+                system_event_type = event_types[field]
+                event_detail = SystemEventDetail(
+                    coexistence_payload=coexistence.model_dump(
+                        mode="json", by_alias=True, exclude_none=True
+                    )
+                )
+
+                if isinstance(coexistence, SmbAppStateSyncWebhookValue):
+                    state = coexistence.state_sync[0]
+                    contact = state.contact
+                    event_timestamp = datetime.fromtimestamp(
+                        int(state.metadata.timestamp), tz=UTC
+                    )
+                    user_base = UserBase(
+                        phone_number=contact.phone_number or "",
+                        bsuid=contact.user_id,
+                        parent_bsuid=contact.parent_user_id,
+                        username=contact.username,
+                        profile_name=contact.full_name,
+                    )
+                elif isinstance(coexistence, SmbMessageEchoesWebhookValue):
+                    echo = coexistence.message_echoes[0]
+                    event_timestamp = datetime.fromtimestamp(
+                        int(echo.timestamp), tz=UTC
+                    )
+                    user_base = self._create_user_base_from_contacts(
+                        webhook, echo.to_user_id or echo.to or ""
+                    )
+                elif isinstance(coexistence, HistoryWebhookValue):
+                    identity = None
+                    if coexistence.contacts:
+                        identity = coexistence.contacts[0].user_id
+                    if identity:
+                        user_base = self._create_user_base_from_contacts(
+                            webhook, identity
+                        )
+
             case "messages":
                 # System messages from the messages field (type=="system")
                 raw_messages = webhook.get_raw_messages()
@@ -701,6 +962,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                     event_detail = SystemEventDetail(
                         wa_id=message.from_ or None,
                         user_id=message.new_user_id,
+                        parent_user_id=message.system.parent_user_id,
                         body=message.system_message,
                     )
 
@@ -729,6 +991,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 return UserBase(
                     phone_number=getattr(contact, "wa_id", "") or "",
                     bsuid=getattr(contact, "bsuid", None),
+                    parent_bsuid=getattr(contact, "parent_bsuid", None),
                     username=getattr(contact, "username", None),
                     country_code=getattr(contact, "country_code", None),
                     profile_name=contact.display_name,
@@ -740,6 +1003,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         return UserBase(
             phone_number=fallback_phone,
             bsuid=fallback_bsuid,
+            parent_bsuid=None,
             username=None,
             country_code=None,
             profile_name=None,
@@ -756,6 +1020,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 return WhatsAppIncomingWebhookData(
                     wa_id=getattr(contact, "wa_id", None) or None,
                     bsuid=getattr(contact, "bsuid", None),
+                    parent_bsuid=getattr(contact, "parent_bsuid", None),
                     username=getattr(contact, "username", None),
                     country_code=getattr(contact, "country_code", None),
                 )
@@ -763,9 +1028,19 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         return WhatsAppIncomingWebhookData(
             wa_id=sender_id if looks_like_phone_number(sender_id) else None,
             bsuid=sender_id if looks_like_bsuid(sender_id) else None,
+            parent_bsuid=None,
             username=None,
             country_code=None,
         )
+
+    def _create_status_user_from_contacts(
+        self, webhook: BaseWebhook, recipient_id: str
+    ) -> "UserBase | None":
+        """Build status recipient data when Meta includes the contacts block."""
+        contacts = webhook.get_contacts()
+        if not contacts:
+            return None
+        return self._create_user_base_from_contacts(webhook, recipient_id)
 
     def _extract_business_context(
         self, message_data: dict[str, Any]

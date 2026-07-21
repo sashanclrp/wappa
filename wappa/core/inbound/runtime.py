@@ -21,6 +21,7 @@ from wappa.processors.base_processor import ProcessorError
 from wappa.processors.factory import processor_factory
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.webhook_interfaces import (
+    CallWebhook,
     ErrorWebhook,
     InboundMessageWebhook,
     StatusWebhook,
@@ -346,6 +347,8 @@ class InboundRuntime:
     def _resolve_handler_user_id(self, universal_webhook: UniversalWebhook) -> str:
         if isinstance(universal_webhook, InboundMessageWebhook):
             return universal_webhook.user.user_id
+        if isinstance(universal_webhook, CallWebhook) and universal_webhook.user_id:
+            return universal_webhook.user_id
         if isinstance(universal_webhook, SystemWebhook) and universal_webhook.user:
             return universal_webhook.user.user_id
         if isinstance(universal_webhook, StatusWebhook) and universal_webhook.user_id:
@@ -363,6 +366,10 @@ class InboundRuntime:
         if isinstance(webhook, InboundMessageWebhook) and webhook.user:
             bsuid, phone = derive_identifiers(webhook.user)
             return webhook.user.user_id or fallback_user_id, bsuid, phone
+
+        if isinstance(webhook, CallWebhook):
+            user_id = webhook.user_id or fallback_user_id
+            return user_id, webhook.bsuid, webhook.phone_number
 
         if isinstance(webhook, StatusWebhook):
             user_id = webhook.user_id or fallback_user_id
