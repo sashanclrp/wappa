@@ -68,10 +68,15 @@ requires_postgres = pytest.mark.skipif(
 
 
 class _FakeSession:
-    """Records teardown lifecycle so we can assert it ran to completion."""
+    """Records the session lifecycle so we can assert teardown ran to completion."""
 
     def __init__(self) -> None:
         self.events: list[str] = []
+
+    async def connection(self) -> object:
+        """Stand in for the eager pool checkout ``_acquire_session`` performs."""
+        self.events.append("connect")
+        return self
 
     async def commit(self) -> None:
         self.events.append("commit_start")
@@ -118,6 +123,8 @@ async def test_commit_completes_and_no_rollback_on_success() -> None:
     async with manager._managed_session(lambda: fake):
         pass  # clean exit -> auto_commit
 
+    # Connection is checked out eagerly, before the caller runs any query.
+    assert fake.events[0] == "connect", fake.events
     assert "commit_done" in fake.events, fake.events
     assert "close_done" in fake.events, fake.events
     assert "rollback_start" not in fake.events, fake.events

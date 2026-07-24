@@ -72,9 +72,13 @@ class WhatsAppButtonMessage(WhatsAppMessageIdentity, BaseMessage):
     # Button content
     button: ButtonContent = Field(..., description="Button reply content and metadata")
 
-    # Required context (button messages always have context)
-    context: MessageContext = Field(
-        ..., description="Context linking to the original message with the button"
+    # Optional context: Meta omits it for template quick-reply taps
+    context: MessageContext | None = Field(
+        None,
+        description=(
+            "Context linking to the original message with the button. "
+            "Absent for quick-reply taps on template messages."
+        ),
     )
 
     @property
@@ -114,15 +118,10 @@ class WhatsAppButtonMessage(WhatsAppMessageIdentity, BaseMessage):
 
     @model_validator(mode="after")
     def validate_button_message_context(self):
-        """Validate button message has proper context."""
-        # Button messages must have context with message ID and sender
-        if not self.context.id:
-            raise ValueError(
-                "Button messages must have context with original message ID"
-            )
-
-        if not self.context.from_:
-            raise ValueError("Button messages must have context with original sender")
+        """Validate button message context when Meta includes one."""
+        # Template quick-reply taps arrive without a context block at all
+        if self.context is None:
+            return self
 
         # Button messages should not have forwarding or product context
         if self.context.forwarded or self.context.frequently_forwarded:
@@ -149,30 +148,36 @@ class WhatsAppButtonMessage(WhatsAppMessageIdentity, BaseMessage):
         return self.button.payload
 
     @property
-    def original_message_id(self) -> str:
-        """Get the ID of the original message that contained the button."""
-        return self.context.id
+    def text_content(self) -> str:
+        """Expose the button label as text so universal text accessors work."""
+        return self.button.text
 
     @property
-    def business_phone(self) -> str:
+    def original_message_id(self) -> str | None:
+        """Get the ID of the original message that contained the button."""
+        return self.context.id if self.context else None
+
+    @property
+    def business_phone(self) -> str | None:
         """Get the business phone number that sent the original message."""
-        return self.context.from_
+        return self.context.from_ if self.context else None
 
     @property
     def unix_timestamp(self) -> int:
         """Get the timestamp as an integer."""
         return self.timestamp
 
-    def get_button_context(self) -> tuple[str, str]:
+    def get_button_context(self) -> tuple[str | None, str | None]:
         """
         Get button context information.
 
         Returns:
-            Tuple of (business_phone, original_message_id) for the button interaction.
+            Tuple of (business_phone, original_message_id) for the button interaction,
+            with None entries when Meta omits the context block.
         """
         return (self.business_phone, self.original_message_id)
 
-    def to_summary_dict(self) -> dict[str, str | bool | int]:
+    def to_summary_dict(self) -> dict[str, str | bool | int | None]:
         """
         Create a summary dictionary for logging and analysis.
 
@@ -217,7 +222,7 @@ class WhatsAppButtonMessage(WhatsAppMessageIdentity, BaseMessage):
         return ConversationType.GROUP if self.group_id else ConversationType.PRIVATE
 
     def has_context(self) -> bool:
-        return True  # Button messages always have context
+        return self.context is not None
 
     def get_context(self) -> BaseMessageContext | None:
         from .text import WhatsAppMessageContext
@@ -244,7 +249,7 @@ class WhatsAppButtonMessage(WhatsAppMessageIdentity, BaseMessage):
                 "timestamp_str": self.timestamp_str,
                 "type": self.type,
                 "button_content": self.button.model_dump(),
-                "context": self.context.model_dump(),
+                "context": self.context.model_dump() if self.context else None,
             },
         }
 
@@ -255,7 +260,7 @@ class WhatsAppButtonMessage(WhatsAppMessageIdentity, BaseMessage):
             "timestamp_str": self.timestamp_str,
             "message_type": self.type,
             "button_content": self.button.model_dump(),
-            "context": self.context.model_dump(),
+            "context": self.context.model_dump() if self.context else None,
             "interaction_details": {
                 "button_text": self.button_text,
                 "button_payload": self.button_payload,

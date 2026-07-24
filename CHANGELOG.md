@@ -5,6 +5,27 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.22.1] - 2026-07-24
+
+Fixes dropped template quick-reply taps. When a user tapped a quick-reply button
+on a template message, Meta sent a `type: "button"` message with no `context`
+block, `WhatsAppButtonMessage` rejected it as a missing required field, and the
+webhook returned `HTTP 400` — every button tap on a promo template was silently
+lost while plain text messages kept working.
+
+### Fixed
+- `WhatsAppButtonMessage.context` is now optional, matching Meta's real payload
+  for template quick-reply taps. Contexts that *are* present keep their previous
+  validation (forwarded and product contexts are still rejected).
+- `original_message_id`, `business_phone`, and `get_button_context()` return
+  `None` instead of raising when there is no context; `has_context()` now
+  reflects the payload, and platform/universal dicts serialize `context: None`.
+
+### Added
+- `WhatsAppButtonMessage.text_content`, so `webhook.get_message_text()` returns
+  the button label (e.g. `"QUIERO PROMO SUERO"`) instead of an empty string for
+  template button replies.
+
 ## [0.22.0] - 2026-07-21
 
 Updates Wappa's WhatsApp identity contract for Meta's 2026 BSUID and username
