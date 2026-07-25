@@ -5,6 +5,53 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.0] - 2026-07-25
+
+Promotes a set of generic runtime primitives into Wappa so host platforms stop
+hand-rolling them: signed-webhook verification, external event routing, cache
+namespacing and versioned invalidation, request correlation IDs, and retry
+helpers for transient HTTP and database failures. All of it is domain-neutral
+and reachable through shallow public imports. The trade-offs behind each
+primitive are recorded in
+[ADR-0005](docs/adr/0005-runtime-primitives-for-host-platforms.md).
+
+Everything here is additive — no existing public surface changed.
+
+### Added
+- `HMACSignatureVerifier` (`from wappa import HMACSignatureVerifier`) for signed
+  External Webhook Sources. Handles hex/base64 encodings, algorithm prefixes
+  (`sha256=`), case-insensitive header lookup, and constant-time comparison.
+  Returns a verdict instead of raising; misconfiguration raises at construction.
+- `ExternalEventRegistry` and `DispatchReport` (`from wappa import ...`) for
+  routing `ExternalEvent`s to async handlers by `(source, event_type)`. Matches
+  exact, prefix (`payment.*`), and any (`*`) subscriptions; dispatch is
+  best-effort per handler so one broken subscriber cannot silence the rest.
+- `VersionedTableCache[T]` (`from wappa.persistence import VersionedTableCache`)
+  invalidates a whole read model with one `bump_version()` — no key enumeration,
+  visible across processes, scoped per logical table.
+- Optional `cache_space` on `TypedTableCache` and `VersionedTableCache`, plus the
+  `build_table_name()` helper, so host modules can share a table name inside one
+  Inbox without colliding.
+- `TypedTableCache.renew_ttl()` for extending a row's TTL without rewriting it.
+- `RequestIdMiddleware`, installed by `WappaCorePlugin` as Wappa's outermost
+  middleware. Reuses a trusted inbound `X-Request-ID`, otherwise generates one;
+  echoes it on the response and adds `request_id` to JSON log records.
+- `get_current_request_id()` and a `request_id` argument on
+  `set_request_context()`, both exported from `wappa.core.logging`.
+- `wappa.resilience`: `RetryPolicy`, `retry_async`, `retry_transient_http`,
+  `retry_transient_db`, `is_transient_http_error`, `is_transient_db_error`.
+  Bounded exponential backoff with jitter; `CancelledError` is never retried and
+  the final attempt's exception propagates unchanged.
+- ADR-0005 recording the decisions behind these primitives, and 81 new tests
+  covering retry classification, signature verification, event dispatch, cache
+  versioning, request IDs, and SSE hub fan-out/overflow/cleanup.
+
+### Changed
+- `PostgresSessionManager` transient-error classification now delegates to
+  `wappa.resilience.is_transient_db_error`, so the session manager and host-owned
+  retry decorators agree on what "transient" means. Behavior is unchanged,
+  including the deliberate fast-fail on SQLAlchemy pool checkout timeouts.
+
 ## [0.22.1] - 2026-07-24
 
 Fixes dropped template quick-reply taps. When a user tapped a quick-reply button

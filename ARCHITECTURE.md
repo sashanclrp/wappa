@@ -203,6 +203,9 @@ Wappa manages two separate HTTP client pools, both owned by `SessionLifecycle`:
    Plugins
      └── depends on → Core (any), Domain Interfaces
    
+   Resilience (retry + transient-failure classification)
+     └── depends on → Core Logging, httpx
+   
    Domain Interfaces (pure abstractions)
      └── depends on → nothing
 ```
@@ -238,6 +241,7 @@ Each bounded context has its own `ARCHITECTURE.md` for internal details:
 | SSE/PubSub | [`wappa/core/sse/ARCHITECTURE.md`](./wappa/core/sse/ARCHITECTURE.md) | Subscription model, fan-out, envelope structure |
 | Expiry | [`wappa/core/expiry/ARCHITECTURE.md`](./wappa/core/expiry/ARCHITECTURE.md) | Key format, keyspace notification flow, handler registration |
 | Plugins | [`wappa/core/plugins/ARCHITECTURE.md`](./wappa/core/plugins/ARCHITECTURE.md) | Plugin lifecycle, hook points, built-in plugins |
+| External Webhooks | [`wappa/core/external_webhooks/ARCHITECTURE.md`](./wappa/core/external_webhooks/ARCHITECTURE.md) | External source runtime, signature verification, event registry |
 | CLI | [`wappa/cli/ARCHITECTURE.md`](./wappa/cli/ARCHITECTURE.md) | Commands, templates, example generation |
 
 ## Key Architectural Decisions
@@ -245,3 +249,4 @@ Each bounded context has its own `ARCHITECTURE.md` for internal details:
 See [`docs/adr/`](./docs/adr/) for recorded decisions. Notable:
 
 - [ADR-0001: inbox_id as runtime scope](./docs/adr/0001-inbox-id-runtime-scope.md) — replaces tenant_id
+- [ADR-0005: Runtime primitives for host platforms](./docs/adr/0005-runtime-primitives-for-host-platforms.md) — signature verification, external event routing, versioned caches, request IDs, retry classification

@@ -62,6 +62,9 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **External Webhook Source** | A non-messaging system that sends webhooks into Wappa, such as MercadoPago, Stripe, Wompi, GitHub, or a CRM. |
 | **External Webhook Runtime** | The Wappa module that turns an accepted External Webhook Source request into a context-bound `process_external_event()` dispatch. It owns Inbox mismatch checks, Dispatch Context creation, handler cloning, and event dispatch. |
 | **Payment Provider** | A payment-specific External Webhook Source, such as MercadoPago, Stripe, or Wompi. This term is allowed for payment integrations, not for messaging platforms. |
+| **Signature Verifier** | A value object that checks an External Webhook Source signature against a shared secret. `HMACSignatureVerifier` covers the common shape (HMAC of the raw body, carried in a header). Used inside a processor's `parse_event()`; it returns a verdict rather than raising. |
+| **External Event Registry** | A Host Application-owned routing table mapping `(source, event_type)` to async handlers, used inside `process_external_event()`. Matches exact, prefix (`payment.*`), and any (`*`) subscriptions. Dispatch is best-effort per handler. |
+
 
 ## Persistence
 
@@ -72,6 +75,9 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **State Cache** | Per-user conversational state within an Inbox. |
 | **User Cache** | Per-user profile/metadata cache within an Inbox. |
 | **Table Cache** | Structured record storage scoped by Inbox. |
+| **Cache Space** | An optional Host Application-owned namespace segment folded into a table name (`{cache_space}:{table_name}`). Separates unrelated read models that share a table name inside one Inbox. Wappa never assigns one; the host passes it explicitly. |
+| **Table Generation** | The version suffix (`{table}@v{n}`) identifying the live generation of a versioned Table Cache. |
+| **Version Bump** | Incrementing a versioned Table Cache's generation counter to invalidate every row at once, without enumerating keys. Orphaned generations expire by TTL. |
 
 ## Real-Time
 
@@ -80,6 +86,19 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **SSE Event** | A server-sent event pushed to subscribers. Scoped by `inbox_id` and optionally by `user_id` and `event_type`. |
 | **Event Envelope** | The JSON structure wrapping an SSE event: `{ event_id, event_type, timestamp, inbox_id, user_id, bsuid, phone_number, platform, source, payload, metadata }`. |
 | **Subscription** | A client connection filtering events by `inbox_id`, `user_id`, and/or `event_type`. |
+
+## Request Correlation
+
+| Term | Definition |
+|------|-----------|
+| **Request ID** | The correlation identifier assigned to one inbound HTTP request. Read from the inbound header when present, otherwise generated. Echoed on the response, attached to JSON log records, and cleared once the response is produced. It is request-scoped, so background work that outlives the request carries none. |
+
+## Resilience
+
+| Term | Definition |
+|------|-----------|
+| **Transient Failure** | An integration failure a retry can plausibly fix: timeouts, connection resets, DNS/TLS failures, and the retryable HTTP statuses. Distinct from contract failures (4xx, constraint violations, bad payloads) and from pool exhaustion, which retries make worse. |
+| **Retry Policy** | Attempt count plus bounded exponential backoff with jitter, applied by the `wappa.resilience` decorators. |
 
 ## Expiry
 

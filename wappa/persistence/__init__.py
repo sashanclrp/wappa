@@ -33,21 +33,26 @@ from ..domain.interfaces.state_repository import IStateRepository
 from ..domain.interfaces.tables_repository import ITablesRepository
 from ..domain.interfaces.user_repository import IUserRepository
 from .cache_factory import create_cache_factory, get_cache_factory
+from .cache_space import build_table_name
 
 # Redis implementation re-exports
 from .redis import RedisClient
 from .redis import ops as redis_ops
 from .redis.redis_cache_factory import RedisCacheFactory
 from .typed_table_cache import TypedTableCache
+from .versioned_table_cache import VersionedTableCache
 
 __all__ = [
     # Cache Factory Functions (User Request: Main access point)
     "create_cache_factory",
     "get_cache_factory",
+    # Cache key composition
+    "build_table_name",
     # Core Interfaces
     "ICacheFactory",
     "ITableCache",
     "TypedTableCache",
+    "VersionedTableCache",
     "IRepositoryFactory",
     # Repository Interfaces
     "IStateRepository",

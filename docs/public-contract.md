@@ -97,6 +97,8 @@ Public imports include:
 
 - `from wappa import ExternalEvent`
 - `from wappa import IWebhookProcessor`
+- `from wappa import HMACSignatureVerifier`
+- `from wappa import ExternalEventRegistry`, `from wappa import DispatchReport`
 - `from wappa.core.plugins import WebhookPlugin`
 
 An `IWebhookProcessor` must provide:
@@ -154,6 +156,64 @@ public contract.
 
 The result does not change HTTP delivery semantics: an accepted route response
 still means "queued locally", not "handled successfully".
+
+### Webhook Signature Verification
+
+`HMACSignatureVerifier` verifies signed External Webhook Source requests. It is
+used inside a processor's `parse_event()`; Wappa never calls it for you, because
+only the processor knows which secret and header a source uses.
+
+```python
+verifier = HMACSignatureVerifier(
+    secret=settings.stripe_webhook_secret,
+    header="Stripe-Signature",
+    algorithm="sha256",   # any hashlib algorithm
+    prefix="",            # e.g. "sha256=" for GitHub-style headers
+    encoding="hex",       # or "base64"
+)
+
+verifier.verify(raw_body, request.headers) -> bool
+verifier.verify_signature(raw_body, signature_string) -> bool
+verifier.sign(raw_body) -> str
+```
+
+`verify()` returns `False` — it does not raise — for a missing header, a wrong
+prefix, an undecodable signature, or a digest mismatch. Header lookup is
+case-insensitive. Hex casing and base64 padding variants do not affect the
+verdict. Misconfiguration (empty secret, unknown algorithm or encoding) raises
+`ValueError` at construction. Providers that sign something other than the raw
+body build that string themselves and pass it as the payload.
+
+### External Event Registry
+
+`ExternalEventRegistry` routes `ExternalEvent` instances to async handlers by
+`(source, event_type)`. It is transport-free and Host Application-driven: Wappa
+does not install it into the External Webhook Runtime.
+
+```python
+registry = ExternalEventRegistry()
+
+@registry.on("mercadopago", "payment.approved")
+async def credit_wallet(event: ExternalEvent) -> None: ...
+
+class MyHandler(WappaEventHandler):
+    async def process_external_event(self, event):
+        report = await registry.dispatch(event)
+```
+
+- `register(source, event_type, handler)` / `on(source, event_type="*")`
+- `handlers_for(source, event_type) -> list[handler]`
+- `dispatch(event) -> DispatchReport(matched, succeeded, errors, failed)`
+
+Matching runs in three tiers, most specific first, and within a tier in
+registration order: exact (`payment.approved`), prefix (`payment.*`, matching
+any depth below it), then any (`*`). A handler matched by several tiers runs
+once per event. Handlers must be async; sync callables are rejected at
+registration.
+
+Dispatch is best-effort per handler: a raising handler is logged and the
+remaining handlers still run. `DispatchReport.errors` carries
+`(handler_name, exception)` for callers that need to react.
 
 ## Server-Sent Events
 
@@ -221,6 +281,84 @@ An unknown profile or missing `RateLimitPlugin` is a configuration error, not
 fail-open behavior. Wappa does not provide Redis-backed or distributed rate
 limiting in this contract.
 
+## Request Correlation
+
+`RequestIdMiddleware` is installed by `WappaCorePlugin` as Wappa's outermost
+middleware, so every application built through `Wappa` or a builder that adds
+the core plugin gets correlation IDs with no extra configuration.
+
+Behavior:
+
+- Reads the inbound `X-Request-ID` header when it is non-empty, printable, and
+  at most 128 characters; otherwise generates a UUID4 hex value.
+- Publishes the ID to `request.state.request_id` and to the request-scoped
+  logging context for the duration of the request.
+- Echoes the ID on the response under the same header.
+- Adds `request_id` to `WappaJSONFormatter` records while a request scope is
+  active, and omits the field outside one (background work, expiry handlers,
+  cron jobs).
+- Clears the context once the response is produced, including when the handler
+  raises.
+
+Configuration is per-instance, for hosts that install it themselves:
+
+- `RequestIdMiddleware(app, header_name="X-Request-ID", trust_inbound=True)`
+- `trust_inbound=False` always generates a fresh ID, for untrusted edges.
+
+Public imports:
+
+- `from wappa.api.middleware import RequestIdMiddleware, DEFAULT_REQUEST_ID_HEADER`
+- `from wappa.core.logging import get_current_request_id, set_request_context`
+
+`set_request_context(inbox_id=None, user_id=None, request_id=None)` remains the
+way to populate context outside HTTP (background work, tests).
+
+## Resilience
+
+`wappa.resilience` provides transport-neutral retry helpers for transient
+integration failures. They are reusable by transport adapters, webhook
+processors, credential stores, and external platform clients.
+
+```python
+from wappa.resilience import RetryPolicy, retry_transient_http
+
+@retry_transient_http(policy=RetryPolicy(attempts=5))
+async def fetch_profile(client, url):
+    response = await client.get(url)
+    response.raise_for_status()
+    return response.json()
+```
+
+Public surface:
+
+- `RetryPolicy(attempts=3, initial_delay=0.2, max_delay=5.0, multiplier=2.0, jitter=0.25)`
+  and `DEFAULT_RETRY_POLICY`
+- `retry_async(policy=..., retry_on=predicate, operation=None)`
+- `retry_transient_http(policy=..., operation=None)`
+- `retry_transient_db(policy=..., operation=None)`
+- `is_transient_http_error(error)`, `is_transient_db_error(error)`
+- `TRANSIENT_HTTP_STATUS_CODES`, `TRANSIENT_DB_ERROR_TYPES`,
+  `TRANSIENT_DB_ERROR_PATTERNS`
+
+Classification contract:
+
+- HTTP transient: timeouts, connect/read/write failures, remote protocol
+  errors, pool timeouts, DNS and TLS failures, and responses with status
+  `408`, `425`, `429`, `500`, `502`, `503`, `504`. Status retries require the
+  wrapped function to raise `httpx.HTTPStatusError` (e.g. via
+  `response.raise_for_status()`).
+- HTTP non-transient: every other 4xx, and non-HTTP exceptions such as a
+  payload `ValueError`.
+- Database transient: connection refused/reset, dropped server connections,
+  DNS failures, and OS-level socket errors.
+- Database non-transient: SQLAlchemy pool checkout timeouts (the pool is
+  already drained), integrity violations, and query errors.
+
+`asyncio.CancelledError` is never retried. The final attempt's exception
+propagates unchanged, so callers keep the original error and traceback. Only
+async callables are supported. Retries are per-process and in-memory; Wappa
+does not provide a distributed retry or circuit-breaker contract.
+
 ## Messenger
 
 `IMessenger` is Wappa's public outbound message interface. Host applications use it to send text, media, interactive, template, and specialized messages through an Inbox.
@@ -252,6 +390,7 @@ Internal module paths (`wappa.core.*`, `wappa.persistence.redis.redis_handler.*`
 - `Wappa`, `WappaBuilder`, `WappaPlugin`, `WappaEventHandler`
 - `ExternalEvent`, `CronEvent`, `ExpiryPlugin`, `expiry_registry`
 - `IIdentityResolver`, `PassthroughIdentityResolver`, `IWebhookProcessor`
+- `HMACSignatureVerifier`, `ExternalEventRegistry`, `DispatchReport`
 - `CustomWebhook`, `WappaContext`
 
 ### SSE (`from wappa.sse import ...`)
@@ -270,7 +409,7 @@ Internal module paths (`wappa.core.*`, `wappa.persistence.redis.redis_handler.*`
 ### Persistence (`from wappa.persistence import ...`)
 
 - `create_cache_factory`, `get_cache_factory`, `ICacheFactory`
-- `TypedTableCache`, `ITableCache`
+- `TypedTableCache`, `VersionedTableCache`, `ITableCache`, `build_table_name`
 - `RedisCacheFactory`, `RedisClient`, `redis_ops`
 - `IStateRepository`, `IUserRepository`, `IExpiryRepository`, `ISharedStateRepository`
 
@@ -283,9 +422,35 @@ Internal module paths (`wappa.core.*`, `wappa.persistence.redis.redis_handler.*`
 - `exists(pkid) -> bool`
 - `update_field(pkid, field, value, ttl=None) -> bool`
 
+- `renew_ttl(pkid, ttl=None) -> bool`
+
 Inbox scoping still comes from the `ICacheFactory` / `ITableCache` that creates
-the underlying table cache. Wappa does not expose `cache_space` or versioned
-table cache semantics.
+the underlying table cache.
+
+`cache_space` is an optional host-owned namespace segment folded into the table
+name as `"{cache_space}:{table_name}"`. Wappa never assigns one; omitting it
+leaves key shapes unchanged. `build_table_name(table_name, cache_space=None)` is
+the public composition helper. Both segments must be non-empty and must not
+contain `:` or `@`.
+
+`VersionedTableCache[T]` adds bump-to-invalidate semantics on top of the same
+`ITableCache`:
+
+- `VersionedTableCache(cache, table_name, model, default_ttl, cache_space=None)`
+- the same row API as `TypedTableCache` (`get`, `upsert`, `delete`, `exists`,
+  `update_field`, `renew_ttl`)
+- `current_version() -> int` (starts at `1`)
+- `bump_version() -> int` — invalidates every row in one operation
+- `current_table_name() -> str` — e.g. `"crm:agents@v2"`
+
+Rows live under a generation-suffixed table, so a bump makes every row
+unreachable without enumerating keys, and is immediately visible to other
+processes sharing the backend. Generations are per logical table and per cache
+space: bumping one table does not affect its neighbours. `default_ttl` is
+required and must be positive — orphaned generations are reclaimed only by TTL.
+The generation counter is stored with its own longer TTL, refreshed on each
+bump, so it always outlives the rows a bump orphans. Each operation reads the
+counter first, costing one extra cache read.
 
 ### Webhooks (`from wappa.webhooks import ...`)
 
@@ -320,7 +485,19 @@ Platform Account (WABA), not a User. Consumers handle them in `process_system_we
 ### Core Logging (`from wappa.core.logging import ...`)
 
 - `get_logger`, `get_app_logger`, `setup_app_logging`
-- `get_current_inbox_context`, `set_request_context`
+- `get_current_inbox_context`, `get_current_user_context`, `get_current_request_id`
+- `set_request_context`, `clear_request_context`, `get_context_info`
+
+### Resilience (`from wappa.resilience import ...`)
+
+- `RetryPolicy`, `DEFAULT_RETRY_POLICY`
+- `retry_async`, `retry_transient_http`, `retry_transient_db`
+- `is_transient_http_error`, `is_transient_db_error`
+- `TRANSIENT_HTTP_STATUS_CODES`, `TRANSIENT_DB_ERROR_TYPES`, `TRANSIENT_DB_ERROR_PATTERNS`
+
+### Middleware (`from wappa.api.middleware import ...`)
+
+- `RequestIdMiddleware`, `DEFAULT_REQUEST_ID_HEADER`
 
 ### Core Expiry (`from wappa.core.expiry import ...`)
 

@@ -6,6 +6,7 @@ from fastapi import FastAPI
 
 from wappa.api.middleware.error_handler import ErrorHandlerMiddleware
 from wappa.api.middleware.inbox import InboxMiddleware
+from wappa.api.middleware.request_id import RequestIdMiddleware
 from wappa.api.middleware.request_logging import RequestLoggingMiddleware
 from wappa.api.routes.health import router as health_router
 from wappa.api.routes.whatsapp_combined import whatsapp_router
@@ -31,10 +32,13 @@ class WappaCorePlugin:
         logger = get_app_logger()
         logger.debug("🏗️ Configuring WappaCorePlugin...")
 
-        # Higher priority numbers run closer to routes (inner middleware)
+        # Higher priority numbers run closer to routes (inner middleware).
+        # RequestIdMiddleware is outermost so the correlation ID exists for
+        # every downstream middleware, route, log line, and error response.
         builder.add_middleware(InboxMiddleware, priority=90)
         builder.add_middleware(ErrorHandlerMiddleware, priority=80)
         builder.add_middleware(RequestLoggingMiddleware, priority=70)
+        builder.add_middleware(RequestIdMiddleware, priority=60)
 
         builder.add_router(health_router, public=True)
         builder.add_router(whatsapp_router)
@@ -49,7 +53,7 @@ class WappaCorePlugin:
         builder.add_shutdown_hook(self._core_shutdown, priority=10)
 
         logger.debug(
-            "✅ WappaCorePlugin configured - cache_type: %s, middleware: 3, routes: 2, hooks: 4",
+            "✅ WappaCorePlugin configured - cache_type: %s, middleware: 4, routes: 2, hooks: 4",
             self.cache_type.value,
         )
 

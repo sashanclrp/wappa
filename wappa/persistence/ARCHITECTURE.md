@@ -26,7 +26,9 @@ This context does NOT own:
 ```
 wappa/persistence/
 ├── cache_factory.py              # Selects backend (redis / memory / json)
+├── cache_space.py                # Optional host-owned namespace segment for table names
 ├── typed_table_cache.py          # TypedTableCache[T] convenience wrapper over ITableCache
+├── versioned_table_cache.py      # VersionedTableCache[T] — bump-to-invalidate read models
 │
 ├── redis/                        # Primary production backend
 │   ├── redis_client.py           # 5-pool, fork-safe async Redis client
@@ -134,6 +136,26 @@ existing `ITableCache` to a table name and Pydantic model. It validates table
 names and primary keys, forwards TTLs, and returns typed rows without changing
 backend key shapes. Inbox scoping still comes from the `ICacheFactory` /
 `ITableCache` instance.
+
+**Cache space as an optional second segment** — Inbox scoping is Wappa's; a
+*cache space* is the host's. `build_table_name(table, cache_space)` folds it in
+as `"{cache_space}:{table}"`, so two host modules can use the same table name
+inside one Inbox without colliding. Wappa never invents a cache space, and
+omitting it leaves existing key shapes untouched. Both segments reject `:` and
+`@` so a caller cannot smuggle extra key structure through a name.
+
+**Generation counter instead of key enumeration** — `VersionedTableCache[T]`
+suffixes its table with a generation (`agents@v3`) read from a counter row in
+`_wappa_table_versions`. Invalidating a whole read model is one counter
+increment: readers miss immediately, writers land in the new generation, and
+the old one is orphaned. This avoids SCAN-and-delete over a live key space,
+which is both slow and impossible to do atomically while writers are active.
+The cost is one extra cache read per operation — deliberate, because caching
+the generation in-process would keep serving rows another worker already
+invalidated. Orphaned generations are reclaimed by TTL, which is why
+`default_ttl` is required rather than optional — and why the counter row itself
+carries a longer TTL, refreshed on every bump, so it can never expire back to
+`v1` while orphaned rows are still live.
 
 **Hybrid context pattern** — `RedisCacheFactory` is constructed once per request with `(inbox_id, user_id)` defaults. Any `create_*_cache()` call can override either dimension without constructing a new factory. This avoids threading context through every call site while still supporting API-event scenarios where the canonical user differs from the sender.
 

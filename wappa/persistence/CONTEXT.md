@@ -24,6 +24,9 @@ Reference: [root CONTEXT.md](../../../CONTEXT.md)
 | **Expiry Key** | A Redis key with a TTL whose expiration fires an Expiry Action. Format: `{inbox_id}:EXPTRIGGER:{action}:{identifier}`. |
 | **PubSub Channel** | Redis Pub/Sub channel for real-time notifications. Format: `wappa:notify:{inbox_id}:{user_id}:{event_type}`. Note the `wappa:notify:` prefix before `inbox_id`. |
 | **KeyFactory** | Pure stateless Pydantic model that constructs all Redis key strings. Single source of truth for key format. |
+| **Cache Space** | Optional host-owned namespace folded into a table name as `{cache_space}:{table_name}`. Separates unrelated read models that share a table name inside one Inbox. Wappa never assigns one; the Host Application passes it explicitly. |
+| **Table Generation** | The version suffix (`{table}@v{n}`) identifying which generation of a versioned table cache is live. Starts at `v1`. |
+| **Version Bump** | Incrementing a versioned table's generation counter to invalidate every row in one operation, without enumerating keys. Orphaned generations expire by TTL. |
 
 ## Connection Infrastructure
 

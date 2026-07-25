@@ -15,13 +15,14 @@ from contextlib import asynccontextmanager
 
 import anyio
 from sqlalchemy import text
-from sqlalchemy.exc import TimeoutError as SQLAlchemyTimeoutError
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+
+from wappa.resilience import is_transient_db_error
 
 logger = logging.getLogger("wappa.database.session_manager")
 
@@ -65,30 +66,6 @@ class PostgresSessionManager:
 
         await manager.cleanup()
     """
-
-    # Transient errors that should trigger retry
-    _TRANSIENT_ERROR_TYPES = (
-        OSError,
-        ConnectionError,
-        ConnectionRefusedError,
-        ConnectionResetError,
-        TimeoutError,
-    )
-
-    # Error message patterns indicating transient failures
-    _TRANSIENT_ERROR_PATTERNS = (
-        "connection refused",
-        "connection reset",
-        "connection timed out",
-        "could not connect",
-        "server closed the connection",
-        "ssl connection has been closed",
-        "network is unreachable",
-        "no route to host",
-        "name resolution failed",
-        "name or service not known",
-        "dns",
-    )
 
     def __init__(
         self,
@@ -371,22 +348,15 @@ class PostgresSessionManager:
 
         Returns:
             True if error is likely transient and retryable
+
+        Note:
+            Classification lives in ``wappa.resilience`` so the session
+            manager, transport adapters, and host-owned retry decorators all
+            agree on what "transient" means. Pool checkout timeouts are
+            excluded there: the pool is already drained, so retrying just
+            parks the request and saturates the pooler further.
         """
-        # Pool exhaustion (QueuePool checkout timeout) is NOT transient: the pool
-        # is drained, so retrying just parks the request and saturates the pooler
-        # further. SQLAlchemy raises exc.TimeoutError with a message containing
-        # "connection timed out", which would otherwise match the patterns below —
-        # classify it as non-transient explicitly and fail fast.
-        if isinstance(error, SQLAlchemyTimeoutError):
-            return False
-
-        # Check error type
-        if isinstance(error, self._TRANSIENT_ERROR_TYPES):
-            return True
-
-        # Check error message patterns
-        error_msg = str(error).lower()
-        return any(pattern in error_msg for pattern in self._TRANSIENT_ERROR_PATTERNS)
+        return is_transient_db_error(error)
 
     def _calculate_backoff(self, attempt: int) -> float:
         """

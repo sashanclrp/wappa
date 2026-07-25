@@ -20,6 +20,8 @@ from rich.theme import Theme
 
 from wappa.core.config.settings import settings
 
+from .context import get_current_request_id
+
 # Regex to parse [T:...][U:...] context prefixes injected by ContextLogger
 _CTX_PREFIX_RE = re.compile(
     r"^(?:\[T:(?P<inbox>[^\]]*)\])?(?:\[U:(?P<user>[^\]]*)\])?\s*(?P<rest>.*)",
@@ -42,6 +44,7 @@ class WappaJSONFormatter(logging.Formatter):
     - ``msg``    – message text (context prefix stripped)
     - ``inbox`` – inbox ID when present in the message prefix
     - ``user``   – user ID when present in the message prefix
+    - ``request_id`` – correlation ID when an HTTP request scope is active
     - ``exc``    – single-line traceback string (only when exception info is present)
     """
 
@@ -65,6 +68,11 @@ class WappaJSONFormatter(logging.Formatter):
             obj["inbox"] = inbox
         if user:
             obj["user"] = user
+
+        request_id = get_current_request_id()
+        if request_id:
+            obj["request_id"] = request_id
+
         if record.exc_info:
             obj["exc"] = "".join(traceback.format_exception(*record.exc_info)).replace(
                 "\n", "\\n"

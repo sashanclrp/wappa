@@ -12,6 +12,8 @@
   full Messenger and Cache Factory context when a `user_id` is resolved.
 - Return an internal process result for tests and observability without changing
   the accepted HTTP delivery contract.
+- Provide the reusable pieces a processor would otherwise re-implement: HMAC
+  signature verification and event-type-to-handler routing.
 
 ## Explicit Non-Responsibilities
 
@@ -27,8 +29,25 @@
 ```
 wappa/core/external_webhooks/
 ├── __init__.py
-└── runtime.py
+├── runtime.py      # ExternalWebhookRuntime — accepted request → dispatch
+├── signature.py    # HMACSignatureVerifier — generic signed-webhook verification
+└── registry.py     # ExternalEventRegistry — event type → handler routing
 ```
+
+`HMACSignatureVerifier` covers the shape shared by most signed webhook
+providers: an HMAC of the raw body under a shared secret, carried in a header,
+optionally algorithm-prefixed, hex or base64 encoded. It is a value object used
+*inside* a processor's `parse_event()`; the runtime never calls it, because only
+the processor knows which secret and header a given source uses. It returns
+booleans rather than raising, so the processor keeps ownership of how a bad
+signature is reported.
+
+`ExternalEventRegistry` is the routing table a Host Application uses inside
+`process_external_event()` when one source emits many event types. It is
+transport-free by design — no HTTP, no signature checks, no Dispatch Context —
+so it can be unit tested without a request and reused outside the webhook path.
+Dispatch is best-effort per handler: one raising subscriber cannot silence the
+others, and the returned `DispatchReport` carries the failures.
 
 `ExternalWebhookRuntime` is the deep module behind `WebhookPlugin`. It owns the
 orchestration that would otherwise leak into every external webhook route:

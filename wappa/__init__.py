@@ -16,6 +16,11 @@ from .core.config.settings import settings
 from .core.context import WappaContext
 from .core.events.event_handler import WappaEventHandler
 from .core.expiry import expiry_registry
+from .core.external_webhooks import (
+    DispatchReport,
+    ExternalEventRegistry,
+    HMACSignatureVerifier,
+)
 from .core.factory import WappaBuilder, WappaPlugin
 from .core.plugins import ExpiryPlugin
 from .core.wappa_app import Wappa
@@ -41,6 +46,9 @@ __all__ = [
     # External Webhook Gateway
     "ExternalEvent",
     "IWebhookProcessor",
+    "ExternalEventRegistry",
+    "DispatchReport",
+    "HMACSignatureVerifier",
     "WappaContext",
     # Cron Scheduling
     "CronEvent",
