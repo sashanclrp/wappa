@@ -4,6 +4,45 @@ This file tracks upstream Meta changes that alter Wappa's WhatsApp contract.
 `CHANGELOG.md` records Wappa releases; this file records why each Meta-driven
 release exists, the payload shapes it covers, and what host applications must do.
 
+## 2026-07-26: `user_actions` — marketing message interaction events
+
+### Status
+
+- Meta source: "Tracking click events", WhatsApp Marketing Messages API documentation (updated 2025-11-18).
+- Trigger: production `WHATSAPP_WEBHOOK_CONTRACT_DRIFT error_type=extra_forbidden fields=entry.0.changes.0.user_actions` → `HTTP 400`. Ordinary messages kept parsing, but every `user_actions` delivery was rejected and retried by Meta.
+
+### What Meta changed
+
+Meta delivers a `user_actions` array when a user interacts with a marketing message — currently a click on the message body or its call-to-action. It arrives on the `messages` field, but the change `value` carries only `messaging_product`, `metadata`, and `user_actions`: no `messages`, no `contacts`.
+
+```json
+"user_actions": [
+  {
+    "action_type": "marketing_messages_link_click",
+    "timestamp": "<time_of_click>",
+    "marketing_messages_link_click_data": {
+      "click_component": "cta",
+      "product_id": "sku_id",
+      "click_id": "click_id",
+      "tracking_token": "example_token"
+    }
+  }
+]
+```
+
+`action_type` and `timestamp` are required; the rest of `marketing_messages_link_click_data` is optional. Production payloads also carry action types Meta has not documented, with their own `<action_type>_data` objects (one observed variant nests a device descriptor such as `"agent": "(Android 15)"`), so the set of action types is open-ended.
+
+### Wappa contract
+
+- `WebhookValue.user_actions` is a typed `list[UserActionEntry]` and counts as webhook content, so a value carrying only user actions is valid.
+- `UserActionEntry` is `action_type` + `timestamp` + the typed `marketing_messages_link_click_data`, with `extra="allow"`. This is deliberate: an undocumented action type must not become a sustained 400 that gets the webhook throttled or disabled. Strictness stays at `WebhookValue`, which still rejects unknown top-level keys as contract drift.
+- Such a webhook routes as a system event: `SystemEventType.USER_ACTION`, with `SystemEventDetail.action_type` and `SystemEventDetail.user_action` (the entry serialized without field loss), timestamped from the action. It dispatches with `SystemWebhook.user is None` — the payload carries no user identity.
+- When a `value` carries both `messages` and `user_actions`, the inbound-message path wins; the actions stay reachable via `WhatsAppWebhook.get_user_actions()`.
+
+### Host application impact
+
+No breaking change. Hosts that want click attribution handle `SystemEventType.USER_ACTION` in `process_system_webhook`; everyone else simply stops seeing 400s for these deliveries.
+
 ## 2026-07-21: BSUIDs, usernames, and optional phone numbers
 
 ### Status

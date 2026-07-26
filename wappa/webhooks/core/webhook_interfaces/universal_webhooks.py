@@ -48,6 +48,8 @@ class SystemEventType(str, Enum):
     HISTORY_SYNC = "history_sync"
     SMB_MESSAGE_ECHO = "smb_message_echo"
     SMB_APP_STATE_SYNC = "smb_app_state_sync"
+    # User interaction events (e.g. marketing message link clicks).
+    USER_ACTION = "user_action"
 
 
 class WhatsAppIncomingWebhookData(BaseModel):

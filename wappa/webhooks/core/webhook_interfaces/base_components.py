@@ -446,3 +446,13 @@ class SystemEventDetail(BaseModel):
         default=None,
         description="Typed Meta Coexistence value serialized without field loss",
     )
+
+    # User interaction events (marketing message link clicks and future actions).
+    action_type: str | None = Field(
+        default=None,
+        description="Provider action name, e.g. 'marketing_messages_link_click'",
+    )
+    user_action: dict | None = Field(
+        default=None,
+        description="Typed user action serialized without field loss",
+    )

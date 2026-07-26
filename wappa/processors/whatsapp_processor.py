@@ -712,6 +712,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         # - field: "user_preferences"           → MARKETING_PREFERENCE
         # - field: "user_id_update"             → USER_ID_CHANGE
         # - field: "messages" (type=="system")  → NUMBER_CHANGE or USER_ID_CHANGE
+        # - field: "messages" (user_actions)    → USER_ACTION
         from wappa.webhooks.core.webhook_interfaces import (
             SystemEventDetail,
             SystemEventType,
@@ -934,6 +935,19 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                         user_base = self._create_user_base_from_contacts(
                             webhook, identity
                         )
+
+            case "messages" if webhook.is_user_action:
+                # User interaction events (marketing message link clicks) ride
+                # the messages field with no messages and no contacts, so there
+                # is no User to attach — the event is Inbox-scoped.
+                action = webhook.get_user_actions()[0]
+
+                system_event_type = SystemEventType.USER_ACTION
+                event_detail = SystemEventDetail(
+                    action_type=action.action_type,
+                    user_action=action.model_dump(mode="json", exclude_none=True),
+                )
+                event_timestamp = datetime.fromtimestamp(action.timestamp_int, tz=UTC)
 
             case "messages":
                 # System messages from the messages field (type=="system")

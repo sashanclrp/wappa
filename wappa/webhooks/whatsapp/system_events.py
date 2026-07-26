@@ -106,6 +106,65 @@ class GroupParticipantsUpdateEntry(BaseModel):
     added_participants: list[GroupParticipantIdentity] | None = None
 
 
+class MarketingMessagesLinkClickData(BaseModel):
+    """Payload of the ``marketing_messages_link_click`` user action.
+
+    Delivered by Meta's Marketing Messages API when a user clicks the body or
+    call-to-action of a marketing message.
+    """
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    click_component: str | None = Field(
+        None, description="Where the click happened: 'cta' or 'body'"
+    )
+    click_id: str | None = Field(
+        None,
+        description="Unique click identifier, also appended to the visited URL",
+    )
+    tracking_token: str | None = Field(
+        None, description="Internal Meta token for processing and tracking"
+    )
+    product_id: str | None = Field(
+        None, description="Product SKU ID when assigned in Ads Manager / Marketing API"
+    )
+
+
+class UserActionEntry(BaseModel):
+    """One entry of the ``user_actions`` array on a ``messages`` webhook.
+
+    Meta delivers user interaction events (currently marketing-message link
+    clicks) on the ``messages`` field, in a ``value`` that carries no
+    ``messages`` and no ``contacts`` — only ``metadata`` plus this array.
+
+    Each entry is ``action_type`` + ``timestamp`` plus one action-specific
+    ``<action_type>_data`` object. Meta ships new action types without
+    announcing them, and the ones seen in production already carry undocumented
+    sub-objects (e.g. device/agent descriptors). ``extra="allow"`` is therefore
+    deliberate: an unknown action type must not turn into a sustained 400 that
+    makes Meta throttle or disable the whole webhook. Strictness is kept one
+    level up — ``WebhookValue`` still rejects unknown keys, so a genuinely new
+    top-level field still surfaces as contract drift.
+    """
+
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
+
+    action_type: str = Field(
+        ..., description="Name of the action, e.g. 'marketing_messages_link_click'"
+    )
+    timestamp: int | str = Field(
+        ..., description="Unix timestamp of when the action happened"
+    )
+    marketing_messages_link_click_data: MarketingMessagesLinkClickData | None = Field(
+        None, description="Click details for 'marketing_messages_link_click'"
+    )
+
+    @property
+    def timestamp_int(self) -> int:
+        """Timestamp as an int, tolerating Meta's string-encoded form."""
+        return int(self.timestamp)
+
+
 # NOTE: Coexistence account-level events (account_offboarded / account_reconnected)
 # are modeled by ``AccountWebhookValue`` in ``webhook_container.py``, alongside the
 # other strict change-value models. Their value is a flat change ``value`` (not a

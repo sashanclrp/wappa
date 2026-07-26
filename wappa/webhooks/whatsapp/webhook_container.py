@@ -36,6 +36,7 @@ from wappa.webhooks.whatsapp.coexistence_events import (
     SmbAppStateSyncWebhookValue,
     SmbMessageEchoesWebhookValue,
 )
+from wappa.webhooks.whatsapp.system_events import UserActionEntry
 
 # Pre-computed union used by ``is_system_event`` to identify fields that are
 # system events by their field name alone (as opposed to system messages that
@@ -86,6 +87,13 @@ class WebhookValue(BaseModel):
     groups: list[dict[str, Any]] | None = Field(
         None, description="WhatsApp group participant updates"
     )
+    user_actions: list[UserActionEntry] | None = Field(
+        None,
+        description=(
+            "User interaction events (e.g. marketing message link clicks). "
+            "Delivered on the 'messages' field without messages or contacts."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_webhook_content(self):
@@ -100,6 +108,7 @@ class WebhookValue(BaseModel):
             self.user_id_update is not None and len(self.user_id_update) > 0
         )
         has_groups = self.groups is not None and len(self.groups) > 0
+        has_user_actions = self.user_actions is not None and len(self.user_actions) > 0
 
         if not (
             has_messages
@@ -108,9 +117,11 @@ class WebhookValue(BaseModel):
             or has_user_prefs
             or has_user_id_update
             or has_groups
+            or has_user_actions
         ):
             raise ValueError(
-                "Webhook must contain messages, statuses, errors, user preferences, user ID updates, or groups"
+                "Webhook must contain messages, statuses, errors, user preferences, "
+                "user ID updates, groups, or user actions"
             )
 
         # Messages and statuses should not be present together
@@ -137,9 +148,10 @@ class WebhookValue(BaseModel):
         "user_preferences",
         "user_id_update",
         "groups",
+        "user_actions",
     )
     @classmethod
-    def validate_arrays_not_empty(cls, v: list[dict] | None) -> list[dict] | None:
+    def validate_arrays_not_empty(cls, v: list[Any] | None) -> list[Any] | None:
         """Validate that arrays are not empty if present."""
         if v is not None and len(v) == 0:
             return None  # Convert empty arrays to None for cleaner logic
@@ -486,6 +498,7 @@ class WhatsAppWebhook(BaseWebhook):
         - field: "user_preferences" webhooks
         - field: "user_id_update" webhooks
         - field: "messages" where ALL messages have type: "system"
+        - field: "messages" carrying only user_actions (no messages)
         """
         if not self.entry:
             return False
@@ -495,13 +508,27 @@ class WhatsAppWebhook(BaseWebhook):
                 # Direct system event fields
                 if change.field in _DIRECT_SYSTEM_EVENT_FIELDS:
                     return True
-                # System messages within the messages field
                 messages = getattr(change.value, "messages", None)
+                # User action events ride the messages field with no messages.
+                if not messages and getattr(change.value, "user_actions", None):
+                    return True
+                # System messages within the messages field
                 if (
                     change.field == "messages"
                     and messages
                     and all(msg.get("type") == "system" for msg in messages)
                 ):
+                    return True
+        return False
+
+    @property
+    def is_user_action(self) -> bool:
+        """Check if this webhook carries user interaction events only."""
+        for entry in self.entry:
+            for change in entry.changes:
+                if getattr(change.value, "messages", None):
+                    continue
+                if getattr(change.value, "user_actions", None):
                     return True
         return False
 
@@ -628,6 +655,16 @@ class WhatsAppWebhook(BaseWebhook):
                 if groups:
                     items.extend(groups)
         return items
+
+    def get_user_actions(self) -> list[UserActionEntry]:
+        """Return typed user interaction events, empty when none are present."""
+        actions: list[UserActionEntry] = []
+        for entry in self.entry:
+            for change in entry.changes:
+                value_actions = getattr(change.value, "user_actions", None)
+                if value_actions:
+                    actions.extend(value_actions)
+        return actions
 
     def get_account_event(self, field_name: str) -> "AccountWebhookValue | None":
         """Return the typed ``value`` of an account-level coexistence event.

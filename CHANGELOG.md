@@ -5,6 +5,46 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.1] - 2026-07-26
+
+Fixes rejected marketing-message interaction webhooks. Meta's Marketing Messages
+API delivers a `user_actions` array when a user clicks the body or call-to-action
+of a marketing message — on the `messages` field, but in a `value` carrying
+neither `messages` nor `contacts`. `WebhookValue` is `extra="forbid"`, so every
+one of those deliveries failed with
+`WHATSAPP_WEBHOOK_CONTRACT_DRIFT error_type=extra_forbidden fields=entry.0.changes.0.user_actions`
+and returned `HTTP 400`. Ordinary messages kept working, but Meta retried each
+rejected click event, and sustained 400s put the webhook at risk of being
+throttled. Payload shapes and the reasoning are recorded in
+[META-CHANGELOGS.md](META-CHANGELOGS.md).
+
+### Fixed
+- `user_actions` webhooks now parse and dispatch instead of returning `HTTP 400`.
+
+### Added
+- `WebhookValue.user_actions`, typed as `list[UserActionEntry]` and accepted as
+  webhook content, so a `value` carrying only user actions is valid.
+- `UserActionEntry` and `MarketingMessagesLinkClickData` in
+  `wappa.webhooks.whatsapp.system_events`. The entry is `extra="allow"` on
+  purpose: Meta ships action types it has not documented, and an unrecognized
+  one must not become a sustained 400. Strictness stays at `WebhookValue`, which
+  still rejects unknown top-level keys as contract drift.
+- `SystemEventType.USER_ACTION`, plus `SystemEventDetail.action_type` and
+  `SystemEventDetail.user_action` (the action entry serialized without field
+  loss). These events are Inbox-scoped and dispatch with
+  `SystemWebhook.user is None` — the payload carries no user identity. Hosts that
+  want click attribution handle them in `process_system_webhook`.
+- `WhatsAppWebhook.is_user_action` and `WhatsAppWebhook.get_user_actions()`.
+- 5 contract tests covering the documented click payload, an undocumented action
+  type, drift still being reported for unknown `value` keys, dispatch, and the
+  messages-take-precedence case.
+
+### Changed
+- When a `value` carries both `messages` and `user_actions`, the inbound-message
+  path wins; the actions remain reachable via `get_user_actions()`. Meta only
+  documents them arriving standalone, but a future combined payload must not
+  swallow a real message.
+
 ## [0.23.0] - 2026-07-25
 
 Promotes a set of generic runtime primitives into Wappa so host platforms stop

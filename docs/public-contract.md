@@ -465,6 +465,8 @@ Account-scoped events populate `SystemEventDetail.waba_id` (and `phone_number_id
 `reason` where applicable) and dispatch with `SystemWebhook.user is None` — they target a
 Platform Account (WABA), not a User. Consumers handle them in `process_system_webhook`.
 
+`USER_ACTION` covers Meta's `user_actions` payload — user interaction events such as marketing message link clicks, delivered on the `messages` field with no `messages` and no `contacts`. It populates `SystemEventDetail.action_type` (Meta's action name, e.g. `marketing_messages_link_click`) and `SystemEventDetail.user_action` (the full action entry serialized, including any action-specific `<action_type>_data` object). Like account-scoped events it dispatches with `SystemWebhook.user is None` — the payload carries no user identity. Action entries validate permissively: an `action_type` Wappa has not seen keeps its extra keys and still dispatches, rather than failing the delivery. Unknown keys elsewhere in the change `value` remain strict contract drift.
+
 ### Domain Interfaces (`from wappa.domain.interfaces import ...`)
 
 - `IMessenger`, `IMediaHandler`, `ICacheFactory`
