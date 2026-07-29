@@ -6,7 +6,30 @@ introduced alongside the BSUID system. They are parsed by the processor
 and transformed into the universal SystemWebhook interface.
 """
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from wappa.core.logging.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+def _warn_on_undocumented_fields(model: BaseModel, *, context: str) -> None:
+    """Log a warning (not a 400) when a tolerant model receives unknown fields.
+
+    ``extra="allow"`` keeps Meta's undocumented additions from becoming a
+    sustained 400, but silently swallowing them means we'd never notice a new
+    field exists until a host asks why data is missing. This surfaces it in
+    logs instead, with the field names and the raw values Meta actually sent,
+    so the contract can be updated deliberately.
+    """
+    extra = model.model_extra
+    if extra:
+        logger.warning(
+            "WHATSAPP_WEBHOOK_UNDOCUMENTED_FIELDS context=%s fields=%s raw=%s",
+            context,
+            ",".join(extra.keys()),
+            extra,
+        )
 
 
 class UserPreferenceEntry(BaseModel):
@@ -113,7 +136,11 @@ class MarketingMessagesLinkClickData(BaseModel):
     call-to-action of a marketing message.
     """
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    # Meta ships new fields on this sub-object without announcing them (e.g.
+    # ``client_user_agent`` appeared in production undocumented). ``extra="allow"``
+    # keeps a genuinely new field from turning into a sustained 400, matching the
+    # tolerance already applied to ``UserActionEntry`` above.
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     click_component: str | None = Field(
         None, description="Where the click happened: 'cta' or 'body'"
@@ -128,6 +155,14 @@ class MarketingMessagesLinkClickData(BaseModel):
     product_id: str | None = Field(
         None, description="Product SKU ID when assigned in Ads Manager / Marketing API"
     )
+    client_user_agent: str | None = Field(
+        None, description="User agent of the client that performed the click, e.g. '(Android 14)'"
+    )
+
+    @model_validator(mode="after")
+    def _warn_on_extra(self) -> "MarketingMessagesLinkClickData":
+        _warn_on_undocumented_fields(self, context="marketing_messages_link_click_data")
+        return self
 
 
 class UserActionEntry(BaseModel):
@@ -163,6 +198,13 @@ class UserActionEntry(BaseModel):
     def timestamp_int(self) -> int:
         """Timestamp as an int, tolerating Meta's string-encoded form."""
         return int(self.timestamp)
+
+    @model_validator(mode="after")
+    def _warn_on_extra(self) -> "UserActionEntry":
+        _warn_on_undocumented_fields(
+            self, context=f"user_actions.action_type={self.action_type}"
+        )
+        return self
 
 
 # NOTE: Coexistence account-level events (account_offboarded / account_reconnected)

@@ -4,6 +4,26 @@ This file tracks upstream Meta changes that alter Wappa's WhatsApp contract.
 `CHANGELOG.md` records Wappa releases; this file records why each Meta-driven
 release exists, the payload shapes it covers, and what host applications must do.
 
+## 2026-07-29: `marketing_messages_link_click_data.client_user_agent`
+
+### Status
+
+- Trigger: production `extra_forbidden (input: "(Android 14)")` on `user_actions.0.marketing_messages_link_click_data.client_user_agent`, ~10:47 on 2026-07-29. The 0.23.1 dispatch fix below was already deployed and working; this was a separate, narrower validation failure one level down.
+- Impact: the click event was discarded, but it is marketing-click analytics, not a customer message — no conversations were lost.
+
+### What Meta changed
+
+Meta added `client_user_agent` to `marketing_messages_link_click_data` without updating the documented schema referenced below. Observed value: `"(Android 14)"`.
+
+### Wappa contract
+
+- `MarketingMessagesLinkClickData` now types `client_user_agent: str | None` and switched to `extra="allow"` (previously `extra="forbid"`), matching the tolerance already used on `UserActionEntry`.
+- Both `UserActionEntry` and `MarketingMessagesLinkClickData` now log `WHATSAPP_WEBHOOK_UNDOCUMENTED_FIELDS` (field names + raw values) whenever a field lands outside the typed contract, so the *next* undocumented field shows up in logs as a warning instead of needing a production 400 to notice.
+
+### Host application impact
+
+No breaking change. Shipped in `0.23.2`.
+
 ## 2026-07-26: `user_actions` — marketing message interaction events
 
 ### Status

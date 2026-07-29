@@ -5,6 +5,29 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.23.2] - 2026-07-29
+
+Fixes a second rejected shape on the same `user_actions` payload. Meta started
+sending `client_user_agent` inside `marketing_messages_link_click_data`
+(e.g. `"(Android 14)"`) without announcing it, and that sub-object was
+`extra="forbid"`, so every click carrying it still 400'd with
+`extra_forbidden` even after 0.23.1. The dispatch fix from 0.23.1 was already
+working correctly — this is purely the nested payload validation.
+
+### Fixed
+- `marketing_messages_link_click_data` no longer 400s on `client_user_agent`
+  (now a typed field) or on any other undocumented sibling field.
+
+### Added
+- `MarketingMessagesLinkClickData` is now `extra="allow"`, matching the
+  tolerance policy already applied to `UserActionEntry`.
+- Both models now log a `WHATSAPP_WEBHOOK_UNDOCUMENTED_FIELDS` warning
+  (field names + raw values) whenever Meta sends a field outside the typed
+  contract, so new additions are visible in logs instead of silently
+  dropped.
+- 2 contract tests covering the `client_user_agent` payload and the new
+  warning log.
+
 ## [0.23.1] - 2026-07-26
 
 Fixes rejected marketing-message interaction webhooks. Meta's Marketing Messages
