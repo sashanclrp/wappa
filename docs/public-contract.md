@@ -71,8 +71,8 @@ expected to alert on that signature.
 `InboundMessageWebhook` is the only public inbound-message Universal Model name. Wappa does not provide a compatibility alias for previous inbound-message model names.
 
 `CallWebhook` dispatches WhatsApp Calling connect, terminate, and status events
-to `WappaEventHandler.process_call(webhook)`. The default hook is a no-op so
-existing Host Applications remain source-compatible.
+to `WappaEventHandler.process_call(webhook)`. The default hook is a no-op because
+hosts may deliberately ignore calling events.
 
 The old inbound schema paths under `wappa.schemas.whatsapp`,
 `wappa.schemas.factory`, and `wappa.schemas.core.base_*` are intentionally
@@ -380,6 +380,53 @@ the feature raise `NotImplementedError` unless their Messenger overrides it.
 - If a split is justified in the future, it will be a clean breaking change with no compatibility aliases.
 - Internal handler composition (per message family) is not part of the public contract.
 
+## Inbox-scoped Template transport
+
+Host Applications that send Templates use the shallow `wappa.messaging`
+contract instead of constructing Wappa clients, handlers, factories, sessions,
+or Messenger Pipelines:
+
+- `OutboundRuntime.from_app(app).templates(inbox_id)`
+- `InboxTemplateTransport.send(request)`
+- `TextTemplateTransportRequest`, `MediaTemplateTransportRequest`,
+  `LocationTemplateTransportRequest`
+- `TemplateTransportMediaHeader`, `TemplateTransportLocationHeader`,
+  `TemplateTransportRouting`, `TemplateTransportParameter`, `TemplateCategory`,
+  `TemplateMediaType`, `TemplateAuthenticationMethod`
+- `PhoneNumberTemplateRecipient`, `BsuidTemplateRecipient`, `TemplateAddressKind`
+- `TemplateRoutingPolicy`, `TemplateEndpoint`, `TemplateRoutingReason`
+- `TemplateTransportOutcome`, `TemplateTransportResult`
+
+Requests reject unknown fields and contain only platform-facing values. Agent,
+Campaign, authority, attribution, Conversation, Reply State, state-cache,
+persistence, and arbitrary Host metadata do not cross this boundary.
+
+Every request contains exactly one discriminated Delivery Address. Phone
+numbers are normalized and sent in Meta's `to` field. Regular and parent
+BSUIDs are normalized and sent in Meta's `recipient` field. Usernames are not
+accepted as outbound addresses. Authentication Templates require their method
+and reject BSUID addresses.
+
+Category-default routing sends marketing Templates to `/marketing_messages`
+and utility/authentication Templates to `/messages`. The only fallback is the
+explicit `cloud_messages_fallback` policy for marketing. Wappa never retries a
+rejection or ambiguous call through the other endpoint. Results report the
+selected endpoint and routing reason.
+
+Outcomes mean exactly:
+
+- `accepted`: the platform accepted the call and returned a Message ID;
+- `rejected`: a request or platform response proves the send was not accepted;
+- `transport_unavailable`: Wappa could not start a platform call, including drain;
+- `indeterminate`: Wappa cannot prove whether the platform accepted the call.
+
+Acceptance does not claim delivery, read, reply, or Host Application commit.
+Callers must not automatically resend an `indeterminate` result.
+
+Wappa's standalone Template HTTP adapter is disabled by default. A standalone
+host opts in with `Wappa(include_template_transport_api=True)`. Embedding hosts
+receive no raw Template mutation routes unless they make that choice.
+
 ## Canonical Import Paths (SDK Surface)
 
 Host applications should prefer these shallow imports over deep internal paths.
@@ -402,9 +449,19 @@ Internal module paths (`wappa.core.*`, `wappa.persistence.redis.redis_handler.*`
 
 ### Messaging (`from wappa.messaging import ...`)
 
-- `IMessenger`, `WhatsAppMessenger`, `WhatsAppClient`
-- `WhatsAppMediaHandler`, `WhatsAppInteractiveHandler`, `WhatsAppTemplateHandler`, `WhatsAppSpecializedHandler`
+- `IMessenger`
 - `MessengerMiddleware`, `MessengerPipeline`, `SendInvocation`, `SendNext`, `PRIORITY_CACHE`
+- `OutboundRuntime`, `InboxTemplateTransport`
+- `TextTemplateTransportRequest`, `MediaTemplateTransportRequest`, `LocationTemplateTransportRequest`
+- `TemplateTransportMediaHeader`, `TemplateTransportLocationHeader`, `TemplateTransportRouting`
+- `TemplateTransportParameter`, `TemplateCategory`, `TemplateMediaType`, `TemplateAuthenticationMethod`
+- `PhoneNumberTemplateRecipient`, `BsuidTemplateRecipient`, `TemplateAddressKind`
+- `TemplateRoutingPolicy`, `TemplateEndpoint`, `TemplateRoutingReason`
+- `TemplateTransportOutcome`, `TemplateTransportResult`
+
+`WhatsAppClient`, `WhatsAppMessenger`, their handlers, `MessengerFactory`, and
+session lifecycle classes are implementation details. Host Applications do not
+construct or import them.
 
 ### Persistence (`from wappa.persistence import ...`)
 

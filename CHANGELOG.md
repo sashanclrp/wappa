@@ -5,6 +5,44 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.24.0] - 2026-08-03
+
+Adds an Inbox-scoped Template transport so embedding applications can send Templates through a small public capability instead of constructing Wappa's credential lookup, HTTP session, WhatsApp client, handlers, Messenger, and pipeline. The result type distinguishes a proven rejection from a call whose platform outcome is unknown, so a host never automatically retries an irreversible send. This release also takes a clean break on the internals that leaked through Wappa's public surface — raw `app.state` client aliases, compatibility status aliases, and duplicate Template models are gone rather than deprecated. Reasoning is recorded in [ADR-0006](docs/adr/0006-inbox-scoped-template-transport-outcomes.md), which extends ADR-0003 and ADR-0004.
+
+**This release contains breaking changes.** See the Removed and Changed sections below.
+
+### Added
+- **`OutboundRuntime`** (`from wappa.messaging import OutboundRuntime`) — public factory that resolves Inbox credentials and active HTTP clients, constructs the platform Messenger and Messenger Pipeline, and hands back small Inbox-scoped capabilities. `OutboundRuntime.from_app(app).templates(inbox_id)` returns an `InboxTemplateTransport`.
+- **`InboxTemplateTransport.send(request)`** — the Template capability. Requests are a strict discriminated union: `TextTemplateTransportRequest`, `MediaTemplateTransportRequest`, `LocationTemplateTransportRequest`. They reject unknown fields and carry platform-facing values only — no Agent, Campaign, attribution, Conversation, Reply State, or persistence concepts cross the boundary.
+- **Typed Delivery Addresses** — each request carries exactly one: `PhoneNumberTemplateRecipient` (serialized as Meta's `to`) or `BsuidTemplateRecipient` (regular or parent BSUID, serialized as Meta's `recipient`). Usernames are webhook/response evidence and are not accepted as outbound addresses. Authentication Templates require a named method and reject BSUID addresses.
+- **`TemplateTransportOutcome`** with four meanings: `accepted` (platform acceptance *and* a platform Message ID are proven), `rejected` (evidence the call was not accepted), `transport_unavailable` (no call could be started, including drain), `indeterminate` (acceptance cannot be proven). A success response without a Message ID is `indeterminate`. Acceptance never claims delivery, read, reply, or Host Application commit — and callers must not auto-resend an `indeterminate` result.
+- **Explicit endpoint routing** — marketing Templates go to `/marketing_messages` and utility/authentication to `/messages` by category default. The only fallback is the named `cloud_messages_fallback` policy, selected before I/O. Wappa never retries a rejection or an ambiguous response through the other endpoint. `TemplateTransportResult` reports the selected `TemplateEndpoint` and `TemplateRoutingReason`.
+- **`Wappa(include_template_transport_api=True)`** — opt-in for Wappa's standalone Template HTTP routes. Embedding hosts get no raw Template mutation routes unless they ask.
+- **Richer recipient evidence on `MessageResult`** — `recipient_parent_bsuid` and `recipient_username`, plus `ResponseContact.parent_bsuid`, `.username`, `.profile`, and `.resolved_username`.
+- **ADR-0006**, a `Delivery Address` / `Outbound Runtime` / `Template Transport` / `Template Transport Outcome` glossary in `CONTEXT.md`, a Template transport flow in `ARCHITECTURE.md`, and a verification record under `docs/verification/`.
+
+### Changed
+- **`IMessenger` Template methods take `routing_policy` instead of `override`.** The old boolean `override` did not say what it selected; `routing_policy: str = "category_default"` names the choice. Update `send_text_template(..., override=True)` to `send_text_template(..., routing_policy="cloud_messages_fallback")`.
+- **`WappaCorePlugin.recreate_http_session()` no longer takes an `app` argument.** The plugin already owns the lifecycle. Replace `recreate_http_session(app)` with `recreate_http_session()`.
+- **`SessionLifecycle` is the sole owner of Wappa's HTTP clients.** Consumers receive provider callables (`get_session`, `get_media_download_client`); the media-download client is no longer created ad hoc by the media handler. ADR-0003 and ADR-0004 are amended to record this.
+- **`whatsapp_router` is now `create_whatsapp_router(include_template_transport=...)`** in `wappa.api.routes`.
+- **`HTTPSessionNotAvailableError` is renamed `SessionLifecycleNotAvailableError`** (`wappa.core.expiry`).
+- **Outbound failures return a sanitized `error` message and a stable `error_code`** instead of `str(exception)`. Codes: `runtime_unavailable`, `platform_outcome_indeterminate`, `invalid_template_request`, Meta's numeric error code, or `http_<status>`. Raw exception text no longer reaches callers.
+- **`APIEventDispatcher.dispatch()` requires its `request` argument** — it is no longer optional.
+- Universal enums in `wappa.schemas.core.types` are `StrEnum` rather than `str, Enum`.
+
+### Removed
+- **`wappa.messaging` no longer re-exports adapter internals**: `WhatsAppClient`, `WhatsAppMessenger`, `WhatsAppUrlBuilder`, `WhatsAppFormDataBuilder`, `WhatsAppMediaHandler`, `WhatsAppInteractiveHandler`, `WhatsAppTemplateHandler`, `WhatsAppSpecializedHandler`. Host Applications receive `IMessenger` from Wappa runtime contexts or resolve the Template capability through `OutboundRuntime`; they do not construct clients, handlers, factories, or sessions.
+- **Template request models** `TextTemplateMessage`, `MediaTemplateMessage`, `LocationTemplateMessage`, their `*Metadata` classes, `BaseTemplateMessage`, `TemplateLanguage`, `TemplateComponent`, and `TemplateValidationResult`. The public Template request surface is now the transport request union in `wappa.messaging`.
+- **Status compatibility aliases** `StatusType`, `DeliveryStatus`, `ReadStatus`, `SentStatus`, `FailedStatus` from `wappa.webhooks.whatsapp` — all five were aliases of `MessageStatus` / `WhatsAppMessageStatus`, which are exported directly.
+- **Raw client aliases in application state**: `app.state.http_session`, `app.state.get_http_session`, `app.state.media_download_client`. Use `app.state.session_lifecycle`, or the `OutboundRuntime` seam.
+- **The shadow `wappa/sse.py` module.** The `wappa/sse/` package is the sole SSE public surface; imports are unchanged.
+- **Media payload creation on `MessageFactory`** (`create_image_message`, `create_video_message`, `create_audio_message`, `create_document_message`, `create_sticker_message`) — `MediaFactory` is the single owner of media payloads.
+- **`get_api_logger()`** from `wappa.core.logging.logger`, an alias of `get_app_logger()`.
+
+### Verification
+`uv run ruff check .` clean, `uv run ruff format --check .` clean, `uv run pytest` → 402 passed. Strict mypy passes on the new transport, lifecycle, expiry composition, and Template route adapter (the repository-wide mypy baseline is not green and is unchanged by this work). Controlled live sends through `/messages` and `/marketing_messages` against Meta have **not** been run — no provider credentials were available during implementation. See `docs/verification/260803-template-runtime-seam.md`.
+
 ## [0.23.2] - 2026-07-29
 
 Fixes a second rejected shape on the same `user_actions` payload. Meta started

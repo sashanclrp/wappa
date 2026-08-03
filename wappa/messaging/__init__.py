@@ -1,25 +1,11 @@
 """
 Wappa Messaging Components
 
-Provides access to messaging interfaces and platform-specific implementations
-including WhatsApp client, messenger, and specialized handlers.
+Public outbound interfaces, middleware contracts, and Inbox-scoped capabilities.
 
-Clean Architecture: Application services and infrastructure implementations.
-
-Usage (User Request: Quick access to WhatsApp messaging components):
-    # Core messaging interface
-    from wappa.messaging import IMessenger
-
-    # WhatsApp client and messenger
-    from wappa.messaging.whatsapp import WhatsAppClient, WhatsAppMessenger
-
-    # WhatsApp specialized handlers
-    from wappa.messaging.whatsapp import (
-        WhatsAppMediaHandler,
-        WhatsAppInteractiveHandler,
-        WhatsAppTemplateHandler,
-        WhatsAppSpecializedHandler
-    )
+WhatsApp clients, handlers, and Messenger construction are adapter internals.
+Host Applications receive ``IMessenger`` from Wappa runtime contexts or resolve
+the smaller Template capability through ``OutboundRuntime``.
 """
 
 # Core Messaging Interface
@@ -33,36 +19,59 @@ from wappa.core.messaging.pipeline import (
 )
 from wappa.domain.interfaces.messaging_interface import IMessenger
 
-# WhatsApp Client & Messenger (User Request: Quick access)
-from .whatsapp.client import WhatsAppClient, WhatsAppFormDataBuilder, WhatsAppUrlBuilder
-
-# WhatsApp Specialized Handlers (User Request: Quick access)
-from .whatsapp.handlers import (
-    WhatsAppInteractiveHandler,
-    WhatsAppMediaHandler,
-    WhatsAppSpecializedHandler,
-    WhatsAppTemplateHandler,
+from .template_transport import (
+    BsuidTemplateRecipient,
+    InboxTemplateTransport,
+    LocationTemplateTransportRequest,
+    MediaTemplateTransportRequest,
+    OutboundRuntime,
+    PhoneNumberTemplateRecipient,
+    TemplateAddressKind,
+    TemplateAuthenticationMethod,
+    TemplateCategory,
+    TemplateEndpoint,
+    TemplateMediaType,
+    TemplateRoutingPolicy,
+    TemplateRoutingReason,
+    TemplateTransportLocationHeader,
+    TemplateTransportMediaHeader,
+    TemplateTransportOutcome,
+    TemplateTransportParameter,
+    TemplateTransportRequest,
+    TemplateTransportResult,
+    TemplateTransportRouting,
+    TextTemplateTransportRequest,
 )
-from .whatsapp.messenger import WhatsAppMessenger
 
 __all__ = [
     # Core Interface
     "IMessenger",
-    # WhatsApp Client & Utilities
-    "WhatsAppClient",
-    "WhatsAppUrlBuilder",
-    "WhatsAppFormDataBuilder",
-    # WhatsApp Messenger
-    "WhatsAppMessenger",
-    # WhatsApp Handlers (User Request: Clean access to all handlers)
-    "WhatsAppMediaHandler",
-    "WhatsAppInteractiveHandler",
-    "WhatsAppTemplateHandler",
-    "WhatsAppSpecializedHandler",
     # Messenger Pipeline
     "MessengerMiddleware",
     "MessengerPipeline",
     "SendInvocation",
     "SendNext",
     "PRIORITY_CACHE",
+    # Inbox-scoped outbound Template transport
+    "OutboundRuntime",
+    "InboxTemplateTransport",
+    "TemplateTransportRequest",
+    "TemplateTransportParameter",
+    "PhoneNumberTemplateRecipient",
+    "BsuidTemplateRecipient",
+    "TemplateAuthenticationMethod",
+    "TemplateAddressKind",
+    "TemplateCategory",
+    "TemplateEndpoint",
+    "TemplateMediaType",
+    "TextTemplateTransportRequest",
+    "MediaTemplateTransportRequest",
+    "LocationTemplateTransportRequest",
+    "TemplateTransportMediaHeader",
+    "TemplateTransportLocationHeader",
+    "TemplateTransportRouting",
+    "TemplateRoutingPolicy",
+    "TemplateRoutingReason",
+    "TemplateTransportOutcome",
+    "TemplateTransportResult",
 ]

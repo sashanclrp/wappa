@@ -68,9 +68,9 @@ class InboundRuntimeDependencies:
     messenger_middleware: Sequence[Any]
     cache_type: str
     background_work_tracker: Any
+    media_download_client_provider: Callable[[], httpx.AsyncClient]
     redis_manager: Any | None = None
     postgres_session_manager: Any | None = None
-    media_download_client_provider: Callable[[], httpx.AsyncClient] | None = None
 
 
 @dataclass(frozen=True)

@@ -176,4 +176,3 @@ class WebhookPlugin:
             name=f"webhook:{self.external_source}:{inbox_id}",
         )
         return {"status": "accepted"}
-

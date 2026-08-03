@@ -10,7 +10,8 @@ This context owns:
 - Wrapping each dispatch in an SSE identity scope so SSE events emitted from handlers carry coherent `inbox_id` / user identity
 - Reconnecting to Redis on connection loss with exponential backoff
 - Providing helper factories (`create_expiry_messenger`, `create_expiry_cache_factory`) that bootstrap framework dependencies for use inside expiry handlers
-- Holding a reference to the host `FastAPI` app via `AppContext` so handlers can reach shared HTTP session state
+- Holding a reference to the host `FastAPI` app via `AppContext` so framework
+  helpers can reach `SessionLifecycle` and configured infrastructure
 
 ## Explicit Boundaries
 
@@ -35,7 +36,7 @@ wappa/core/expiry/
 ├── reconnection.py      # ReconnectionStrategy, ReconnectionConfig (exponential backoff)
 ├── app_context.py       # AppContext singleton, set_fastapi_app() / get_fastapi_app()
 └── context_helpers.py   # create_expiry_messenger(), create_expiry_cache_factory(),
-                         # parse_tenant_from_expired_key()
+                         # parse_inbox_from_expired_key()
 ```
 
 ## Key Classes and Their Roles
@@ -49,7 +50,7 @@ wappa/core/expiry/
 | `ExpiryDispatcher` | Creates an `asyncio.Task` per event via `_run_with_sse_scope`. Logs completion or errors via done-callback. |
 | `RedisConnectionManager` | Obtains a Redis client from the pool, enables `notify-keyspace-events=Ex`, creates and manages a PubSub subscription. |
 | `ReconnectionStrategy` | Tracks failure count, computes `base_delay × 2^(n-1)` (capped at `max_delay`), exposes `should_retry()` and `async wait()`. |
-| `AppContext` | Module-level singleton holding a `FastAPI` reference; accessed by context helpers to reach `app.state.http_session`. |
+| `AppContext` | Module-level singleton holding a `FastAPI` reference; accessed by context helpers to reach the core-owned `SessionLifecycle` and credential store. |
 
 ## Design Patterns
 
@@ -81,7 +82,7 @@ ExpiryDispatcher.dispatch(event)                [dispatcher.py]
         │  asyncio.create_task(_run_with_sse_scope(event))
         ▼
 _run_with_sse_scope                             [dispatcher.py]
-        │  parse_tenant_from_expired_key → inbox_id
+        │  parse_inbox_from_expired_key → inbox_id
         │  classify_meta_identifier → bsuid / phone
         │  sse_event_scope(inbox_id, user_id, …)
         ▼

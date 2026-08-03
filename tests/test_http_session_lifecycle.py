@@ -25,7 +25,7 @@ def test_validate_session_open():
 def test_validate_session_closed():
     session = MagicMock(spec=httpx.AsyncClient)
     session.is_closed = True
-    with pytest.raises(HTTPSessionClosedError, match="app.state.http_session.*closed"):
+    with pytest.raises(HTTPSessionClosedError, match="HTTP session is closed"):
         validate_session(session)
 
 
@@ -61,14 +61,20 @@ class TestMessengerFactorySessionGuard:
         def bad_provider():
             raise HTTPSessionClosedError("session closed")
 
-        factory = MessengerFactory(session_provider=bad_provider)
+        factory = MessengerFactory(
+            session_provider=bad_provider,
+            media_download_client_provider=bad_provider,
+        )
         with pytest.raises(HTTPSessionClosedError):
             factory._get_session()
 
     def test_provider_returns_session(self, open_session):
         from wappa.domain.factories.messenger_factory import MessengerFactory
 
-        factory = MessengerFactory(session_provider=lambda: open_session)
+        factory = MessengerFactory(
+            session_provider=lambda: open_session,
+            media_download_client_provider=lambda: open_session,
+        )
         result = factory._get_session()
         assert result is open_session
 
@@ -83,7 +89,9 @@ class TestMessengerFactorySessionGuard:
             raise HTTPSessionClosedError("session closed")
 
         factory = MessengerFactory(
-            session_provider=bad_provider, credential_store=mock_credential_store
+            session_provider=bad_provider,
+            media_download_client_provider=bad_provider,
+            credential_store=mock_credential_store,
         )
         with pytest.raises(RuntimeError, match="Messenger creation failed"):
             await factory.create_messenger(
@@ -99,6 +107,7 @@ class TestMessengerFactorySessionGuard:
 
         factory = MessengerFactory(
             session_provider=lambda: open_session,
+            media_download_client_provider=lambda: open_session,
             credential_store=mock_credential_store,
         )
 
@@ -124,7 +133,7 @@ class TestExpiryMessengerSessionGuard:
     @pytest.mark.asyncio
     async def test_no_lifecycle_raises_http_not_available(self):
         from wappa.core.expiry.context_helpers import (
-            HTTPSessionNotAvailableError,
+            SessionLifecycleNotAvailableError,
             create_expiry_messenger,
         )
 
@@ -140,7 +149,7 @@ class TestExpiryMessengerSessionGuard:
                 return_value=mock_context,
             ),
             pytest.raises(
-                HTTPSessionNotAvailableError,
+                SessionLifecycleNotAvailableError,
                 match="SessionLifecycle not available",
             ),
         ):
@@ -218,13 +227,10 @@ class TestSessionRecreation:
         await old_session.aclose()
         assert old_session.is_closed
 
-        mock_app = MagicMock(spec=["state"])
-        mock_app.state = MagicMock()
-
         plugin = self._make_plugin_with_lifecycle(old_session)
-        await plugin.recreate_http_session(mock_app)
+        await plugin.recreate_http_session()
 
-        new_session = mock_app.state.http_session
+        new_session = plugin._session_lifecycle.get_session()
         assert isinstance(new_session, httpx.AsyncClient)
         assert not new_session.is_closed
         assert new_session is not old_session
@@ -237,10 +243,8 @@ class TestSessionRecreation:
         from wappa.core.types import CacheType
 
         plugin = WappaCorePlugin(cache_type=CacheType.MEMORY)
-        mock_app = MagicMock(spec=["state"])
-
         with pytest.raises(RuntimeError, match="called before startup"):
-            await plugin.recreate_http_session(mock_app)
+            await plugin.recreate_http_session()
 
     @pytest.mark.asyncio
     async def test_recreate_handles_already_closed(self):
@@ -249,13 +253,10 @@ class TestSessionRecreation:
         old_session = SessionLifecycle._default_client_factory()
         await old_session.aclose()
 
-        mock_app = MagicMock(spec=["state"])
-        mock_app.state = MagicMock()
-
         plugin = self._make_plugin_with_lifecycle(old_session)
-        await plugin.recreate_http_session(mock_app)
+        await plugin.recreate_http_session()
 
-        new_session = mock_app.state.http_session
+        new_session = plugin._session_lifecycle.get_session()
         assert isinstance(new_session, httpx.AsyncClient)
         assert not new_session.is_closed
 

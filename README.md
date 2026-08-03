@@ -8,7 +8,7 @@ Build intelligent WhatsApp bots, workflows, and chat applications with clean arc
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.137+-green.svg)](https://fastapi.tiangolo.com)
 [![WhatsApp Business API](https://img.shields.io/badge/WhatsApp-Business%20API-25D366.svg)](https://developers.facebook.com/docs/whatsapp)
-[![Version](https://img.shields.io/badge/version-0.23.2-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.24.0-orange.svg)](CHANGELOG.md)
 
 > **v0.13.0 — Clean-break release** — `inbox_id` replaces `tenant_id`/`owner_id` as core identity, all compatibility shims removed, webhook schemas consolidated under `wappa/webhooks/`, inbound dispatch context added for multi-inbox routing. See [CHANGELOG.md](CHANGELOG.md) for the full breakdown.
 
@@ -96,8 +96,38 @@ app = Wappa(cache="redis")  # or "memory" or "json"
 await self.state_cache.set("conversation", {"step": "greeting"})
 ```
 
+### Inbox-scoped Template transport
+
+Embedding applications send Templates through Wappa's public runtime capability;
+they do not construct WhatsApp clients, handlers, sessions, or pipelines:
+
+```python
+from wappa.messaging import (
+    OutboundRuntime,
+    PhoneNumberTemplateRecipient,
+    TextTemplateTransportRequest,
+)
+
+transport = OutboundRuntime.from_app(fastapi_app).templates(inbox_id)
+result = await transport.send(
+    TextTemplateTransportRequest(
+        recipient=PhoneNumberTemplateRecipient(value="573001112233"),
+        template_name="welcome",
+        category="utility",
+    )
+)
+```
+
+`result.outcome` is `accepted`, `rejected`, `transport_unavailable`, or
+`indeterminate`. Acceptance proves a platform Message ID, not delivery or a Host
+Application commit. Wappa's standalone Template HTTP routes are opt-in with
+`Wappa(include_template_transport_api=True)`.
+
 ### 🏭 **Factory Pattern for Cross-Platform Messages** (v0.3.0)
-Text, read-status, and media payloads are produced by dedicated factories (`WhatsAppMessageFactory`, `WhatsAppMediaFactory`) and consumed by `WhatsAppMessenger` through dependency injection. This keeps pure payload construction separate from I/O and gives you clean injection points in FastAPI routes.
+Text/read-status payloads and media payloads have separate owners:
+`WhatsAppMessageFactory` and `WhatsAppMediaFactory`. `WhatsAppMessenger`
+consumes both through dependency injection, keeping pure payload construction
+separate from I/O without duplicating media construction rules.
 
 ```python
 # Defaults keep the library ergonomic:

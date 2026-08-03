@@ -46,11 +46,6 @@ class _SingleInboxCredentialStore(IInboxCredentialStore):
         return inbox_id == self.inbox_id
 
 
-class _NoopHTTPSession:
-    async def post(self, *args: Any, **kwargs: Any) -> httpx.Response:
-        return httpx.Response(200, json={})
-
-
 @pytest.fixture
 def authenticated_webhook_app() -> FastAPI:
     return _build_authenticated_webhook_app("123")
@@ -211,7 +206,6 @@ def test_webhook_url_factory_uses_canonical_inbox_processing_path() -> None:
 def _build_authenticated_webhook_app(inbox_id: str) -> FastAPI:
     app = FastAPI()
     app.state.inbox_credential_store = _SingleInboxCredentialStore(inbox_id)
-    app.state.http_session = _NoopHTTPSession()
     app.state.messenger_middleware = []
     app.state.wappa_cache_type = "memory"
     app.state.public_route_prefixes = ("/webhook",)

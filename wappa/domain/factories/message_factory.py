@@ -27,54 +27,6 @@ class MessageFactory(ABC):
     ) -> dict[str, Any]: ...
 
     @abstractmethod
-    def create_image_message(
-        self,
-        media_reference: str,
-        recipient: str,
-        caption: str | None = None,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]: ...
-
-    @abstractmethod
-    def create_video_message(
-        self,
-        media_reference: str,
-        recipient: str,
-        caption: str | None = None,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]: ...
-
-    @abstractmethod
-    def create_audio_message(
-        self,
-        media_reference: str,
-        recipient: str,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]: ...
-
-    @abstractmethod
-    def create_document_message(
-        self,
-        media_reference: str,
-        recipient: str,
-        filename: str | None = None,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]: ...
-
-    @abstractmethod
-    def create_sticker_message(
-        self,
-        media_reference: str,
-        recipient: str,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]: ...
-
-    @abstractmethod
     def validate_message(self, message_payload: dict[str, Any]) -> bool: ...
 
     @abstractmethod
@@ -82,37 +34,6 @@ class MessageFactory(ABC):
 
 
 class WhatsAppMessageFactory(MessageFactory):
-    def _build_media_payload(
-        self,
-        media_type: str,
-        media_reference: str,
-        recipient: str,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-        caption: str | None = None,
-        filename: str | None = None,
-    ) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "type": media_type,
-        }
-        apply_recipient_to_payload(payload, recipient)
-
-        media_obj: dict[str, Any] = (
-            {"link": media_reference} if is_url else {"id": media_reference}
-        )
-        if caption:
-            media_obj["caption"] = caption
-        if filename:
-            media_obj["filename"] = filename
-        payload[media_type] = media_obj
-
-        if reply_to_message_id:
-            payload["context"] = {"message_id": reply_to_message_id}
-
-        return payload
-
     @property
     def platform(self) -> PlatformType:
         return PlatformType.WHATSAPP
@@ -148,79 +69,6 @@ class WhatsAppMessageFactory(MessageFactory):
         if typing:
             payload["typing_indicator"] = {"type": "text"}
         return payload
-
-    def create_image_message(
-        self,
-        media_reference: str,
-        recipient: str,
-        caption: str | None = None,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]:
-        return self._build_media_payload(
-            "image",
-            media_reference,
-            recipient,
-            reply_to_message_id,
-            is_url,
-            caption=caption,
-        )
-
-    def create_video_message(
-        self,
-        media_reference: str,
-        recipient: str,
-        caption: str | None = None,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]:
-        return self._build_media_payload(
-            "video",
-            media_reference,
-            recipient,
-            reply_to_message_id,
-            is_url,
-            caption=caption,
-        )
-
-    def create_audio_message(
-        self,
-        media_reference: str,
-        recipient: str,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]:
-        return self._build_media_payload(
-            "audio", media_reference, recipient, reply_to_message_id, is_url
-        )
-
-    def create_document_message(
-        self,
-        media_reference: str,
-        recipient: str,
-        filename: str | None = None,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]:
-        return self._build_media_payload(
-            "document",
-            media_reference,
-            recipient,
-            reply_to_message_id,
-            is_url,
-            filename=filename,
-        )
-
-    def create_sticker_message(
-        self,
-        media_reference: str,
-        recipient: str,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]:
-        return self._build_media_payload(
-            "sticker", media_reference, recipient, reply_to_message_id, is_url
-        )
 
     def validate_message(self, message_payload: dict[str, Any]) -> bool:
         try:

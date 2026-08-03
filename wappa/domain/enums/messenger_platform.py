@@ -6,7 +6,7 @@ enabled platforms from application settings and integration with
 existing PlatformType enum from core types.
 """
 
-from enum import Enum
+from enum import Enum, StrEnum
 
 from wappa.core.config.settings import settings
 from wappa.schemas.core.types import PlatformType
@@ -27,7 +27,7 @@ def create_messenger_platform_enum() -> type[Enum]:
 
     if not enabled_platforms:
         # Fallback enum if no platforms are enabled
-        class MessengerPlatformEnum(str, Enum):
+        class MessengerPlatformEnum(StrEnum):
             """No messenger platforms are currently enabled."""
 
             pass

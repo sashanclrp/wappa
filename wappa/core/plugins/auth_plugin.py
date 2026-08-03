@@ -109,4 +109,3 @@ class AuthPlugin:
             f"AuthPlugin configured - strategy: {type(self.strategy).__name__}, "
             f"mode: {mode}, {mode} paths: {path_count}, priority: {self.priority}"
         )
-

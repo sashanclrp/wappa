@@ -43,6 +43,7 @@ All messenger construction paths consume `SessionLifecycle.get_session` as a ses
 
 - In-flight background work completes (or times out) before resources close.
 - Host applications no longer need to detect/repair Wappa's closed sessions.
-- `app.state.http_session` remains set for backward compatibility.
+- `app.state.session_lifecycle` exposes the lifecycle owner to Wappa composition
+  paths; raw client aliases are not published.
 - `engine.dispose(close=False)` remains correct — drain ensures no active operations at disposal time.
 - Unauthenticated media download client remains separate per ADR-0003.

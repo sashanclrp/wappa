@@ -11,13 +11,13 @@ Current transport mapping targets WhatsApp Cloud API:
 """
 
 import re
-from enum import Enum
+from enum import StrEnum
 from typing import Annotated, Any
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
 
-class RecipientKind(str, Enum):
+class RecipientKind(StrEnum):
     """Supported outbound recipient identifier kinds."""
 
     PHONE_NUMBER = "phone_number"

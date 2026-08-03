@@ -60,7 +60,7 @@ class APIEventDispatcher:
     async def dispatch(
         self,
         event: APIMessageEvent,
-        request: "Request | None" = None,
+        request: "Request",
     ) -> dict:
         """
         Dispatch API message event to handler with full dependency injection.
@@ -71,8 +71,7 @@ class APIEventDispatcher:
 
         Args:
             event: APIMessageEvent with full message context
-            request: FastAPI Request object for accessing app.state (optional for
-                     backwards compatibility, but required for DB access)
+            request: FastAPI Request object for runtime and database dependencies
 
         Returns:
             Dict with success status and optional error
@@ -93,11 +92,7 @@ class APIEventDispatcher:
             if bsuid is None:
                 bsuid, _ = classify_meta_identifier(canonical_user_id)
 
-            _tracker = (
-                getattr(request.app.state, "background_work_tracker", None)
-                if request
-                else None
-            )
+            _tracker = getattr(request.app.state, "background_work_tracker", None)
             async with sse_event_scope(
                 inbox_id=event.inbox_id or "unknown",
                 user_id=canonical_user_id,
@@ -125,7 +120,7 @@ class APIEventDispatcher:
     def _create_api_request_handler(
         self,
         event: APIMessageEvent,
-        request: "Request | None",
+        request: "Request",
     ) -> "WappaEventHandler":
         """
         Create a context-bound handler clone for API event processing.
@@ -147,13 +142,10 @@ class APIEventDispatcher:
         db: Callable[[], AbstractAsyncContextManager[AsyncSession]] | None = None
         db_read: Callable[[], AbstractAsyncContextManager[AsyncSession]] | None = None
 
-        if request is not None:
-            session_manager = getattr(
-                request.app.state, "postgres_session_manager", None
-            )
-            if session_manager:
-                db = session_manager.get_session
-                db_read = session_manager.get_read_session
+        session_manager = getattr(request.app.state, "postgres_session_manager", None)
+        if session_manager:
+            db = session_manager.get_session
+            db_read = session_manager.get_read_session
 
         self.logger.debug(
             "API handler context: inbox=%s, db_available=%s",

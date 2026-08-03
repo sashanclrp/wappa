@@ -104,4 +104,3 @@ class CORSPlugin:
             f"CORSPlugin configured - Origins: {self.allow_origins}, "
             f"Methods: {self.allow_methods}, Credentials: {self.allow_credentials}"
         )
-

@@ -23,11 +23,11 @@ from wappa import expiry_registry
 from wappa.core.expiry import (
     CacheFactoryCreationError,
     FastAPIAppNotAvailableError,
-    HTTPSessionNotAvailableError,
     MessengerCreationError,
+    SessionLifecycleNotAvailableError,
     create_expiry_cache_factory,
     create_expiry_messenger,
-    parse_tenant_from_expired_key,
+    parse_inbox_from_expired_key,
 )
 from wappa.core.logging.logger import get_logger
 
@@ -61,7 +61,7 @@ async def handle_user_inactivity(identifier: str, full_key: str) -> None:
          [10:30:50] See you later!"
     """
     user_id = identifier
-    inbox_id = parse_tenant_from_expired_key(full_key)
+    inbox_id = parse_inbox_from_expired_key(full_key)
 
     logger.info(
         f"User inactivity detected for {user_id} - processing accumulated messages"
@@ -143,7 +143,7 @@ async def _send_echo_message(inbox_id: str, user_id: str, echo_text: str) -> boo
         logger.error(f"FastAPI app not available: {e}")
         return False
 
-    except HTTPSessionNotAvailableError as e:
+    except SessionLifecycleNotAvailableError as e:
         logger.error(f"HTTP session not available: {e}")
         return False
 

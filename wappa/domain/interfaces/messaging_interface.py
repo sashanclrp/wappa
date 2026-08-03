@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     )
 
 TemplateBodyParameters = list[dict] | None
-TemplateOverride = bool | None
+TemplateRoutingPolicyValue = str
 
 
 class IMessenger(ABC):
@@ -147,7 +147,7 @@ class IMessenger(ABC):
         language_code: str = "es",
         *,
         template_type: str,
-        override: TemplateOverride = None,
+        routing_policy: TemplateRoutingPolicyValue = "category_default",
     ) -> MessageResult: ...
 
     @abstractmethod
@@ -162,7 +162,7 @@ class IMessenger(ABC):
         language_code: str = "es",
         *,
         template_type: str,
-        override: TemplateOverride = None,
+        routing_policy: TemplateRoutingPolicyValue = "category_default",
     ) -> MessageResult: ...
 
     @abstractmethod
@@ -178,7 +178,7 @@ class IMessenger(ABC):
         language_code: str = "es",
         *,
         template_type: str,
-        override: TemplateOverride = None,
+        routing_policy: TemplateRoutingPolicyValue = "category_default",
     ) -> MessageResult: ...
 
     # Specialized

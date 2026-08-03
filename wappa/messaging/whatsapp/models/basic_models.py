@@ -12,6 +12,13 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+class ResponseProfile(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    name: str | None = None
+    username: str | None = None
+
+
 class ResponseContact(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -28,6 +35,13 @@ class ResponseContact(BaseModel):
         alias="user_id",
         description="Business Scoped User ID (BSUID). Present if sent to BSUID.",
     )
+    parent_bsuid: str | None = Field(default=None, alias="parent_user_id")
+    username: str | None = None
+    profile: ResponseProfile | None = None
+
+    @property
+    def resolved_username(self) -> str | None:
+        return self.username or (self.profile.username if self.profile else None)
 
     @property
     def recipient_id(self) -> str:
@@ -98,6 +112,8 @@ class MessageResult(BaseModel):
         None,
         description="Recipient phone number (may be empty if sent to BSUID)",
     )
+    recipient_parent_bsuid: str | None = None
+    recipient_username: str | None = None
     error: str | None = None
     error_code: str | None = None
     timestamp: datetime = Field(default_factory=_utc_now)
@@ -125,6 +141,8 @@ class MessageResult(BaseModel):
             recipient=contact.recipient_id if contact else None,
             recipient_bsuid=contact.bsuid if contact else None,
             recipient_phone=contact.wa_id if contact and contact.wa_id else None,
+            recipient_parent_bsuid=contact.parent_bsuid if contact else None,
+            recipient_username=contact.resolved_username if contact else None,
             inbox_id=inbox_id,
             error=error,
             error_code=error_code,

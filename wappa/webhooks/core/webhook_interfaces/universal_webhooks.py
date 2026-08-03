@@ -15,7 +15,7 @@ webhook structure. All platforms (Teams, Telegram, Instagram) must adapt to thes
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -34,7 +34,7 @@ from wappa.webhooks.core.webhook_interfaces.base_components import (
 )
 
 
-class SystemEventType(str, Enum):
+class SystemEventType(StrEnum):
     """Types of platform-level system events."""
 
     NUMBER_CHANGE = "number_change"

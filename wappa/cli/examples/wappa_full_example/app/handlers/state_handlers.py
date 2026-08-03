@@ -189,7 +189,7 @@ class StateHandlers:
         selected_button = button_state.get_selected_button()
 
         # Remove state from cache
-        await self.cache_helper.remove_user_state(user_id, StateType.BUTTON)
+        await self.cache_helper.remove_user_state(StateType.BUTTON)
 
         # Extract and format metadata
         metadata = MetadataExtractor.extract_metadata(webhook, start_time)
@@ -274,7 +274,7 @@ class StateHandlers:
         selected_item = list_state.get_selected_item()
 
         # Remove state from cache
-        await self.cache_helper.remove_user_state(user_id, StateType.LIST)
+        await self.cache_helper.remove_user_state(StateType.LIST)
 
         # Extract and format metadata
         metadata = MetadataExtractor.extract_metadata(webhook, start_time)
@@ -709,7 +709,7 @@ async def cleanup_expired_user_states(
             for state_type in [StateType.BUTTON, StateType.LIST]:
                 state = await cache_helper.get_user_state(user_id, state_type)
                 if state and state.is_expired():
-                    await cache_helper.remove_user_state(user_id, state_type)
+                    await cache_helper.remove_user_state(state_type)
                     cleanup_count += 1
                     logger.info(
                         f"🧹 Cleaned up expired {state_type.value} state for user {user_id}"

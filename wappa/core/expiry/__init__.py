@@ -35,8 +35,8 @@ from .context_helpers import (
     CacheFactoryCreationError,
     ExpiryContextError,
     FastAPIAppNotAvailableError,
-    HTTPSessionNotAvailableError,
     MessengerCreationError,
+    SessionLifecycleNotAvailableError,
     create_expiry_cache_factory,
     create_expiry_messenger,
     parse_inbox_from_expired_key,
@@ -83,7 +83,7 @@ __all__ = [
     # Context helper exceptions
     "ExpiryContextError",
     "FastAPIAppNotAvailableError",
-    "HTTPSessionNotAvailableError",
+    "SessionLifecycleNotAvailableError",
     "MessengerCreationError",
     "CacheFactoryCreationError",
 ]

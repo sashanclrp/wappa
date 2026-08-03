@@ -8,7 +8,7 @@ Follows 30x-community enum pattern with custom column types.
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from uuid import UUID, uuid4
 
 from sqlalchemy import Boolean, Column, DateTime, Text, func, text
@@ -85,7 +85,7 @@ def get_enum_column(
 # =============================================================================
 
 
-class Platform(str, Enum):
+class Platform(StrEnum):
     """Platform where the user is writing from (platform_t in Supabase)."""
 
     WHATSAPP = "whatsapp"
@@ -93,7 +93,7 @@ class Platform(str, Enum):
     TELEGRAM = "telegram"
 
 
-class MessageActor(str, Enum):
+class MessageActor(StrEnum):
     """Who produced the message (message_actor_t in Supabase)."""
 
     USER = "user"
@@ -102,7 +102,7 @@ class MessageActor(str, Enum):
     TOOL = "tool"
 
 
-class MessageKind(str, Enum):
+class MessageKind(StrEnum):
     """Content type of the message (message_kind_t in Supabase)."""
 
     TEXT = "text"
@@ -120,7 +120,7 @@ class MessageKind(str, Enum):
     UNKNOWN = "unknown"
 
 
-class ConversationStatus(str, Enum):
+class ConversationStatus(StrEnum):
     """Status of a conversation (conversation_status_t in Supabase)."""
 
     OPEN = "open"

@@ -3,6 +3,12 @@
 from typing import Any
 
 from wappa.core.logging.logger import get_logger
+from wappa.messaging.template_transport import (
+    TemplateCategory,
+    TemplateEndpoint,
+    TemplateRoutingPolicy,
+    resolve_template_route,
+)
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.template_models import (
@@ -59,15 +65,13 @@ class WhatsAppTemplateHandler:
         return payload
 
     def _resolve_template_send_url(
-        self, template_type: WhatsAppTemplateType, override: bool | None
+        self, template_type: WhatsAppTemplateType, routing_policy: str
     ) -> str | None:
-        if template_type != WhatsAppTemplateType.MARKETING and override:
-            raise ValueError(
-                "override parameter is only compatible with template_type='marketing'"
-            )
-        if template_type == WhatsAppTemplateType.MARKETING:
-            if override is False:
-                return None
+        endpoint, _ = resolve_template_route(
+            TemplateCategory(template_type.value),
+            TemplateRoutingPolicy(routing_policy),
+        )
+        if endpoint is TemplateEndpoint.MARKETING_MESSAGES:
             return self.client.url_builder.get_marketing_messages_url()
         return None
 
@@ -76,10 +80,11 @@ class WhatsAppTemplateHandler:
         payload: dict[str, Any],
         recipient: str,
         template_type: WhatsAppTemplateType,
-        override: bool | None,
+        routing_policy: str,
     ) -> MessageResult:
         response = await self.client.post_request(
-            payload, custom_url=self._resolve_template_send_url(template_type, override)
+            payload,
+            custom_url=self._resolve_template_send_url(template_type, routing_policy),
         )
         return MessageResult.from_response_payload(
             response,
@@ -119,7 +124,7 @@ class WhatsAppTemplateHandler:
         language_code: str = "es",
         *,
         template_type: WhatsAppTemplateType,
-        override: bool | None = None,
+        routing_policy: str = "category_default",
     ) -> MessageResult:
         try:
             body_component = self._build_body_component(body_parameters)
@@ -135,7 +140,7 @@ class WhatsAppTemplateHandler:
 
             self.logger.debug(f"Sending text template '{template_name}' to {recipient}")
             result = await self._send_template_payload(
-                payload, recipient, template_type, override
+                payload, recipient, template_type, routing_policy
             )
             self.logger.info(
                 f"Text template '{template_name}' sent successfully to {result.recipient}"
@@ -162,7 +167,7 @@ class WhatsAppTemplateHandler:
         language_code: str = "es",
         *,
         template_type: WhatsAppTemplateType,
-        override: bool | None = None,
+        routing_policy: str = "category_default",
     ) -> MessageResult:
         try:
             if bool(media_id) == bool(media_url):
@@ -191,7 +196,7 @@ class WhatsAppTemplateHandler:
                 f"Sending media template '{template_name}' ({media_type.value}) to {recipient}"
             )
             result = await self._send_template_payload(
-                payload, recipient, template_type, override
+                payload, recipient, template_type, routing_policy
             )
             self.logger.info(
                 f"Media template '{template_name}' sent successfully to {result.recipient}"
@@ -219,7 +224,7 @@ class WhatsAppTemplateHandler:
         language_code: str = "es",
         *,
         template_type: WhatsAppTemplateType,
-        override: bool | None = None,
+        routing_policy: str = "category_default",
     ) -> MessageResult:
         try:
             try:
@@ -260,7 +265,7 @@ class WhatsAppTemplateHandler:
                 f"Sending location template '{template_name}' to {recipient}"
             )
             result = await self._send_template_payload(
-                payload, recipient, template_type, override
+                payload, recipient, template_type, routing_policy
             )
             self.logger.info(
                 f"Location template '{template_name}' sent successfully to {result.recipient}"

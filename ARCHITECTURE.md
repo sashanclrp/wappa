@@ -139,6 +139,32 @@ Host's process_message():
 └─────────────────────────────────┘
 ```
 
+## Message Flow — Inbox-scoped Template transport
+
+Embedding hosts that only need Template delivery use a smaller public
+capability. The capability and the general Messenger share the same internal
+construction and pipeline; it is not a second delivery implementation.
+
+```
+Host Application
+    │ OutboundRuntime.from_app(app).templates(inbox_id).send(request)
+    ▼
+InboxTemplateTransport
+    │ validates Delivery Address, category, authentication method,
+    │ and selects one endpoint before I/O
+    ▼
+MessengerFactory → MessengerPipeline → WhatsApp adapter → Meta
+    │
+    ▼
+TemplateTransportResult
+    accepted | rejected | transport_unavailable | indeterminate
+```
+
+The request contains platform-facing values only. The Host Application retains
+governance, attribution, state, persistence, and durable commit. A result is
+`accepted` only when Meta returns a platform Message ID. Wappa never performs an
+automatic cross-endpoint retry.
+
 ## HTTP Client Lifecycle
 
 Wappa manages two separate HTTP client pools, both owned by `SessionLifecycle`:

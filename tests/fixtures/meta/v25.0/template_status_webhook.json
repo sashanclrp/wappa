@@ -1,0 +1,38 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "535497026314662",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550001111",
+              "phone_number_id": "123456789012345"
+            },
+            "contacts": [
+              {
+                "profile": {"username": "known_customer"},
+                "wa_id": "573001112233",
+                "user_id": "CO.2186878922080769",
+                "parent_user_id": "CO.ENT.2186878922080769"
+              }
+            ],
+            "statuses": [
+              {
+                "id": "wamid.golden",
+                "status": "sent",
+                "timestamp": "1785772800",
+                "recipient_id": "573001112233",
+                "recipient_user_id": "CO.2186878922080769",
+                "recipient_parent_user_id": "CO.ENT.2186878922080769"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

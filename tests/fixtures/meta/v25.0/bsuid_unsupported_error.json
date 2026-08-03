@@ -1,0 +1,8 @@
+{
+  "error": {
+    "message": "Unsupported recipient for this message type",
+    "type": "OAuthException",
+    "code": 131062,
+    "fbtrace_id": "sanitized"
+  }
+}

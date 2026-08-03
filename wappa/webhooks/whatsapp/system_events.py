@@ -156,7 +156,8 @@ class MarketingMessagesLinkClickData(BaseModel):
         None, description="Product SKU ID when assigned in Ads Manager / Marketing API"
     )
     client_user_agent: str | None = Field(
-        None, description="User agent of the client that performed the click, e.g. '(Android 14)'"
+        None,
+        description="User agent of the client that performed the click, e.g. '(Android 14)'",
     )
 
     @model_validator(mode="after")

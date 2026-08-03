@@ -69,11 +69,11 @@ class CacheHelper:
         """
         Get user profile from cache.
 
-        Note: user_id parameter is kept for API compatibility but the actual
-        user identity is bound in the cache factory at construction time.
+        The cache is already bound to the user identity. ``user_id`` is used
+        only to make a failed lookup diagnostic useful.
 
         Args:
-            user_id: User phone number/ID (for compatibility, not used directly)
+            user_id: User phone number/ID included in lookup diagnostics
 
         Returns:
             UserProfile object or None if not found
@@ -250,12 +250,11 @@ class CacheHelper:
             print(f"Error saving user state {state.state_type.value}: {e}")
             return False
 
-    async def remove_user_state(self, user_id: str, state_type: StateType) -> bool:
+    async def remove_user_state(self, state_type: StateType) -> bool:
         """
         Remove user interactive state.
 
         Args:
-            user_id: User phone number/ID (for compatibility, not used directly)
             state_type: Type of state to remove
 
         Returns:
@@ -270,13 +269,11 @@ class CacheHelper:
             print(f"Error removing user state {state_type.value}: {e}")
             return False
 
-    async def cleanup_expired_states(self, batch_size: int = 100) -> int:
+    async def cleanup_expired_states(self) -> int:
         """
         Cleanup expired states from cache.
 
         Args:
-            batch_size: Number of states to check in each batch
-
         Returns:
             Number of expired states cleaned up
         """

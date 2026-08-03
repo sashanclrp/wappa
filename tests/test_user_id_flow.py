@@ -9,6 +9,7 @@ Covers:
 """
 
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from wappa.domain.events.api_message_event import APIMessageEvent
@@ -16,6 +17,16 @@ from wappa.messaging.whatsapp.models.basic_models import BasicTextMessage
 from wappa.schemas.core.recipient import RecipientRequest
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.webhook_interfaces import StatusWebhook
+
+
+def _fake_request() -> MagicMock:
+    """Minimal FastAPI Request stand-in exposing empty app.state."""
+    request = MagicMock()
+    request.app.state = SimpleNamespace(
+        background_work_tracker=None, postgres_session_manager=None
+    )
+    return request
+
 
 # ──────────────────────────────────────────────
 # RecipientRequest — base schema
@@ -96,7 +107,9 @@ def test_api_event_dispatcher_binds_user_id_when_distinct() -> None:
 
     import asyncio
 
-    asyncio.get_event_loop().run_until_complete(dispatcher.dispatch(event))
+    asyncio.get_event_loop().run_until_complete(
+        dispatcher.dispatch(event, _fake_request())
+    )
 
     handler.with_context.assert_called_once()
     call_kwargs = handler.with_context.call_args.kwargs
@@ -117,7 +130,9 @@ def test_api_event_dispatcher_falls_back_to_recipient_when_same() -> None:
 
     import asyncio
 
-    asyncio.get_event_loop().run_until_complete(dispatcher.dispatch(event))
+    asyncio.get_event_loop().run_until_complete(
+        dispatcher.dispatch(event, _fake_request())
+    )
 
     call_kwargs = handler.with_context.call_args.kwargs
     assert call_kwargs["user_id"] == "+573001234567"

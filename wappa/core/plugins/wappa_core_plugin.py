@@ -9,7 +9,7 @@ from wappa.api.middleware.inbox import InboxMiddleware
 from wappa.api.middleware.request_id import RequestIdMiddleware
 from wappa.api.middleware.request_logging import RequestLoggingMiddleware
 from wappa.api.routes.health import router as health_router
-from wappa.api.routes.whatsapp_combined import whatsapp_router
+from wappa.api.routes.whatsapp_combined import create_whatsapp_router
 from wappa.core.lifecycle import BackgroundWorkTracker, SessionLifecycle
 
 from ..config.settings import settings
@@ -23,8 +23,14 @@ if TYPE_CHECKING:
 class WappaCorePlugin:
     """Core Wappa functionality implemented as a plugin."""
 
-    def __init__(self, cache_type: CacheType = CacheType.MEMORY) -> None:
+    def __init__(
+        self,
+        cache_type: CacheType = CacheType.MEMORY,
+        *,
+        include_template_transport_api: bool = False,
+    ) -> None:
         self.cache_type = cache_type
+        self.include_template_transport_api = include_template_transport_api
         self._session_lifecycle: SessionLifecycle | None = None
         self._background_work_tracker: BackgroundWorkTracker | None = None
 
@@ -41,7 +47,11 @@ class WappaCorePlugin:
         builder.add_middleware(RequestIdMiddleware, priority=60)
 
         builder.add_router(health_router, public=True)
-        builder.add_router(whatsapp_router)
+        builder.add_router(
+            create_whatsapp_router(
+                include_template_transport=self.include_template_transport_api
+            )
+        )
 
         builder.add_startup_hook(self._core_startup, priority=10)
         # Shutdown phases (highest priority runs first):
@@ -81,14 +91,8 @@ class WappaCorePlugin:
             client = SessionLifecycle._default_client_factory()
             self._session_lifecycle = SessionLifecycle(client)
             app.state.session_lifecycle = self._session_lifecycle
-            app.state.http_session = client
-            app.state.get_http_session = self._session_lifecycle.get_session
             logger.info(
                 "✅ Persistent HTTP client created - connections: 100, keepalive: 20"
-            )
-
-            app.state.media_download_client = (
-                self._session_lifecycle.get_media_download_client
             )
 
             self._background_work_tracker = BackgroundWorkTracker()
@@ -164,7 +168,7 @@ class WappaCorePlugin:
         except Exception as e:
             logger.error("❌ Error during Wappa core shutdown: %s", e, exc_info=True)
 
-    async def recreate_http_session(self, app: FastAPI) -> None:
+    async def recreate_http_session(self) -> None:
         """Recreate the HTTP session after hot-reload or session failure.
 
         Serialized via lock — concurrent callers produce exactly one
@@ -176,8 +180,7 @@ class WappaCorePlugin:
                 "WappaCorePlugin.recreate_http_session() called before startup — "
                 "ensure the plugin has started before requesting session recreation"
             )
-        new_session = await self._session_lifecycle.recreate()
-        app.state.http_session = new_session
+        await self._session_lifecycle.recreate()
 
     async def _display_webhook_urls(self, logger, base_url: str) -> None:
         try:

@@ -9,7 +9,7 @@ from wappa.messaging.whatsapp.models.basic_models import MessageResult
 
 
 class _StrictTemplateMessenger:
-    """Mock messenger that enforces keyword-only template_type and override."""
+    """Mock messenger that enforces keyword-only Template routing values."""
 
     async def send_text_template(
         self,
@@ -19,7 +19,7 @@ class _StrictTemplateMessenger:
         language_code: str = "es",
         *,
         template_type: str,
-        override: bool | None = None,
+        routing_policy: str = "category_default",
     ) -> MessageResult:
         return MessageResult(success=True, message_id="text-tmpl-ok")
 
@@ -34,7 +34,7 @@ class _StrictTemplateMessenger:
         language_code: str = "es",
         *,
         template_type: str,
-        override: bool | None = None,
+        routing_policy: str = "category_default",
     ) -> MessageResult:
         return MessageResult(success=True, message_id="media-tmpl-ok")
 
@@ -50,7 +50,7 @@ class _StrictTemplateMessenger:
         language_code: str = "es",
         *,
         template_type: str,
-        override: bool | None = None,
+        routing_policy: str = "category_default",
     ) -> MessageResult:
         return MessageResult(success=True, message_id="loc-tmpl-ok")
 
@@ -116,12 +116,12 @@ class TestTemplatePipelineKeywordArgs:
             template_name="test",
             recipient="+1234567890",
             template_type="marketing",
-            override=True,
+            routing_policy="cloud_messages_fallback",
         )
         assert result.success
         assert len(captured) == 1
         inv = captured[0]
         assert inv.arguments["template_type"] == "marketing"
-        assert inv.arguments["override"] is True
+        assert inv.arguments["routing_policy"] == "cloud_messages_fallback"
         assert inv.kwargs["template_type"] == "marketing"
-        assert inv.kwargs["override"] is True
+        assert inv.kwargs["routing_policy"] == "cloud_messages_fallback"

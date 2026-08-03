@@ -1,0 +1,9 @@
+{
+  "messaging_product": "whatsapp",
+  "to": "573001112233",
+  "type": "template",
+  "template": {
+    "name": "utility_notice",
+    "language": {"code": "es"}
+  }
+}

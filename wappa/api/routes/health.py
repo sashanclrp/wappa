@@ -8,9 +8,9 @@ from typing import Any
 from fastapi import APIRouter
 
 from wappa.core.config.settings import settings
-from wappa.core.logging.logger import get_api_logger
+from wappa.core.logging.logger import get_logger
 
-logger = get_api_logger()
+logger = get_logger(__name__)
 router = APIRouter(tags=["Health"])
 
 

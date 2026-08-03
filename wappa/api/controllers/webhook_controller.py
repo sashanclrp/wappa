@@ -173,8 +173,8 @@ class WebhookController:
             postgres_session_manager=getattr(
                 app_state, "postgres_session_manager", None
             ),
-            media_download_client_provider=getattr(
-                app_state, "media_download_client", None
+            media_download_client_provider=(
+                session_lifecycle.get_media_download_client
             ),
         )
 

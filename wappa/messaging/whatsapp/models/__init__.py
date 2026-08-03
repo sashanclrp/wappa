@@ -21,15 +21,11 @@ from .specialized_models import (
     PersonalContact,
 )
 from .template_models import (
-    LocationTemplateMessage,
-    LocationTemplateMetadata,
-    MediaTemplateMessage,
-    MediaTemplateMetadata,
     TemplateMessageStatus,
     TemplateParameter,
-    TemplateValidationResult,
-    TextTemplateMessage,
-    TextTemplateMetadata,
+    TemplateParameterType,
+    TemplateStateConfig,
+    WhatsAppTemplateMediaType,
     WhatsAppTemplateType,
 )
 
@@ -55,13 +51,9 @@ __all__ = [
     "BusinessContact",
     "PersonalContact",
     "TemplateParameter",
-    "WhatsAppTemplateType",
-    "TextTemplateMetadata",
-    "TextTemplateMessage",
-    "MediaTemplateMetadata",
-    "MediaTemplateMessage",
-    "LocationTemplateMetadata",
-    "LocationTemplateMessage",
     "TemplateMessageStatus",
-    "TemplateValidationResult",
+    "TemplateParameterType",
+    "TemplateStateConfig",
+    "WhatsAppTemplateMediaType",
+    "WhatsAppTemplateType",
 ]

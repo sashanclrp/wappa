@@ -25,14 +25,7 @@ from .base_models import (
 )
 
 # Status models
-from .status_models import (
-    DeliveryStatus,
-    FailedStatus,
-    MessageStatus,
-    ReadStatus,
-    SentStatus,
-    StatusType,
-)
+from .status_models import MessageStatus, WhatsAppMessageStatus
 from .webhook_container import WhatsAppWebhook
 
 __all__ = [
@@ -49,9 +42,5 @@ __all__ = [
     "Conversation",
     # Status models
     "MessageStatus",
-    "StatusType",
-    "DeliveryStatus",
-    "ReadStatus",
-    "SentStatus",
-    "FailedStatus",
+    "WhatsAppMessageStatus",
 ]

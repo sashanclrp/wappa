@@ -108,43 +108,6 @@ class TestMediaHandlerPooledClient:
         pooled.stream.assert_called_once()
         pooled.aclose.assert_not_called()
 
-    @pytest.mark.asyncio
-    async def test_falls_back_without_pooled_client(self):
-        mock_wa_client = MagicMock()
-        mock_wa_client.url_builder.get_media_url.return_value = (
-            "https://graph.facebook.com/v25.0/123/media"
-        )
-        mock_wa_client.post_request = AsyncMock(return_value={"id": "media_id_abc"})
-
-        handler = WhatsAppMediaHandler(
-            client=mock_wa_client, inbox_id="phone_123"
-        )
-
-        resp = MagicMock()
-        resp.status_code = 200
-        resp.headers = {"content-type": "image/jpeg", "content-length": "200"}
-        resp.aiter_bytes = lambda chunk_size=8192: _fake_stream(b"\xff\xd8" * 100)
-
-        stream_ctx = AsyncMock()
-        stream_ctx.__aenter__ = AsyncMock(return_value=resp)
-        stream_ctx.__aexit__ = AsyncMock(return_value=False)
-
-        fallback_client = MagicMock()
-        fallback_client.stream = MagicMock(return_value=stream_ctx)
-        fallback_client.aclose = AsyncMock()
-
-        with patch(
-            "wappa.messaging.whatsapp.handlers.whatsapp_media_handler.httpx.AsyncClient",
-            return_value=fallback_client,
-        ) as mock_cls:
-            result = await handler.upload_media_from_url(
-                "https://cdn.example.com/photo.jpg"
-            )
-            mock_cls.assert_called_once()
-
-        assert result.success is True
-        fallback_client.aclose.assert_awaited_once()
-
 
 class _FakeAsyncIter:
     def __init__(self, data: bytes, chunk_size: int = 8192):

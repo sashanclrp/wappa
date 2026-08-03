@@ -528,7 +528,7 @@ class WhatsAppMessenger(IMessenger):
         language_code: str = "es",
         *,
         template_type: str,
-        override: bool | None = None,
+        routing_policy: str = "category_default",
     ) -> MessageResult:
         template_type_enum = self._parse_template_type(template_type)
         if template_type_enum is None:
@@ -541,7 +541,7 @@ class WhatsAppMessenger(IMessenger):
             body_parameters=self._convert_body_parameters(body_parameters),
             language_code=language_code,
             template_type=template_type_enum,
-            override=override,
+            routing_policy=routing_policy,
         )
 
     async def send_media_template(
@@ -555,7 +555,7 @@ class WhatsAppMessenger(IMessenger):
         language_code: str = "es",
         *,
         template_type: str,
-        override: bool | None = None,
+        routing_policy: str = "category_default",
     ) -> MessageResult:
         template_type_enum, media_type_enum = self._parse_template_enums(
             template_type, media_type
@@ -578,7 +578,7 @@ class WhatsAppMessenger(IMessenger):
             body_parameters=self._convert_body_parameters(body_parameters),
             language_code=language_code,
             template_type=template_type_enum,
-            override=override,
+            routing_policy=routing_policy,
         )
 
     async def send_location_template(
@@ -593,7 +593,7 @@ class WhatsAppMessenger(IMessenger):
         language_code: str = "es",
         *,
         template_type: str,
-        override: bool | None = None,
+        routing_policy: str = "category_default",
     ) -> MessageResult:
         template_type_enum = self._parse_template_type(template_type)
         if template_type_enum is None:
@@ -610,7 +610,7 @@ class WhatsAppMessenger(IMessenger):
             body_parameters=self._convert_body_parameters(body_parameters),
             language_code=language_code,
             template_type=template_type_enum,
-            override=override,
+            routing_policy=routing_policy,
         )
 
     # Specialized

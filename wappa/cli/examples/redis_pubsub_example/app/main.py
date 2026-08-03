@@ -163,7 +163,9 @@ def create_wappa_application() -> Wappa:
                 return
 
             coro = start_pubsub_listener(
-                session_lifecycle.get_session, credential_store
+                session_lifecycle.get_session,
+                session_lifecycle.get_media_download_client,
+                credential_store,
             )
             tracker.track(coro, name="pubsub_listener")
 

@@ -35,9 +35,8 @@ class MessengerFactory:
     def __init__(
         self,
         session_provider: Callable[[], httpx.AsyncClient],
+        media_download_client_provider: Callable[[], httpx.AsyncClient],
         credential_store: IInboxCredentialStore | None = None,
-        *,
-        media_download_client_provider: Callable[[], httpx.AsyncClient] | None = None,
     ) -> None:
         self._session_provider = session_provider
         self._credential_store = credential_store
@@ -49,9 +48,7 @@ class MessengerFactory:
         """Return the HTTP session via the lifecycle-aware provider."""
         return self._session_provider()
 
-    def _get_media_download_client(self) -> httpx.AsyncClient | None:
-        if self._media_download_client_provider is None:
-            return None
+    def _get_media_download_client(self) -> httpx.AsyncClient:
         return self._media_download_client_provider()
 
     async def create_messenger(

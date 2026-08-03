@@ -5,13 +5,13 @@ Contains models for managing button and list interactive states with TTL.
 """
 
 from datetime import datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
 
-class StateType(str, Enum):
+class StateType(StrEnum):
     """Types of interactive states."""
 
     BUTTON = "button"
@@ -21,7 +21,7 @@ class StateType(str, Enum):
     CUSTOM = "custom"
 
 
-class StateStatus(str, Enum):
+class StateStatus(StrEnum):
     """Status of interactive states."""
 
     ACTIVE = "active"

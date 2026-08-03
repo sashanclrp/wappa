@@ -36,7 +36,7 @@ class SessionLifecycle:
         *,
         client_factory: Callable[[], httpx.AsyncClient] | None = None,
     ) -> None:
-        self._session = session
+        self._session: httpx.AsyncClient | None = session
         self._client_factory = client_factory or self._default_client_factory
         self._draining = False
         self._recreation_lock = asyncio.Lock()
@@ -58,7 +58,7 @@ class SessionLifecycle:
         if self._session is None or getattr(self._session, "is_closed", False):
             raise HTTPSessionClosedError(
                 "httpx.AsyncClient is closed — call SessionLifecycle.recreate() "
-                "or WappaCorePlugin.recreate_http_session(app) to restore it."
+                "or WappaCorePlugin.recreate_http_session() to restore it."
             )
         return self._session
 
@@ -115,11 +115,6 @@ class SessionLifecycle:
     @property
     def is_draining(self) -> bool:
         return self._draining
-
-    @property
-    def session(self) -> httpx.AsyncClient | None:
-        """Raw session reference for backward compat (app.state.http_session)."""
-        return self._session
 
     @staticmethod
     def _default_client_factory() -> httpx.AsyncClient:

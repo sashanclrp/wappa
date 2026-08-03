@@ -343,6 +343,7 @@ def _runtime_dependencies(
         messenger_middleware=[],
         cache_type="memory",
         background_work_tracker=BackgroundWorkTracker(),
+        media_download_client_provider=lambda: http_session,
     )
 
 

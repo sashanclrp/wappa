@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -13,7 +13,11 @@ def _make_handler() -> WhatsAppMediaHandler:
         "https://graph.facebook.com/v25.0/123/media"
     )
     client.post_request = AsyncMock(return_value={"id": "media_id_abc"})
-    return WhatsAppMediaHandler(client=client, inbox_id="phone_123")
+    return WhatsAppMediaHandler(
+        client=client,
+        inbox_id="phone_123",
+        media_download_client=MagicMock(),
+    )
 
 
 class _FakeAsyncByteStream:
@@ -74,13 +78,8 @@ async def test_upload_from_url_success():
     _resp, resp_ctx = _mock_response(content_type="image/jpeg", body=b"\xff\xd8" * 50)
     client_ctx = _mock_client(resp_ctx)
 
-    with patch(
-        "wappa.messaging.whatsapp.handlers.whatsapp_media_handler.httpx.AsyncClient",
-        return_value=client_ctx,
-    ):
-        result = await handler.upload_media_from_url(
-            "https://cdn.example.com/photo.jpg"
-        )
+    handler._media_download_client = client_ctx
+    result = await handler.upload_media_from_url("https://cdn.example.com/photo.jpg")
 
     assert result.success is True
     assert result.media_id == "media_id_abc"
@@ -94,15 +93,9 @@ async def test_upload_from_url_no_auth_headers():
     _resp, resp_ctx = _mock_response()
     client_ctx = _mock_client(resp_ctx)
 
-    with patch(
-        "wappa.messaging.whatsapp.handlers.whatsapp_media_handler.httpx.AsyncClient",
-        return_value=client_ctx,
-    ) as mock_cls:
-        await handler.upload_media_from_url("https://cdn.example.com/photo.jpg")
-        call_kwargs = mock_cls.call_args
-        if "headers" in (call_kwargs.kwargs if call_kwargs else {}):
-            headers = call_kwargs.kwargs["headers"]
-            assert "Authorization" not in headers
+    handler._media_download_client = client_ctx
+    await handler.upload_media_from_url("https://cdn.example.com/photo.jpg")
+    assert "Authorization" not in client_ctx.headers
 
 
 @pytest.mark.asyncio
@@ -111,11 +104,8 @@ async def test_download_failure_returns_error():
     _resp, resp_ctx = _mock_response(status_code=404)
     client_ctx = _mock_client(resp_ctx)
 
-    with patch(
-        "wappa.messaging.whatsapp.handlers.whatsapp_media_handler.httpx.AsyncClient",
-        return_value=client_ctx,
-    ):
-        result = await handler.upload_media_from_url("https://cdn.example.com/gone.jpg")
+    handler._media_download_client = client_ctx
+    result = await handler.upload_media_from_url("https://cdn.example.com/gone.jpg")
 
     assert result.success is False
     assert result.error_code == "DOWNLOAD_FAILED"
@@ -127,11 +117,8 @@ async def test_missing_content_type_returns_error():
     _resp, resp_ctx = _mock_response(content_type="application/octet-stream")
     client_ctx = _mock_client(resp_ctx)
 
-    with patch(
-        "wappa.messaging.whatsapp.handlers.whatsapp_media_handler.httpx.AsyncClient",
-        return_value=client_ctx,
-    ):
-        result = await handler.upload_media_from_url("https://cdn.example.com/blob")
+    handler._media_download_client = client_ctx
+    result = await handler.upload_media_from_url("https://cdn.example.com/blob")
 
     assert result.success is False
     assert result.error_code == "MIME_TYPE_UNKNOWN"
@@ -143,13 +130,8 @@ async def test_unsupported_mime_type_returns_error():
     _resp, resp_ctx = _mock_response(content_type="application/zip")
     client_ctx = _mock_client(resp_ctx)
 
-    with patch(
-        "wappa.messaging.whatsapp.handlers.whatsapp_media_handler.httpx.AsyncClient",
-        return_value=client_ctx,
-    ):
-        result = await handler.upload_media_from_url(
-            "https://cdn.example.com/archive.zip"
-        )
+    handler._media_download_client = client_ctx
+    result = await handler.upload_media_from_url("https://cdn.example.com/archive.zip")
 
     assert result.success is False
     assert result.error_code == "MIME_TYPE_UNSUPPORTED"
@@ -165,11 +147,8 @@ async def test_file_size_exceeded_via_content_length():
     )
     client_ctx = _mock_client(resp_ctx)
 
-    with patch(
-        "wappa.messaging.whatsapp.handlers.whatsapp_media_handler.httpx.AsyncClient",
-        return_value=client_ctx,
-    ):
-        result = await handler.upload_media_from_url("https://cdn.example.com/huge.jpg")
+    handler._media_download_client = client_ctx
+    result = await handler.upload_media_from_url("https://cdn.example.com/huge.jpg")
 
     assert result.success is False
     assert result.error_code == "FILE_SIZE_EXCEEDED"
@@ -186,11 +165,8 @@ async def test_file_size_exceeded_during_streaming():
     )
     client_ctx = _mock_client(resp_ctx)
 
-    with patch(
-        "wappa.messaging.whatsapp.handlers.whatsapp_media_handler.httpx.AsyncClient",
-        return_value=client_ctx,
-    ):
-        result = await handler.upload_media_from_url("https://cdn.example.com/huge.jpg")
+    handler._media_download_client = client_ctx
+    result = await handler.upload_media_from_url("https://cdn.example.com/huge.jpg")
 
     assert result.success is False
     assert result.error_code == "FILE_SIZE_EXCEEDED"
@@ -202,14 +178,11 @@ async def test_filename_gets_extension_from_mime():
     _resp, resp_ctx = _mock_response(content_type="image/png", body=b"\x89PNG" * 10)
     client_ctx = _mock_client(resp_ctx)
 
-    with patch(
-        "wappa.messaging.whatsapp.handlers.whatsapp_media_handler.httpx.AsyncClient",
-        return_value=client_ctx,
-    ):
-        result = await handler.upload_media_from_url(
-            "https://cdn.example.com/photo",
-            filename="header_image",
-        )
+    handler._media_download_client = client_ctx
+    result = await handler.upload_media_from_url(
+        "https://cdn.example.com/photo",
+        filename="header_image",
+    )
 
     assert result.success is True
     handler.client.post_request.assert_called_once()
@@ -225,15 +198,9 @@ async def test_custom_timeout_is_applied():
     _resp, resp_ctx = _mock_response()
     client_ctx = _mock_client(resp_ctx)
 
-    with patch(
-        "wappa.messaging.whatsapp.handlers.whatsapp_media_handler.httpx.AsyncClient",
-        return_value=client_ctx,
-    ) as mock_cls:
-        await handler.upload_media_from_url(
-            "https://cdn.example.com/photo.jpg",
-            timeout=30.0,
-        )
-        call_kwargs = mock_cls.call_args
-        timeout_obj = call_kwargs.kwargs.get("timeout")
-        assert timeout_obj is not None
-        assert timeout_obj.read == 30.0
+    handler._media_download_client = client_ctx
+    await handler.upload_media_from_url(
+        "https://cdn.example.com/photo.jpg",
+        timeout=30.0,
+    )
+    assert client_ctx.stream.call_args.kwargs["timeout"] == 30.0

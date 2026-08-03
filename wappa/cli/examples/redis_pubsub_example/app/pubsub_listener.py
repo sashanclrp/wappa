@@ -27,7 +27,9 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-async def start_pubsub_listener(session_provider, credential_store) -> None:
+async def start_pubsub_listener(
+    session_provider, media_download_client_provider, credential_store
+) -> None:
     """
     Start Redis PubSub subscriber in background with multi-inbox support.
 
@@ -49,7 +51,11 @@ async def start_pubsub_listener(session_provider, credential_store) -> None:
     try:
         logger.info("🔄 Creating messenger factory for multi-inbox subscriber...")
 
-        messenger_factory = MessengerFactory(session_provider, credential_store)
+        messenger_factory = MessengerFactory(
+            session_provider=session_provider,
+            media_download_client_provider=media_download_client_provider,
+            credential_store=credential_store,
+        )
 
         logger.info("✅ Messenger factory ready for multi-inbox support")
         logger.info("🔄 Connecting to Redis for PubSub subscription...")

@@ -64,6 +64,7 @@ class Wappa:
         cache: CacheTypeOptions = "memory",
         config: dict | None = None,
         inbox_credential_store: "IInboxCredentialStore | None" = None,
+        include_template_transport_api: bool = False,
     ):
         """
         Initialize Wappa application with plugin-based architecture.
@@ -76,6 +77,8 @@ class Wappa:
             config: Optional configuration overrides for FastAPI app
             inbox_credential_store: Optional custom credential store for resolving
                 inbox credentials. Defaults to SettingsInboxCredentialStore.
+            include_template_transport_api: Mount Wappa's standalone Template
+                mutation routes. Disabled by default for embedding safety.
 
         Raises:
             ValueError: If cache type is not supported
@@ -91,7 +94,10 @@ class Wappa:
         self._builder = WappaBuilder()
         if inbox_credential_store is not None:
             self._builder.with_inbox_credential_store(inbox_credential_store)
-        self._core_plugin = WappaCorePlugin(cache_type=self.cache_type)
+        self._core_plugin = WappaCorePlugin(
+            cache_type=self.cache_type,
+            include_template_transport_api=include_template_transport_api,
+        )
         self._builder.add_plugin(self._core_plugin)
 
         # Automatically add cache-specific plugins

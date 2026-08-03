@@ -41,7 +41,6 @@ wappa/webhooks/
 │   ├── base_webhook.py         # BaseWebhook, BaseContact, BaseWebhookMetadata, BaseWebhookError (ABCs)
 │   ├── base_message.py         # BaseMessage ABC
 │   ├── base_status.py          # Base status model
-│   ├── types.py                # Re-export shim → wappa.schemas.core.types (shared primitives)
 │   └── webhook_interfaces/
 │       ├── base_components.py  # InboxBase, UserBase, BusinessContextBase, ForwardContextBase,
 │       │                       # AdReferralBase, ConversationBase, ErrorDetailBase, SystemEventDetail

@@ -93,7 +93,7 @@ class MediaDownloadResult(BaseModel):
         """Synchronous context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, _exc_type, _exc_val, _exc_tb):
         """Synchronous context manager exit with cleanup."""
         self._cleanup_temp_file()
 
@@ -101,7 +101,7 @@ class MediaDownloadResult(BaseModel):
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
         """Async context manager exit with cleanup."""
         self._cleanup_temp_file()
 

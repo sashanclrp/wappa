@@ -78,4 +78,3 @@ class CustomMiddlewarePlugin:
             f"CustomMiddlewarePlugin configured - {self.name} "
             f"(priority: {self.priority})"
         )
-

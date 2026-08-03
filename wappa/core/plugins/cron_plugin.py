@@ -302,4 +302,3 @@ class CronPlugin:
 
         if hasattr(app.state, "cron_plugin"):
             del app.state.cron_plugin
-

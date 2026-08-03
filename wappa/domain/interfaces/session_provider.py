@@ -25,11 +25,8 @@ def validate_session(session: httpx.AsyncClient) -> httpx.AsyncClient:
     """
     if getattr(session, "is_closed", False):
         raise HTTPSessionClosedError(
-            "httpx.AsyncClient (app.state.http_session) is closed — all "
-            "outbound WhatsApp API calls will fail. Cause: app shutdown or "
-            "hot-reload closed the lifespan transport. Fix: call "
-            "WappaCorePlugin.recreate_http_session(app) to restore it, or "
-            "ensure the host app does not close the Wappa lifespan while "
-            "background handlers (expiry, cron) are still in flight."
+            "Wappa's HTTP session is closed — outbound platform calls cannot "
+            "start. The lifespan may be stopping or may require "
+            "WappaCorePlugin.recreate_http_session()."
         )
     return session

@@ -191,7 +191,7 @@ update_metadata(run_id=str(run_id))
 }
 ```
 
-Without metadata configured, `"metadata": null` is always present in the envelope (backward compatible).
+Without metadata configured, `"metadata": null` remains part of the stable envelope contract.
 
 ## Frontend EventSource receiver
 

@@ -122,7 +122,7 @@ Pre-v0.4.0 the plugin flipped `app.state.pubsub_wrap_messenger = True` and the w
 
 In v0.4.0 that wrapper was rewritten as a ~60 LOC `PubSubNotificationMiddleware` on the general messenger pipeline. It reads inbox + user identity from the active `SSEEventContext` (set once per request by the framework entry point), so the middleware is app-scoped and shared across requests. Adding another outbound concern is a single `add_messenger_middleware` call at the right priority — no new `app.state` flags, no controller changes, no private-attribute drilling.
 
-`mark_as_read()` still bypasses the pipeline (it is not a user-visible message), matching legacy behaviour.
+`mark_as_read()` bypasses the pipeline because it is not a user-visible message.
 
 The legacy `PubSubMessengerWrapper` import was removed in the clean-break compatibility cleanup. See [MessengerMiddleware.md](./MessengerMiddleware.md) for the full design.
 

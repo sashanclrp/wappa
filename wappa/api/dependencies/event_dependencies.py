@@ -46,7 +46,7 @@ async def dispatch_api_message_event(
     result: "MessageResult",
     request_payload: dict,
     recipient: str,
-    request: Request | None = None,
+    request: Request,
     platform: str = "whatsapp",
     user_id: str | None = None,
 ) -> None:
@@ -65,7 +65,7 @@ async def dispatch_api_message_event(
         result: MessageResult from the messenger
         request_payload: Original API request payload
         recipient: Recipient phone number
-        request: FastAPI Request for database session access (recommended)
+        request: FastAPI Request for runtime and database dependencies
     """
     if dispatcher is None:
         return
@@ -89,9 +89,7 @@ async def dispatch_api_message_event(
         platform=platform,
     )
 
-    tracker = (
-        getattr(request.app.state, "background_work_tracker", None) if request else None
-    )
+    tracker = getattr(request.app.state, "background_work_tracker", None)
     if tracker is None:
         raise RuntimeError(
             "BackgroundWorkTracker not available — cannot dispatch API event "

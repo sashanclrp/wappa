@@ -23,6 +23,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **BSUID** | Business Scoped User ID. Meta's user identifier scoped to one business portfolio (v24.0+). It survives username changes but Meta regenerates it when the user changes phone number; `user_id_update` carries the previous/current mapping. Format: `CC.<alphanumeric>`. |
 | **Parent BSUID** | Optional enterprise identity for businesses enrolled in a parent BSUID account. It uses `CC.ENT.<alphanumeric>` and can be addressed by Inboxes across the enrolled portfolios. Keep it distinct from the portfolio BSUID. |
 | `phone_number` | The raw E.164 phone number of the user. May change; not stable for identity. Retained for marketing and PII use cases. |
+| **Delivery Address** | The one normalized platform address selected for an outbound call. A phone number and a BSUID are alternative Delivery Addresses; neither is Wappa's canonical User identity. A username is identity evidence, not a Delivery Address. |
 
 ## Host Integration
 
@@ -59,6 +60,9 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **Event Dispatch** | The act of routing a parsed universal model to the appropriate WappaEventHandler processor method. |
 | **Messenger** | The outbound message interface. Sends text, media, interactive, template, and specialized messages to a User on a Platform via an Inbox. |
 | **Messenger Pipeline** | Composable middleware stack wrapping outbound message calls (SSE lifecycle, PubSub notification, etc.). |
+| **Outbound Runtime** | The public Wappa factory that resolves Inbox credentials and active HTTP clients, constructs the platform Messenger and Messenger Pipeline, and returns small Inbox-scoped outbound capabilities. Host Applications do not construct those internals. |
+| **Template Transport** | An Inbox-scoped outbound capability that accepts only platform-facing Template values and returns evidence about the platform call. It performs no Host Application governance, attribution, state, lifecycle, or persistence work. |
+| **Template Transport Outcome** | Wappa's bounded statement about one Template call: `accepted`, `rejected`, `transport_unavailable`, or `indeterminate`. Acceptance proves platform acceptance and a platform Message ID; it never claims delivery, read, reply, or Host Application commit. |
 | **External Webhook Source** | A non-messaging system that sends webhooks into Wappa, such as MercadoPago, Stripe, Wompi, GitHub, or a CRM. |
 | **External Webhook Runtime** | The Wappa module that turns an accepted External Webhook Source request into a context-bound `process_external_event()` dispatch. It owns Inbox mismatch checks, Dispatch Context creation, handler cloning, and event dispatch. |
 | **Payment Provider** | A payment-specific External Webhook Source, such as MercadoPago, Stripe, or Wompi. This term is allowed for payment integrations, not for messaging platforms. |

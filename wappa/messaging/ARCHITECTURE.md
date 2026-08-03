@@ -9,7 +9,12 @@
   interactive, templates, contacts, locations, and contact-information requests.
 - Own recipient normalization (phone → E.164, BSUID detection) via `schemas.core.recipient`.
 - Own read-only template metadata queries against the WABA-level Graph API.
-- Keep `Messenger` / `IMessenger` as the public outbound seam for Host Applications.
+- Own the public `OutboundRuntime` and Inbox-scoped `InboxTemplateTransport`.
+  This deep module resolves credentials and active clients, constructs the
+  platform Messenger and Messenger Pipeline, executes Template transport, and
+  normalizes platform evidence without exposing its composition.
+- Keep `Messenger` / `IMessenger` as the general outbound seam. Template-only
+  Host Applications use the smaller public Template transport capability.
   Internal WhatsApp handlers may stay grouped by message family, but public
   `TextMessenger`, `MediaMessenger`, or similar seams are deferred until there is
   concrete pressure from multiple platform adapters or tests.
@@ -20,12 +25,16 @@
 - Cache scoping, SSE, or runtime state — owned by `persistence`.
 - Credential provisioning and `inbox_id` resolution — owned by `core/config` and API route adapters.
 - Business logic, workflow decisions, or event handler behaviour — owned by host applications.
+- Template authorization, attribution, idempotency, Campaigns, Conversation
+  lifecycle, Reply State, Agent context, and Message persistence — owned by Host
+  Applications and forbidden from the Template transport request.
 - `IMediaHandler` and `IMessenger` abstract contracts — defined in `domain/interfaces`.
 
 ## Module Structure
 
 ```
 messaging/
+  template_transport.py         # Public OutboundRuntime + Inbox Template capability
   whatsapp/
     client/
       whatsapp_client.py          # HTTP session wrapper; WhatsAppUrlBuilder, WhatsAppManagementUrlBuilder
@@ -62,6 +71,9 @@ messaging/
 | `WhatsAppSpecializedHandler` | Sends contact cards, location pins, and location-request messages. |
 | `WhatsAppTemplateInfoService` | Stateless read service for WABA-scoped template metadata. Uses `WhatsAppManagementUrlBuilder`. |
 | `MessageResult` | Uniform result VO returned by every send method. |
+| `OutboundRuntime` | Deep public factory over credentials, sessions, Messenger construction, and Messenger Pipeline composition. |
+| `InboxTemplateTransport` | Small capability bound to one Inbox; accepts provider-facing typed requests and returns normalized transport evidence. |
+| `TemplateTransportResult` | Accepted/rejected/unavailable/indeterminate evidence. Acceptance requires a platform Message ID and does not imply delivery or local commit. |
 
 ## Design Patterns
 
@@ -85,6 +97,22 @@ Host application
   ← MessageResult returned to host application
 ```
 
+## Data Flow — Template Transport
+
+```
+Host Application use case
+  → OutboundRuntime.from_app(app).templates(inbox_id)
+  → InboxTemplateTransport.send(typed provider-facing request)
+      → Inbox credential resolution + active SessionLifecycle client
+      → WhatsApp Messenger construction + registered Messenger Pipeline
+      → WhatsAppTemplateHandler endpoint/payload/media work
+      → normalized TemplateTransportResult
+  ← Host Application applies its own durability and lifecycle policy
+```
+
+Transport execution and Host Application commit are intentionally separate.
+An `indeterminate` result must not be treated as safe to retry automatically.
+
 ## Data Flow — Media Upload (file path)
 
 ```
@@ -106,9 +134,12 @@ WhatsAppMessenger._resolve_media_object(path, ...)
 | `get_media_info()`, `download_media()`, `stream_media()` | Authenticated `WhatsAppClient` | Bearer token | SessionLifecycle main pool (100 conn) |
 | `upload_media_from_url()` — download from public URL | Unauthenticated pooled client | None | SessionLifecycle media pool (20 conn) |
 
-The media download client is injected via `media_download_client` kwarg at construction. When absent (backward compat), `upload_media_from_url()` creates a throwaway `httpx.AsyncClient` per call. The pooled client is wired through both injection paths:
+The media download client is injected via `media_download_client` and remains
+separate from the authenticated platform client. The pooled client is wired
+through both construction paths:
 
-1. **API routes**: `get_whatsapp_media_handler()` reads `app.state.media_download_client` provider
+1. **API routes**: `get_whatsapp_media_handler()` acquires the media client from
+   `app.state.session_lifecycle`
 2. **Inbound dispatch**: `MessengerFactory` receives `media_download_client_provider` via `InboundRuntimeDependencies`
 
 **Invariant:** The media download client must never carry `Authorization` headers. Tests enforce this.
@@ -117,15 +148,19 @@ The media download client is injected via `media_download_client` kwarg at const
 
 `WhatsAppClient.phone_number_id` is the `inbox_id` for the WhatsApp platform. It flows into every `MessageResult` and `MediaUploadResult` as `inbox_id`. The mapping is explicit: `inbox_id == phone_number_id` for all WhatsApp operations.
 
-## Messenger Seam Decision
+## Outbound Seam Decision
 
-`IMessenger` remains Wappa's single public outbound interface for host applications.
+`IMessenger` remains Wappa's general outbound interface. The Template transport
+is the first deliberately smaller capability because a real Host Application
+needed to depend on provider sending without receiving the rest of Messenger or
+constructing its internal pipeline.
 
 **Why the seam stays whole:**
 
 - No second real platform adapter (Telegram, Instagram) exists yet to create pressure.
 - Tests do not repeatedly need smaller Messenger fakes.
-- Host applications have not requested smaller outbound capability sets.
+- Other message families have not yet demonstrated the same smaller-capability
+  requirement.
 - Message families (text, media, interactive, template, specialized) share the same `inbox_id`, `MessageResult`, and error-handling semantics — the interface is wide but cohesive.
 
 **Internal composition is allowed:**

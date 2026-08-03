@@ -1,11 +1,15 @@
 # ADR-0003: HTTP Client Lifecycle Ownership
 
-**Status:** Accepted  
+**Status:** Accepted
 **Date:** 2026-05-26
+**Amended:** 2026-08-03
 
 ## Context
 
-Wappa creates a lifespan-scoped `httpx.AsyncClient` at startup (`WappaCorePlugin._core_startup`) and shares it across all WhatsApp messenger instances via `app.state.http_session`. When the lifespan ends (shutdown, hot-reload), the client is closed — but nothing invalidated cached messengers holding references to it.
+Wappa creates lifespan-scoped HTTP clients at startup. Earlier implementations
+published a raw client through application state, which allowed consumers and
+cached messengers to outlive its ownership boundary. When the lifespan ended,
+those consumers retained a closed client.
 
 Downstream host applications (e.g., Symphonai) worked around this by detecting closed sessions inside their own engine/agency layers and rebinding Wappa's internal transport. This crosses ownership boundaries: agency code should not know that Wappa uses httpx or how to repair its session.
 
@@ -20,11 +24,16 @@ A naive "use one global client" policy would leak bearer tokens to arbitrary med
 
 ### Wappa owns messenger session validity
 
-1. `validate_session()` in `wappa/domain/interfaces/session_provider.py` is the single guard. Every callsite that consumes `app.state.http_session` validates the session is open before use.
+1. `SessionLifecycle` is the only owner of Wappa HTTP clients. Consumers receive
+   provider callables (`get_session` and `get_media_download_client`), never raw
+   application-state client aliases.
 
-2. `MessengerFactory` validates its session on every `create_messenger` call. Cached messengers with stale sessions are evicted.
+2. `MessengerFactory` acquires the authenticated client from the lifecycle on
+   every `create_messenger` call. Cached messengers with stale sessions are evicted.
 
-3. `WappaCorePlugin.recreate_http_session(app)` is the supported recovery hook for host applications that hot-reload or need to restore a closed transport.
+3. `WappaCorePlugin.recreate_http_session()` is the supported recovery hook for
+   an active runtime whose transport was closed. The plugin already owns the
+   lifecycle; callers do not pass an application object.
 
 4. Host applications must not detect or repair closed httpx sessions inside Wappa. If they encounter `HTTPSessionClosedError`, the correct action is to call the recreation hook or let the message fail with a clear error.
 
@@ -32,8 +41,8 @@ A naive "use one global client" policy would leak bearer tokens to arbitrary med
 
 | Traffic | Owner | Rationale |
 |---------|-------|-----------|
-| Authenticated Meta API (WhatsApp sends, template management) | Wappa lifespan client (`app.state.http_session`) | Connection pooling across high-volume sends |
-| Downloads from arbitrary media URLs | Separate unauthenticated client (`whatsapp_media_handler.py`) | Bearer token must never be sent to third-party hosts |
+| Authenticated Meta API (WhatsApp sends, template management) | `SessionLifecycle.get_session` | Connection pooling across high-volume sends |
+| Downloads from arbitrary media URLs | `SessionLifecycle.get_media_download_client` | Bearer token must never be sent to third-party hosts |
 | Host application services (Supabase, external APIs) | Host application | Different credentials, timeouts, retry semantics |
 | Batch upload operations (e.g., header media refresh) | Host adapter, batch-scoped | Acceptable per-batch lifecycle; does not need to share the send client |
 
@@ -44,9 +53,9 @@ A naive "use one global client" policy would leak bearer tokens to arbitrary med
 ## Consequences
 
 - `HTTPSessionClosedError` is a new error type callers may encounter if they attempt messaging after shutdown begins. This is intentional — silent failures are worse.
-- Host applications that hot-reload should call `recreate_http_session()` rather than attempting to mutate Wappa internals.
+- Active runtimes may call `recreate_http_session()` rather than mutating Wappa internals.
 - The messenger cache in `MessengerFactory` remains for performance but is now self-healing: stale entries are evicted on access rather than persisting indefinitely.
-- Symphonai's temporary transport-repair workaround in `agency/` and `engine/expiry/` can be removed once this Wappa version is consumed.
+- Raw authenticated and media-download client aliases are not part of application state or Wappa's public contract.
 
 ## Alternatives Considered
 
@@ -56,4 +65,4 @@ A naive "use one global client" policy would leak bearer tokens to arbitrary med
 
 3. **Let host apps repair Wappa's internal session** — Rejected (current state being fixed). Crosses ownership boundaries and creates tight coupling to Wappa's transport implementation.
 
-4. **Lazy session creation on first use instead of lifespan startup** — Considered but deferred. Startup creation is simpler, validates connectivity early, and the recreation hook covers the hot-reload case.
+4. **Lazy authenticated-session creation on first use instead of lifespan startup** — Rejected for the authenticated pool. Startup ownership makes readiness explicit. The unauthenticated media pool remains lazy because many applications never download third-party media.

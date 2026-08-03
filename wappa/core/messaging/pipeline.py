@@ -470,9 +470,9 @@ class MessengerPipeline(IMessenger):
         language_code: str = "es",
         *,
         template_type: str,
-        override: bool | None = None,
+        routing_policy: str = "category_default",
     ) -> MessageResult:
-        kw = {"template_type": template_type, "override": override}
+        kw = {"template_type": template_type, "routing_policy": routing_policy}
         return await self._invoke(
             "send_text_template",
             "text_template",
@@ -498,9 +498,9 @@ class MessengerPipeline(IMessenger):
         language_code: str = "es",
         *,
         template_type: str,
-        override: bool | None = None,
+        routing_policy: str = "category_default",
     ) -> MessageResult:
-        kw = {"template_type": template_type, "override": override}
+        kw = {"template_type": template_type, "routing_policy": routing_policy}
         return await self._invoke(
             "send_media_template",
             "media_template",
@@ -530,9 +530,9 @@ class MessengerPipeline(IMessenger):
         language_code: str = "es",
         *,
         template_type: str,
-        override: bool | None = None,
+        routing_policy: str = "category_default",
     ) -> MessageResult:
-        kw = {"template_type": template_type, "override": override}
+        kw = {"template_type": template_type, "routing_policy": routing_policy}
         return await self._invoke(
             "send_location_template",
             "location_template",

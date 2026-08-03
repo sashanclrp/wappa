@@ -6,13 +6,13 @@ objects to provide comprehensive information about each message type.
 """
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class MessageType(str, Enum):
+class MessageType(StrEnum):
     """Supported message types for metadata extraction."""
 
     TEXT = "text"

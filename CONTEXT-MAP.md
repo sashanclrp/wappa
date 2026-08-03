@@ -106,7 +106,10 @@ Each processor receives a **cloned handler instance** with per-request context a
 
 - **Webhooks → Core Events**: Conformist. Webhooks parse raw platform payloads into universal models that Core Events consumes without transformation.
 - **Core Events → WappaEventHandler**: Published Language. The event dispatcher publishes typed events; host applications implement handlers against the published interface.
-- **WappaEventHandler → Messaging**: Customer/Supplier. Event handlers call the messaging interface to send replies; messaging owns the delivery contract.
+- **Host Application → Messaging**: Customer/Supplier. Context-bound handlers
+  use `IMessenger` for replies; other host services use the Inbox-scoped
+  Template capability. Both paths share Wappa's provider adapter and pipeline,
+  while the host retains business governance and durable commit.
 - **WappaEventHandler → Persistence**: Customer/Supplier. Event handlers use cache factories for state; persistence owns backend selection and key structure.
 - **SSE/PubSub ← Messaging**: Observer. The messenger pipeline notifies SSE/PubSub of outbound messages for real-time streaming.
 - **Expiry → Messaging + Persistence**: Autonomous. Expiry reacts to Redis keyspace events and bootstraps its own messenger/cache instances.

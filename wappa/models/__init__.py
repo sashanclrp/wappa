@@ -19,8 +19,7 @@ Usage (User Request: Quick access to WhatsApp models for endpoint schemas):
     # Specialized models
     from wappa.models import ContactMessage, LocationMessage
 
-    # Template models
-    from wappa.models import TextTemplateMessage, MediaTemplateMessage
+    Template transport requests are public from ``wappa.messaging``.
 """
 
 # Re-export WhatsApp models with cleaner path (User Request: Quick access)
@@ -41,20 +40,14 @@ from ..messaging.whatsapp.models import (
     ListMessage,
     LocationMessage,
     LocationRequestMessage,
-    LocationTemplateMessage,
     LocationValidationResult,
-    MediaTemplateMessage,
     # Media Models
     MediaType,
     MessageResult,
     PersonalContact,
     ReadStatusMessage,
     StickerMessage,
-    TemplateMessageStatus,
     TemplateParameter,
-    # Template Models
-    TemplateValidationResult,
-    TextTemplateMessage,
     VideoMessage,
     WhatsAppTemplateType,
 )
@@ -87,9 +80,4 @@ __all__ = [
     # Template Models
     "TemplateParameter",
     "WhatsAppTemplateType",
-    "TextTemplateMessage",
-    "MediaTemplateMessage",
-    "LocationTemplateMessage",
-    "TemplateMessageStatus",
-    "TemplateValidationResult",
 ]

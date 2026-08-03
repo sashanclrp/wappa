@@ -91,8 +91,10 @@ class TestSessionLifecycle:
         lifecycle = SessionLifecycle(client)
         await lifecycle.close()
         assert client.is_closed
-        assert lifecycle.session is None
+        with pytest.raises(HTTPSessionClosedError):
+            lifecycle.get_session()
 
-    def test_session_property_for_backward_compat(self, live_session):
+    def test_get_session_is_the_only_acquisition_api(self, live_session):
         lifecycle = SessionLifecycle(live_session)
-        assert lifecycle.session is live_session
+        assert lifecycle.get_session() is live_session
+        assert not hasattr(lifecycle, "session")

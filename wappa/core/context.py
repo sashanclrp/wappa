@@ -164,6 +164,9 @@ class WappaContextFactory:
             messenger_factory = MessengerFactory(
                 credential_store=credential_store,
                 session_provider=session_lifecycle.get_session,
+                media_download_client_provider=(
+                    session_lifecycle.get_media_download_client
+                ),
             )
             raw_messenger = await messenger_factory.create_messenger(
                 platform=platform,

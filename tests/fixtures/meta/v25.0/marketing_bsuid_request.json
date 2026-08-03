@@ -1,0 +1,9 @@
+{
+  "messaging_product": "whatsapp",
+  "recipient": "CO.2186878922080769",
+  "type": "template",
+  "template": {
+    "name": "marketing_offer",
+    "language": {"code": "es"}
+  }
+}

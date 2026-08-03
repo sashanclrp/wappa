@@ -159,8 +159,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         try:
             from wappa.webhooks.whatsapp.webhook_container import WhatsAppWebhook
 
-            # A missing registry means no custom fields are registered — only
-            # built-ins are accepted, preserving backwards-compatible 400s.
+            # A missing registry means no custom fields are registered.
             context = {"field_registry": self._field_registry}
             webhook = WhatsAppWebhook.model_validate(payload, context=context)
             self.logger.debug(

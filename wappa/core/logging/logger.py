@@ -372,21 +372,6 @@ def get_app_logger() -> ContextLogger:
     return get_logger("wappa.app")
 
 
-def get_api_logger(name: str | None = None) -> ContextLogger:
-    """
-    Get API logger for application endpoints and controllers.
-
-    Alias for get_app_logger() to maintain compatibility with existing code.
-
-    Args:
-        name: Optional logger name (ignored for compatibility)
-
-    Returns:
-        ContextLogger instance with API-level context
-    """
-    return get_logger(name or "wappa.api")
-
-
 def get_webhook_logger(name: str, inbox_id: str, user_id: str) -> ContextLogger:
     """
     Get a logger specifically configured for webhook processing.

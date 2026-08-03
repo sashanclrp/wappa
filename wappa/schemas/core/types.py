@@ -5,11 +5,11 @@ This module defines the common types used across all messaging platforms
 to ensure consistent data handling regardless of the underlying platform.
 """
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class PlatformType(str, Enum):
+class PlatformType(StrEnum):
     """Supported messaging platforms in the Mimeia platform."""
 
     WHATSAPP = "whatsapp"
@@ -18,7 +18,7 @@ class PlatformType(str, Enum):
     INSTAGRAM = "instagram"
 
 
-class MessageType(str, Enum):
+class MessageType(StrEnum):
     """Universal message types across all platforms."""
 
     TEXT = "text"
@@ -39,7 +39,7 @@ class MessageType(str, Enum):
     UNSUPPORTED = "unsupported"  # Unsupported message types
 
 
-class WebhookType(str, Enum):
+class WebhookType(StrEnum):
     """Types of webhook events that platforms can send."""
 
     INCOMING_MESSAGES = "incoming_messages"
@@ -49,7 +49,7 @@ class WebhookType(str, Enum):
     SYSTEM_EVENTS = "system_events"
 
 
-class MessageStatus(str, Enum):
+class MessageStatus(StrEnum):
     """Universal message delivery status across platforms."""
 
     SENT = "sent"
@@ -61,7 +61,7 @@ class MessageStatus(str, Enum):
     PENDING = "pending"
 
 
-class InteractiveType(str, Enum):
+class InteractiveType(StrEnum):
     """Types of interactive elements across platforms."""
 
     BUTTON_REPLY = "button_reply"
@@ -73,7 +73,7 @@ class InteractiveType(str, Enum):
     MENU = "menu"
 
 
-class MediaType(str, Enum):
+class MediaType(StrEnum):
     """Media content types with MIME type mapping."""
 
     IMAGE_JPEG = "image/jpeg"
@@ -100,7 +100,7 @@ class MediaType(str, Enum):
     DOCUMENT_CSV = "text/csv"
 
 
-class ConversationType(str, Enum):
+class ConversationType(StrEnum):
     """Types of conversations across platforms."""
 
     PRIVATE = "private"  # 1-on-1 conversation
@@ -109,7 +109,7 @@ class ConversationType(str, Enum):
     BUSINESS = "business"  # Business conversation (WhatsApp Business)
 
 
-class UserRole(str, Enum):
+class UserRole(StrEnum):
     """User roles in conversations."""
 
     MEMBER = "member"
@@ -125,7 +125,7 @@ MessageMetadata = dict[str, Any]
 UniversalMessageData = dict[str, str | int | bool | None | dict | list]
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     """Universal error codes for webhook processing."""
 
     VALIDATION_ERROR = "validation_error"
@@ -138,7 +138,7 @@ class ErrorCode(str, Enum):
     SIGNATURE_VALIDATION_FAILED = "signature_validation_failed"
 
 
-class ProcessingPriority(str, Enum):
+class ProcessingPriority(StrEnum):
     """Priority levels for message processing."""
 
     LOW = "low"

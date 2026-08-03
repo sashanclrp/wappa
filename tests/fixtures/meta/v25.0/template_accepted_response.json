@@ -1,0 +1,13 @@
+{
+  "messaging_product": "whatsapp",
+  "contacts": [
+    {
+      "input": "CO.2186878922080769",
+      "wa_id": "573001112233",
+      "user_id": "CO.2186878922080769",
+      "parent_user_id": "CO.ENT.2186878922080769",
+      "profile": {"username": "known_customer"}
+    }
+  ],
+  "messages": [{"id": "wamid.golden", "message_status": "accepted"}]
+}

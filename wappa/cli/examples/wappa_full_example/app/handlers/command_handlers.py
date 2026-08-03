@@ -62,7 +62,7 @@ class CommandHandlers:
                 user_id, StateType.BUTTON
             )
             if existing_state:
-                await self.cache_helper.remove_user_state(user_id, StateType.BUTTON)
+                await self.cache_helper.remove_user_state(StateType.BUTTON)
 
             # Create button data for state storage (as dictionaries)
             button_data = [
@@ -102,7 +102,7 @@ class CommandHandlers:
                 self.logger.error(
                     f"Failed to send button message: {button_result.error}"
                 )
-                await self.cache_helper.remove_user_state(user_id, StateType.BUTTON)
+                await self.cache_helper.remove_user_state(StateType.BUTTON)
                 return {"success": False, "error": "Failed to send button message"}
 
             # Update button state with message ID
@@ -167,7 +167,7 @@ class CommandHandlers:
                 user_id, StateType.LIST
             )
             if existing_state:
-                await self.cache_helper.remove_user_state(user_id, StateType.LIST)
+                await self.cache_helper.remove_user_state(StateType.LIST)
 
             # Create list sections with media options
             sections = [
@@ -224,7 +224,7 @@ class CommandHandlers:
 
             if not list_result.success:
                 self.logger.error(f"Failed to send list message: {list_result.error}")
-                await self.cache_helper.remove_user_state(user_id, StateType.LIST)
+                await self.cache_helper.remove_user_state(StateType.LIST)
                 return {"success": False, "error": "Failed to send list message"}
 
             # Update list state with message ID

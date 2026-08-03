@@ -42,8 +42,8 @@ class FastAPIAppNotAvailableError(ExpiryContextError):
     pass
 
 
-class HTTPSessionNotAvailableError(ExpiryContextError):
-    """Raised when HTTP session is not available in app state."""
+class SessionLifecycleNotAvailableError(ExpiryContextError):
+    """Raised when Wappa's session lifecycle is unavailable."""
 
     pass
 
@@ -64,8 +64,8 @@ async def create_expiry_messenger(inbox_id: str) -> IMessenger:
     """
     Return a WhatsApp messenger for use inside an expiry handler.
 
-    Creates a WhatsApp messenger instance using the shared HTTP session
-    from FastAPI app state, following the same pattern as webhook controllers.
+    Creates a WhatsApp messenger through the lifecycle owner registered by the
+    core plugin.
 
     This function hides the 18-line manual bootstrapping complexity,
     providing production-ready error handling with specific error types.
@@ -78,10 +78,10 @@ async def create_expiry_messenger(inbox_id: str) -> IMessenger:
 
     Raises:
         FastAPIAppNotAvailableError: If ExpiryPlugin is not configured.
-        HTTPSessionNotAvailableError: If http_session is missing from app.state.
+        SessionLifecycleNotAvailableError: If the lifecycle owner is unavailable.
         MessengerCreationError: If the messenger factory fails.
     """
-    # Get FastAPI app to access shared HTTP session
+    # AppContext provides access to the core plugin's lifecycle owner.
     app = get_app_context().get_app()
 
     if not app:
@@ -92,7 +92,7 @@ async def create_expiry_messenger(inbox_id: str) -> IMessenger:
 
     session_lifecycle = getattr(app.state, "session_lifecycle", None)
     if not session_lifecycle:
-        raise HTTPSessionNotAvailableError(
+        raise SessionLifecycleNotAvailableError(
             "SessionLifecycle not available in app.state — ensure "
             "WappaCorePlugin is configured and has started"
         )
@@ -103,6 +103,9 @@ async def create_expiry_messenger(inbox_id: str) -> IMessenger:
         messenger_factory = MessengerFactory(
             credential_store=credential_store,
             session_provider=session_lifecycle.get_session,
+            media_download_client_provider=(
+                session_lifecycle.get_media_download_client
+            ),
         )
         messenger = await messenger_factory.create_messenger(
             platform=PlatformType.WHATSAPP,

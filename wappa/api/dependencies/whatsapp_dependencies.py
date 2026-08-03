@@ -125,8 +125,10 @@ async def get_whatsapp_media_handler(
         Configured WhatsApp media handler for upload/download operations
     """
     inbox_id = require_inbox_context()
-    media_client_provider = getattr(request.app.state, "media_download_client", None)
-    media_client = media_client_provider() if media_client_provider else None
+    lifecycle = getattr(request.app.state, "session_lifecycle", None)
+    if lifecycle is None:
+        raise RuntimeError("SessionLifecycle is required for media handling")
+    media_client = lifecycle.get_media_download_client()
     return WhatsAppMediaHandler(
         client=client, inbox_id=inbox_id, media_download_client=media_client
     )
