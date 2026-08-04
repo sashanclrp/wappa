@@ -32,7 +32,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
 from ...domain.interfaces.messaging_interface import IMessenger
 from ...schemas.core.types import PlatformType
@@ -106,7 +106,7 @@ class SendInvocation:
 
     def to_request_payload(self) -> dict[str, Any]:
         """Serializable named-argument payload (for event emission)."""
-        return _to_serializable(dict(self.arguments))
+        return cast(dict[str, Any], _to_serializable(dict(self.arguments)))
 
 
 SendNext = Callable[[SendInvocation], Awaitable["MessageResult"]]
@@ -198,7 +198,8 @@ class MessengerPipeline(IMessenger):
 
     async def _call_raw(self, invocation: SendInvocation) -> MessageResult:
         method = getattr(self._raw, invocation.method_name)
-        return await method(*invocation.args, **invocation.kwargs)
+        result: MessageResult = await method(*invocation.args, **invocation.kwargs)
+        return result
 
     def _invoke(
         self,

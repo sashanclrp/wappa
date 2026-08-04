@@ -145,7 +145,7 @@ class WhatsAppReactionMessage(WhatsAppMessageIdentity, BaseMessage):
     @property
     def emoji(self) -> str | None:
         """Get the reaction emoji."""
-        return self.reaction.emoji
+        return self.reaction.emoji or ""
 
     @property
     def is_adding_reaction(self) -> bool:
@@ -170,10 +170,10 @@ class WhatsAppReactionMessage(WhatsAppMessageIdentity, BaseMessage):
             The emoji if present, or "[removed]" if reaction was removed.
         """
         if self.is_adding_reaction:
-            return self.emoji
+            return self.emoji or ""
         return "[removed]"
 
-    def to_summary_dict(self) -> dict[str, str | bool | int]:
+    def to_summary_dict(self) -> dict[str, str | bool | int | None]:
         """
         Create a summary dictionary for logging and analysis.
 
@@ -269,6 +269,6 @@ class WhatsAppReactionMessage(WhatsAppMessageIdentity, BaseMessage):
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppReactionMessage":
         return cls.model_validate(data)

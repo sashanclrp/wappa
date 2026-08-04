@@ -1,7 +1,7 @@
 ---
 id: 003
 title: Deep Inbound Runtime and Dispatch Context
-status: proposed
+status: implemented
 request_type: architecture-prd
 model_fit:
   primary_100_percent:
@@ -49,7 +49,7 @@ That bundle is the **Dispatch Context**. Calling it request context is misleadin
 
 ## What To Build
 
-This PRD proposes a future implementation change. Do not implement it while writing this PRD.
+This request has been implemented. The list below records the delivered scope.
 
 1. Create or rename a module that explicitly owns the Inbound Runtime.
 2. Move orchestration logic out of the current webhook controller into this module:
@@ -85,15 +85,15 @@ This PRD proposes a future implementation change. Do not implement it while writ
 
 ## Acceptance Criteria
 
-- [ ] Inbound Runtime exists as a named module/class/function boundary.
-- [ ] Dispatch Context is explicit in code or as a clearly named internal structure.
-- [ ] `IncomingMessageWebhook` is removed.
-- [ ] `InboundMessageWebhook` is the only public inbound-message Universal Model name.
-- [ ] Processors do not mutate ContextVars.
-- [ ] Processors do not build Messenger, Cache Factory, DB sessions, or handlers.
-- [ ] URL `inbox_id` wins over payload metadata.
-- [ ] Payload `phone_number_id` mismatch is rejected.
-- [ ] Tests cover multi-inbox dispatch in a single process.
+- [x] Inbound Runtime exists as a named module/class/function boundary.
+- [x] Dispatch Context is explicit in code or as a clearly named internal structure.
+- [x] `IncomingMessageWebhook` is removed.
+- [x] `InboundMessageWebhook` is the only public inbound-message Universal Model name.
+- [x] Processors do not mutate ContextVars.
+- [x] Processors do not build Messenger, Cache Factory, DB sessions, or handlers.
+- [x] URL `inbox_id` wins over payload metadata.
+- [x] Payload `phone_number_id` mismatch is rejected.
+- [x] Tests cover multi-inbox dispatch in a single process.
 
 ## Affected Files
 

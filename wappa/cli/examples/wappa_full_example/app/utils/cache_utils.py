@@ -11,10 +11,22 @@ Uses the new type-specific cache interfaces:
 """
 
 from datetime import datetime
-from typing import Any, TypeVar
+from typing import Any, TypeVar, cast
 
 from pydantic import BaseModel
 
+from wappa.domain.interfaces.cache_factory import ICacheFactory
+from wappa.domain.interfaces.cache_interfaces import (
+    IStateCache,
+    ITableCache,
+    IUserCache,
+)
+
+from ..models.api_tracking_models import (
+    APIMessageHistoryEntry,
+    APIMessageStatistics,
+    UserAPIActivity,
+)
 from ..models.state_models import InteractiveState, StateType
 from ..models.user_models import UserProfile
 
@@ -32,7 +44,7 @@ def get_state_handler_name(state_type: StateType) -> str:
 class CacheHelper:
     """Helper class for common cache operations using type-specific cache interfaces."""
 
-    def __init__(self, cache_factory):
+    def __init__(self, cache_factory: ICacheFactory) -> None:
         """
         Initialize CacheHelper with cache factory.
 
@@ -40,26 +52,26 @@ class CacheHelper:
             cache_factory: Wappa cache factory instance (ICacheFactory)
         """
         self.cache_factory = cache_factory
-        self._user_cache = None
-        self._state_cache = None
-        self._table_cache = None
+        self._user_cache: IUserCache | None = None
+        self._state_cache: IStateCache | None = None
+        self._table_cache: ITableCache | None = None
 
     @property
-    def user_cache(self):
+    def user_cache(self) -> IUserCache:
         """Get user cache instance (IUserCache - pre-bound to user context)."""
         if not self._user_cache:
             self._user_cache = self.cache_factory.create_user_cache()
         return self._user_cache
 
     @property
-    def state_cache(self):
+    def state_cache(self) -> IStateCache:
         """Get state cache instance (IStateCache - pre-bound to user context)."""
         if not self._state_cache:
             self._state_cache = self.cache_factory.create_state_cache()
         return self._state_cache
 
     @property
-    def table_cache(self):
+    def table_cache(self) -> ITableCache:
         """Get table cache instance (ITableCache - pre-bound to inbox context)."""
         if not self._table_cache:
             self._table_cache = self.cache_factory.create_table_cache()
@@ -81,7 +93,7 @@ class CacheHelper:
         try:
             # IUserCache.get() - no key needed, user identity is baked in
             profile_data = await self.user_cache.get(models=UserProfile)
-            return profile_data
+            return cast(UserProfile | None, profile_data)
         except Exception as e:
             print(f"Error getting user profile {user_id}: {e}")
             return None
@@ -186,14 +198,11 @@ class CacheHelper:
             print(f"Error updating user activity {user_id}: {e}")
             return None
 
-    async def get_user_state(
-        self, user_id: str, state_type: StateType
-    ) -> InteractiveState | None:
+    async def get_user_state(self, state_type: StateType) -> InteractiveState | None:
         """
         Get user interactive state.
 
         Args:
-            user_id: User phone number/ID (for compatibility, not used directly)
             state_type: Type of state to get
 
         Returns:
@@ -213,7 +222,10 @@ class CacheHelper:
             elif state_type == StateType.LIST:
                 model_class = ListState
 
-            state_data = await self.state_cache.get(handler_name, models=model_class)
+            state_data = cast(
+                InteractiveState | None,
+                await self.state_cache.get(handler_name, models=model_class),
+            )
 
             if state_data and state_data.is_expired():
                 # Remove expired state
@@ -264,7 +276,7 @@ class CacheHelper:
             # IStateCache.delete(handler_name) - handler_name as key
             handler_name = get_state_handler_name(state_type)
             result = await self.state_cache.delete(handler_name)
-            return result
+            return result > 0
         except Exception as e:
             print(f"Error removing user state {state_type.value}: {e}")
             return False
@@ -338,7 +350,8 @@ class CacheHelper:
             pkid = user_id
 
             # Get existing history
-            history = await self.table_cache.get(table_name, pkid, models=list) or []
+            stored = await self.table_cache.get(table_name, pkid) or {}
+            history = cast(list[dict[str, Any]], stored.get("messages", []))
 
             # Add new message with timestamp
             message_entry = {**message_data, "stored_at": datetime.now().isoformat()}
@@ -351,7 +364,7 @@ class CacheHelper:
 
             # ITableCache.upsert(table_name, pkid, data, ttl=...) - save updated history
             await self.table_cache.upsert(
-                table_name, pkid, history, ttl=604800
+                table_name, pkid, {"messages": history}, ttl=604800
             )  # 7 days
             return True
 
@@ -376,7 +389,8 @@ class CacheHelper:
             # ITableCache.get(table_name, pkid, models=...) - separate params
             table_name = "message_history"
             pkid = user_id
-            history = await self.table_cache.get(table_name, pkid, models=list) or []
+            stored = await self.table_cache.get(table_name, pkid) or {}
+            history = cast(list[dict[str, Any]], stored.get("messages", []))
 
             # Return recent messages
             return history[-limit:] if history else []
@@ -470,7 +484,7 @@ class CacheHelper:
 
     async def save_api_message_history(
         self,
-        entry,
+        entry: APIMessageHistoryEntry,
         ttl_seconds: int = 604800,  # 7 days
     ) -> bool:
         """Save API message history entry."""
@@ -485,10 +499,8 @@ class CacheHelper:
             print(f"Error saving API message history: {e}")
             return False
 
-    async def get_api_message_statistics(self):
+    async def get_api_message_statistics(self) -> APIMessageStatistics:
         """Get global API message statistics."""
-        from ..models.api_tracking_models import APIMessageStatistics
-
         try:
             stats_data = await self.table_cache.get(
                 table_name="api_message_stats",
@@ -505,7 +517,7 @@ class CacheHelper:
 
     async def save_api_message_statistics(
         self,
-        stats,
+        stats: APIMessageStatistics,
         ttl_seconds: int = 2592000,  # 30 days
     ) -> bool:
         """Save global API message statistics."""
@@ -520,10 +532,8 @@ class CacheHelper:
             print(f"Error saving API message statistics: {e}")
             return False
 
-    async def get_user_api_activity(self, user_id: str):
+    async def get_user_api_activity(self, user_id: str) -> UserAPIActivity | None:
         """Get per-user API activity log."""
-        from ..models.api_tracking_models import UserAPIActivity
-
         try:
             log_data = await self.table_cache.get(
                 table_name="user_api_activity",
@@ -538,10 +548,8 @@ class CacheHelper:
             print(f"Error getting user API activity: {e}")
             return None
 
-    async def get_or_create_user_api_activity(self, user_id: str):
+    async def get_or_create_user_api_activity(self, user_id: str) -> UserAPIActivity:
         """Get or create user API activity log."""
-        from ..models.api_tracking_models import UserAPIActivity
-
         activity = await self.get_user_api_activity(user_id)
         if activity:
             return activity
@@ -550,7 +558,7 @@ class CacheHelper:
 
     async def save_user_api_activity(
         self,
-        activity,
+        activity: UserAPIActivity,
         ttl_seconds: int = 2592000,  # 30 days
     ) -> bool:
         """Save per-user API activity log."""
@@ -565,7 +573,7 @@ class CacheHelper:
             print(f"Error saving user API activity: {e}")
             return False
 
-    async def get_all_user_api_activities(self) -> list:
+    async def get_all_user_api_activities(self) -> list[UserAPIActivity]:
         """Get all user API activity logs (for /API-STATS command)."""
         import logging
 
@@ -633,7 +641,9 @@ class CacheKeys:
 
 
 # Convenience functions for direct use
-async def get_user_from_cache(cache_factory, user_id: str) -> UserProfile | None:
+async def get_user_from_cache(
+    cache_factory: ICacheFactory, user_id: str
+) -> UserProfile | None:
     """
     Get user profile from cache (convenience function).
 
@@ -648,7 +658,9 @@ async def get_user_from_cache(cache_factory, user_id: str) -> UserProfile | None
     return await helper.get_user_profile(user_id)
 
 
-async def save_user_to_cache(cache_factory, user_profile: UserProfile) -> bool:
+async def save_user_to_cache(
+    cache_factory: ICacheFactory, user_profile: UserProfile
+) -> bool:
     """
     Save user profile to cache (convenience function).
 
@@ -664,7 +676,10 @@ async def save_user_to_cache(cache_factory, user_profile: UserProfile) -> bool:
 
 
 async def update_user_stats(
-    cache_factory, user_id: str, message_type: str = "text", command: str | None = None
+    cache_factory: ICacheFactory,
+    user_id: str,
+    message_type: str = "text",
+    command: str | None = None,
 ) -> UserProfile | None:
     """
     Update user statistics (convenience function).

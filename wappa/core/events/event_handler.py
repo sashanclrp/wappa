@@ -463,7 +463,7 @@ class WappaEventHandler(ABC):
         Process external webhook event with custom business logic.
 
         Optional method - override to handle payment notifications, CRM updates,
-        subscription events, or any external provider webhook.
+        subscription events, or any External Webhook Source event.
 
         When this method is called, self.messenger, self.cache_factory, and self.db
         are available (when the processor resolved a user_id and plugins are configured).

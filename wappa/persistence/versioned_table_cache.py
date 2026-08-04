@@ -127,8 +127,10 @@ class VersionedTableCache[T: BaseModel]:
 
     @staticmethod
     def _to_version(bumps: object) -> int:
+        if not isinstance(bumps, (str, bytes, bytearray, int, float)):
+            return FIRST_VERSION
         try:
-            counter = int(bumps)  # type: ignore[arg-type]
+            counter = int(bumps)
         except (TypeError, ValueError):
             counter = 0
         return FIRST_VERSION + max(counter, 0)

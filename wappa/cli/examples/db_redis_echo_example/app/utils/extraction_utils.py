@@ -13,10 +13,12 @@ it handles ONLY data extraction with no side effects.
 
 from __future__ import annotations
 
+from typing import Any
+
 from wappa.webhooks import InboundMessageWebhook
 
 
-def extract_media_data(webhook: InboundMessageWebhook) -> dict:
+def extract_media_data(webhook: InboundMessageWebhook) -> dict[str, Any]:
     """
     Extract media metadata from webhook for media messages.
 
@@ -27,7 +29,7 @@ def extract_media_data(webhook: InboundMessageWebhook) -> dict:
         Dictionary with media fields (mime, sha256, url, caption, etc.)
     """
     message = webhook.message
-    media_data = {
+    media_data: dict[str, Any] = {
         "media_mime": None,
         "media_sha256": None,
         "media_url": None,
@@ -84,7 +86,7 @@ def extract_media_data(webhook: InboundMessageWebhook) -> dict:
     return media_data
 
 
-def extract_json_content(webhook: InboundMessageWebhook) -> dict | None:
+def extract_json_content(webhook: InboundMessageWebhook) -> dict[str, Any] | None:
     """
     Extract structured JSON content for special message types.
 
@@ -123,9 +125,9 @@ def extract_json_content(webhook: InboundMessageWebhook) -> dict | None:
     return None
 
 
-def _extract_contact_json(message) -> dict:
+def _extract_contact_json(message: Any) -> dict[str, Any]:
     """Extract JSON content for contact messages."""
-    json_content = {
+    json_content: dict[str, Any] = {
         "message_type": "contact",
         "contact_name": None,
         "contact_phone": None,
@@ -148,9 +150,9 @@ def _extract_contact_json(message) -> dict:
     return json_content
 
 
-def _extract_location_json(message) -> dict:
+def _extract_location_json(message: Any) -> dict[str, Any]:
     """Extract JSON content for location messages."""
-    json_content = {
+    json_content: dict[str, Any] = {
         "message_type": "location",
         "latitude": None,
         "longitude": None,
@@ -173,9 +175,11 @@ def _extract_location_json(message) -> dict:
     return json_content
 
 
-def _extract_interactive_json(webhook: InboundMessageWebhook, message) -> dict:
+def _extract_interactive_json(
+    webhook: InboundMessageWebhook, message: Any
+) -> dict[str, Any]:
     """Extract JSON content for interactive messages."""
-    json_content = {
+    json_content: dict[str, Any] = {
         "message_type": "interactive",
         "interactive_type": None,
         "selected_id": None,
@@ -197,7 +201,7 @@ def _extract_interactive_json(webhook: InboundMessageWebhook, message) -> dict:
     return json_content
 
 
-def _extract_reaction_json(message) -> dict:
+def _extract_reaction_json(message: Any) -> dict[str, Any]:
     """Extract JSON content for reaction messages."""
     json_content = {
         "message_type": "reaction",
@@ -213,7 +217,7 @@ def _extract_reaction_json(message) -> dict:
     return json_content
 
 
-def extract_contact_data(webhook: InboundMessageWebhook) -> dict:
+def extract_contact_data(webhook: InboundMessageWebhook) -> dict[str, Any]:
     """
     Extract contact information from contact messages.
 
@@ -223,7 +227,7 @@ def extract_contact_data(webhook: InboundMessageWebhook) -> dict:
     Returns:
         Dictionary with contact data (name, phone, etc.)
     """
-    contact_data = {
+    contact_data: dict[str, Any] = {
         "name": None,
         "phone": None,
         "contacts": [],

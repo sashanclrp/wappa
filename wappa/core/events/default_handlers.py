@@ -6,11 +6,13 @@ used out-of-the-box or extended by users for custom behavior.
 """
 
 import re
+from collections.abc import Callable
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from wappa.core.logging.logger import get_logger
+from wappa.core.logging.logger import ContextLogger, get_logger
 from wappa.webhooks import (
     ErrorWebhook,
     InboundMessageWebhook,
@@ -56,6 +58,52 @@ class ErrorLogStrategy(Enum):
     SUMMARY_ONLY = "summary_only"  # Log error count and primary error only
 
 
+@dataclass
+class _MessageStats:
+    total_messages: int = 0
+    by_type: dict[str, int] = field(default_factory=dict)
+    by_user: dict[str, int] = field(default_factory=dict)
+    by_inbox: dict[str, int] = field(default_factory=dict)
+    sensitive_content_detected: int = 0
+    last_reset: datetime = field(default_factory=datetime.now)
+
+
+@dataclass
+class _StatusStats:
+    total_processed: int = 0
+    sent: int = 0
+    delivered: int = 0
+    read: int = 0
+    played: int = 0
+    failed: int = 0
+    deleted: int = 0
+    last_processed: datetime | None = None
+
+
+@dataclass
+class _RecentError:
+    timestamp: datetime
+    error_code: int
+    critical: bool
+
+
+@dataclass
+class _ErrorStats:
+    total_errors: int = 0
+    critical_errors: int = 0
+    escalated_errors: int = 0
+    last_error: datetime | None = None
+    error_types: dict[int, int] = field(default_factory=dict)
+    recent_errors: list[_RecentError] = field(default_factory=list)
+
+
+@dataclass
+class _SystemStats:
+    total_events: int = 0
+    by_type: dict[str, int] = field(default_factory=dict)
+    last_processed: datetime | None = None
+
+
 class DefaultMessageHandler:
     """
     Default handler for incoming message webhooks.
@@ -80,7 +128,7 @@ class DefaultMessageHandler:
         log_level: LogLevel = LogLevel.INFO,
         content_preview_length: int = 100,
         mask_sensitive_data: bool = True,
-    ):
+    ) -> None:
         """
         Initialize the default message handler.
 
@@ -96,14 +144,7 @@ class DefaultMessageHandler:
         self.mask_sensitive_data = mask_sensitive_data
 
         # Statistics tracking
-        self._stats = {
-            "total_messages": 0,
-            "by_type": {},
-            "by_user": {},
-            "by_inbox": {},
-            "sensitive_content_detected": 0,
-            "last_reset": datetime.now(),
-        }
+        self._stats = _MessageStats()
 
     async def log_incoming_message(self, webhook: InboundMessageWebhook) -> None:
         """
@@ -147,21 +188,19 @@ class DefaultMessageHandler:
 
     def _update_stats(self, webhook: InboundMessageWebhook) -> None:
         """Update internal statistics tracking."""
-        self._stats["total_messages"] += 1
+        self._stats.total_messages += 1
 
         # Track by message type
         message_type = webhook.get_message_type_name()
-        self._stats["by_type"][message_type] = (
-            self._stats["by_type"].get(message_type, 0) + 1
-        )
+        self._stats.by_type[message_type] = self._stats.by_type.get(message_type, 0) + 1
 
         # Track by user
         user_id = webhook.user.user_id if webhook.user else "unknown"
-        self._stats["by_user"][user_id] = self._stats["by_user"].get(user_id, 0) + 1
+        self._stats.by_user[user_id] = self._stats.by_user.get(user_id, 0) + 1
 
         # Track by inbox
         inbox_id = webhook.inbox.get_inbox_key() if webhook.inbox else "unknown"
-        self._stats["by_inbox"][inbox_id] = self._stats["by_inbox"].get(inbox_id, 0) + 1
+        self._stats.by_inbox[inbox_id] = self._stats.by_inbox.get(inbox_id, 0) + 1
 
         # Check for sensitive content
         if self.mask_sensitive_data:
@@ -174,7 +213,7 @@ class DefaultMessageHandler:
                     self._CREDIT_CARD_PATTERN,
                 ]
             ):
-                self._stats["sensitive_content_detected"] += 1
+                self._stats.sensitive_content_detected += 1
 
     def _get_content_preview(self, webhook: InboundMessageWebhook) -> str:
         """Get masked content preview for logging."""
@@ -192,16 +231,20 @@ class DefaultMessageHandler:
 
         return content
 
-    async def _log_stats_only(self, logger, webhook: InboundMessageWebhook) -> None:
+    async def _log_stats_only(
+        self, logger: ContextLogger, webhook: InboundMessageWebhook
+    ) -> None:
         """Log only statistics summary."""
-        if self._stats["total_messages"] % 10 == 0:  # Log every 10 messages
+        if self._stats.total_messages % 10 == 0:  # Log every 10 messages
             logger.info(
-                f"📊 Message Stats: {self._stats['total_messages']} total, "
-                f"Types: {dict(list(self._stats['by_type'].items())[:3])}, "
-                f"Active users: {len(self._stats['by_user'])}"
+                f"📊 Message Stats: {self._stats.total_messages} total, "
+                f"Types: {dict(list(self._stats.by_type.items())[:3])}, "
+                f"Active users: {len(self._stats.by_user)}"
             )
 
-    async def _log_summarized(self, logger, webhook: InboundMessageWebhook) -> None:
+    async def _log_summarized(
+        self, logger: ContextLogger, webhook: InboundMessageWebhook
+    ) -> None:
         """Log summarized message information."""
         user_id = webhook.user.user_id if webhook.user else "unknown"
         message_type = webhook.get_message_type_name()
@@ -213,7 +256,9 @@ class DefaultMessageHandler:
             + (f" - '{content_preview}'" if content_preview else "")
         )
 
-    async def _log_full_detail(self, logger, webhook: InboundMessageWebhook) -> None:
+    async def _log_full_detail(
+        self, logger: ContextLogger, webhook: InboundMessageWebhook
+    ) -> None:
         """Log full message details."""
         user_id = webhook.user.user_id if webhook.user else "unknown"
         inbox_id = webhook.inbox.get_inbox_key() if webhook.inbox else "unknown"
@@ -225,7 +270,9 @@ class DefaultMessageHandler:
             f"Type={message_type}, Content='{content_preview}'"
         )
 
-    async def _log_filtered(self, logger, webhook: InboundMessageWebhook) -> None:
+    async def _log_filtered(
+        self, logger: ContextLogger, webhook: InboundMessageWebhook
+    ) -> None:
         """Log with custom filtering logic (can be extended by users)."""
         message_type = webhook.get_message_type_name()
 
@@ -240,18 +287,11 @@ class DefaultMessageHandler:
         Returns:
             Dictionary containing message processing statistics
         """
-        return self._stats.copy()
+        return asdict(self._stats)
 
     def reset_stats(self) -> None:
         """Reset statistics tracking."""
-        self._stats = {
-            "total_messages": 0,
-            "by_type": {},
-            "by_user": {},
-            "by_inbox": {},
-            "sensitive_content_detected": 0,
-            "last_reset": datetime.now(),
-        }
+        self._stats = _MessageStats()
 
 
 class DefaultStatusHandler:
@@ -266,7 +306,7 @@ class DefaultStatusHandler:
         self,
         log_strategy: StatusLogStrategy = StatusLogStrategy.IMPORTANT_ONLY,
         log_level: LogLevel = LogLevel.INFO,
-    ):
+    ) -> None:
         """
         Initialize the default status handler.
 
@@ -279,16 +319,7 @@ class DefaultStatusHandler:
         self.logger = get_logger(__name__)
 
         # Track status statistics
-        self._stats = {
-            "total_processed": 0,
-            "sent": 0,
-            "delivered": 0,
-            "read": 0,
-            "played": 0,
-            "failed": 0,
-            "deleted": 0,
-            "last_processed": None,
-        }
+        self._stats = _StatusStats()
 
     async def handle_status(self, webhook: StatusWebhook) -> dict[str, Any]:
         """
@@ -300,13 +331,23 @@ class DefaultStatusHandler:
         Returns:
             Dictionary with handling results and statistics
         """
-        self._stats["total_processed"] += 1
-        self._stats["last_processed"] = datetime.now(UTC)
+        self._stats.total_processed += 1
+        self._stats.last_processed = datetime.now(UTC)
 
         # Update status-specific counters
         status_value = webhook.status.value.lower()
-        if status_value in self._stats:
-            self._stats[status_value] += 1
+        if status_value == "sent":
+            self._stats.sent += 1
+        elif status_value == "delivered":
+            self._stats.delivered += 1
+        elif status_value == "read":
+            self._stats.read += 1
+        elif status_value == "played":
+            self._stats.played += 1
+        elif status_value == "failed":
+            self._stats.failed += 1
+        elif status_value == "deleted":
+            self._stats.deleted += 1
 
         # Apply logging strategy
         should_log = self._should_log_status(webhook)
@@ -329,7 +370,7 @@ class DefaultStatusHandler:
             "status": webhook.status.value,
             "recipient": webhook.recipient_id,
             "logged": should_log,
-            "stats": self._stats.copy(),
+            "stats": asdict(self._stats),
         }
 
     def _should_log_status(self, webhook: StatusWebhook) -> bool:
@@ -374,7 +415,7 @@ class DefaultStatusHandler:
         }
         return icons.get(status.lower(), "📋")
 
-    def _get_log_method(self, log_level: LogLevel):
+    def _get_log_method(self, log_level: LogLevel) -> Callable[[str], None]:
         """Get the appropriate logger method for log level."""
         methods = {
             LogLevel.DEBUG: self.logger.debug,
@@ -386,14 +427,11 @@ class DefaultStatusHandler:
 
     def get_stats(self) -> dict[str, Any]:
         """Get current status processing statistics."""
-        return self._stats.copy()
+        return asdict(self._stats)
 
-    def reset_stats(self):
+    def reset_stats(self) -> None:
         """Reset status processing statistics."""
-        for key in self._stats:
-            if key != "last_processed":
-                self._stats[key] = 0
-        self._stats["last_processed"] = None
+        self._stats = _StatusStats()
 
 
 class DefaultErrorHandler:
@@ -409,7 +447,7 @@ class DefaultErrorHandler:
         log_strategy: ErrorLogStrategy = ErrorLogStrategy.ALL,
         escalation_threshold: int = 5,
         escalation_window_minutes: int = 10,
-    ):
+    ) -> None:
         """
         Initialize the default error handler.
 
@@ -424,14 +462,7 @@ class DefaultErrorHandler:
         self.logger = get_logger(__name__)
 
         # Track error statistics
-        self._stats = {
-            "total_errors": 0,
-            "critical_errors": 0,
-            "escalated_errors": 0,
-            "last_error": None,
-            "error_types": {},
-            "recent_errors": [],  # For escalation tracking
-        }
+        self._stats = _ErrorStats()
 
     async def handle_error(self, webhook: ErrorWebhook) -> dict[str, Any]:
         """
@@ -447,28 +478,28 @@ class DefaultErrorHandler:
         primary_error = webhook.get_primary_error()
 
         # Update statistics
-        self._stats["total_errors"] += error_count
-        self._stats["last_error"] = datetime.now(UTC)
+        self._stats.total_errors += error_count
+        self._stats.last_error = datetime.now(UTC)
 
         # Track error types
         error_code = primary_error.error_code
-        if error_code not in self._stats["error_types"]:
-            self._stats["error_types"][error_code] = 0
-        self._stats["error_types"][error_code] += 1
+        if error_code not in self._stats.error_types:
+            self._stats.error_types[error_code] = 0
+        self._stats.error_types[error_code] += 1
 
         # Check if error is critical
         is_critical = self._is_critical_error(primary_error)
         if is_critical:
-            self._stats["critical_errors"] += 1
+            self._stats.critical_errors += 1
 
         # Add to recent errors for escalation tracking
         current_time = datetime.now(UTC)
-        self._stats["recent_errors"].append(
-            {
-                "timestamp": current_time,
-                "error_code": error_code,
-                "critical": is_critical,
-            }
+        self._stats.recent_errors.append(
+            _RecentError(
+                timestamp=current_time,
+                error_code=error_code,
+                critical=is_critical,
+            )
         )
 
         # Clean old errors from recent list
@@ -477,7 +508,7 @@ class DefaultErrorHandler:
         # Check for escalation
         should_escalate = self._should_escalate()
         if should_escalate:
-            self._stats["escalated_errors"] += 1
+            self._stats.escalated_errors += 1
 
         # Apply logging strategy
         should_log = self._should_log_error(webhook, is_critical)
@@ -502,7 +533,7 @@ class DefaultErrorHandler:
             "stats": self._get_stats_summary(),
         }
 
-    def _is_critical_error(self, error) -> bool:
+    def _is_critical_error(self, error: Any) -> bool:
         """Determine if an error is critical based on error code."""
         critical_codes = {
             100,  # Invalid parameter
@@ -515,20 +546,22 @@ class DefaultErrorHandler:
 
     def _should_escalate(self) -> bool:
         """Check if errors should be escalated based on recent activity."""
-        recent_count = len(self._stats["recent_errors"])
-        critical_recent = sum(1 for e in self._stats["recent_errors"] if e["critical"])
+        recent_count = len(self._stats.recent_errors)
+        critical_recent = sum(
+            1 for error in self._stats.recent_errors if error.critical
+        )
 
         # Escalate if too many errors recently, or multiple critical errors
         return recent_count >= self.escalation_threshold or critical_recent >= 2
 
-    def _clean_recent_errors(self, current_time: datetime):
+    def _clean_recent_errors(self, current_time: datetime) -> None:
         """Remove old errors from recent tracking list."""
         cutoff_time = current_time.timestamp() - (self.escalation_window_minutes * 60)
 
-        self._stats["recent_errors"] = [
-            e
-            for e in self._stats["recent_errors"]
-            if e["timestamp"].timestamp() > cutoff_time
+        self._stats.recent_errors = [
+            error
+            for error in self._stats.recent_errors
+            if error.timestamp.timestamp() > cutoff_time
         ]
 
     def _should_log_error(self, webhook: ErrorWebhook, is_critical: bool) -> bool:
@@ -566,31 +599,24 @@ class DefaultErrorHandler:
     def _get_stats_summary(self) -> dict[str, Any]:
         """Get summarized statistics for response."""
         return {
-            "total_errors": self._stats["total_errors"],
-            "critical_errors": self._stats["critical_errors"],
-            "escalated_errors": self._stats["escalated_errors"],
-            "recent_count": len(self._stats["recent_errors"]),
+            "total_errors": self._stats.total_errors,
+            "critical_errors": self._stats.critical_errors,
+            "escalated_errors": self._stats.escalated_errors,
+            "recent_count": len(self._stats.recent_errors),
             "top_error_types": dict(
                 sorted(
-                    self._stats["error_types"].items(), key=lambda x: x[1], reverse=True
+                    self._stats.error_types.items(), key=lambda x: x[1], reverse=True
                 )[:5]
             ),
         }
 
     def get_stats(self) -> dict[str, Any]:
         """Get complete error processing statistics."""
-        return self._stats.copy()
+        return asdict(self._stats)
 
-    def reset_stats(self):
+    def reset_stats(self) -> None:
         """Reset error processing statistics."""
-        self._stats = {
-            "total_errors": 0,
-            "critical_errors": 0,
-            "escalated_errors": 0,
-            "last_error": None,
-            "error_types": {},
-            "recent_errors": [],
-        }
+        self._stats = _ErrorStats()
 
 
 class DefaultSystemHandler:
@@ -601,7 +627,7 @@ class DefaultSystemHandler:
     BSUID updates, and marketing preference changes.
     """
 
-    def __init__(self, log_level: LogLevel = LogLevel.INFO):
+    def __init__(self, log_level: LogLevel = LogLevel.INFO) -> None:
         """
         Initialize the default system handler.
 
@@ -611,11 +637,7 @@ class DefaultSystemHandler:
         self.log_level = log_level
         self.logger = get_logger(__name__)
 
-        self._stats: dict[str, Any] = {
-            "total_events": 0,
-            "by_type": {},
-            "last_processed": None,
-        }
+        self._stats = _SystemStats()
 
     async def handle_system(self, webhook: SystemWebhook) -> dict[str, Any]:
         """
@@ -627,12 +649,10 @@ class DefaultSystemHandler:
         Returns:
             Dictionary with handling results
         """
-        self._stats["total_events"] += 1
+        self._stats.total_events += 1
         event_type = webhook.system_event_type.value
-        self._stats["by_type"][event_type] = (
-            self._stats["by_type"].get(event_type, 0) + 1
-        )
-        self._stats["last_processed"] = datetime.now(UTC)
+        self._stats.by_type[event_type] = self._stats.by_type.get(event_type, 0) + 1
+        self._stats.last_processed = datetime.now(UTC)
 
         log_method = self._get_log_method(self.log_level)
         log_method(
@@ -646,7 +666,7 @@ class DefaultSystemHandler:
             "event_type": event_type,
         }
 
-    def _get_log_method(self, log_level: LogLevel):
+    def _get_log_method(self, log_level: LogLevel) -> Callable[[str], None]:
         """Get the appropriate logger method for log level."""
         methods = {
             LogLevel.DEBUG: self.logger.debug,
@@ -658,15 +678,11 @@ class DefaultSystemHandler:
 
     def get_stats(self) -> dict[str, Any]:
         """Get current system event processing statistics."""
-        return self._stats.copy()
+        return asdict(self._stats)
 
     def reset_stats(self) -> None:
         """Reset system event processing statistics."""
-        self._stats = {
-            "total_events": 0,
-            "by_type": {},
-            "last_processed": None,
-        }
+        self._stats = _SystemStats()
 
 
 class DefaultHandlerFactory:

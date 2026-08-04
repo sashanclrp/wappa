@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
@@ -44,14 +44,15 @@ class InboxCache(BaseModel):
     async def _hset_with_ttl(
         self,
         key: str,
-        data: dict[str, Any],
+        data: dict[str, Any] | BaseModel,
         ttl: int | None = None,
         *,
         alias: PoolAlias | None = None,
     ) -> bool:
         """Helper for atomic hash set with expiration"""
         _alias = alias or self.redis_alias
-        payload = dumps_hash(data)
+        normalized = data.model_dump() if isinstance(data, BaseModel) else data
+        payload = dumps_hash(normalized)
         if not payload:
             logger.warning(f"Setting key '{key}' with empty data. Deleting instead.")
             return await delete(key, alias=_alias) >= 0
@@ -84,7 +85,11 @@ class InboxCache(BaseModel):
         """
         _alias = alias or self.redis_alias
         raw_data = await hgetall(key, alias=_alias)
-        return loads_hash(raw_data, models=models) if raw_data else None
+        return (
+            cast(dict[str, Any], loads_hash(raw_data, models=models))
+            if raw_data
+            else None
+        )
 
     async def _find_by_field(
         self,
@@ -112,7 +117,7 @@ class InboxCache(BaseModel):
             f"Searching pattern '{pattern}' where field '{field}' == '{compare_value_str}'"
         )
 
-        cursor = "0"
+        cursor = 0
         try:
             while True:
                 next_cursor, keys_batch = await scan_keys(
@@ -129,7 +134,7 @@ class InboxCache(BaseModel):
                             full_key, models=models, alias=alias
                         )
 
-                if next_cursor == "0":
+                if next_cursor == 0:
                     logger.debug(
                         f"SCAN finished for pattern '{pattern}'. No match found."
                     )
@@ -154,7 +159,7 @@ class InboxCache(BaseModel):
         """
         _alias = alias or self.redis_alias
         all_keys: list[str] = []
-        cursor = "0"
+        cursor = 0
 
         try:
             while True:
@@ -162,7 +167,7 @@ class InboxCache(BaseModel):
                     match_pattern=pattern, cursor=cursor, count=100, alias=_alias
                 )
                 all_keys.extend(keys_batch)
-                if next_cursor == "0":
+                if next_cursor == 0:
                     break
                 cursor = next_cursor
         except Exception as e:
@@ -185,7 +190,7 @@ class InboxCache(BaseModel):
         """
         _alias = alias or self.redis_alias
         total_deleted = 0
-        cursor = "0"
+        cursor = 0
 
         logger.debug(f"Deleting keys matching pattern '{pattern}'")
         try:
@@ -200,7 +205,7 @@ class InboxCache(BaseModel):
                     if deleted_in_batch >= 0:
                         total_deleted += deleted_in_batch
 
-                if next_cursor == "0":
+                if next_cursor == 0:
                     break
                 cursor = next_cursor
 
@@ -280,14 +285,14 @@ class InboxCache(BaseModel):
         _alias = alias or self.redis_alias
         return await exists(key, alias=_alias) > 0
 
-    async def renew_ttl(
+    async def _renew_ttl(
         self, key: str, ttl: int | None = None, *, alias: PoolAlias | None = None
     ) -> bool:
         """Renew TTL for a key"""
         _alias = alias or self.redis_alias
         return await expire(key, ttl or self.ttl_default, alias=_alias)
 
-    async def get_ttl(self, key: str, *, alias: PoolAlias | None = None) -> int:
+    async def _get_ttl(self, key: str, *, alias: PoolAlias | None = None) -> int:
         """Get remaining TTL for a key"""
         _alias = alias or self.redis_alias
         return await get_ttl(key, alias=_alias)

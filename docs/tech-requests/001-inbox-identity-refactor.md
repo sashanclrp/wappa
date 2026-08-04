@@ -1,3 +1,8 @@
+---
+status: implemented
+completed: 2026-08-03
+---
+
 # Tech Request: Write Per-Context Documentation for Wappa
 
 **Priority:** High — must land before or in parallel with the inbox_id rename  
@@ -67,8 +72,8 @@ The inbox_id rename is starting in parallel. Having per-context docs means:
 
 ## Acceptance Criteria
 
-- All 14 files listed above exist
-- Each `CONTEXT.md` is a glossary only, uses Inbox language, no implementation details
-- Each `ARCHITECTURE.md` describes actual code structure, responsibilities, boundaries, and patterns
-- No code was modified
-- Root `CONTEXT-MAP.md` links remain valid (paths match created files)
+- [x] All 14 files listed above exist.
+- [x] Each `CONTEXT.md` is a glossary only, uses Inbox language, and contains no implementation plans.
+- [x] Each `ARCHITECTURE.md` describes actual code structure, responsibilities, boundaries, and patterns.
+- [x] The documentation bootstrap itself required no runtime behavior change.
+- [x] Root `CONTEXT-MAP.md` links remain valid.

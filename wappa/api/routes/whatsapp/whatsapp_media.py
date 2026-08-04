@@ -1,5 +1,4 @@
-"""
-WhatsApp media messaging API endpoints.
+"""WhatsApp media messaging API endpoints.
 
 Provides REST API endpoints for WhatsApp media operations:
 - POST /api/whatsapp/media/upload: Upload media files
@@ -17,6 +16,8 @@ Router configuration:
 - Tags: ["WhatsApp - Media"]
 - Full URL: /api/whatsapp/media/
 """
+
+from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
@@ -336,7 +337,7 @@ async def get_media_info(
         result = await media_handler.get_media_info(media_id)
 
         if not result.success:
-            if "not found" in result.error.lower():
+            if "not found" in (result.error or "").lower():
                 raise HTTPException(status_code=404, detail=result.error)
             else:
                 raise HTTPException(status_code=400, detail=result.error)
@@ -359,7 +360,7 @@ async def get_media_info(
 )
 async def download_media(
     media_id: str, media_handler: IMediaHandler = Depends(get_whatsapp_media_handler)
-):
+) -> StreamingResponse:
     """Download media by ID as streaming response.
 
     Returns media file as streaming download with appropriate headers.
@@ -368,7 +369,7 @@ async def download_media(
         # Get media info first for headers
         info_result = await media_handler.get_media_info(media_id)
         if not info_result.success:
-            if "not found" in info_result.error.lower():
+            if "not found" in (info_result.error or "").lower():
                 raise HTTPException(status_code=404, detail=info_result.error)
             else:
                 raise HTTPException(status_code=400, detail=info_result.error)
@@ -379,8 +380,14 @@ async def download_media(
             raise HTTPException(status_code=400, detail=download_result.error)
 
         # Create streaming response
-        def generate_content():
-            yield download_result.file_data
+        if download_result.file_data is None:
+            raise HTTPException(
+                status_code=500, detail="Media download returned no data"
+            )
+        file_data = download_result.file_data
+
+        def generate_content() -> Iterator[bytes]:
+            yield file_data
 
         # Determine filename
         filename = f"media_{media_id}"
@@ -434,7 +441,7 @@ async def delete_media(
         result = await media_handler.delete_media(media_id)
 
         if not result.success:
-            if "not found" in result.error.lower():
+            if "not found" in (result.error or "").lower():
                 raise HTTPException(status_code=404, detail=result.error)
             else:
                 raise HTTPException(status_code=400, detail=result.error)

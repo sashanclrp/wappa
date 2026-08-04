@@ -10,9 +10,10 @@ Operates in one of two mutually exclusive modes (enforced by AuthPlugin):
 Also supports SSE query-param token promotion and user info exposure.
 """
 
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp
 
 from ..logging.logger import get_app_logger
 from .strategy import AuthStrategy
@@ -46,7 +47,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,  # noqa: ANN001
+        app: ASGIApp,
         strategy: AuthStrategy,
         protect: list[str] | None = None,
         exclude: list[str] | None = None,
@@ -75,7 +76,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         return True
 
-    async def dispatch(self, request: Request, call_next) -> Response:  # noqa: ANN001
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         """Authenticate the request or pass through based on path rules."""
         logger = get_app_logger()
         path = request.url.path

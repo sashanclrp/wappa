@@ -1,7 +1,8 @@
-from collections.abc import Sequence
+from collections.abc import Mapping
 
 from fastapi import HTTPException
 
+from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.utils.error_helpers import BSUID_ERROR_TAG
 
 # Error code to HTTP status code mapping
@@ -52,9 +53,9 @@ def map_error_to_status(error_code: str | None, default_status: int = 400) -> in
 
 
 def raise_for_failed_result(
-    result,
+    result: MessageResult,
     operation_name: str,
-    error_code_groups: dict[Sequence[str], int] | None = None,
+    error_code_groups: Mapping[tuple[str, ...], int] | None = None,
 ) -> None:
     if result.success:
         return

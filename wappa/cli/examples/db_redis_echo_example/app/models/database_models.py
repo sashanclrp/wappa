@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum, StrEnum
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import Boolean, Column, DateTime, Text, func, text
@@ -22,7 +23,7 @@ from sqlmodel import Field, SQLModel
 # =============================================================================
 
 
-def enum_values(enum_cls: type[Enum]) -> list:
+def enum_values(enum_cls: type[Enum]) -> list[object]:
     """
     Extract enum values for SQLAlchemy enum configuration.
 
@@ -49,7 +50,7 @@ def get_enum_column(
     nullable: bool = False,
     create_type: bool = False,
     native_enum: bool = True,
-):
+) -> Column[Any]:
     """
     Create a SQLAlchemy Column for enum fields with proper configuration.
 

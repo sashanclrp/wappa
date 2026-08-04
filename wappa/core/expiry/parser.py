@@ -7,6 +7,7 @@ Addresses DRY violation by delegating to registry.resolve().
 
 import logging
 from dataclasses import dataclass
+from typing import cast
 
 from .registry import AsyncHandler, ExpirationHandlerRegistry
 
@@ -116,7 +117,7 @@ class ExpiryEventParser:
         if not expired_key:
             return None
 
-        return expired_key
+        return cast(str, expired_key)
 
     def _extract_action(self, key: str) -> str:
         """

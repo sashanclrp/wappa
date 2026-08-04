@@ -6,7 +6,7 @@ Contains models for managing button and list interactive states with TTL.
 
 from datetime import datetime, timedelta
 from enum import StrEnum
-from typing import Any
+from typing import Any, Self, cast
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -60,14 +60,18 @@ class InteractiveState(BaseModel):
 
     @field_validator("user_id", mode="before")
     @classmethod
-    def validate_user_id(cls, v):
+    def validate_user_id(cls, v: Any) -> Any:
         """Convert user ID to string if it's an integer."""
         return str(v) if v is not None else v
 
     @classmethod
     def create_with_ttl(
-        cls, user_id: str, state_type: StateType, ttl_seconds: int = 600, **kwargs
-    ) -> "InteractiveState":
+        cls,
+        user_id: str,
+        state_type: StateType,
+        ttl_seconds: int = 600,
+        **kwargs: Any,
+    ) -> Self:
         """Create a new interactive state with TTL."""
         expires_at = datetime.now() + timedelta(seconds=ttl_seconds)
         return cls(
@@ -165,7 +169,7 @@ class ButtonState(InteractiveState):
         buttons: list[dict[str, str]],
         message_text: str,
         ttl_seconds: int = 600,
-        original_message_id: str = None,
+        original_message_id: str | None = None,
     ) -> "ButtonState":
         """Create a new button state."""
         return cls.create_with_ttl(
@@ -227,7 +231,7 @@ class ListState(InteractiveState):
         message_text: str,
         button_text: str = "Choose an option",
         ttl_seconds: int = 600,
-        original_message_id: str = None,
+        original_message_id: str | None = None,
     ) -> "ListState":
         """Create a new list state."""
         # Extract all possible item IDs for validation
@@ -279,7 +283,7 @@ class ListState(InteractiveState):
             rows = section.get("rows", [])
             for row in rows:
                 if row.get("id") == self.selected_item_id:
-                    return row
+                    return cast(dict[str, Any], row)
         return None
 
 
@@ -299,10 +303,10 @@ class CommandState(InteractiveState):
         cls,
         user_id: str,
         command_name: str,
-        expected_responses: list[str] = None,
+        expected_responses: list[str] | None = None,
         ttl_seconds: int = 600,
         total_steps: int = 1,
-        original_message_id: str = None,
+        original_message_id: str | None = None,
     ) -> "CommandState":
         """Create a new command state."""
         return cls.create_with_ttl(
@@ -418,7 +422,7 @@ class StateManager(BaseModel):
         completed_count = len(self.completed_states)
 
         # Count by state type
-        type_counts = {}
+        type_counts: dict[str, int] = {}
         for state in self.active_states.values():
             state_type = state.state_type.value
             type_counts[state_type] = type_counts.get(state_type, 0) + 1

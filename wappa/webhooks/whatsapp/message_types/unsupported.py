@@ -229,6 +229,6 @@ class WhatsAppUnsupportedMessage(WhatsAppMessageIdentity, BaseMessage):
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppUnsupportedMessage":
         return cls.model_validate(data)

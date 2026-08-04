@@ -330,6 +330,6 @@ class WhatsAppStickerMessage(WhatsAppMessageIdentity, BaseMediaMessage):
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppStickerMessage":
         return cls.model_validate(data)

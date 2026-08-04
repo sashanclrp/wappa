@@ -8,7 +8,7 @@ and write/read replica support.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from wappa.core.logging.logger import get_app_logger
 from wappa.database.session_manager import PostgresSessionManager
@@ -18,6 +18,23 @@ if TYPE_CHECKING:
     from sqlmodel import SQLModel
 
     from wappa.core.factory.wappa_builder import WappaBuilder
+
+
+class _PoolConfig(TypedDict):
+    pool_size: int
+    max_overflow: int
+    pool_timeout: int
+    pool_recycle: int
+    pool_pre_ping: bool
+    max_retries: int
+    base_delay: float
+    max_delay: float
+    auto_commit: bool
+    echo: bool
+    statement_cache_size: int | None
+    command_timeout: float | None
+    connect_timeout: float | None
+    connect_max_retries: int
 
 
 class PostgresDatabasePlugin:
@@ -131,7 +148,7 @@ class PostgresDatabasePlugin:
         self.auto_commit = auto_commit
 
         # Store pool configuration for session manager
-        self._pool_config = {
+        self._pool_config: _PoolConfig = {
             "pool_size": pool_size,
             "max_overflow": max_overflow,
             "pool_timeout": pool_timeout,

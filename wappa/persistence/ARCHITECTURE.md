@@ -9,9 +9,9 @@ Cross-references: [root ARCHITECTURE.md](../../../ARCHITECTURE.md) · [CONTEXT.m
 This context owns:
 - Multi-pool Redis client management (lifecycle, fork-safety, health checks)
 - Redis key namespace generation via `KeyFactory`
-- Context-bound cache repositories for each data domain
+- Context-bound cache handlers for each data domain
 - Typed table-cache ergonomics over the existing `ITableCache` contract
-- `ICacheFactory` implementation that creates those repositories
+- `ICacheFactory` implementation that creates those handlers
 - PubSub channel construction and subscription helpers
 - Backend selection between Redis, JSON-file, and in-memory backends
 
@@ -33,7 +33,7 @@ wappa/persistence/
 ├── redis/                        # Primary production backend
 │   ├── redis_client.py           # 5-pool, fork-safe async Redis client
 │   ├── redis_manager.py          # App-lifecycle wrapper: init / health / cleanup
-│   ├── redis_cache_factory.py    # ICacheFactory → instantiates repositories
+│   ├── redis_cache_factory.py    # ICacheFactory → instantiates cache handlers
 │   ├── ops.py                    # Thin async wrappers over raw redis-py commands
 │   ├── pubsub_subscriber.py      # PubSub subscription utilities (subscribe / build_channel)
 │   │
@@ -45,7 +45,7 @@ wappa/persistence/
 │       ├── ai_state.py           # RedisAIState   → IAIStateCache
 │       │
 │       └── utils/
-│           ├── tenant_cache.py   # InboxCache base (currently named TenantCache — rename in progress)
+│           ├── inbox_cache.py    # InboxCache shared Redis behavior
 │           ├── key_factory.py    # KeyFactory: all key-building logic
 │           └── serde.py          # JSON serialise / deserialise for hash fields
 │
@@ -57,7 +57,7 @@ wappa/persistence/
 
 Five isolated Redis databases, one per data domain:
 
-| Pool alias      | DB  | Purpose                    | Repository class    |
+| Pool alias      | DB  | Purpose                    | Cache handler       |
 |-----------------|-----|----------------------------|---------------------|
 | `users`         | 0   | User profile / metadata    | `RedisUser`         |
 | `state_handler` | 1   | Conversational handler state | `RedisStateHandler` |
@@ -80,8 +80,6 @@ All keys are built exclusively through `KeyFactory`. The `inbox_id` value is alw
 | AI state      | `{inbox_id}:aistate:{agent_name}:{user_id}`           |
 | PubSub channel | `wappa:notify:{inbox_id}:{user_id}:{event_type}`     |
 
-> **Note on rename**: Code currently uses `tenant` where these patterns say `inbox_id`. The key value stored in Redis is the same (it is the `phone_number_id`); only the Python variable and parameter names are changing.
-
 ## Component Relationships
 
 ```
@@ -89,9 +87,9 @@ ICacheFactory (domain interface)
     └── RedisCacheFactory (redis/redis_cache_factory.py)
             ├── constructed with (inbox_id, user_id) defaults
             ├── _resolve_context() merges defaults with per-call overrides
-            └── create_*_cache() → instantiates repository with (inbox_id, user_id, pool_alias)
+            └── create_*_cache() → instantiates a handler with (inbox_id, user_id, pool_alias)
 
-InboxCache (redis_handler/utils/tenant_cache.py)   ← base for all repositories
+InboxCache (redis_handler/utils/inbox_cache.py)   ← shared Redis behavior
     ├── holds: inbox_id, ttl_default, redis_alias, keys: KeyFactory
     ├── _hset_with_ttl()        atomic hash write + EXPIRE
     ├── _get_hash()             HGETALL + deserialise
@@ -129,9 +127,13 @@ pubsub_subscriber.py
 
 ## Design Patterns
 
-**Repository per domain** — Each data domain is a discrete class with a focused public API (`get`, `upsert`, `delete`, etc.) rather than a single generic cache adapter. This keeps callers from coupling to raw Redis commands.
+**Cache contract per domain** — Each data domain has one focused interface
+(`IUserCache`, `IStateCache`, `ITableCache`, `IExpiryCache`, or
+`IAIStateCache`) implemented by each backend. The former unused
+`I*Repository` hierarchy was removed: it duplicated these contracts without an
+implementation path.
 
-**Typed wrapper over table repositories** — `TypedTableCache[T]` binds an
+**Typed wrapper over table caches** — `TypedTableCache[T]` binds an
 existing `ITableCache` to a table name and Pydantic model. It validates table
 names and primary keys, forwards TTLs, and returns typed rows without changing
 backend key shapes. Inbox scoping still comes from the `ICacheFactory` /
@@ -174,10 +176,11 @@ release. Current persistence code should use:
 - `create_*_cache(inbox_id=..., user_id=...)`
 - Redis key patterns whose first segment is the Inbox ID
 
-**Redis key values are not affected.** The first segment of every key is the `phone_number_id` value, which does not change. Only the Python variable names that hold that value are being renamed.
+For WhatsApp, the first key segment contains the Inbox's Meta
+`phone_number_id`; the adapter owns that mapping.
 
 ## Extension Points
 
 - **New cache backend**: implement `ICacheFactory` and the five `I*Cache` interfaces; register it in `cache_factory.py`.
-- **New data domain**: add a new repository class inheriting `InboxCache`, implement a new `I*Cache` interface, add a `create_*_cache()` method to `ICacheFactory` and `RedisCacheFactory`.
+- **New data domain**: add a cache handler inheriting `InboxCache`, implement a new `I*Cache` interface, and add a `create_*_cache()` method to `ICacheFactory` and each backend factory.
 - **New key type**: add a builder method to `KeyFactory`; do not build key strings anywhere else.

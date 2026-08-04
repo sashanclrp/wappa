@@ -12,7 +12,7 @@ from wappa.core.config.settings import Settings
 class DBRedisSettings(Settings):
     """Extended settings with database configuration."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # Initialize base Wappa settings
         super().__init__()
 
@@ -27,7 +27,7 @@ class DBRedisSettings(Settings):
         if not _is_cli_context():
             self._validate_database_configuration()
 
-    def _validate_database_configuration(self):
+    def _validate_database_configuration(self) -> None:
         """Validate database configuration for server operations."""
         if not self.database_url:
             raise ValueError(

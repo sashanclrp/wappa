@@ -5,7 +5,7 @@ Provides table cache operations using JSON file storage.
 """
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
 
@@ -60,7 +60,10 @@ class JSONTable(ITableCache):
             Table row data or None if not found
         """
         key = self._key(table_name, pkid)
-        return await storage_manager.get("tables", self.inbox, None, key, models)
+        return cast(
+            dict[str, Any] | None,
+            await storage_manager.get("tables", self.inbox, None, key, models),
+        )
 
     async def upsert(
         self,
@@ -295,7 +298,9 @@ class JSONTable(ITableCache):
             for key, value in all_keys.items():
                 if key.startswith(key_prefix):
                     if models is not None and isinstance(value, dict):
-                        results.append(models.model_validate(value))
+                        results.append(
+                            cast(dict[str, Any], models.model_validate(value))
+                        )
                     else:
                         results.append(value)
 
@@ -307,3 +312,31 @@ class JSONTable(ITableCache):
                 f"Error getting all rows from table '{table_name}': {e}", exc_info=True
             )
             return []
+
+    async def delete_table(self, table_name: str) -> int:
+        """Delete every row in a table for this inbox."""
+        if not table_name:
+            raise ValueError("table_name must be non-empty")
+
+        deleted = 0
+        key_prefix = self.keys.table(self.inbox, table_name, "")
+        all_keys = await storage_manager.get_all_keys("tables", self.inbox, None)
+        for key in all_keys:
+            if key.startswith(key_prefix) and await storage_manager.delete(
+                "tables", self.inbox, None, key
+            ):
+                deleted += 1
+        return deleted
+
+    async def list_pkids(self, table_name: str) -> list[str]:
+        """Return all pkids stored for a table under this inbox."""
+        if not table_name:
+            raise ValueError("table_name must be non-empty")
+
+        key_prefix = self.keys.table(self.inbox, table_name, "")
+        all_keys = await storage_manager.get_all_keys("tables", self.inbox, None)
+        return sorted(
+            key.removeprefix(key_prefix)
+            for key in all_keys
+            if key.startswith(key_prefix)
+        )

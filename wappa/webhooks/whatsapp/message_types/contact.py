@@ -481,6 +481,6 @@ class WhatsAppContactMessage(WhatsAppMessageIdentity, BaseContactMessage):
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppContactMessage":
         return cls.model_validate(data)

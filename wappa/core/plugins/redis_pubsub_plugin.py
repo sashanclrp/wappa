@@ -13,6 +13,7 @@ Event Types:
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from ...core.logging.logger import get_app_logger
@@ -88,7 +89,9 @@ class RedisPubSubPlugin:
         # Track original handlers for restoration
         self._original_message_handler = None
         self._original_status_handler = None
-        self._api_post_process_hook = None
+        self._api_post_process_hook: (
+            Callable[[APIMessageEvent], Awaitable[None]] | None
+        ) = None
 
     def configure(self, builder: WappaBuilder) -> None:
         """Register hooks and (optionally) the outbound pub/sub middleware.

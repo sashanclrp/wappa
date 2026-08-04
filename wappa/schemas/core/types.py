@@ -6,7 +6,7 @@ to ensure consistent data handling regardless of the underlying platform.
 """
 
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 
 class PlatformType(StrEnum):
@@ -122,7 +122,7 @@ class UserRole(StrEnum):
 # Type aliases for complex types
 PlatformData = dict[str, Any]
 MessageMetadata = dict[str, Any]
-UniversalMessageData = dict[str, str | int | bool | None | dict | list]
+UniversalMessageData = dict[str, Any]
 
 
 class ErrorCode(StrEnum):
@@ -250,10 +250,10 @@ def is_interactive_type_supported(
 def get_max_text_length(platform: PlatformType) -> int:
     """Get maximum text length for a platform."""
     capabilities = get_platform_capabilities(platform)
-    return capabilities.get("max_text_length", 4096)
+    return cast(int, capabilities.get("max_text_length", 4096))
 
 
 def get_max_media_size(platform: PlatformType) -> int:
     """Get maximum media file size for a platform."""
     capabilities = get_platform_capabilities(platform)
-    return capabilities.get("max_media_size", 16 * 1024 * 1024)
+    return cast(int, capabilities.get("max_media_size", 16 * 1024 * 1024))

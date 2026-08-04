@@ -1,7 +1,8 @@
 import json
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -300,7 +301,7 @@ class WhatsAppClient:
             self.logger.debug(
                 "GET %s params=%s returned: %s", url, params, response_data
             )
-            return response_data
+            return cast(dict[str, Any], response_data)
         except httpx.HTTPStatusError as http_err:
             self.logger.error(
                 "HTTP GET error for inbox %s: %s - %s",
@@ -333,7 +334,7 @@ class WhatsAppClient:
             self.logger.debug(
                 "DELETE %s params=%s returned: %s", url, params, response_data
             )
-            return response_data
+            return cast(dict[str, Any], response_data)
         except httpx.HTTPStatusError as http_err:
             self.logger.error(
                 "HTTP DELETE error for inbox %s: %s - %s",
@@ -349,7 +350,9 @@ class WhatsAppClient:
             raise
 
     @asynccontextmanager
-    async def stream_get(self, url: str, params: dict[str, Any] | None = None):
+    async def stream_get(
+        self, url: str, params: dict[str, Any] | None = None
+    ) -> AsyncIterator[httpx.Response]:
         self._update_activity()
         try:
             async with self.session.stream(

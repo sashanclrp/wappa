@@ -245,7 +245,7 @@ class WhatsAppSystemMessage(WhatsAppMessageIdentity, BaseMessage):
 
         return None
 
-    def to_summary_dict(self) -> dict[str, str | bool | int]:
+    def to_summary_dict(self) -> dict[str, str | bool | int | None]:
         """
         Create a summary dictionary for logging and analysis.
 
@@ -354,6 +354,6 @@ class WhatsAppSystemMessage(WhatsAppMessageIdentity, BaseMessage):
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppSystemMessage":
         return cls.model_validate(data)

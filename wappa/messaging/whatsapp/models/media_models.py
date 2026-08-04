@@ -3,7 +3,7 @@
 from enum import Enum
 from pathlib import Path
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from wappa.schemas.core.recipient import RecipientRequest
 
@@ -98,7 +98,9 @@ class MediaMessage(RecipientRequest):
 
     @field_validator("caption")
     @classmethod
-    def validate_caption_for_media_type(cls, v, info):
+    def validate_caption_for_media_type(
+        cls, v: str | None, info: ValidationInfo
+    ) -> str | None:
         if v is not None and info.data and "media_type" in info.data:
             media_type = info.data["media_type"]
             if media_type in (MediaType.AUDIO, MediaType.STICKER):
@@ -109,7 +111,9 @@ class MediaMessage(RecipientRequest):
 
     @field_validator("filename")
     @classmethod
-    def validate_filename_for_documents(cls, v, info):
+    def validate_filename_for_documents(
+        cls, v: str | None, info: ValidationInfo
+    ) -> str | None:
         if v is not None and info.data and "media_type" in info.data:
             media_type = info.data["media_type"]
             if media_type != MediaType.DOCUMENT:
@@ -187,7 +191,7 @@ class MediaUploadRequest(BaseModel):
 
     @field_validator("media_type")
     @classmethod
-    def validate_mime_type(cls, v):
+    def validate_mime_type(cls, v: str) -> str:
         supported_types: set[str] = set()
         for media_type in MediaType:
             supported_types.update(MediaType.get_supported_mime_types(media_type))

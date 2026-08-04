@@ -5,12 +5,13 @@ This module contains Pydantic models for processing WhatsApp video messages,
 including video files, forwarded videos, and videos sent via Click-to-WhatsApp ads.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from wappa.schemas.core.types import (
     ConversationType,
+    MediaType,
     PlatformType,
     UniversalMessageData,
 )
@@ -147,7 +148,7 @@ class WhatsAppVideoMessage(WhatsAppMessageIdentity, BaseVideoMessage):
         return v
 
     @model_validator(mode="after")
-    def validate_message_consistency(self):
+    def validate_message_consistency(self) -> Self:
         """Validate message field consistency."""
         # If we have a referral, this should be from an ad
         if self.referral and self.context:
@@ -170,8 +171,9 @@ class WhatsAppVideoMessage(WhatsAppMessageIdentity, BaseVideoMessage):
     @property
     def is_forwarded(self) -> bool:
         """Check if this video message was forwarded."""
-        return self.context is not None and (
-            self.context.forwarded or self.context.frequently_forwarded
+        return bool(
+            self.context is not None
+            and (self.context.forwarded or self.context.frequently_forwarded)
         )
 
     @property
@@ -220,10 +222,8 @@ class WhatsAppVideoMessage(WhatsAppMessageIdentity, BaseVideoMessage):
         return self.timestamp
 
     @property
-    def media_type(self):
+    def media_type(self) -> MediaType:
         """Get the media type from MediaType enum."""
-        from wappa.schemas.core.types import MediaType
-
         mime_str = self.video.mime_type
         try:
             return MediaType(mime_str)
@@ -349,6 +349,6 @@ class WhatsAppVideoMessage(WhatsAppMessageIdentity, BaseVideoMessage):
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppVideoMessage":
         return cls.model_validate(data)

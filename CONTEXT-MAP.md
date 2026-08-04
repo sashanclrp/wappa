@@ -100,7 +100,11 @@ The Host Application implements `WappaEventHandler` and overrides these processo
 | `process_api_message()` | Outbound API | `APIMessageEvent` | A message was sent via Wappa's REST API (tracking, DB writes, analytics) |
 | `process_cron_event()` | CronPlugin | `CronEvent` | A scheduled cron fires (background tasks, reminders, reports) |
 
-Each processor receives a **cloned handler instance** with per-request context already injected (`inbox_id`, `user_id`, `messenger`, `cache_factory`, `db`). The Template Method pattern ensures framework pre/post-processing (logging, metrics) runs automatically around the user's business logic.
+Each dispatch receives a **cloned handler instance** with its Dispatch Context
+already injected (`inbox_id`, `user_id`, `messenger`, `cache_factory`, `db`).
+Processors only translate platform payloads; they never receive or build this
+runtime context. The Template Method pattern runs framework pre/post-processing
+around the Host Application's business logic.
 
 ## Relationship Types
 
@@ -108,7 +112,7 @@ Each processor receives a **cloned handler instance** with per-request context a
 - **Core Events → WappaEventHandler**: Published Language. The event dispatcher publishes typed events; host applications implement handlers against the published interface.
 - **Host Application → Messaging**: Customer/Supplier. Context-bound handlers
   use `IMessenger` for replies; other host services use the Inbox-scoped
-  Template capability. Both paths share Wappa's provider adapter and pipeline,
+  Template capability. Both paths share Wappa's platform adapter and pipeline,
   while the host retains business governance and durable commit.
 - **WappaEventHandler → Persistence**: Customer/Supplier. Event handlers use cache factories for state; persistence owns backend selection and key structure.
 - **SSE/PubSub ← Messaging**: Observer. The messenger pipeline notifies SSE/PubSub of outbound messages for real-time streaming.

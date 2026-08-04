@@ -5,7 +5,7 @@ Provides user-specific cache operations using JSON file storage.
 """
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
 
@@ -57,7 +57,10 @@ class JSONUser(IUserCache):
             User data dictionary or BaseModel instance, None if not found
         """
         key = self._key()
-        return await storage_manager.get("users", self.inbox, self.user_id, key, models)
+        return cast(
+            dict[str, Any] | None,
+            await storage_manager.get("users", self.inbox, self.user_id, key, models),
+        )
 
     async def upsert(
         self, data: dict[str, Any] | BaseModel, ttl: int | None = None

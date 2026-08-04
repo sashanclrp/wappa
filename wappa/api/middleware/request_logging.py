@@ -8,8 +8,11 @@ import time
 from typing import Any
 
 from fastapi import Request
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
+from starlette.types import ASGIApp
+
+from wappa.core.logging.logger import ContextLogger
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -23,7 +26,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     - Structured log format for monitoring
     """
 
-    def __init__(self, app, log_requests: bool = True, log_responses: bool = True):
+    def __init__(
+        self, app: ASGIApp, log_requests: bool = True, log_responses: bool = True
+    ) -> None:
         super().__init__(app)
         self.log_requests = log_requests
         self.log_responses = log_responses
@@ -38,7 +43,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             "x-whatsapp-hub-signature",
         }
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         """Process request with comprehensive logging."""
         # Start timing
         start_time = time.time()
@@ -85,7 +92,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         skip_paths = ["/health", "/docs", "/redoc", "/openapi.json", "/favicon.ico"]
         return any(path.startswith(skip_path) for skip_path in skip_paths)
 
-    async def _log_request(self, request: Request, logger) -> None:
+    async def _log_request(self, request: Request, logger: ContextLogger) -> None:
         """Log incoming request with sanitized information."""
         # Safely read body for logging (only for small payloads)
         body_info = await self._get_request_body_info(request)
@@ -113,7 +120,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         )
 
     async def _log_response(
-        self, request: Request, response: Response, process_time: float, logger
+        self,
+        request: Request,
+        response: Response,
+        process_time: float,
+        logger: ContextLogger,
     ) -> None:
         """Log response with timing and status information."""
         # Determine log level based on status code
@@ -152,7 +163,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             content_length = request.headers.get("content-length")
             content_type = request.headers.get("content-type", "unknown")
 
-            body_info = {"content_type": content_type, "content_length": content_length}
+            body_info: dict[str, Any] = {
+                "content_type": content_type,
+                "content_length": content_length,
+            }
 
             # For webhook endpoints, we might want to log structure but not content
             if request.url.path.startswith("/webhook/"):

@@ -281,7 +281,7 @@ class WhatsAppDocumentMessage(WhatsAppMessageIdentity, BaseDocumentMessage):
             return (self.referral.source_id, self.referral.ctwa_clid)
         return (None, None)
 
-    def to_summary_dict(self) -> dict[str, str | bool | int]:
+    def to_summary_dict(self) -> dict[str, str | bool | int | None]:
         """
         Create a summary dictionary for logging and analysis.
 
@@ -419,6 +419,6 @@ class WhatsAppDocumentMessage(WhatsAppMessageIdentity, BaseDocumentMessage):
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppDocumentMessage":
         return cls.model_validate(data)

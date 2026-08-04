@@ -7,6 +7,7 @@ memory store implementation.
 
 import logging
 from datetime import datetime, timedelta
+from typing import Any
 
 from .memory_store import get_memory_store
 
@@ -21,10 +22,12 @@ class TTLManager:
     and advanced expiration handling.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.memory_store = get_memory_store()
 
-    async def get_ttl_info(self, namespace: str, context_key: str, key: str) -> dict:
+    async def get_ttl_info(
+        self, namespace: str, context_key: str, key: str
+    ) -> dict[str, Any]:
         """
         Get detailed TTL information for a key.
 
@@ -38,7 +41,7 @@ class TTLManager:
         """
         ttl_seconds = await self.memory_store.get_ttl(namespace, context_key, key)
 
-        info = {
+        info: dict[str, Any] = {
             "key": key,
             "namespace": namespace,
             "context_key": context_key,
@@ -177,7 +180,7 @@ class TTLManager:
             )
         return results
 
-    async def get_namespace_stats(self, namespace: str) -> dict:
+    async def get_namespace_stats(self, namespace: str) -> dict[str, Any]:
         """
         Get statistics for a namespace.
 
@@ -187,7 +190,7 @@ class TTLManager:
         Returns:
             Dictionary with namespace statistics
         """
-        stats = {
+        stats: dict[str, Any] = {
             "namespace": namespace,
             "total_contexts": 0,
             "total_keys": 0,

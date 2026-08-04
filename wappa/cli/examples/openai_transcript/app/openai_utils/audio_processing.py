@@ -65,24 +65,22 @@ class AudioProcessingService:
 
             else:
                 # File-like object input
-                # Ensure it has a name attribute for OpenAI API
-                if not hasattr(audio_source, "name"):
-                    audio_source.name = filename
+                upload_name = str(getattr(audio_source, "name", filename))
                 transcription = (
                     await self.async_openai_client.audio.transcriptions.create(
                         model="gpt-4o-mini-transcribe",
-                        file=audio_source,
+                        file=(upload_name, audio_source.read()),
                         response_format="json",
                     )
                 )
                 logger.debug(
-                    f"Transcription successful for file-like object: {getattr(audio_source, 'name', 'unknown')}"
+                    f"Transcription successful for file-like object: {upload_name}"
                 )
 
             return transcription.text
 
         except FileNotFoundError:
-            logger.error(f"Audio file not found for transcription: {audio_source}")
+            logger.error(f"Audio file not found for transcription: {audio_source!r}")
             raise
         except Exception as e:
             logger.error(f"Error during OpenAI transcription call: {e}", exc_info=True)

@@ -40,7 +40,7 @@ class ContactName(BaseModel):
 
     @field_validator("formatted_name")
     @classmethod
-    def validate_formatted_name_required(cls, v):
+    def validate_formatted_name_required(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("formatted_name is required and cannot be empty")
         return v.strip()

@@ -7,6 +7,7 @@ Single Responsibility: Handle reconnection attempts with configurable backoff st
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from typing import cast
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,7 @@ class ReconnectionStrategy:
             return self.config.base_delay
 
         exponential = self.config.base_delay * (2 ** (self._attempt_count - 1))
-        return min(exponential, self.config.max_delay)
+        return cast(int, min(exponential, self.config.max_delay))
 
     async def wait(self) -> None:
         """

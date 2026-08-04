@@ -50,7 +50,7 @@ class DBRedisExampleHandler(WappaEventHandler):
     - Clean separation of concerns
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the DB + Redis example handler."""
         super().__init__()
 
@@ -93,6 +93,7 @@ class DBRedisExampleHandler(WappaEventHandler):
 
             # 2. Check for special commands
             if is_special_command(message_text):
+                assert self.command_handlers is not None
                 command = get_command_from_text(message_text)
                 result = await self.command_handlers.handle_command(webhook, command)
 
@@ -108,6 +109,7 @@ class DBRedisExampleHandler(WappaEventHandler):
                 return
 
             # 3. Process regular message
+            assert self.message_handlers is not None
             result = await self.message_handlers.handle_message(webhook)
 
             if result.get("success"):
@@ -210,6 +212,7 @@ class DBRedisExampleHandler(WappaEventHandler):
         """
         try:
             user_id = webhook.user.user_id
+            assert self.messenger is not None
             await self.messenger.send_text(
                 "Sorry, an error occurred while processing your message. "
                 "Please try again.",

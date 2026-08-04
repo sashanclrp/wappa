@@ -15,6 +15,7 @@ import os
 import sys
 import tomllib
 from pathlib import Path
+from typing import cast
 
 from dotenv import load_dotenv
 
@@ -31,7 +32,7 @@ def _get_version_from_pyproject() -> str:
                     pyproject_data = tomllib.load(f)
                     version = pyproject_data.get("project", {}).get("version")
                     if version:
-                        return version
+                        return cast(str, version)
             except (OSError, tomllib.TOMLDecodeError):
                 continue
     return "0.1.0"
@@ -53,7 +54,7 @@ def _is_cli_context() -> bool:
 class Settings:
     """Application settings with environment-based configuration."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # ── Version ──────────────────────────────────────────────
         self.version: str = _get_version_from_pyproject()
 
@@ -96,7 +97,7 @@ class Settings:
         if not _is_cli_context():
             self._validate_whatsapp_credentials()
 
-    def _validate_settings(self):
+    def _validate_settings(self) -> None:
         valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR"]
         if self.log_level.upper() not in valid_levels:
             raise ValueError(f"SYSTEM_LOG_LEVEL must be one of {valid_levels}")
@@ -106,7 +107,7 @@ class Settings:
             self.environment = "DEV"
         self.environment = self.environment.upper()
 
-    def _validate_whatsapp_credentials(self):
+    def _validate_whatsapp_credentials(self) -> None:
         missing = [
             name
             for name, val in [

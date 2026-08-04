@@ -170,7 +170,7 @@ class BaseMessage(BaseModel, ABC):
 
     @classmethod
     @abstractmethod
-    def from_platform_data(cls, data: dict[str, Any], **kwargs) -> "BaseMessage":
+    def from_platform_data(cls, data: dict[str, Any], **kwargs: Any) -> "BaseMessage":
         """
         Create message instance from platform-specific data.
 
@@ -284,11 +284,13 @@ class BaseInteractiveMessage(BaseMessage):
         """Get the ID of the original interactive message."""
         pass
 
+    @property
     @abstractmethod
     def is_button_reply(self) -> bool:
         """Check if this is a button selection."""
         pass
 
+    @property
     @abstractmethod
     def is_list_reply(self) -> bool:
         """Check if this is a list selection."""
@@ -345,6 +347,7 @@ class BaseMediaMessage(BaseMessage):
         """
         pass
 
+    @property
     def has_caption(self) -> bool:
         """Check if the media has a caption."""
         caption = self.caption

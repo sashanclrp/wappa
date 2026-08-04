@@ -7,6 +7,8 @@ This module handles all message history operations including:
 - /HISTORY command processing
 """
 
+from typing import cast
+
 from wappa.webhooks import InboundMessageWebhook
 
 from ..models.redis_demo_models import MessageLog
@@ -89,8 +91,11 @@ class MessageHistoryScore(ScoreBase):
 
             # ITableCache.get() requires (table_name, pkid, models=...)
             # Use user_id as the primary key for their message history
-            message_log = await self.table_cache.get(
-                MESSAGE_HISTORY_TABLE, user_id, models=MessageLog
+            message_log = cast(
+                MessageLog | None,
+                await self.table_cache.get(
+                    MESSAGE_HISTORY_TABLE, user_id, models=MessageLog
+                ),
             )
 
             if message_log:
@@ -137,8 +142,11 @@ class MessageHistoryScore(ScoreBase):
             user_id = user_data["user_id"]
 
             # Get user's message history using ITableCache interface
-            message_log = await self.table_cache.get(
-                MESSAGE_HISTORY_TABLE, user_id, models=MessageLog
+            message_log = cast(
+                MessageLog | None,
+                await self.table_cache.get(
+                    MESSAGE_HISTORY_TABLE, user_id, models=MessageLog
+                ),
             )
 
             if message_log:
@@ -184,8 +192,11 @@ class MessageHistoryScore(ScoreBase):
             Number of messages from user, 0 if no history
         """
         try:
-            message_log = await self.table_cache.get(
-                MESSAGE_HISTORY_TABLE, user_id, models=MessageLog
+            message_log = cast(
+                MessageLog | None,
+                await self.table_cache.get(
+                    MESSAGE_HISTORY_TABLE, user_id, models=MessageLog
+                ),
             )
             return message_log.get_message_count() if message_log else 0
         except Exception as e:

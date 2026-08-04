@@ -40,6 +40,10 @@ surfaces encountered in this work:
 - removed the ignored user parameter from user-scoped state deletion;
 - removed media payload creation from `MessageFactory`; `MediaFactory` is its
   single owner;
+- removed the unused `I*Repository` contract family; `ICacheFactory` and the
+  five type-specific `I*Cache` interfaces are the only persistence contracts;
+- removed the compatibility-only Template status endpoint and response model;
+- removed the unused `MessengerPlatform` enum and stale example aliases;
 - renamed the ambiguous Template `override` switch to `routing_policy`.
 
 Repository searches find no executable compatibility/deprecation/shim markers
@@ -54,22 +58,18 @@ clean-break rule or record already removed code.
 | `uv run ruff check .` | Pass |
 | `uv run ruff format --check .` | Pass |
 | `uv run pytest -q` | 402 passed |
-| Strict mypy on the new transport, lifecycle, expiry composition, and Template route adapter | Pass; 4 source files |
-| `vulture` at 80% confidence | No actionable finding after excluding abstract/protocol signatures and the type-check-only `CronConfig` import |
-| `jscpd` at 20 lines / 120 tokens, excluding exports and generated examples | 36 structural clones; 3.56% duplicated lines |
+| `uv run mypy wappa` | Pass; 332 source files, 0 errors |
+| `vulture wappa --min-confidence 80` | Pass; no findings |
+| `jscpd` at 20 lines / 120 tokens, excluding exports and generated examples | 35 structural clones; 3.59% duplicated lines |
 
-The clone review removed the actionable duplicate media factory. Remaining
-clone groups are backend-specific persistence adapter implementations, repeated
-provider webhook schema shapes, one universal-model shape, and one documentation
-example. They are separate contract representations, not parallel Template
-transport implementations. Sharing those shapes would couple independent
-adapters or weaken explicit provider validation; they are therefore not treated
-as a Wappa Template seam or behavior duplication.
-
-The repository-wide `uv run mypy wappa` baseline is not green: it reports 793
-errors across 142 files. The new and materially changed seam files pass strict
-mypy, but this record does not misrepresent the unrelated repository-wide type
-backlog as resolved.
+The clone review removed the actionable competing media factory and unused
+repository contract hierarchy. Remaining clone groups are independent backend
+implementations, explicit WhatsApp payload schema shapes, one Universal Model
+shape, and one documentation example. They do not implement competing behavior
+or a second Template transport seam; merging them would couple independent
+adapters or weaken explicit platform validation. The generated CLI examples
+were excluded from clone metrics, but they are included in Ruff, strict mypy,
+and import/test verification.
 
 ## Provider certification still required
 

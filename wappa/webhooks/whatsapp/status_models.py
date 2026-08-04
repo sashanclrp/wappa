@@ -5,11 +5,11 @@ This module contains Pydantic models for processing WhatsApp message status
 updates including delivery receipts, read receipts, and failure notifications.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from wappa.schemas.core.types import MessageStatus
+from wappa.schemas.core.types import MessageStatus, PlatformType
 from wappa.webhooks.core.base_status import BaseMessageStatus
 from wappa.webhooks.whatsapp.base_models import Conversation, MessageError, Pricing
 
@@ -131,7 +131,7 @@ class WhatsAppMessageStatus(BaseMessageStatus):
         return bool(self.wa_recipient_id and self.wa_recipient_id.strip())
 
     @model_validator(mode="after")
-    def validate_status_consistency(self):
+    def validate_status_consistency(self) -> Self:
         """Validate status-specific field consistency."""
         # Failed status must have errors, others should not
         if self.wa_status == "failed":
@@ -333,13 +333,13 @@ class WhatsAppMessageStatus(BaseMessageStatus):
         return self.id
 
     @property
-    def platform(self) -> str:
+    def platform(self) -> PlatformType:
         """Get the platform name."""
-        return "whatsapp"
+        return PlatformType.WHATSAPP
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppMessageStatus":
         """Create instance from platform-specific data."""
         return cls.model_validate(data)
@@ -384,7 +384,7 @@ class WhatsAppMessageStatus(BaseMessageStatus):
             )
         return (None, None, None)
 
-    def get_all_errors(self) -> list[dict[str, str | int]]:
+    def get_all_errors(self) -> list[dict[str, Any]]:
         """
         Get all error information for failed messages.
 
@@ -400,7 +400,7 @@ class WhatsAppMessageStatus(BaseMessageStatus):
                 "code": error.code,
                 "title": error.title,
                 "message": error.message,
-                "details": error.error_data.details,
+                "details": error.error_data.details if error.error_data else "",
                 "docs_url": error.href,
             }
             for error in self.errors
@@ -413,17 +413,16 @@ class WhatsAppMessageStatus(BaseMessageStatus):
         Returns:
             Error dictionary or None if no errors.
         """
-        errors = self.get_error_info()
-        return errors[0] if errors else None
+        return self.get_error_info()
 
-    def to_summary_dict(self) -> dict[str, str | bool | int | None]:
+    def to_summary_dict(self) -> dict[str, Any]:
         """
         Create a summary dictionary for logging and analysis.
 
         Returns:
             Dictionary with key status information for structured logging.
         """
-        summary: dict[str, str | bool | int | None] = {
+        summary: dict[str, Any] = {
             "message_id": self.id,
             "status": self.status.value,
             "timestamp": self.unix_timestamp,
@@ -510,7 +509,7 @@ class WhatsAppStatusWebhook(BaseModel):
         """Check if any messages failed."""
         return any(status.is_failed for status in self.statuses)
 
-    def to_summary_dict(self) -> dict[str, int | bool | list]:
+    def to_summary_dict(self) -> dict[str, Any]:
         """
         Create a summary dictionary for the entire status webhook.
 

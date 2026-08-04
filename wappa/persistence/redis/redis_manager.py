@@ -6,7 +6,10 @@ Provides a clean interface for applications to manage Redis connections.
 """
 
 import logging
-from typing import Any
+from collections.abc import Awaitable
+from typing import Any, cast
+
+from redis.asyncio import Redis
 
 from ...core.config.settings import settings
 from .redis_client import POOL_DB_MAPPING, PoolAlias, RedisClient
@@ -48,6 +51,8 @@ class RedisManager:
         try:
             # Enhanced initialization logging
             url = redis_url or settings.redis_url
+            if not url:
+                raise ValueError("Redis URL is required")
             connections = max_connections or settings.redis_max_connections
 
             logger.info(
@@ -88,10 +93,10 @@ class RedisManager:
         successful_pools = []
 
         for alias in POOL_DB_MAPPING:
-            pool_alias: PoolAlias = alias  # type: ignore
+            pool_alias: PoolAlias = alias
             try:
                 redis = await RedisClient.get(pool_alias)
-                await redis.ping()
+                await cast(Awaitable[bool], redis.ping())
                 successful_pools.append(f"{alias}:db{POOL_DB_MAPPING[alias]}")
                 logger.debug(
                     f"✅ Redis pool '{alias}' (db{POOL_DB_MAPPING[alias]}) health check passed"
@@ -117,17 +122,20 @@ class RedisManager:
         Returns:
             Dictionary containing initialization status and per-pool health info
         """
-        health_status = {"initialized": cls._initialized, "pools": {}}
+        health_status: dict[str, Any] = {
+            "initialized": cls._initialized,
+            "pools": {},
+        }
 
         if not cls._initialized:
             health_status["message"] = "Redis not initialized"
             return health_status
 
         for alias in POOL_DB_MAPPING:
-            pool_alias: PoolAlias = alias  # type: ignore
+            pool_alias: PoolAlias = alias
             try:
                 redis = await RedisClient.get(pool_alias)
-                await redis.ping()
+                await cast(Awaitable[bool], redis.ping())
                 health_status["pools"][alias] = {
                     "status": "healthy",
                     "database": POOL_DB_MAPPING[alias],
@@ -143,7 +151,7 @@ class RedisManager:
         return health_status
 
     @classmethod
-    async def get_client(cls, alias: PoolAlias = "users"):
+    async def get_client(cls, alias: PoolAlias = "users") -> Redis:
         """
         Get Redis client for specified pool.
 
@@ -194,4 +202,4 @@ class RedisManager:
         Returns:
             Dictionary mapping pool aliases to database numbers
         """
-        return POOL_DB_MAPPING.copy()
+        return {str(alias): database for alias, database in POOL_DB_MAPPING.items()}

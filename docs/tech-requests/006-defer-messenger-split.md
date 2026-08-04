@@ -1,7 +1,7 @@
 ---
 id: 006
 title: Defer Messenger Seam Split
-status: proposed
+status: accepted
 request_type: architecture-prd
 model_fit:
   primary_100_percent:
@@ -39,7 +39,7 @@ Telegram, Instagram, and WhatsApp are expected to have similar webhook/API categ
 
 ## What To Build
 
-This PRD proposes a future implementation decision. Do not split Messenger while writing this PRD.
+This decision is accepted and reflected in the Messaging architecture and public contract.
 
 1. Keep `Messenger` / `IMessenger` as the public outbound interface.
 2. Document the decision not to split the public seam yet.
@@ -65,12 +65,12 @@ Revisit the Messenger split only when at least one of these becomes true:
 
 ## Acceptance Criteria
 
-- [ ] Messaging docs state that Messenger remains the public seam.
-- [ ] Internal WhatsApp handler composition remains allowed.
-- [ ] No new public Messenger sub-interfaces are introduced.
-- [ ] Any implementation cleanup preserves current `IMessenger` behavior.
-- [ ] Future split criteria are documented.
-- [ ] Docs state that a future split, if justified, should be a clean breaking change.
+- [x] Messaging docs state that Messenger remains the public seam.
+- [x] Internal WhatsApp handler composition remains allowed.
+- [x] No new public Messenger sub-interfaces are introduced.
+- [x] Any implementation cleanup preserves current `IMessenger` behavior.
+- [x] Future split criteria are documented.
+- [x] Docs state that a future split, if justified, should be a clean breaking change.
 
 ## Affected Files
 

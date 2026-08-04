@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 _EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 
 
-def _raise_for_whatsapp_error(result, operation_name: str) -> None:
+def _raise_for_whatsapp_error(result: MessageResult, operation_name: str) -> None:
     if result.success:
         return
 
@@ -242,9 +242,8 @@ async def validate_contact_data(contact: ContactCard) -> ContactValidationResult
         is_valid = not validation_issues
 
         result = ContactValidationResult(
-            is_valid=is_valid,
-            validation_errors=validation_issues if validation_issues else None,
-            contact_summary=f"{contact.name.formatted_name} with {len(contact.phones)} phone(s)",
+            valid=is_valid,
+            errors=validation_issues or None,
         )
 
         logger.info(
@@ -303,9 +302,11 @@ async def validate_coordinates(
             )
 
         result = LocationValidationResult(
-            is_valid=is_valid,
-            validation_errors=validation_issues if validation_issues else None,
-            coordinates_summary=f"({request.latitude}, {request.longitude}) - {region}",
+            valid=is_valid,
+            latitude=request.latitude,
+            longitude=request.longitude,
+            errors=validation_issues or None,
+            address_suggestions=[region],
         )
 
         logger.info(

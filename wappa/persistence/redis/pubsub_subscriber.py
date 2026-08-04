@@ -176,6 +176,7 @@ async def listen_once(
     except TimeoutError:
         logger.debug(f"listen_once timed out after {timeout}s")
         return None
+    return None
 
 
 class NotificationBuffer:

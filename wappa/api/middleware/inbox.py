@@ -5,7 +5,7 @@ Simple middleware that extracts the inbox_id from webhook URL paths and sets it 
 """
 
 from fastapi import HTTPException, Request
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
 from wappa.core.config.settings import settings
@@ -25,7 +25,9 @@ class InboxMiddleware(BaseHTTPMiddleware):
     That's it. Nothing more.
     """
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         """Extract inbox_id from URL path and set in context."""
         inbox_id = None
 

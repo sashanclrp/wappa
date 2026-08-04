@@ -5,7 +5,7 @@ This module contains Pydantic models for processing WhatsApp button reply messag
 which are sent when users tap quick-reply buttons in template messages.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -117,7 +117,7 @@ class WhatsAppButtonMessage(WhatsAppMessageIdentity, BaseMessage):
         return v
 
     @model_validator(mode="after")
-    def validate_button_message_context(self):
+    def validate_button_message_context(self) -> Self:
         """Validate button message context when Meta includes one."""
         # Template quick-reply taps arrive without a context block at all
         if self.context is None:
@@ -270,6 +270,6 @@ class WhatsAppButtonMessage(WhatsAppMessageIdentity, BaseMessage):
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppButtonMessage":
         return cls.model_validate(data)

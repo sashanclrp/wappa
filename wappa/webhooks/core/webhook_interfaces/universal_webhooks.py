@@ -16,7 +16,7 @@ webhook structure. All platforms (Teams, Telegram, Instagram) must adapt to thes
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -145,7 +145,7 @@ class InboundMessageWebhook(BaseModel):
         """
         # For text messages, get the text_content property
         if hasattr(self.message, "text_content"):
-            return self.message.text_content
+            return cast(str, self.message.text_content)
 
         # For interactive messages, try to get the selection value
         interactive_value = self.get_interactive_selection()
@@ -171,7 +171,7 @@ class InboundMessageWebhook(BaseModel):
 
         # Try to get the selected option ID from the message
         if hasattr(self.message, "selected_option_id"):
-            return self.message.selected_option_id
+            return cast(str | None, self.message.selected_option_id)
 
         # Fallback: try to get interactive data directly (platform-specific)
         if hasattr(self.message, "interactive"):
@@ -184,7 +184,7 @@ class InboundMessageWebhook(BaseModel):
             ):
                 button_reply = getattr(interactive_data, "button_reply", None)
                 if button_reply and hasattr(button_reply, "id"):
-                    return button_reply.id
+                    return cast(str | None, button_reply.id)
 
             # Handle list replies
             elif (
@@ -193,7 +193,7 @@ class InboundMessageWebhook(BaseModel):
             ):
                 list_reply = getattr(interactive_data, "list_reply", None)
                 if list_reply and hasattr(list_reply, "id"):
-                    return list_reply.id
+                    return cast(str | None, list_reply.id)
 
         return None
 
@@ -437,6 +437,7 @@ class StatusWebhook(BaseModel):
         """Get the primary error if this status failed."""
         if not self.has_errors():
             return None
+        assert self.errors is not None
         return self.errors[0]
 
     def is_billable_message(self) -> bool:

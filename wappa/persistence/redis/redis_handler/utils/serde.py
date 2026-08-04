@@ -7,7 +7,7 @@ from decimal import Decimal
 from enum import Enum
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network
 from pathlib import PurePath
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -56,7 +56,7 @@ def _json_default_handler(obj: Any) -> str | int | float | list:
     if isinstance(obj, Decimal):
         return float(obj)
     if isinstance(obj, Enum):
-        return obj.value
+        return cast(str | int | float, obj.value)
     if isinstance(obj, bytes):
         return obj.decode("utf-8", errors="replace")
     if isinstance(obj, (set, frozenset)):
@@ -119,6 +119,7 @@ def loads(raw: str | None, model: type[BaseModel] | None = None) -> Any:
     """Deserialize Redis string back to Python object"""
     if raw in (None, "null"):
         return None
+    assert raw is not None
     if raw == "1":
         return True
     if raw == "0":

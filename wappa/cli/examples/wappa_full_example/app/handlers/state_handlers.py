@@ -6,7 +6,10 @@ selections, including state validation, response processing, and cleanup.
 """
 
 import time
+from typing import Any
 
+from wappa.domain.interfaces.cache_factory import ICacheFactory
+from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.webhooks import InboundMessageWebhook
 
 from ..models.state_models import ButtonState, ListState, StateType
@@ -19,7 +22,9 @@ from ..utils.metadata_extractor import MetadataExtractor
 class StateHandlers:
     """Collection of handlers for interactive state management."""
 
-    def __init__(self, messenger, cache_factory, logger):
+    def __init__(
+        self, messenger: IMessenger, cache_factory: ICacheFactory, logger: Any
+    ) -> None:
         """
         Initialize state handlers.
 
@@ -37,7 +42,7 @@ class StateHandlers:
         webhook: InboundMessageWebhook,
         user_profile: UserProfile,
         button_state: ButtonState,
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Handle response when user is in button state.
 
@@ -61,6 +66,8 @@ class StateHandlers:
             # Check if this is an interactive button selection
             if message_type == "interactive":
                 selection_id = webhook.get_interactive_selection()
+                if selection_id is None:
+                    selection_id = ""
 
                 if button_state.is_valid_selection(selection_id):
                     # Valid button selection - process it
@@ -108,7 +115,7 @@ class StateHandlers:
         webhook: InboundMessageWebhook,
         user_profile: UserProfile,
         list_state: ListState,
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Handle response when user is in list state.
 
@@ -132,6 +139,8 @@ class StateHandlers:
             # Check if this is an interactive list selection
             if message_type == "interactive":
                 selection_id = webhook.get_interactive_selection()
+                if selection_id is None:
+                    selection_id = ""
 
                 if list_state.is_valid_selection(selection_id):
                     # Valid list selection - process it
@@ -179,7 +188,7 @@ class StateHandlers:
         button_state: ButtonState,
         selection_id: str,
         start_time: float,
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """Process valid button selection."""
         user_id = webhook.user.user_id
         message_id = webhook.message.message_id
@@ -187,6 +196,8 @@ class StateHandlers:
         # Handle the selection in the state
         button_state.handle_selection(selection_id)
         selected_button = button_state.get_selected_button()
+        if selected_button is None:
+            raise ValueError(f"Button selection '{selection_id}' has no option data")
 
         # Remove state from cache
         await self.cache_helper.remove_user_state(StateType.BUTTON)
@@ -264,7 +275,7 @@ class StateHandlers:
         list_state: ListState,
         selection_id: str,
         start_time: float,
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """Process valid list selection."""
         user_id = webhook.user.user_id
         message_id = webhook.message.message_id
@@ -272,6 +283,8 @@ class StateHandlers:
         # Handle the selection in the state
         list_state.handle_selection(selection_id)
         selected_item = list_state.get_selected_item()
+        if selected_item is None:
+            raise ValueError(f"List selection '{selection_id}' has no item data")
 
         # Remove state from cache
         await self.cache_helper.remove_user_state(StateType.LIST)
@@ -427,8 +440,8 @@ class StateHandlers:
         self,
         webhook: InboundMessageWebhook,
         user_profile: UserProfile,
-        state_data: dict[str, any],
-    ) -> dict[str, any]:
+        state_data: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Handle template-example state responses.
 
@@ -474,9 +487,9 @@ class StateHandlers:
         self,
         webhook: InboundMessageWebhook,
         user_profile: UserProfile,
-        state_data: dict[str, any],
+        state_data: dict[str, Any],
         start_time: float,
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """Echo back the template that triggered the state."""
         user_id = webhook.user.user_id
         template_name = state_data.get("template_name", "hello_world")
@@ -518,7 +531,7 @@ class StateHandlers:
             state_cache = self.cache_helper.state_cache
             await state_cache.upsert(
                 handler_name="template-example",
-                state_data=state_data,
+                data=state_data,
                 ttl=1800,  # Reset TTL to 30 minutes
             )
 
@@ -564,9 +577,9 @@ class StateHandlers:
         self,
         webhook: InboundMessageWebhook,
         user_profile: UserProfile,
-        state_data: dict[str, any],
+        state_data: dict[str, Any],
         start_time: float,
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """Exit template-example state and show summary."""
         from datetime import datetime
 
@@ -628,10 +641,10 @@ class StateHandlers:
 async def handle_user_in_state(
     webhook: InboundMessageWebhook,
     user_profile: UserProfile,
-    messenger,
-    cache_factory,
-    logger,
-) -> dict[str, any]:
+    messenger: IMessenger,
+    cache_factory: ICacheFactory,
+    logger: Any,
+) -> dict[str, Any] | None:
     """
     Handle user response when they are in an active state (convenience function).
 
@@ -647,10 +660,9 @@ async def handle_user_in_state(
     """
     handlers = StateHandlers(messenger, cache_factory, logger)
     cache_helper = CacheHelper(cache_factory)
-    user_id = webhook.user.user_id
 
     # Check for active button state
-    button_state = await cache_helper.get_user_state(user_id, StateType.BUTTON)
+    button_state = await cache_helper.get_user_state(StateType.BUTTON)
     if button_state and button_state.is_active():
         # Ensure we have the correct type
         if isinstance(button_state, ButtonState):
@@ -661,7 +673,7 @@ async def handle_user_in_state(
             logger.warning(f"Button state returned wrong type: {type(button_state)}")
 
     # Check for active list state
-    list_state = await cache_helper.get_user_state(user_id, StateType.LIST)
+    list_state = await cache_helper.get_user_state(StateType.LIST)
     if list_state and list_state.is_active():
         # Ensure we have the correct type
         if isinstance(list_state, ListState):
@@ -684,7 +696,7 @@ async def handle_user_in_state(
 
 
 async def cleanup_expired_user_states(
-    cache_factory, logger, user_id: str = None
+    cache_factory: ICacheFactory, logger: Any, user_id: str | None = None
 ) -> int:
     """
     Cleanup expired states for a specific user or all users (convenience function).
@@ -707,7 +719,7 @@ async def cleanup_expired_user_states(
         if user_id:
             # Clean up specific user's states
             for state_type in [StateType.BUTTON, StateType.LIST]:
-                state = await cache_helper.get_user_state(user_id, state_type)
+                state = await cache_helper.get_user_state(state_type)
                 if state and state.is_expired():
                     await cache_helper.remove_user_state(state_type)
                     cleanup_count += 1

@@ -93,13 +93,3 @@ class TemplateStateConfig(BaseModel):
             "phone number to an internal account id)."
         ),
     )
-
-
-class TemplateMessageStatus(BaseModel):
-    """Current platform status for a configured Template."""
-
-    template_name: str = Field(..., description="Template name")
-    status: str = Field(..., description="Template status")
-    language: str = Field(..., description="Template language")
-    category: str | None = Field(None, description="Template category")
-    components: list[dict] | None = Field(None, description="Template components")

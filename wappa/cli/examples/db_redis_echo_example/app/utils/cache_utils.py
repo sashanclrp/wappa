@@ -12,10 +12,13 @@ it handles ONLY cache operations with Redis.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any, cast
 from uuid import uuid4
 
 from sqlmodel import select
 
+from wappa.domain.interfaces.cache_factory import ICacheFactory
+from wappa.domain.interfaces.cache_interfaces import IUserCache
 from wappa.webhooks import InboundMessageWebhook
 
 from ..models.cache_models import ConversationCache
@@ -32,7 +35,11 @@ class CacheHelper:
     Follows Interface Segregation Principle - only depends on cache_factory.
     """
 
-    def __init__(self, cache_factory, db_session_factory=None):
+    def __init__(
+        self,
+        cache_factory: ICacheFactory,
+        db_session_factory: Any = None,
+    ) -> None:
         """
         Initialize CacheHelper with cache factory.
 
@@ -45,7 +52,7 @@ class CacheHelper:
 
     async def get_or_create_conversation(
         self,
-        user_cache,
+        user_cache: IUserCache,
         user_id: str,
         webhook: InboundMessageWebhook,
     ) -> ConversationCache:
@@ -61,7 +68,10 @@ class CacheHelper:
             ConversationCache instance
         """
         # Try to get existing conversation
-        conversation = await user_cache.get(models=ConversationCache)
+        conversation = cast(
+            ConversationCache | None,
+            await user_cache.get(models=ConversationCache),
+        )
 
         if conversation:
             return conversation
@@ -133,7 +143,10 @@ class CacheHelper:
             ConversationCache or None if not found
         """
         user_cache = self.cache_factory.create_user_cache()
-        return await user_cache.get(models=ConversationCache)
+        return cast(
+            ConversationCache | None,
+            await user_cache.get(models=ConversationCache),
+        )
 
     async def save_conversation(
         self, conversation: ConversationCache, ttl: int = CONVERSATION_CACHE_TTL

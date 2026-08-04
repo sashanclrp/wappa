@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from ....domain.interfaces.cache_interfaces import IUserCache
 from ..ops import hdel, hget, hincrby_with_expire
+from ..redis_client import PoolAlias
 from .utils.inbox_cache import InboxCache
 from .utils.serde import loads
 
@@ -39,7 +40,7 @@ class RedisUser(InboxCache, IUserCache):
     """
 
     user_id: str = Field(..., min_length=1)
-    redis_alias: str = "user"
+    redis_alias: PoolAlias = "users"
 
     def _key(self) -> str:
         """Build user key using KeyFactory"""
@@ -62,7 +63,9 @@ class RedisUser(InboxCache, IUserCache):
             )
         return result
 
-    async def upsert(self, data: dict[str, Any], ttl: int | None = None) -> bool:
+    async def upsert(
+        self, data: dict[str, Any] | BaseModel, ttl: int | None = None
+    ) -> bool:
         """Create or update user record with multiple fields (Redis HSET upsert behavior)"""
         key = self._key()
         return await self._hset_with_ttl(key, data, ttl)
@@ -146,7 +149,7 @@ class RedisUser(InboxCache, IUserCache):
             Remaining TTL in seconds, -1 if no expiry, -2 if doesn't exist
         """
         key = self._key()
-        return await super().get_ttl(key)
+        return await self._get_ttl(key)
 
     async def renew_ttl(self, ttl: int) -> bool:
         """
@@ -159,4 +162,4 @@ class RedisUser(InboxCache, IUserCache):
             True if successful, False otherwise
         """
         key = self._key()
-        return await super().renew_ttl(key, ttl)
+        return await self._renew_ttl(key, ttl)

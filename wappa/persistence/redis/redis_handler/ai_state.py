@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from ....domain.interfaces.cache_interfaces import IAIStateCache
 from ..ops import hget, hincrby_with_expire, hset
+from ..redis_client import PoolAlias
 from .utils.inbox_cache import InboxCache
 from .utils.serde import dumps, loads
 
@@ -16,7 +17,7 @@ logger = logging.getLogger("RedisAIState")
 
 class RedisAIState(InboxCache, IAIStateCache):
     user_id: str = Field(..., min_length=1)
-    redis_alias: str = "ai_state"  # Uses ai_state pool (db=4)
+    redis_alias: PoolAlias = "ai_state"  # Uses ai_state pool (db=4)
 
     def _key(self, agent_name: str) -> str:
         return self.keys.aistate(self.inbox, agent_name, self.user_id)
@@ -117,10 +118,10 @@ class RedisAIState(InboxCache, IAIStateCache):
         return None
 
     async def get_ttl(self, agent_name: str) -> int:
-        return await super().get_ttl(self._key(agent_name))
+        return await self._get_ttl(self._key(agent_name))
 
     async def renew_ttl(self, agent_name: str, ttl: int) -> bool:
-        return await super().renew_ttl(self._key(agent_name), ttl)
+        return await self._renew_ttl(self._key(agent_name), ttl)
 
     async def delete_all_for_user(self) -> int:
         pattern = f"{self.inbox}:{self.keys.aistate_prefix}:*:{self.user_id}"

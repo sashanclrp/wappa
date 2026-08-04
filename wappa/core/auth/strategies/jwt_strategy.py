@@ -80,6 +80,7 @@ class JWTStrategy:
 
         self._jwks_client: PyJWKClient | None = None
         if has_jwks:
+            assert jwks_url is not None
             self._jwks_client = PyJWKClient(
                 jwks_url, cache_jwk_set=True, lifespan=jwks_cache_ttl
             )

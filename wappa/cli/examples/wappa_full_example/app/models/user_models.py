@@ -5,6 +5,7 @@ Contains models for user profiles, message history, and interaction statistics.
 """
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -26,7 +27,6 @@ class UserProfile(BaseModel):
 
     # Statistics
     total_messages: int = 0
-    message_count: int = 0  # Alias for compatibility
     text_messages: int = 0
     media_messages: int = 0
     interactive_messages: int = 0
@@ -51,14 +51,13 @@ class UserProfile(BaseModel):
 
     @field_validator("phone_number", mode="before")
     @classmethod
-    def validate_phone_number(cls, v):
+    def validate_phone_number(cls, v: Any) -> Any:
         """Convert phone number to string if provided."""
         return str(v) if v is not None else v
 
     def increment_message_count(self, message_type: str = "text") -> None:
         """Increment the message count and update statistics."""
         self.total_messages += 1
-        self.message_count += 1  # For compatibility
         self.last_seen = datetime.now()
         self.last_message_timestamp = datetime.now()
         self.is_first_time_user = False
@@ -128,7 +127,7 @@ class UserProfile(BaseModel):
         else:
             return self.user_id
 
-    def get_activity_summary(self) -> dict[str, any]:
+    def get_activity_summary(self) -> dict[str, Any]:
         """Get a summary of user activity."""
         return {
             "user_id": self.user_id,
@@ -181,7 +180,10 @@ class UserSession(BaseModel):
     platform_version: str | None = None
 
     def update_activity(
-        self, message_type: str = None, command: str = None, interaction: bool = False
+        self,
+        message_type: str | None = None,
+        command: str | None = None,
+        interaction: bool = False,
     ) -> None:
         """Update session activity."""
         self.last_activity = datetime.now()
@@ -197,7 +199,7 @@ class UserSession(BaseModel):
         if interaction:
             self.interactions_in_session += 1
 
-    def set_current_state(self, state: str = None) -> None:
+    def set_current_state(self, state: str | None = None) -> None:
         """Set the current interactive state."""
         self.current_state = state
         self.last_activity = datetime.now()
@@ -211,7 +213,7 @@ class UserSession(BaseModel):
         """Get the current session duration in seconds."""
         return int((self.last_activity - self.session_start).total_seconds())
 
-    def get_session_summary(self) -> dict[str, any]:
+    def get_session_summary(self) -> dict[str, Any]:
         """Get a summary of the current session."""
         return {
             "session_id": self.session_id,
@@ -282,7 +284,7 @@ class UserStatistics(BaseModel):
 
         self.last_updated = datetime.now()
 
-    def get_summary(self) -> dict[str, any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get a comprehensive statistics summary."""
         return {
             "overview": {

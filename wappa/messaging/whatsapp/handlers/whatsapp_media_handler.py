@@ -386,6 +386,13 @@ class WhatsAppMediaHandler(IMediaHandler):
                 )
 
             media_url = media_info_result.url
+            if media_url is None:
+                return MediaDownloadResult(
+                    success=False,
+                    error=f"Media URL missing for ID {media_id}",
+                    error_code="MEDIA_URL_MISSING",
+                    inbox_id=self._inbox_id,
+                )
             content_type = media_info_result.mime_type
 
             self.logger.debug(
@@ -510,7 +517,7 @@ class WhatsAppMediaHandler(IMediaHandler):
         media_id: str,
         temp_suffix: str | None = None,
         sender_id: str | None = None,
-    ):
+    ) -> AsyncIterator[MediaDownloadResult]:
         """Download media to a temporary file with automatic cleanup.
 
         Example:
@@ -547,6 +554,8 @@ class WhatsAppMediaHandler(IMediaHandler):
                 raise RuntimeError(
                     f"Failed to get media URL for ID {media_id}: {media_info_result.error}"
                 )
+            if media_info_result.url is None:
+                raise RuntimeError(f"Media URL missing for ID {media_id}")
 
             async with self.client.stream_get(media_info_result.url) as response:
                 if response.status_code != 200:
@@ -612,7 +621,7 @@ class WhatsAppMediaHandler(IMediaHandler):
             "url_expiry_minutes": 5,
             "media_persistence_days": 30,
             "platform": "whatsapp",
-            "api_version": self.client.api_version,
+            "api_version": self.client.url_builder.api_version,
         }
 
     def _get_max_size_for_mime_type(self, mime_type: str) -> int:

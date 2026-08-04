@@ -8,6 +8,7 @@ maintaining compatibility with platform-specific response formats.
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -89,23 +90,33 @@ class MediaDownloadResult(BaseModel):
 
     model_config = ConfigDict(use_enum_values=True, arbitrary_types_allowed=True)
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         """Synchronous context manager entry."""
         return self
 
-    def __exit__(self, _exc_type, _exc_val, _exc_tb):
+    def __exit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc_val: BaseException | None,
+        _exc_tb: object | None,
+    ) -> None:
         """Synchronous context manager exit with cleanup."""
         self._cleanup_temp_file()
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         """Async context manager entry."""
         return self
 
-    async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
+    async def __aexit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc_val: BaseException | None,
+        _exc_tb: object | None,
+    ) -> None:
         """Async context manager exit with cleanup."""
         self._cleanup_temp_file()
 
-    def _cleanup_temp_file(self):
+    def _cleanup_temp_file(self) -> None:
         """Clean up temporary file if configured for auto-cleanup."""
         if self._cleanup_on_exit and self._is_temp_file and self.file_path:
             try:
@@ -116,7 +127,7 @@ class MediaDownloadResult(BaseModel):
                 # Silently ignore cleanup errors - temp files will be cleaned by OS eventually
                 pass
 
-    def mark_as_temp_file(self, cleanup_on_exit: bool = True):
+    def mark_as_temp_file(self, cleanup_on_exit: bool = True) -> Self:
         """Mark this result as containing a temporary file for cleanup.
 
         Args:

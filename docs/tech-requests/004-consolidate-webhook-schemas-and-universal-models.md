@@ -1,7 +1,7 @@
 ---
 id: 004
 title: Consolidate Webhook Schemas and Universal Models
-status: proposed
+status: implemented
 request_type: architecture-prd
 model_fit:
   primary_100_percent:
@@ -43,7 +43,7 @@ Every Universal Model form must also be a Pydantic schema. Future Telegram, Inst
 
 ## What To Build
 
-This PRD proposes a future implementation change. Do not implement it while writing this PRD.
+This request has been implemented. The list below records the delivered scope.
 
 1. Make the Webhooks context the canonical owner of inbound webhook schemas and Universal Models.
 2. Keep Pydantic schemas for every webhook payload and every Universal Webhook Schema.
@@ -75,13 +75,13 @@ This PRD proposes a future implementation change. Do not implement it while writ
 
 ## Acceptance Criteria
 
-- [ ] `wappa/webhooks` owns all inbound webhook schemas and Universal Models.
-- [ ] Each Universal Model form is a Pydantic schema.
-- [ ] `wappa/schemas` contains only shared primitives or non-inbound request/response models.
-- [ ] No inbound webhook model exists in two canonical locations.
-- [ ] No compatibility import path remains for moved inbound models.
-- [ ] WhatsApp webhook parsing tests still pass.
-- [ ] Documentation explains how a future platform maps into Universal Models.
+- [x] `wappa/webhooks` owns all inbound webhook schemas and Universal Models.
+- [x] Each Universal Model form is a Pydantic schema.
+- [x] `wappa/schemas` contains only shared primitives or non-inbound request/response models.
+- [x] No inbound webhook model exists in two canonical locations.
+- [x] No compatibility import path remains for moved inbound models.
+- [x] WhatsApp webhook parsing tests still pass.
+- [x] Documentation explains how a future platform maps into Universal Models.
 
 ## Affected Files
 

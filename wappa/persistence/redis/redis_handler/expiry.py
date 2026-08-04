@@ -7,6 +7,7 @@ from pydantic import Field
 
 from ....domain.interfaces.cache_interfaces import IExpiryCache
 from ..ops import delete, exists, get_ttl, setex
+from ..redis_client import PoolAlias
 from .utils.inbox_cache import InboxCache
 from .utils.serde import dumps
 
@@ -39,7 +40,7 @@ class RedisExpiry(InboxCache, IExpiryCache):
     """
 
     user_id: str = Field(..., min_length=1)
-    redis_alias: str = "expiry"  # Uses expiry pool (db=3)
+    redis_alias: PoolAlias = "expiry"  # Uses expiry pool (db=3)
     ttl_default: int = 0  # Not used (TTL is per-trigger)
 
     def _key(self, action: str, identifier: str) -> str:
@@ -200,7 +201,7 @@ class RedisExpiry(InboxCache, IExpiryCache):
                 print("Reminder is still scheduled")
         """
         key = self._key(action, identifier)
-        return await exists(key, alias=self.redis_alias)
+        return await exists(key, alias=self.redis_alias) > 0
 
     async def get_ttl(self, action: str, identifier: str) -> int:
         """

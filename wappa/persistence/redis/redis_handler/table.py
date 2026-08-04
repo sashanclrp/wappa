@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from ....domain.interfaces.cache_interfaces import ITableCache
 from ..ops import hget, hincrby_with_expire
+from ..redis_client import PoolAlias
 from .utils.inbox_cache import InboxCache
 from .utils.serde import loads
 
@@ -32,7 +33,7 @@ class RedisTable(InboxCache, ITableCache):
     Single Responsibility: Table/DataFrame data management only
     """
 
-    redis_alias: str = "table"
+    redis_alias: PoolAlias = "table"
 
     def _key(self, table_name: str, pkid: str) -> str:
         """Build table key using KeyFactory"""
@@ -61,7 +62,11 @@ class RedisTable(InboxCache, ITableCache):
         return result
 
     async def upsert(
-        self, table_name: str, pkid: str, data: dict[str, Any], ttl: int | None = None
+        self,
+        table_name: str,
+        pkid: str,
+        data: dict[str, Any] | BaseModel,
+        ttl: int | None = None,
     ) -> bool:
         """Set table row data (Redis HSET upsert behavior)"""
         key = self._key(table_name, pkid)
@@ -172,7 +177,7 @@ class RedisTable(InboxCache, ITableCache):
             Remaining TTL in seconds, -1 if no expiry, -2 if doesn't exist
         """
         key = self._key(table_name, pkid)
-        return await super().get_ttl(key)
+        return await self._get_ttl(key)
 
     async def renew_ttl(self, table_name: str, pkid: str, ttl: int) -> bool:
         """
@@ -187,7 +192,7 @@ class RedisTable(InboxCache, ITableCache):
             True if successful, False otherwise
         """
         key = self._key(table_name, pkid)
-        return await super().renew_ttl(key, ttl)
+        return await self._renew_ttl(key, ttl)
 
     async def delete_table(self, table_name: str) -> int:
         if not table_name:
@@ -250,7 +255,7 @@ class RedisTable(InboxCache, ITableCache):
 
         pattern = self.keys.table(self.inbox, table_name, "*")
         results = []
-        cursor = "0"
+        cursor = 0
 
         try:
             while True:
@@ -266,7 +271,7 @@ class RedisTable(InboxCache, ITableCache):
                     if data:
                         results.append(data)
 
-                if next_cursor == "0":
+                if next_cursor == 0:
                     break
                 cursor = next_cursor
 

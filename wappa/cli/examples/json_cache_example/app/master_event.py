@@ -32,7 +32,7 @@ class JSONCacheExampleHandler(WappaEventHandler):
     - Professional error handling and logging
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the JSON cache example handler."""
         super().__init__()
 
@@ -175,6 +175,9 @@ class JSONCacheExampleHandler(WappaEventHandler):
                     "❌ Cache factory not available - cannot initialize SOLID architecture"
                 )
                 return
+            if self.messenger is None:
+                self.logger.error("❌ Messenger not available")
+                return
 
             # Create dependencies container with cache factory (Dependency Inversion)
             # The cache factory creates context-aware cache instances per-request
@@ -315,6 +318,8 @@ class JSONCacheExampleHandler(WappaEventHandler):
             error_details: Details about the error for logging
         """
         try:
+            if self.messenger is None:
+                raise RuntimeError("Messenger not configured")
             user_data = extract_user_data(webhook)
             user_id = user_data["user_id"]
 
@@ -391,7 +396,7 @@ class JSONCacheExampleHandler(WappaEventHandler):
             Health check results for the entire system
         """
         try:
-            health_results = {
+            health_results: dict[str, Any] = {
                 "overall_healthy": True,
                 "initialized": self._initialized,
                 "components": {},

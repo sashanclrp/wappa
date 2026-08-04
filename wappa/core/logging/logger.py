@@ -13,6 +13,7 @@ import os
 import re
 import traceback
 from datetime import UTC, datetime
+from typing import Any
 
 from rich.console import Console
 from rich.logging import RichHandler
@@ -88,7 +89,7 @@ class WappaJSONFormatter(logging.Formatter):
 class CompactFormatter(logging.Formatter):
     """Custom formatter that shortens long module names for better readability."""
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         # Shorten long module names for better readability
         if record.name.startswith("wappa."):
             # Convert wappa.core.events.event_dispatcher -> events.dispatcher
@@ -134,7 +135,7 @@ class ContextLogger:
     """
     Logger wrapper that adds inbox and user context to messages.
 
-    Following the old app's successful pattern - adds context as message prefixes
+    Adds request context as message prefixes
     instead of trying to modify the format string.
     """
 
@@ -165,31 +166,31 @@ class ContextLogger:
             return f"[U:{current_user}] {message}"
         return message
 
-    def debug(self, message: str, *args, **kwargs) -> None:
+    def debug(self, message: str, *args: Any, **kwargs: Any) -> None:
         """Log debug message with context."""
         self.logger.debug(self._format_message(message), *args, **kwargs)
 
-    def info(self, message: str, *args, **kwargs) -> None:
+    def info(self, message: str, *args: Any, **kwargs: Any) -> None:
         """Log info message with context."""
         self.logger.info(self._format_message(message), *args, **kwargs)
 
-    def warning(self, message: str, *args, **kwargs) -> None:
+    def warning(self, message: str, *args: Any, **kwargs: Any) -> None:
         """Log warning message with context."""
         self.logger.warning(self._format_message(message), *args, **kwargs)
 
-    def error(self, message: str, *args, **kwargs) -> None:
+    def error(self, message: str, *args: Any, **kwargs: Any) -> None:
         """Log error message with context."""
         self.logger.error(self._format_message(message), *args, **kwargs)
 
-    def critical(self, message: str, *args, **kwargs) -> None:
+    def critical(self, message: str, *args: Any, **kwargs: Any) -> None:
         """Log critical message with context."""
         self.logger.critical(self._format_message(message), *args, **kwargs)
 
-    def exception(self, message: str, *args, **kwargs) -> None:
+    def exception(self, message: str, *args: Any, **kwargs: Any) -> None:
         """Log exception message with context."""
         self.logger.exception(self._format_message(message), *args, **kwargs)
 
-    def bind(self, **kwargs) -> ContextLogger:
+    def bind(self, **kwargs: Any) -> ContextLogger:
         """
         Create a new ContextLogger with additional or updated context.
 

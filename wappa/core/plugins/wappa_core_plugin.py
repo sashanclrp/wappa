@@ -13,7 +13,7 @@ from wappa.api.routes.whatsapp_combined import create_whatsapp_router
 from wappa.core.lifecycle import BackgroundWorkTracker, SessionLifecycle
 
 from ..config.settings import settings
-from ..logging.logger import get_app_logger, setup_app_logging
+from ..logging.logger import ContextLogger, get_app_logger, setup_app_logging
 from ..types import CacheType
 
 if TYPE_CHECKING:
@@ -182,7 +182,7 @@ class WappaCorePlugin:
             )
         await self._session_lifecycle.recreate()
 
-    async def _display_webhook_urls(self, logger, base_url: str) -> None:
+    async def _display_webhook_urls(self, logger: ContextLogger, base_url: str) -> None:
         try:
             # Imported here to avoid circular imports during startup
             from ..events.webhook_factory import webhook_url_factory

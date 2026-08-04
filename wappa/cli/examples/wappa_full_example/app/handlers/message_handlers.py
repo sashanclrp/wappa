@@ -6,6 +6,7 @@ including text, media, location, contact, and interactive messages.
 """
 
 import time
+from typing import Any, cast
 
 from wappa.webhooks import InboundMessageWebhook
 
@@ -18,7 +19,7 @@ from ..utils.metadata_extractor import MetadataExtractor
 class MessageHandlers:
     """Collection of message handlers for different message types."""
 
-    def __init__(self, messenger, cache_factory, logger):
+    def __init__(self, messenger: Any, cache_factory: Any, logger: Any) -> None:
         """
         Initialize message handlers.
 
@@ -34,7 +35,7 @@ class MessageHandlers:
 
     async def handle_text_message(
         self, webhook: InboundMessageWebhook, user_profile: UserProfile
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Handle text message with echo functionality.
 
@@ -112,7 +113,7 @@ class MessageHandlers:
 
     async def handle_media_message(
         self, webhook: InboundMessageWebhook, user_profile: UserProfile
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Handle media message with relay functionality.
 
@@ -198,7 +199,7 @@ class MessageHandlers:
 
     async def handle_location_message(
         self, webhook: InboundMessageWebhook, user_profile: UserProfile
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Handle location message with echo functionality.
 
@@ -293,7 +294,7 @@ class MessageHandlers:
 
     async def handle_contact_message(
         self, webhook: InboundMessageWebhook, user_profile: UserProfile
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Handle contact message with echo functionality.
 
@@ -390,7 +391,7 @@ class MessageHandlers:
 
     async def handle_interactive_message(
         self, webhook: InboundMessageWebhook, user_profile: UserProfile
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Handle interactive message (button/list selections).
 
@@ -462,9 +463,9 @@ class MessageHandlers:
             )
             return {"success": False, "error": str(e)}
 
-    def _convert_contact_to_dict(self, contact_obj) -> dict[str, any]:
+    def _convert_contact_to_dict(self, contact_obj: Any) -> dict[str, Any]:
         """Convert contact object to dictionary format for messenger."""
-        contact_dict = {}
+        contact_dict: dict[str, Any] = {}
 
         # Extract name information
         if hasattr(contact_obj, "name") and contact_obj.name:
@@ -506,12 +507,12 @@ class MessageHandlers:
 
         return contact_dict
 
-    def _extract_contact_name(self, contact_obj) -> str:
+    def _extract_contact_name(self, contact_obj: Any) -> str:
         """Extract contact name for display."""
         if hasattr(contact_obj, "name") and contact_obj.name:
             name_obj = contact_obj.name
             if hasattr(name_obj, "formatted_name"):
-                return name_obj.formatted_name
+                return cast(str, name_obj.formatted_name)
             elif hasattr(name_obj, "first_name"):
                 first = name_obj.first_name or ""
                 last = getattr(name_obj, "last_name", "") or ""
@@ -524,10 +525,10 @@ class MessageHandlers:
 async def handle_message_by_type(
     webhook: InboundMessageWebhook,
     user_profile: UserProfile,
-    messenger,
-    cache_factory,
-    logger,
-) -> dict[str, any]:
+    messenger: Any,
+    cache_factory: Any,
+    logger: Any,
+) -> dict[str, Any]:
     """
     Handle message based on its type (convenience function).
 

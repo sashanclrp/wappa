@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Any
 from ...core.logging.logger import get_app_logger
 
 if TYPE_CHECKING:
+    import fastapi_crons
     from fastapi import APIRouter, FastAPI
-    from fastapi_crons import CronConfig, Crons
 
     from ...core.context import WappaContextFactory
     from ...core.events.cron_event_dispatcher import CronEventDispatcher
@@ -61,7 +61,7 @@ class CronPlugin:
         event_handler: "WappaEventHandler",
         *,
         include_router: bool = True,
-        config: "CronConfig | None" = None,
+        config: "fastapi_crons.CronConfig | None" = None,
     ):
         """
         Initialize cron plugin.
@@ -79,7 +79,7 @@ class CronPlugin:
         self._cron_router: APIRouter | None = None
 
         # Set at startup
-        self._crons: Crons | None = None
+        self._crons: fastapi_crons.Crons | None = None
         self._context_factory: WappaContextFactory | None = None
         self._dispatcher: CronEventDispatcher | None = None
 
@@ -189,6 +189,8 @@ class CronPlugin:
         the cron execution into the Wappa event pipeline.
         """
 
+        assert self._crons is not None
+
         @self._crons.cron(
             expr=reg.expr,
             name=reg.cron_id,
@@ -197,7 +199,7 @@ class CronPlugin:
             retry_delay=reg.retry_delay,
             timeout=reg.timeout,
         )
-        async def _callback():
+        async def _callback() -> None:
             await self._fire_cron_event(reg)
 
     async def _fire_cron_event(self, reg: _CronRegistration) -> None:
@@ -228,6 +230,7 @@ class CronPlugin:
 
         try:
             request_handler = await self._create_request_handler(reg)
+            assert self._dispatcher is not None
             result = await self._dispatcher.dispatch(event, request_handler)
 
             if not result.get("success"):

@@ -127,16 +127,19 @@ class BaseWebhook(BaseModel, ABC):
         """Get the webhook source identifier (phone number ID, bot token, etc.)."""
         pass
 
+    @property
     @abstractmethod
     def is_incoming_message(self) -> bool:
         """Check if this webhook contains incoming messages."""
         pass
 
+    @property
     @abstractmethod
     def is_status_update(self) -> bool:
         """Check if this webhook contains message status updates."""
         pass
 
+    @property
     @abstractmethod
     def has_errors(self) -> bool:
         """Check if this webhook contains error information."""
@@ -243,9 +246,9 @@ class BaseWebhook(BaseModel, ABC):
             "business_id": self.business_id,
             "source_id": self.source_id,
             "received_at": self.received_at.isoformat(),
-            "has_messages": self.is_incoming_message(),
-            "has_statuses": self.is_status_update(),
-            "has_errors": self.has_errors(),
+            "has_messages": self.is_incoming_message,
+            "has_statuses": self.is_status_update,
+            "has_errors": self.has_errors,
             "message_count": len(self.get_raw_messages()),
             "status_count": len(self.get_raw_statuses()),
             "contact_count": len(self.get_contacts()),
@@ -253,7 +256,9 @@ class BaseWebhook(BaseModel, ABC):
 
     @classmethod
     @abstractmethod
-    def from_platform_payload(cls, payload: dict[str, Any], **kwargs) -> "BaseWebhook":
+    def from_platform_payload(
+        cls, payload: dict[str, Any], **kwargs: Any
+    ) -> "BaseWebhook":
         """
         Create webhook instance from platform-specific payload.
 

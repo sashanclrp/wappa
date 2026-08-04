@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable
 from contextlib import asynccontextmanager
 from typing import ClassVar, Literal, cast
 
@@ -27,7 +27,7 @@ log = logging.getLogger("RedisClient")
 # Predefined Redis pool aliases with their database numbers for Wappa cache
 PoolAlias = Literal["users", "state_handler", "table", "expiry", "ai_state"]
 
-POOL_DB_MAPPING = {
+POOL_DB_MAPPING: dict[PoolAlias, int] = {
     "users": 0,  # User-specific cache operations
     "state_handler": 1,  # Handler state cache operations
     "table": 2,  # Table/data cache operations
@@ -82,7 +82,7 @@ class RedisClient:
 
         for alias, db_num in POOL_DB_MAPPING.items():
             url = f"{base_url.rstrip('/')}/{db_num}"
-            cls._setup_pool(cast(PoolAlias, alias), url, max_connections)
+            cls._setup_pool(alias, url, max_connections)
 
     @classmethod
     def setup_multiple_urls(
@@ -114,7 +114,7 @@ class RedisClient:
             )
 
         for alias, url in urls.items():
-            cls._setup_pool(cast(PoolAlias, alias), url, max_connections)
+            cls._setup_pool(alias, url, max_connections)
 
     @classmethod
     def _setup_pool(cls, alias: PoolAlias, url: str, max_connections: int) -> None:
@@ -153,11 +153,11 @@ class RedisClient:
 
         aliases = [alias] if alias else list(cls._pools.keys())
         for a in aliases:
-            pool = cls._pools.pop(cast(PoolAlias, a), None)
+            pool = cls._pools.pop(a, None)
             if pool:
                 log.info("Closing Redis pool '%s' in PID %s", a, pid)
                 await pool.disconnect()
-                cls._clients.pop(cast(PoolAlias, a), None)
+                cls._clients.pop(a, None)
         if not cls._pools:
             cls._pid = None
 
@@ -172,7 +172,7 @@ class RedisClient:
             raise RuntimeError(f"RedisClient must be set up for alias '{alias}' first.")
         # quick health check – keep it cheap
         try:
-            await client.ping()
+            await cast("Awaitable[bool]", client.ping())
             log.debug("Redis PING successful for '%s'.", alias)
         except Exception as exc:
             log.error("Redis ping failed for '%s': %s", alias, exc, exc_info=True)

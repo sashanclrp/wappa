@@ -34,6 +34,8 @@ class MasterEventHandler(WappaEventHandler):
             webhook: Incoming WhatsApp webhook with message data
         """
         try:
+            assert self.cache_factory is not None
+            assert self.messenger is not None
             user_id = webhook.user.user_id
             message_text = self._extract_message_content(webhook)
 
@@ -93,6 +95,7 @@ class MasterEventHandler(WappaEventHandler):
 
         except Exception as e:
             self.logger.error(f"❌ Error handling message: {e}", exc_info=True)
+            assert self.messenger is not None
             await self.messenger.send_text(
                 recipient=webhook.user.user_id,
                 text="⚠️ Sorry, something went wrong processing your message.",
@@ -122,11 +125,11 @@ class MasterEventHandler(WappaEventHandler):
             return webhook.get_message_text() or ""
 
         elif message_type == "image":
-            caption = webhook.get_media_caption()
+            caption = getattr(webhook.message, "caption", None)
             return f"📷 [Image{f': {caption}' if caption else ''}]"
 
         elif message_type == "video":
-            caption = webhook.get_media_caption()
+            caption = getattr(webhook.message, "caption", None)
             return f"🎥 [Video{f': {caption}' if caption else ''}]"
 
         elif message_type == "audio":
@@ -136,7 +139,7 @@ class MasterEventHandler(WappaEventHandler):
             return "🎤 [Voice message]"
 
         elif message_type == "document":
-            filename = webhook.get_media_filename()
+            filename = getattr(webhook.message, "filename", None)
             return f"📄 [Document: {filename or 'file'}]"
 
         elif message_type == "sticker":
@@ -184,4 +187,5 @@ class MasterEventHandler(WappaEventHandler):
                 f"⏳ I'll echo everything back after 15s of inactivity"
             )
 
+        assert self.messenger is not None
         await self.messenger.send_text(recipient=user_id, text=feedback)

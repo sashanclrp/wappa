@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 
 from wappa.core.config.settings import settings
@@ -25,7 +25,9 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
     while maintaining security by not exposing internal details in production.
     """
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         """Process request with comprehensive error handling."""
         logger = get_logger(__name__)
         try:

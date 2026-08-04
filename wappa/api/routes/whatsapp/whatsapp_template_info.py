@@ -1,5 +1,7 @@
 """WhatsApp template management read endpoints."""
 
+from typing import NoReturn
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -14,7 +16,6 @@ from wappa.messaging.whatsapp.models.template_info_models import (
     TemplateListRequest,
     TemplateNamespaceResponse,
 )
-from wappa.messaging.whatsapp.models.template_models import TemplateMessageStatus
 from wappa.messaging.whatsapp.services import WhatsAppTemplateInfoService
 
 router = APIRouter(
@@ -31,7 +32,7 @@ router = APIRouter(
 )
 
 
-def _raise_info_http_error(exc: httpx.HTTPStatusError) -> None:
+def _raise_info_http_error(exc: httpx.HTTPStatusError) -> NoReturn:
     """Translate Meta Graph API errors into FastAPI HTTP responses."""
     raise HTTPException(
         status_code=exc.response.status_code,
@@ -204,40 +205,3 @@ async def get_template_namespace(
         return await service.get_template_namespace()
     except httpx.HTTPStatusError as exc:
         _raise_info_http_error(exc)
-
-
-@router.get(
-    "/status/{template_name}",
-    response_model=TemplateMessageStatus,
-    summary="Get Template Status",
-    description="Resolve a template by name and return a compatibility status payload",
-)
-async def get_template_status(
-    template_name: str,
-    service: WhatsAppTemplateInfoService = Depends(get_whatsapp_template_info_service),
-) -> TemplateMessageStatus:
-    """Compatibility endpoint backed by the real template info service."""
-    try:
-        response = await service.get_template_by_name(
-            TemplateByNameRequest(template_name=template_name)
-        )
-    except httpx.HTTPStatusError as exc:
-        _raise_info_http_error(exc)
-
-    if not response.data:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Template '{template_name}' was not found",
-        )
-
-    template = response.data[0]
-    return TemplateMessageStatus(
-        template_name=template.name,
-        status=template.status or "UNKNOWN",
-        language=template.language or "unknown",
-        category=template.category,
-        components=[
-            component.model_dump() if hasattr(component, "model_dump") else component
-            for component in template.components
-        ],
-    )

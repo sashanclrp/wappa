@@ -15,6 +15,7 @@ from wappa.schemas.core.types import ErrorCode, MessageType, PlatformType
 from wappa.webhooks.core.base_message import BaseMessage
 from wappa.webhooks.core.base_status import BaseMessageStatus
 from wappa.webhooks.core.base_webhook import BaseWebhook
+from wappa.webhooks.core.webhook_interfaces.universal_webhooks import UniversalWebhook
 
 
 class ProcessorCapabilities:
@@ -93,7 +94,12 @@ class BaseWebhookProcessor(ABC):
         """Get the capabilities of this processor."""
         pass
 
-    # All processors must implement create_universal_webhook() method instead
+    @abstractmethod
+    async def create_universal_webhook(
+        self, payload: dict[str, Any], **kwargs: Any
+    ) -> UniversalWebhook:
+        """Convert a provider payload to Wappa's universal webhook contract."""
+        pass
 
     @abstractmethod
     def validate_webhook_signature(

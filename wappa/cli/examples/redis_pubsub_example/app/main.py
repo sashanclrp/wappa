@@ -35,6 +35,8 @@ USAGE:
 - Wappa CLI: wappa dev app/main.py
 """
 
+from typing import Any
+
 from wappa import Wappa
 from wappa.core.config.settings import settings
 from wappa.core.logging import get_logger
@@ -141,7 +143,7 @@ def create_wappa_application() -> Wappa:
         )
 
         # Use add_startup_hook method from Wappa to register subscriber
-        async def start_subscriber_hook(fastapi_app):
+        async def start_subscriber_hook(fastapi_app: Any) -> None:
             """Start background PubSub subscriber."""
             logger.info("🔄 Starting Redis PubSub subscriber...")
 

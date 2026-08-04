@@ -6,6 +6,7 @@ different score modules for consistent cache management.
 """
 
 import re
+from typing import Any
 
 
 def generate_cache_key(prefix: str, identifier: str, suffix: str | None = None) -> str:
@@ -156,7 +157,11 @@ def format_cache_error(operation: str, key: str, error: Exception) -> str:
 
 
 def log_cache_operation(
-    logger, operation: str, key: str, success: bool, duration_ms: float | None = None
+    logger: Any,
+    operation: str,
+    key: str,
+    success: bool,
+    duration_ms: float | None = None,
 ) -> None:
     """
     Log cache operations consistently across score modules.

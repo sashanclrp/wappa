@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Callable, Coroutine
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -56,7 +56,7 @@ class SSEEventContext:
     platform: str = "whatsapp"
     metadata: dict[str, Any] = field(default_factory=dict)
     _pending_incoming: dict[str, Any] | None = None
-    _pending_flush: Callable[[dict[str, Any]], Awaitable[None]] | None = None
+    _pending_flush: Callable[[dict[str, Any]], Coroutine[Any, Any, None]] | None = None
     _tracker: Any = None
 
 

@@ -11,10 +11,9 @@ import copy
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
-from logging import Logger
 from typing import TYPE_CHECKING
 
-from wappa.core.logging.logger import get_logger
+from wappa.core.logging.logger import ContextLogger, get_logger
 from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
@@ -45,7 +44,7 @@ class WappaContext:
     messenger: IMessenger | None = None
 
     # Logger
-    logger: Logger = field(default_factory=lambda: get_logger("wappa.context"))
+    logger: ContextLogger = field(default_factory=lambda: get_logger("wappa.context"))
 
     def with_user(self, user_id: str) -> WappaContext:
         """Create a new context with user_id set, preserving all other fields."""

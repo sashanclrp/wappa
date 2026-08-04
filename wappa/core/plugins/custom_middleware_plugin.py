@@ -41,9 +41,9 @@ class CustomMiddlewarePlugin:
         self,
         middleware_class: type,
         priority: int = 50,  # Default priority
-        name: str = None,
+        name: str | None = None,
         **middleware_kwargs: Any,
-    ):
+    ) -> None:
         """
         Initialize custom middleware plugin.
 

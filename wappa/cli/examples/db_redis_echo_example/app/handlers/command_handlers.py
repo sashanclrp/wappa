@@ -12,6 +12,7 @@ it handles ONLY command processing logic.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlmodel import select
@@ -37,7 +38,13 @@ class CommandHandlers:
     Follows Interface Segregation Principle - only depends on required dependencies.
     """
 
-    def __init__(self, messenger, cache_factory, db_session_factory, logger):
+    def __init__(
+        self,
+        messenger: Any,
+        cache_factory: Any,
+        db_session_factory: Any,
+        logger: Any,
+    ) -> None:
         """
         Initialize command handlers.
 

@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import TypedDict
 
 import typer
 from rich.console import Console
@@ -13,8 +14,16 @@ console = Console()
 _SAFE_EXISTING_FILES = frozenset({"pyproject.toml", "uv.lock", "README.md"})
 _SUPPORTED_SERVERS = frozenset({"uvicorn", "hypercorn"})
 
+
+class _ExampleMetadata(TypedDict):
+    name: str
+    description: str
+    features: list[str]
+    complexity: str
+
+
 # Example projects metadata
-EXAMPLES = {
+EXAMPLES: dict[str, _ExampleMetadata] = {
     "init": {
         "name": "Basic Project",
         "description": "Minimal Wappa project with basic message handling",
@@ -349,7 +358,7 @@ def init(
     directory: str = typer.Argument(
         ".", help="Directory to initialize (default: current directory)"
     ),
-):
+) -> None:
     _initialize_project(directory)
 
 
@@ -358,7 +367,7 @@ def examples(
     directory: str = typer.Argument(
         ".", help="Directory to copy example to (default: current directory)"
     ),
-):
+) -> None:
     _show_examples_menu(directory)
 
 

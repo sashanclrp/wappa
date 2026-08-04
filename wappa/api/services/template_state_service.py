@@ -107,8 +107,8 @@ class TemplateStateService:
 
             state_cache = self.cache_factory.create_state_cache(user_id=cache_user_id)
             success = await state_cache.upsert(
-                handler_name=state_key,
-                state_data=state_data,
+                state_key,
+                state_data,
                 ttl=state_config.ttl_seconds,
             )
 

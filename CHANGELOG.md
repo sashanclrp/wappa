@@ -5,6 +5,28 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] - 2026-08-03
+
+Finishes the clean break started in 0.24.0. The unused repository-interface family is gone, so Wappa now has exactly one persistence contract family — the type-specific cache interfaces — instead of two overlapping ones. The rest of the release is a repository-wide typing pass: explicit annotations, narrowed return types on the WhatsApp processor, and typed stats containers in the default handlers, with the Pydantic mypy plugin enabled and the blanket `ignore_missing_imports` overrides for `redis`, `openai`, and `cv2` removed. No runtime behavior changes.
+
+**This release contains breaking changes** for anyone importing the repository interfaces. See Removed.
+
+### Removed
+- **The repository-interface family**: `IBaseRepository`, `IUserRepository`, `IStateRepository`, `ISharedStateRepository`, `IExpiryRepository`, `IPubSubRepository`, `IRepositoryFactory`, and `ITablesRepository` are deleted from `wappa.domain`, `wappa.domain.interfaces`, and `wappa.persistence`. They were a parallel contract set that no backend implemented. Use the cache contracts that were already the real thing: `IUserCache`, `IStateCache`, `IExpiryCache`, `ITableCache`, and `ICacheFactory` — all still exported from `wappa.persistence`.
+- **`wappa.domain.enums`**, including `create_messenger_platform_enum()` and the dynamic `MessengerPlatformEnum` it built from settings. Nothing referenced it; `PlatformType` in `wappa.schemas.core.types` is the platform enum.
+- **`TemplateMessageStatus`** from `wappa.messaging.whatsapp.models` — the last model belonging to the Template status endpoint removed in 0.24.0.
+
+### Changed
+- **`UniversalMessageData`** is now `dict[str, Any]` instead of `dict[str, str | int | bool | None | dict | list]`. The old union was not enforceable in practice and rejected legitimate nested payloads at type-check time.
+- **Default handler statistics are typed containers.** `DefaultMessageHandler`, `DefaultStatusHandler`, `DefaultErrorHandler`, and `DefaultSystemHandler` keep their counters in dataclasses rather than free-form dicts. `get_stats()` returns the same keys and shape as before (`asdict` of the container).
+- **The WhatsApp processor returns concrete types.** `parse_webhook_container()` is annotated `WhatsAppWebhook` and `create_status_from_data()` is annotated `WhatsAppMessageStatus` instead of the `BaseWebhook` / `BaseMessageStatus` supertypes — callers already received these objects at runtime.
+- **Repository-wide annotations**: `-> None` on `__init__`, `**kwargs: Any` on handler and processor signatures, and explicit casts where a `dict[str, Any]` lookup feeds a typed return. Internal only.
+- **mypy configuration**: the Pydantic plugin is enabled and the `redis` / `openai` / `cv2` `ignore_missing_imports` overrides are dropped now that those packages ship types.
+- Tech requests 001–005 are marked `implemented` and `docs/public-contract.md` lists the cache interfaces in place of the removed repository interfaces.
+
+### Verification
+`uv run ruff check .` clean, `uv run ruff format .` clean, `uv run pytest` → 402 passed. No live provider sends were exercised for this release; it contains no outbound behavior changes.
+
 ## [0.24.0] - 2026-08-03
 
 Adds an Inbox-scoped Template transport so embedding applications can send Templates through a small public capability instead of constructing Wappa's credential lookup, HTTP session, WhatsApp client, handlers, Messenger, and pipeline. The result type distinguishes a proven rejection from a call whose platform outcome is unknown, so a host never automatically retries an irreversible send. This release also takes a clean break on the internals that leaked through Wappa's public surface — raw `app.state` client aliases, compatibility status aliases, and duplicate Template models are gone rather than deprecated. Reasoning is recorded in [ADR-0006](docs/adr/0006-inbox-scoped-template-transport-outcomes.md), which extends ADR-0003 and ADR-0004.

@@ -11,11 +11,12 @@ from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from pydantic import BaseModel
 
 from wappa.api.routes.webhooks import create_webhook_router
 from wappa.processors.factory import processor_factory
+from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.schemas.core.types import PlatformType
 
 from .config.settings import settings
@@ -230,6 +231,8 @@ class Wappa:
         # Wire the registry into the shared processor singleton so Pydantic
         # validation accepts registered field values alongside the built-ins.
         whatsapp_processor = processor_factory.get_processor(PlatformType.WHATSAPP)
+        if not isinstance(whatsapp_processor, WhatsAppWebhookProcessor):
+            raise TypeError("WhatsApp processor registration is invalid")
         whatsapp_processor.set_field_registry(self._builder.field_registry)
 
         # Create dispatchers and register webhook router through the builder
@@ -363,7 +366,7 @@ class Wappa:
         return self
 
     def add_middleware(
-        self, middleware_class: type, priority: int = 50, **kwargs
+        self, middleware_class: type, priority: int = 50, **kwargs: Any
     ) -> "Wappa":
         """
         Add middleware to the application with priority ordering.
@@ -399,7 +402,7 @@ class Wappa:
 
         return self
 
-    def add_router(self, router, **kwargs) -> "Wappa":
+    def add_router(self, router: APIRouter, **kwargs: Any) -> "Wappa":
         """
         Add a router to the application.
 
@@ -499,7 +502,7 @@ class Wappa:
 
         return self
 
-    def configure(self, **overrides) -> "Wappa":
+    def configure(self, **overrides: Any) -> "Wappa":
         """
         Override default FastAPI configuration.
 
@@ -528,7 +531,9 @@ class Wappa:
 
         return self
 
-    def run(self, host: str = "0.0.0.0", port: int | None = None, **kwargs) -> None:
+    def run(
+        self, host: str = "0.0.0.0", port: int | None = None, **kwargs: Any
+    ) -> None:
         """
         Run the Wappa application using uvicorn.
 
@@ -555,7 +560,7 @@ class Wappa:
             logger.info("🚀 Production mode: running directly")
             self._run_production(host, port, **kwargs)
 
-    def _run_production(self, host: str, port: int, **kwargs) -> None:
+    def _run_production(self, host: str, port: int, **kwargs: Any) -> None:
         """Run in production mode without auto-reload."""
         logger = get_app_logger()
 
@@ -571,7 +576,7 @@ class Wappa:
         # Use the .asgi property which handles sync build + lifespan initialization
         uvicorn.run(self.asgi, **uvicorn_config)
 
-    def _run_dev_mode(self, host: str, port: int, **kwargs) -> None:
+    def _run_dev_mode(self, host: str, port: int, **kwargs: Any) -> None:
         """
         Run in development mode with uvicorn auto-reload.
 

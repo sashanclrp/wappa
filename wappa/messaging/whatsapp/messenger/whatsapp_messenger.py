@@ -335,7 +335,7 @@ class WhatsAppMessenger(IMessenger):
         if not upload_result.success:
             return None, self._error_result(
                 f"Failed to upload media: {upload_result.error}",
-                upload_result.error_code,
+                upload_result.error_code or "MEDIA_UPLOAD_FAILED",
                 recipient=recipient,
             )
         if not upload_result.media_id:

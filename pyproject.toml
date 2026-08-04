@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wappa"
-version = "0.24.0"
+version = "0.25.0"
 description = "Open Source Framework to develop smart Workflows, Agents and full chat applications through WhatsApp"
 authors = [
     {name = "Sasha Canal", email = "contact@mimeia.com"},
@@ -149,6 +149,7 @@ skip-string-normalization = true
 # MyPy configuration
 [tool.mypy]
 python_version = "3.12"
+plugins = ["pydantic.mypy"]
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
@@ -157,14 +158,6 @@ check_untyped_defs = true
 no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
-
-[[tool.mypy.overrides]]
-module = [
-    "redis.*",
-    "openai.*",
-    "cv2.*",
-]
-ignore_missing_imports = true
 
 # Pytest configuration
 [tool.pytest.ini_options]

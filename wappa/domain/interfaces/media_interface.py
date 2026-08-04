@@ -16,7 +16,7 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager
 from pathlib import Path
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 from wappa.domain.models.media_result import (
     MediaDeleteResult,
@@ -255,7 +255,7 @@ class IMediaHandler(ABC):
         pass
 
     @abstractmethod
-    async def download_media_tempfile(
+    def download_media_tempfile(
         self,
         media_id: str,
         temp_suffix: str | None = None,
@@ -299,7 +299,7 @@ class IMediaHandler(ABC):
         pass
 
     @abstractmethod
-    async def stream_media(
+    def stream_media(
         self, media_id: str, chunk_size: int = 8192
     ) -> AsyncIterator[bytes]:
         """
@@ -375,7 +375,7 @@ class IMediaHandler(ABC):
         pass
 
     @abstractmethod
-    def get_media_limits(self) -> dict[str, any]:
+    def get_media_limits(self) -> dict[str, Any]:
         """
         Get platform-specific media limits and constraints.
 

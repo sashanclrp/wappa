@@ -5,7 +5,7 @@ This module contains the top-level webhook structure models that wrap
 all WhatsApp message types and status updates.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, Self, cast
 
 from pydantic import (
     BaseModel,
@@ -96,7 +96,7 @@ class WebhookValue(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_webhook_content(self):
+    def validate_webhook_content(self) -> Self:
         """Ensure webhook has at least one content array."""
         has_messages = self.messages is not None and len(self.messages) > 0
         has_statuses = self.statuses is not None and len(self.statuses) > 0
@@ -272,12 +272,12 @@ class WebhookChange(BaseModel):
                 return {**data, "value": CallsWebhookValue.model_validate(raw_value)}
             return data
 
-        coexistence_models = {
+        coexistence_models: dict[str, type[BaseModel]] = {
             "history": HistoryWebhookValue,
             "smb_message_echoes": SmbMessageEchoesWebhookValue,
             "smb_app_state_sync": SmbAppStateSyncWebhookValue,
         }
-        coexistence_model = coexistence_models.get(field)
+        coexistence_model = coexistence_models.get(str(field))
         if coexistence_model is not None:
             if isinstance(raw_value, dict):
                 return {**data, "value": coexistence_model.model_validate(raw_value)}
@@ -604,7 +604,7 @@ class WhatsAppWebhook(BaseWebhook):
         metadata = getattr(self.entry[0].changes[0].value, "metadata", None)
         if metadata is None:
             return ""
-        return metadata.phone_number_id
+        return cast(str, metadata.phone_number_id)
 
     def get_display_phone_number(self) -> str:
         """Get the business display phone number from the first entry.
@@ -616,7 +616,7 @@ class WhatsAppWebhook(BaseWebhook):
         metadata = getattr(self.entry[0].changes[0].value, "metadata", None)
         if metadata is None:
             return ""
-        return metadata.display_phone_number
+        return cast(str, metadata.display_phone_number)
 
     def get_raw_user_preferences(self) -> list[dict[str, Any]]:
         """
@@ -813,7 +813,9 @@ class WhatsAppWebhook(BaseWebhook):
         if not self.entry:
             raise ValueError("No entry data available")
 
-        whatsapp_metadata = self.entry[0].changes[0].value.metadata
+        whatsapp_metadata = getattr(self.entry[0].changes[0].value, "metadata", None)
+        if whatsapp_metadata is None:
+            raise ValueError("Webhook value does not contain WhatsApp metadata")
         return WhatsAppWebhookMetadata(whatsapp_metadata)
 
     def to_universal_dict(self) -> dict[str, Any]:
@@ -853,7 +855,7 @@ class WhatsAppWebhook(BaseWebhook):
 
     @classmethod
     def from_platform_payload(
-        cls, payload: dict[str, Any], **kwargs
+        cls, payload: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppWebhook":
         """
         Create webhook instance from WhatsApp-specific payload.

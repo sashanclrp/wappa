@@ -7,7 +7,7 @@ highly customized FastAPI applications using a plugin-based architecture.
 
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -423,7 +423,7 @@ class WappaBuilder:
         # Sort by priority (reverse order because FastAPI adds middleware in reverse)
         sorted_middlewares = sorted(self.middlewares, key=lambda x: x[2], reverse=True)
         for middleware_class, kwargs, priority in sorted_middlewares:
-            app.add_middleware(middleware_class, **kwargs)
+            app.add_middleware(cast(Any, middleware_class), **kwargs)
             logger.debug(
                 f"Added middleware {middleware_class.__name__} (priority: {priority})"
             )

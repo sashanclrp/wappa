@@ -289,7 +289,7 @@ class WhatsAppLocationMessage(WhatsAppMessageIdentity, BaseLocationMessage):
             return (self.referral.source_id, self.referral.ctwa_clid)
         return (None, None)
 
-    def to_summary_dict(self) -> dict[str, str | bool | int | float]:
+    def to_summary_dict(self) -> dict[str, str | bool | int | float | None]:
         """
         Create a summary dictionary for logging and analysis.
 
@@ -398,6 +398,6 @@ class WhatsAppLocationMessage(WhatsAppMessageIdentity, BaseLocationMessage):
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppLocationMessage":
         return cls.model_validate(data)

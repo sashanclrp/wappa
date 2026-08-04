@@ -12,6 +12,7 @@ import logging
 import random
 from collections.abc import AsyncIterator, Awaitable
 from contextlib import asynccontextmanager
+from typing import Protocol, cast
 
 import anyio
 from sqlalchemy import text
@@ -25,6 +26,13 @@ from sqlalchemy.ext.asyncio import (
 from wappa.resilience import is_transient_db_error
 
 logger = logging.getLogger("wappa.database.session_manager")
+
+
+class _PoolMetrics(Protocol):
+    def size(self) -> int: ...
+    def checkedin(self) -> int: ...
+    def checkedout(self) -> int: ...
+    def overflow(self) -> int: ...
 
 
 class TransientDatabaseError(Exception):
@@ -372,7 +380,7 @@ class PostgresSessionManager:
         # Add jitter (0.5x to 1.5x)
         jitter = 0.5 + random.random()
         delay *= jitter
-        return min(delay, self.max_delay)
+        return cast(float, min(delay, self.max_delay))
 
     async def _initialize_with_retry(
         self,
@@ -395,9 +403,13 @@ class PostgresSessionManager:
         Returns:
             True if health check succeeds, False after max retries
         """
-        db_type = (
-            "primary database" if is_primary else f"read replica {replica_index + 1}"
-        )
+        if not is_primary and replica_index is None:
+            raise ValueError("replica_index is required for a read replica")
+        if is_primary:
+            db_type = "primary database"
+        else:
+            assert replica_index is not None
+            db_type = f"read replica {replica_index + 1}"
         last_exception: Exception | None = None
 
         for attempt in range(self.max_retries):
@@ -696,7 +708,7 @@ class PostgresSessionManager:
                 "error": "Engine not initialized",
             }
 
-        pool = self._write_engine.pool
+        pool = cast(_PoolMetrics, self._write_engine.pool)
 
         return {
             "healthy": self._initialized,

@@ -5,7 +5,7 @@ This module contains Pydantic models for processing WhatsApp interactive
 message replies, including button replies and list selection replies.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -114,7 +114,7 @@ class InteractiveContent(BaseModel):
     )
 
     @model_validator(mode="after")
-    def validate_interactive_content(self):
+    def validate_interactive_content(self) -> Self:
         """Validate that the correct reply type is present."""
         if self.type == "button_reply":
             if self.button_reply is None:
@@ -216,7 +216,7 @@ class WhatsAppInteractiveMessage(WhatsAppMessageIdentity, BaseInteractiveMessage
         return v
 
     @model_validator(mode="after")
-    def validate_context_required(self):
+    def validate_context_required(self) -> Self:
         """Validate that context is properly set for interactive messages."""
         if not self.context.id:
             raise ValueError(
@@ -263,12 +263,12 @@ class WhatsAppInteractiveMessage(WhatsAppMessageIdentity, BaseInteractiveMessage
     @property
     def original_message_id(self) -> str:
         """Get the ID of the original interactive message."""
-        return self.context.id
+        return self.context.id or ""
 
     @property
     def original_sender(self) -> str:
         """Get the sender of the original interactive message (business number)."""
-        return self.context.from_
+        return self.context.from_ or ""
 
     def get_button_data(self) -> tuple[str | None, str | None]:
         """
@@ -326,14 +326,14 @@ class WhatsAppInteractiveMessage(WhatsAppMessageIdentity, BaseInteractiveMessage
             return self.interactive.call_permission_reply.response
         return None
 
-    def to_summary_dict(self) -> dict[str, str | bool | int]:
+    def to_summary_dict(self) -> dict[str, str | bool | int | None]:
         """
         Create a summary dictionary for logging and analysis.
 
         Returns:
             Dictionary with key message information for structured logging.
         """
-        summary = {
+        summary: dict[str, str | bool | int | None] = {
             "message_id": self.id,
             "sender": self.sender_phone,
             "timestamp": self.unix_timestamp,
@@ -395,6 +395,7 @@ class WhatsAppInteractiveMessage(WhatsAppMessageIdentity, BaseInteractiveMessage
 
     def to_universal_dict(self) -> UniversalMessageData:
         """Convert to platform-agnostic dictionary representation."""
+        context = self.get_context()
         return {
             "platform": self.platform.value,
             "message_type": self.message_type.value,
@@ -411,9 +412,7 @@ class WhatsAppInteractiveMessage(WhatsAppMessageIdentity, BaseInteractiveMessage
             "original_message_id": self.original_message_id,
             "is_button_reply": self.is_button_reply,
             "is_list_reply": self.is_list_reply,
-            "context": self.get_context().to_universal_dict()
-            if self.has_context()
-            else None,
+            "context": context.to_universal_dict() if context else None,
             "whatsapp_data": {
                 "whatsapp_id": self.id,
                 "from": self.from_,
@@ -463,7 +462,7 @@ class WhatsAppInteractiveMessage(WhatsAppMessageIdentity, BaseInteractiveMessage
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppInteractiveMessage":
         """Create message instance from WhatsApp-specific data."""
         return cls.model_validate(data)

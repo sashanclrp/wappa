@@ -44,7 +44,7 @@ class WappaEventDispatcher:
         self,
         event_handler: "WappaEventHandler",
         field_registry: "FieldHandlerRegistry | None" = None,
-    ):
+    ) -> None:
         self.logger = get_logger(__name__)
         self._event_handler = event_handler
         self._field_registry = field_registry
@@ -62,24 +62,21 @@ class WappaEventDispatcher:
         universal_webhook: "UniversalWebhook",
         inbox_id: str | None = None,
         request_handler: "WappaEventHandler | None" = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         dispatch_start = datetime.now(UTC)
         handler = request_handler or self._event_handler
 
         try:
             webhook_type = type(universal_webhook).__name__
-            platform_or_provider = getattr(
-                universal_webhook,
-                "platform",
-                getattr(universal_webhook, "provider", "unknown"),
+            platform = universal_webhook.platform
+            platform_name = (
+                platform.value if hasattr(platform, "value") else str(platform)
             )
-            if hasattr(platform_or_provider, "value"):
-                platform_or_provider = platform_or_provider.value
 
             emoji = _WEBHOOK_EMOJI.get(webhook_type, "📨")
             self.logger.info(
-                f"{emoji} {webhook_type.replace('Webhook', '')} from {platform_or_provider}"
+                f"{emoji} {webhook_type.replace('Webhook', '')} from {platform_name}"
             )
 
             match universal_webhook:

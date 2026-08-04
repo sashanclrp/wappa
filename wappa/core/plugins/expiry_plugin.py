@@ -9,8 +9,10 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+from ...persistence.redis.redis_client import PoolAlias
 from ...persistence.redis.redis_manager import RedisManager
 from ..expiry.listener import run_expiry_listener
+from ..lifecycle.background_work_tracker import BackgroundWorkTracker
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -56,10 +58,10 @@ class ExpiryPlugin:
     def __init__(
         self,
         *,
-        alias: str = "expiry",
+        alias: PoolAlias = "expiry",
         reconnect_delay: int = 10,
         max_reconnect_attempts: int | None = None,
-    ):
+    ) -> None:
         """
         Initialize expiry plugin.
 
@@ -110,6 +112,8 @@ class ExpiryPlugin:
             )
 
             tracker = getattr(app.state, "background_work_tracker", None)
+            if not isinstance(tracker, BackgroundWorkTracker):
+                raise RuntimeError("BackgroundWorkTracker is not configured")
 
             self._listener_task = asyncio.create_task(
                 run_expiry_listener(

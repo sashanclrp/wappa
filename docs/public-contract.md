@@ -468,7 +468,7 @@ construct or import them.
 - `create_cache_factory`, `get_cache_factory`, `ICacheFactory`
 - `TypedTableCache`, `VersionedTableCache`, `ITableCache`, `build_table_name`
 - `RedisCacheFactory`, `RedisClient`, `redis_ops`
-- `IStateRepository`, `IUserRepository`, `IExpiryRepository`, `ISharedStateRepository`
+- `IUserCache`, `IStateCache`, `IExpiryCache`, `ITableCache`
 
 `TypedTableCache[T]` is a convenience wrapper over an existing `ITableCache`:
 

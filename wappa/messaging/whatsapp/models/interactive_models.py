@@ -2,7 +2,7 @@
 
 from enum import Enum
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
 from wappa.schemas.core.recipient import RecipientRequest
 
@@ -47,14 +47,16 @@ class InteractiveHeader(BaseModel):
 
     @field_validator("text")
     @classmethod
-    def validate_text_header(cls, v, info):
+    def validate_text_header(cls, v: str | None, info: ValidationInfo) -> str | None:
         if info.data.get("type") == HeaderType.TEXT and not v:
             raise ValueError("Text header must include 'text' field")
         return v
 
     @field_validator("image", "video", "document")
     @classmethod
-    def validate_media_header(cls, v, info):
+    def validate_media_header(
+        cls, v: dict[str, str] | None, info: ValidationInfo
+    ) -> dict[str, str] | None:
         if v and not (v.get("id") or v.get("link")):
             raise ValueError("Media header must include either 'id' or 'link'")
         return v
@@ -71,7 +73,7 @@ class ButtonMessage(InteractiveMessage):
 
     @field_validator("buttons")
     @classmethod
-    def validate_button_uniqueness(cls, v):
+    def validate_button_uniqueness(cls, v: list[ReplyButton]) -> list[ReplyButton]:
         button_ids = [button.id for button in v]
         if len(button_ids) != len(set(button_ids)):
             raise ValueError("Button IDs must be unique")
@@ -97,7 +99,7 @@ class ListSection(BaseModel):
 
     @field_validator("rows")
     @classmethod
-    def validate_row_uniqueness(cls, v):
+    def validate_row_uniqueness(cls, v: list[ListRow]) -> list[ListRow]:
         row_ids = [row.id for row in v]
         if len(row_ids) != len(set(row_ids)):
             raise ValueError("Row IDs must be unique within section")
@@ -118,7 +120,7 @@ class ListMessage(InteractiveMessage):
 
     @field_validator("sections")
     @classmethod
-    def validate_global_row_uniqueness(cls, v):
+    def validate_global_row_uniqueness(cls, v: list[ListSection]) -> list[ListSection]:
         all_row_ids = [row.id for section in v for row in section.rows]
         if len(all_row_ids) != len(set(all_row_ids)):
             raise ValueError("Row IDs must be unique across all sections")

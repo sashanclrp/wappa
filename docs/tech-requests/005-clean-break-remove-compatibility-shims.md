@@ -1,7 +1,7 @@
 ---
 id: 005
 title: Clean Break Compatibility Removal
-status: proposed
+status: implemented
 request_type: architecture-prd
 model_fit:
   primary_100_percent:
@@ -36,28 +36,25 @@ If host applications break, that is acceptable. They should adapt to the clean W
 
 `Compatibility Shim` is not accepted as Wappa architecture.
 
-## Current Compatibility/Legacy Findings
+## Compatibility/Legacy Findings Resolved
 
-Initial scan found these candidates for removal or rename:
+The implementation audit resolved every candidate from the initial scan:
 
-| Location | Finding | Target |
-|----------|---------|--------|
-| `wappa/webhooks/core/types.py` | Re-export shim to `wappa.schemas.core.types` | Remove or move canonical types to one location. |
-| `wappa/core/expiry/listener.py` | "Re-export backward compatibility functions" | Delete old functions/imports. |
-| `wappa/core/expiry/app_context.py` | "Backward compatibility functions" | Delete old functions/imports. |
-| `wappa/domain/interfaces/cache_interface.py` | Backwards-compatible generic cache interface | Delete if type-specific cache interfaces fully replace it. |
-| `wappa/messaging/whatsapp/recipient_resolver.py` | Backward-compatible re-export of recipient utilities | Delete and update imports. |
-| `wappa/core/sse/messenger_wrapper.py` | Legacy `SSEMessengerWrapper` deprecation shim | Delete and require messenger middleware. |
-| `wappa/core/pubsub/messenger_wrapper.py` | Legacy `PubSubMessengerWrapper` deprecation shim | Delete and require messenger middleware. |
-| `wappa/webhooks/whatsapp/status_models.py` | Status aliases for compatibility | Delete aliases and update imports. |
-| `wappa/core/logging/logger.py` | `get_logger()` compatibility alias behavior | Decide whether this is public API or remove alias behavior. |
-| `wappa/core/plugins/webhook_plugin.py` | Raw handler v1 backwards compat and `provider` parameter | Rename to External Webhook Source language; remove raw v1 mode if not canonical. |
-| `wappa/core/config/settings.py` | Legacy env var detection | Decide whether this is migration help or compatibility behavior; remove if clean break requires it. |
-| CLI examples | Multiple "compatibility" comments and old imports | Update examples to canonical APIs. |
+| Area | Resolution |
+|------|------------|
+| Inbound schemas and types | Removed duplicate import paths; `wappa.webhooks` is the sole inbound owner and `wappa.schemas` keeps shared primitives only. |
+| Expiry runtime | Kept one explicit `AppContext`; removed old convenience/re-export functions. |
+| Persistence contracts | Removed the generic cache interface and the unused repository-interface family; only type-specific cache contracts remain. |
+| Recipient resolution | Removed the re-export module; canonical recipient primitives live under `wappa.schemas.core.recipient`. |
+| SSE and PubSub | Removed wrapper classes; `MessengerPipeline` middleware is the only composition path. |
+| Status models | Removed compatibility aliases; canonical WhatsApp status schemas remain. |
+| Logging and settings | Removed obsolete accessors and legacy environment detection; retained only current public behavior. |
+| External webhooks | `WebhookPlugin` uses `external_source` and the deep External Webhook Runtime only. |
+| Templates and examples | Removed the compatibility-only Template status endpoint/model and stale example aliases/ignored parameters. |
 
 ## What To Build
 
-This PRD proposes a future implementation change. Do not implement it while writing this PRD.
+This request has been implemented. The list below records the delivered scope.
 
 1. Remove compatibility shims and old import paths.
 2. Rename or delete compatibility-only APIs.
@@ -84,12 +81,12 @@ This PRD proposes a future implementation change. Do not implement it while writ
 
 ## Acceptance Criteria
 
-- [ ] No module is documented as a compatibility shim.
-- [ ] No old import path remains for renamed canonical concepts.
-- [ ] No messaging platform code uses `provider` as a code identifier.
-- [ ] External webhook code uses `external_source` or a specific domain term.
-- [ ] CLI examples compile/import with canonical APIs.
-- [ ] Full test suite passes.
+- [x] No executable module is a compatibility shim.
+- [x] No old import path remains for renamed canonical concepts.
+- [x] No messaging platform code uses `provider` as a code identifier.
+- [x] External webhook code uses `external_source` or a specific domain term.
+- [x] CLI examples compile/import with canonical APIs.
+- [x] Full test suite passes.
 
 ## Affected Files
 

@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from .serialization import from_json_string, to_json_string
 
@@ -10,7 +10,7 @@ logger = logging.getLogger("JSONFileManager")
 
 
 class FileManager:
-    def __init__(self):
+    def __init__(self) -> None:
         self._cache_root: Path | None = None
         self._file_locks: dict[str, asyncio.Lock] = {}
 
@@ -80,7 +80,7 @@ class FileManager:
                 return {}
             try:
                 content = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
-                return from_json_string(content)
+                return cast(dict[str, Any], from_json_string(content))
             except (OSError, json.JSONDecodeError) as e:
                 logger.error(f"Failed to read file {file_path}: {e}")
                 return {}

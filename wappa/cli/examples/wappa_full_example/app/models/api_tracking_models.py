@@ -23,7 +23,7 @@ class APIMessageHistoryEntry(BaseModel):
 
     @field_validator("recipient", "inbox_id", mode="before")
     @classmethod
-    def convert_int_to_str(cls, v):
+    def convert_int_to_str(cls, v: Any) -> Any:
         """Convert int to str for ID fields (Redis numeric string issue)."""
         if isinstance(v, int):
             return str(v)
@@ -106,7 +106,7 @@ class UserAPIActivity(BaseModel):
 
     @field_validator("user_id", mode="before")
     @classmethod
-    def convert_int_to_str(cls, v):
+    def convert_int_to_str(cls, v: Any) -> Any:
         """Convert int to str for user_id field (Redis numeric string issue)."""
         if isinstance(v, int):
             return str(v)

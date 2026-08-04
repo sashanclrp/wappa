@@ -27,7 +27,7 @@ from __future__ import annotations
 import inspect
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel
 
@@ -154,9 +154,13 @@ class FieldHandlerRegistry:
     def _coerce_parser(field_name: str, parser: type[BaseModel] | ParserFn) -> ParserFn:
         if isinstance(parser, type) and issubclass(parser, BaseModel):
             model_cls = parser
-            return lambda raw, _cls=model_cls: _cls.model_validate(raw)
+
+            def parse_model(raw: dict[str, Any]) -> BaseModel:
+                return model_cls.model_validate(raw)
+
+            return parse_model
         if callable(parser):
-            return parser
+            return cast(ParserFn, parser)
         raise TypeError(
             f"Parser for '{field_name}' must be a Pydantic BaseModel subclass "
             f"or a callable returning a BaseModel (got {type(parser).__name__})."

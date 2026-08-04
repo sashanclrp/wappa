@@ -4,14 +4,14 @@ Wappa Persistence Layer
 Provides access to cache factories and storage implementations for different
 persistence backends including Redis, JSON file, and in-memory storage.
 
-Clean Architecture: Infrastructure layer with cache and repository abstractions.
+Infrastructure layer with one cache contract family across all backends.
 
 Usage (User Request: Quick access to create_cache_factory):
     # Cache factory (main request)
     from wappa.persistence import create_cache_factory, get_cache_factory
 
     # Cache interfaces
-    from wappa.persistence import ICacheFactory, IStateRepository
+    from wappa.persistence import ICacheFactory, ITableCache
 
     # Specific implementations
     from wappa.persistence.redis import RedisCacheFactory, RedisClient
@@ -22,16 +22,12 @@ Usage (User Request: Quick access to create_cache_factory):
 # Cache Factory Functions (User Request: Quick access to create_cache_factory)
 # Cache Interfaces
 from ..domain.interfaces.cache_factory import ICacheFactory
-from ..domain.interfaces.cache_interfaces import ITableCache
-from ..domain.interfaces.expiry_repository import IExpiryRepository
-from ..domain.interfaces.pubsub_repository import IPubSubRepository
-
-# Repository Factory Interface
-from ..domain.interfaces.repository_factory import IRepositoryFactory
-from ..domain.interfaces.shared_state_repository import ISharedStateRepository
-from ..domain.interfaces.state_repository import IStateRepository
-from ..domain.interfaces.tables_repository import ITablesRepository
-from ..domain.interfaces.user_repository import IUserRepository
+from ..domain.interfaces.cache_interfaces import (
+    IExpiryCache,
+    IStateCache,
+    ITableCache,
+    IUserCache,
+)
 from .cache_factory import create_cache_factory, get_cache_factory
 from .cache_space import build_table_name
 
@@ -50,17 +46,12 @@ __all__ = [
     "build_table_name",
     # Core Interfaces
     "ICacheFactory",
+    "IUserCache",
+    "IStateCache",
+    "IExpiryCache",
     "ITableCache",
     "TypedTableCache",
     "VersionedTableCache",
-    "IRepositoryFactory",
-    # Repository Interfaces
-    "IStateRepository",
-    "IUserRepository",
-    "ITablesRepository",
-    "IPubSubRepository",
-    "IExpiryRepository",
-    "ISharedStateRepository",
     # Redis implementations
     "RedisCacheFactory",
     "RedisClient",

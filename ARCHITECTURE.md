@@ -33,7 +33,7 @@ Platform (WhatsApp, etc.)
 │  1. Parse JSON body             │
 │  2. Validate platform enum      │
 │  3. InboxMiddleware sets        │
-│     inbox_id in request context │
+│     inbox_id in HTTP context    │
 │  4. Delegate to Inbound Runtime │
 └────────────────┬────────────────┘
                  │

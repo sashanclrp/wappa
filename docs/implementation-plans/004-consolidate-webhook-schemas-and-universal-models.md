@@ -1,3 +1,8 @@
+---
+status: completed
+completed: 2026-08-03
+---
+
 # Implementation Plan: Consolidate Webhook Schemas and Universal Models
 
 ## Source Request
@@ -6,9 +11,9 @@ Requested from the source checkout:
 
 `docs/tech-requests/004-consolidate-webhook-schemas-and-universal-models.md`
 
-The clean worktree is based on commit `54373d5` and does not include that
-untracked request file, so this plan uses the request text from the source
-checkout and the committed architecture in this worktree.
+This plan was executed. It remains as the decision-to-change trace; current
+contracts are documented in `wappa/webhooks/ARCHITECTURE.md` and
+`docs/public-contract.md`.
 
 ## Grounding
 

@@ -30,7 +30,7 @@ class PubSubExampleHandler(WappaEventHandler):
     - API-sent messages trigger 'outgoing_message' PubSub event
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the PubSub example handler."""
         super().__init__()
         self._message_count = 0
@@ -50,6 +50,7 @@ class PubSubExampleHandler(WappaEventHandler):
         self._message_count += 1
 
         try:
+            assert self.messenger is not None
             # Get user info
             user_id = webhook.user.user_id if webhook.user else "unknown"
             message_text = webhook.get_message_text() or "[NON-TEXT MESSAGE]"

@@ -3,9 +3,12 @@
 import os
 import tempfile
 from pathlib import Path
+from types import TracebackType
+from typing import Any, Self
 
 import httpx
 
+from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.webhooks import InboundMessageWebhook
 
 
@@ -16,17 +19,22 @@ class MediaHandler:
         self.temp_dir = temp_dir or tempfile.gettempdir()
         self.session: httpx.AsyncClient | None = None
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> Self:
         self.session = httpx.AsyncClient()
         return self
 
-    async def __aexit__(self, _exc_type, _exc_val, _exc_tb):
+    async def __aexit__(
+        self,
+        _exc_type: type[BaseException] | None,
+        _exc_val: BaseException | None,
+        _exc_tb: TracebackType | None,
+    ) -> None:
         if self.session:
             await self.session.aclose()
 
     async def get_media_info_from_webhook(
         self, webhook: InboundMessageWebhook
-    ) -> dict[str, str] | None:
+    ) -> dict[str, Any] | None:
         """Extract media information from a webhook, or None if no media present."""
         message = webhook.message
         message_type = webhook.get_message_type_name().lower()
@@ -83,27 +91,32 @@ class MediaHandler:
         return media_info
 
     async def download_media_by_id(
-        self, media_id: str, messenger, media_type: str = None
+        self,
+        media_id: str,
+        messenger: IMessenger,
+        media_type: str | None = None,
     ) -> tuple[str, dict[str, str]] | None:
         """Placeholder — integrate with WhatsApp Business API to implement."""
         return None
 
     async def upload_local_media(
-        self, file_path: str, media_type: str = None
+        self, file_path: str, media_type: str | None = None
     ) -> str | None:
         """Placeholder — integrate with WhatsApp Business API media upload to implement."""
         if os.path.exists(file_path):
             return f"local_{os.path.basename(file_path)}"
         return None
 
-    def get_local_media_path(self, filename: str, media_subdir: str = None) -> str:
+    def get_local_media_path(
+        self, filename: str, media_subdir: str | None = None
+    ) -> str:
         base_dir = Path(__file__).parent.parent
         media_dir = base_dir / "media"
         if media_subdir:
             media_dir = media_dir / media_subdir
         return str(media_dir / filename)
 
-    def media_file_exists(self, filename: str, media_subdir: str = None) -> bool:
+    def media_file_exists(self, filename: str, media_subdir: str | None = None) -> bool:
         return os.path.exists(self.get_local_media_path(filename, media_subdir))
 
     def get_media_type_from_extension(self, filename: str) -> str:
@@ -118,12 +131,12 @@ class MediaHandler:
 
     async def send_media_by_file(
         self,
-        messenger,
+        messenger: IMessenger,
         recipient: str,
         file_path: str,
-        caption: str = None,
-        reply_to_message_id: str = None,
-    ) -> dict[str, any]:
+        caption: str | None = None,
+        reply_to_message_id: str | None = None,
+    ) -> dict[str, Any]:
         """Send a local media file using the appropriate messenger method."""
         try:
             if not os.path.exists(file_path):
@@ -197,13 +210,13 @@ class MediaHandler:
 
     async def send_media_by_id(
         self,
-        messenger,
+        messenger: IMessenger,
         recipient: str,
         media_id: str,
         media_type: str,
-        caption: str = None,
-        reply_to_message_id: str = None,
-    ) -> dict[str, any]:
+        caption: str | None = None,
+        reply_to_message_id: str | None = None,
+    ) -> dict[str, Any]:
         """Relay existing media by ID using the appropriate messenger method."""
         try:
             if media_type == "image":
@@ -277,13 +290,13 @@ async def extract_media_info(webhook: InboundMessageWebhook) -> dict[str, str] |
 
 
 async def send_local_media_file(
-    messenger,
+    messenger: IMessenger,
     recipient: str,
     filename: str,
-    media_subdir: str = None,
-    caption: str = None,
-    reply_to_message_id: str = None,
-) -> dict[str, any]:
+    media_subdir: str | None = None,
+    caption: str | None = None,
+    reply_to_message_id: str | None = None,
+) -> dict[str, Any]:
     """Send a local media file from the app's media directory."""
     handler = MediaHandler()
     file_path = handler.get_local_media_path(filename, media_subdir)
@@ -297,11 +310,11 @@ async def send_local_media_file(
 
 
 async def relay_webhook_media(
-    messenger,
+    messenger: IMessenger,
     webhook: InboundMessageWebhook,
     recipient: str,
-    reply_to_message_id: str = None,
-) -> dict[str, any]:
+    reply_to_message_id: str | None = None,
+) -> dict[str, Any]:
     """Relay media from an incoming webhook to a recipient."""
     handler = MediaHandler()
     media_info = await handler.get_media_info_from_webhook(webhook)

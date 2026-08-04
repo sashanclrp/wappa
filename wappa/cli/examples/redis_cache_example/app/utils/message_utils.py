@@ -9,6 +9,8 @@ from datetime import datetime
 
 from wappa.webhooks import InboundMessageWebhook
 
+from ..models.redis_demo_models import CacheStats, MessageHistory, User
+
 
 def extract_user_data(webhook: InboundMessageWebhook) -> dict[str, str]:
     """
@@ -178,7 +180,7 @@ def create_user_greeting(user_name: str | None, message_count: int) -> str:
 
 
 def format_message_history_display(
-    messages, total_count: int, display_count: int = 20
+    messages: list[MessageHistory], total_count: int, display_count: int = 20
 ) -> str:
     """
     Format message history for display to user.
@@ -215,7 +217,7 @@ def format_message_history_display(
     return history_text
 
 
-def create_cache_info_message(user_profile, cache_stats) -> str:
+def create_cache_info_message(user_profile: User, cache_stats: CacheStats) -> str:
     """
     Create informational message about cache status.
 

@@ -9,7 +9,7 @@ logger = logging.getLogger("MemoryStorageManager")
 
 
 class MemoryStorageManager:
-    def __init__(self):
+    def __init__(self) -> None:
         self.memory_store = get_memory_store()
 
     @staticmethod

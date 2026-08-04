@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel
@@ -16,11 +17,11 @@ logger = logging.getLogger("JSONStorageManager")
 
 
 class JSONStorageManager:
-    def __init__(self):
+    def __init__(self) -> None:
         file_manager.ensure_cache_directories()
 
     async def _load_cache_data(
-        self, file_path, *, delete_if_expired: bool = True
+        self, file_path: Path, *, delete_if_expired: bool = True
     ) -> dict[str, Any] | None:
         """Return cache dict, None if file missing or expired (optionally deleting)."""
         file_data = await file_manager.read_file(file_path)

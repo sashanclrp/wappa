@@ -6,6 +6,7 @@ in the Wappa Redis caching system.
 """
 
 from datetime import UTC, datetime
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -71,11 +72,11 @@ class User(BaseModel):
 
     @field_validator("phone_number", mode="before")
     @classmethod
-    def validate_phone_number(cls, v) -> str:
+    def validate_phone_number(cls, v: Any) -> str:
         """Convert phone number to string if it's an integer."""
         if isinstance(v, int):
             return str(v)
-        return v
+        return str(v)
 
     def increment_message_count(self) -> None:
         """Increment the message count and update last_seen timestamp."""
@@ -125,11 +126,11 @@ class MessageLog(BaseModel):
 
     @field_validator("user_id", "inbox_id", mode="before")
     @classmethod
-    def validate_string_ids(cls, v) -> str:
+    def validate_string_ids(cls, v: Any) -> str:
         """Convert ID fields to string if they're integers."""
         if isinstance(v, int):
             return str(v)
-        return v
+        return str(v)
 
     def get_message_count(self) -> int:
         """Get the total number of messages in the history."""

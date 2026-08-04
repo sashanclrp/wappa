@@ -7,10 +7,15 @@ ensuring consistent behavior across different business logic handlers.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from logging import Logger
 
+from wappa.core.logging.logger import ContextLogger
 from wappa.domain.interfaces.cache_factory import ICacheFactory
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
+from wappa.domain.interfaces.cache_interfaces import (
+    IStateCache,
+    ITableCache,
+    IUserCache,
+)
+from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.webhooks import InboundMessageWebhook
 
 
@@ -26,9 +31,9 @@ class ScoreDependencies:
     per-request with inbox and user identity already injected.
     """
 
-    messenger: WhatsAppMessenger
+    messenger: IMessenger
     cache_factory: ICacheFactory
-    logger: Logger
+    logger: ContextLogger
 
 
 class ScoreBase(ABC):
@@ -56,17 +61,17 @@ class ScoreBase(ABC):
 
     # ---- Cache accessor properties for cleaner code in subclasses ----
     @property
-    def user_cache(self):
+    def user_cache(self) -> IUserCache:
         """Get user cache from factory (pre-bound to current user context)."""
         return self.cache_factory.create_user_cache()
 
     @property
-    def table_cache(self):
+    def table_cache(self) -> ITableCache:
         """Get table cache from factory (pre-bound to current inbox context)."""
         return self.cache_factory.create_table_cache()
 
     @property
-    def state_cache(self):
+    def state_cache(self) -> IStateCache:
         """Get state cache from factory (pre-bound to current user context)."""
         return self.cache_factory.create_state_cache()
 
@@ -158,7 +163,7 @@ class ScoreRegistry:
     to be registered without modifying existing code.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._scores: list[ScoreBase] = []
 
     def register_score(self, score: ScoreBase) -> None:

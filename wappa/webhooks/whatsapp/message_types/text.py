@@ -6,7 +6,7 @@ including regular text, forwarded messages, message business button replies,
 and Click-to-WhatsApp ad messages.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -84,7 +84,7 @@ class WhatsAppMessageContext(BaseMessageContext):
         """Check if this represents a forward context."""
         if not self._context:
             return False
-        return self._context.forwarded or self._context.frequently_forwarded
+        return bool(self._context.forwarded or self._context.frequently_forwarded)
 
     def to_universal_dict(self) -> dict[str, Any]:
         """Convert to platform-agnostic dictionary representation."""
@@ -205,7 +205,7 @@ class WhatsAppTextMessage(WhatsAppMessageIdentity, BaseTextMessage):
         return v
 
     @model_validator(mode="after")
-    def validate_message_consistency(self):
+    def validate_message_consistency(self) -> Self:
         """Validate message field consistency."""
         # If we have a referral, this should be from an ad
         if self.referral and self.context:
@@ -226,8 +226,9 @@ class WhatsAppTextMessage(WhatsAppMessageIdentity, BaseTextMessage):
     @property
     def is_forwarded(self) -> bool:
         """Check if this message was forwarded."""
-        return self.context is not None and (
-            self.context.forwarded or self.context.frequently_forwarded
+        return bool(
+            self.context is not None
+            and (self.context.forwarded or self.context.frequently_forwarded)
         )
 
     @property
@@ -390,6 +391,7 @@ class WhatsAppTextMessage(WhatsAppMessageIdentity, BaseTextMessage):
 
     def to_universal_dict(self) -> UniversalMessageData:
         """Convert to platform-agnostic dictionary representation."""
+        context = self.get_context()
         return {
             "platform": self.platform.value,
             "message_type": self.message_type.value,
@@ -405,9 +407,7 @@ class WhatsAppTextMessage(WhatsAppMessageIdentity, BaseTextMessage):
             "is_reply": self.is_reply,
             "is_forwarded": self.is_forwarded,
             "is_frequently_forwarded": self.is_frequently_forwarded,
-            "context": self.get_context().to_universal_dict()
-            if self.has_context()
-            else None,
+            "context": context.to_universal_dict() if context else None,
             "whatsapp_data": {
                 "whatsapp_id": self.id,
                 "from": self.from_,
@@ -444,7 +444,7 @@ class WhatsAppTextMessage(WhatsAppMessageIdentity, BaseTextMessage):
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppTextMessage":
         """Create message instance from WhatsApp-specific data."""
         return cls.model_validate(data)

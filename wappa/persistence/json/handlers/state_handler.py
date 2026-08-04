@@ -5,7 +5,7 @@ Provides state cache operations using JSON file storage.
 """
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
 
@@ -60,8 +60,9 @@ class JSONStateHandler(IStateCache):
             Handler state data or None if not found
         """
         key = self._key(handler_name)
-        return await storage_manager.get(
-            "states", self.inbox, self.user_id, key, models
+        return cast(
+            dict[str, Any] | None,
+            await storage_manager.get("states", self.inbox, self.user_id, key, models),
         )
 
     async def upsert(

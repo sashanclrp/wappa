@@ -5,7 +5,7 @@ This module contains Pydantic models for processing WhatsApp image messages,
 including regular images, forwarded images, and Click-to-WhatsApp ad images.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -175,7 +175,7 @@ class WhatsAppImageMessage(WhatsAppMessageIdentity, BaseImageMessage):
         return v
 
     @model_validator(mode="after")
-    def validate_message_consistency(self):
+    def validate_message_consistency(self) -> Self:
         """Validate message field consistency."""
         # If we have a referral, this should be from an ad (no forwarding context)
         if (
@@ -204,8 +204,9 @@ class WhatsAppImageMessage(WhatsAppMessageIdentity, BaseImageMessage):
     @property
     def is_forwarded(self) -> bool:
         """Check if this image was forwarded."""
-        return self.context is not None and (
-            self.context.forwarded or self.context.frequently_forwarded
+        return bool(
+            self.context is not None
+            and (self.context.forwarded or self.context.frequently_forwarded)
         )
 
     @property
@@ -356,6 +357,7 @@ class WhatsAppImageMessage(WhatsAppMessageIdentity, BaseImageMessage):
 
     def to_universal_dict(self) -> UniversalMessageData:
         """Convert to platform-agnostic dictionary representation."""
+        context = self.get_context()
         return {
             "platform": self.platform.value,
             "message_type": self.message_type.value,
@@ -372,9 +374,7 @@ class WhatsAppImageMessage(WhatsAppMessageIdentity, BaseImageMessage):
             "caption": self.caption,
             "has_caption": self.has_caption,
             "is_forwarded": self.is_forwarded,
-            "context": (
-                self.get_context().to_universal_dict() if self.has_context() else None
-            ),
+            "context": context.to_universal_dict() if context else None,
             "whatsapp_data": {
                 "whatsapp_id": self.id,
                 "from": self.from_,
@@ -440,7 +440,7 @@ class WhatsAppImageMessage(WhatsAppMessageIdentity, BaseImageMessage):
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppImageMessage":
         """Create message instance from WhatsApp-specific data."""
         return cls.model_validate(data)

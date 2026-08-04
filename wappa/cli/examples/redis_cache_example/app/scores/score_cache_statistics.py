@@ -9,6 +9,7 @@ This module handles all cache statistics operations including:
 """
 
 from datetime import UTC, datetime
+from typing import cast
 
 from wappa.webhooks import InboundMessageWebhook
 
@@ -123,7 +124,7 @@ class CacheStatisticsScore(ScoreBase):
             # ---- Query User Cache ----
             # Check if we have a cached user profile for the current user
             try:
-                user_profile = await self.user_cache.get(models=User)
+                user_profile = cast(User | None, await self.user_cache.get(models=User))
                 if user_profile:
                     stats.user_cache_hits = 1
                     stats.total_operations = user_profile.message_count
@@ -142,8 +143,11 @@ class CacheStatisticsScore(ScoreBase):
             try:
                 # Get user_id from cache_factory context
                 user_id = self.cache_factory.user_id
-                message_log = await self.table_cache.get(
-                    MESSAGE_HISTORY_TABLE, user_id, models=MessageLog
+                message_log = cast(
+                    MessageLog | None,
+                    await self.table_cache.get(
+                        MESSAGE_HISTORY_TABLE, user_id, models=MessageLog
+                    ),
                 )
                 if message_log:
                     stats.table_cache_entries = message_log.get_message_count()
@@ -160,7 +164,10 @@ class CacheStatisticsScore(ScoreBase):
             # ---- Query State Cache ----
             # Check if current user has an active WAPPA state
             try:
-                state = await self.state_cache.get(WAPPA_HANDLER, models=StateHandler)
+                state = cast(
+                    StateHandler | None,
+                    await self.state_cache.get(WAPPA_HANDLER, models=StateHandler),
+                )
                 if state and state.is_wappa:
                     stats.state_cache_active = 1
                     self.logger.debug("📊 Active WAPPA state found")

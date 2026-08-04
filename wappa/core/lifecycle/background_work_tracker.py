@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Coroutine
 from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +30,12 @@ class BackgroundWorkTracker:
     """
 
     def __init__(self) -> None:
-        self._tasks: set[asyncio.Task] = set()
+        self._tasks: set[asyncio.Task[Any]] = set()
         self._draining = False
 
-    def track(self, coro, *, name: str | None = None) -> asyncio.Task:
+    def track(
+        self, coro: Coroutine[Any, Any, Any], *, name: str | None = None
+    ) -> asyncio.Task[Any]:
         """Create and track a background task.
 
         Raises RuntimeError if the runtime is draining.

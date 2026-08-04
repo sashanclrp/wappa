@@ -26,7 +26,7 @@ class SimpleEchoHandler(WappaEventHandler):
     the complexity of score modules or caching systems.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the simple echo handler."""
         super().__init__()
         self._message_count = 0
@@ -57,6 +57,7 @@ class SimpleEchoHandler(WappaEventHandler):
         logger.info(f"📝 Message #{self._message_count}: {message_type} from {user_id}")
 
         try:
+            assert self.messenger is not None
             # Mark message as read with typing indicator
             await self.messenger.mark_as_read(message_id=message_id, typing=True)
 
@@ -117,6 +118,7 @@ class SimpleEchoHandler(WappaEventHandler):
                 echo_response += "\n👋 Welcome to the Simple Echo Example!"
 
         # Send echo response
+        assert self.messenger is not None
         result = await self.messenger.send_text(
             recipient=user_id,
             text=echo_response,
@@ -137,6 +139,7 @@ class SimpleEchoHandler(WappaEventHandler):
 
         response = f"📁 {message_type.title()} received! Simple echo doesn't download media, but message was processed successfully.\n\n📊 Total messages: {self._message_count}"
 
+        assert self.messenger is not None
         result = await self.messenger.send_text(
             recipient=user_id,
             text=response,
@@ -157,6 +160,7 @@ class SimpleEchoHandler(WappaEventHandler):
 
         response = f"📍 Location received! Thanks for sharing your location.\n\n📊 Total messages: {self._message_count}"
 
+        assert self.messenger is not None
         result = await self.messenger.send_text(
             recipient=user_id,
             text=response,
@@ -177,6 +181,7 @@ class SimpleEchoHandler(WappaEventHandler):
 
         response = f"👥 Contact shared! Thanks for the contact information.\n\n📊 Total messages: {self._message_count}"
 
+        assert self.messenger is not None
         result = await self.messenger.send_text(
             recipient=user_id,
             text=response,
@@ -197,6 +202,7 @@ class SimpleEchoHandler(WappaEventHandler):
 
         response = f"📨 {message_type.title()} message received! This message type is not fully supported yet, but was processed successfully.\n\n📊 Total messages: {self._message_count}"
 
+        assert self.messenger is not None
         result = await self.messenger.send_text(
             recipient=user_id,
             text=response,

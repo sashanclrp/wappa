@@ -36,15 +36,15 @@ class CORSPlugin:
 
     def __init__(
         self,
-        allow_origins: list[str] = None,
-        allow_methods: list[str] = None,
-        allow_headers: list[str] = None,
+        allow_origins: list[str] | None = None,
+        allow_methods: list[str] | None = None,
+        allow_headers: list[str] | None = None,
         allow_credentials: bool = False,
-        expose_headers: list[str] = None,
+        expose_headers: list[str] | None = None,
         max_age: int = 600,
         priority: int = 90,  # High priority - runs early (outer middleware)
         **cors_kwargs: Any,
-    ):
+    ) -> None:
         """
         Initialize CORS plugin.
 

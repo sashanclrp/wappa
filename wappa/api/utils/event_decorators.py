@@ -180,6 +180,7 @@ def dispatch_message_event(
             if tracker.is_draining:
                 logger.warning("API event dispatch skipped: runtime is draining")
                 return result
+            assert fastapi_request is not None
             dispatch_coro = dispatcher.dispatch(event, fastapi_request)
             try:
                 tracker.track(
@@ -246,6 +247,7 @@ def fire_api_event(
             inbox_id=get_current_inbox_context() or "unknown",
             platform=platform,
         )
+        assert fastapi_request is not None
         await dispatcher.dispatch(event, fastapi_request)
 
     tracker = (

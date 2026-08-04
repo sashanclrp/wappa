@@ -5,6 +5,8 @@ Provides common data transformation functions to eliminate duplication
 across route handlers.
 """
 
+from typing import Any
+
 
 def convert_body_parameters(
     body_parameters: list | None,
@@ -66,7 +68,7 @@ def convert_list_sections_to_dict(sections: list) -> list[dict]:
     return result
 
 
-def convert_header_to_dict(header) -> dict[str, str] | None:
+def convert_header_to_dict(header: Any) -> dict[str, str] | None:
     """Convert InteractiveHeader Pydantic model to dict format.
 
     Args:

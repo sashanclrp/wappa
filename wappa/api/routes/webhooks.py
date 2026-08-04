@@ -5,7 +5,10 @@ Provides webhook endpoints that delegate accepted payloads to the Inbound Runtim
 Routes handle only HTTP concerns while the controller adapts app-state dependencies.
 """
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse
 
 from wappa.api.controllers import WebhookController
 from wappa.core.events import (
@@ -49,7 +52,7 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         hub_mode: str = Query(None, alias="hub.mode"),
         hub_verify_token: str = Query(None, alias="hub.verify_token"),
         hub_challenge: str = Query(None, alias="hub.challenge"),
-    ):
+    ) -> PlainTextResponse:
         """
         Handle webhook verification (challenge-response) for messaging platforms.
 
@@ -81,7 +84,7 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         hub_mode: str = Query(None, alias="hub.mode"),
         hub_verify_token: str = Query(None, alias="hub.verify_token"),
         hub_challenge: str = Query(None, alias="hub.challenge"),
-    ):
+    ) -> PlainTextResponse:
         """
         Handle webhook verification at the same URL used for processing.
 
@@ -101,7 +104,7 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         request: Request,
         inbox_id: str,
         platform: str,
-    ):
+    ) -> dict[str, str]:
         """
         Process incoming webhook payload from a messaging platform.
 
@@ -139,7 +142,7 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         request: Request,
         inbox_id: str,
         platform: str,
-    ):
+    ) -> dict[str, Any]:
         """
         Get webhook status and configuration for a specific platform.
 
@@ -180,7 +183,7 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         }
 
     @router.get("/platforms")
-    async def list_supported_platforms():
+    async def list_supported_platforms() -> dict[str, Any]:
         """
         List all supported platforms and their webhook patterns.
 

@@ -8,7 +8,7 @@ while optimizing for file storage.
 import json
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
 
@@ -106,7 +106,7 @@ def extract_cache_file_data(file_data: dict[str, Any]) -> dict[str, Any] | None:
         except ValueError:
             logger.warning(f"Invalid expires_at format: {expires_at_str}")
 
-    return file_data.get("data", {})
+    return cast(dict[str, Any], file_data.get("data", {}))
 
 
 def to_json_string(data: Any) -> str:

@@ -11,7 +11,7 @@ Architecture:
 """
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from redis.asyncio import Redis
 
@@ -28,7 +28,9 @@ logger = get_logger(__name__)
 
 
 async def start_pubsub_listener(
-    session_provider, media_download_client_provider, credential_store
+    session_provider: Any,
+    media_download_client_provider: Any,
+    credential_store: Any,
 ) -> None:
     """
     Start Redis PubSub subscriber in background with multi-inbox support.
@@ -46,7 +48,7 @@ async def start_pubsub_listener(
         credential_store: IInboxCredentialStore for resolving inbox credentials
     """
     redis = None
-    messenger_cache = {}  # Cache messengers by inbox {inbox_id: IMessenger}
+    messenger_cache: dict[str, IMessenger] = {}
 
     try:
         logger.info("🔄 Creating messenger factory for multi-inbox subscriber...")

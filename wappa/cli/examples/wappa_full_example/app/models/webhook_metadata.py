@@ -59,7 +59,7 @@ class TextMessageMetadata(BaseMessageMetadata):
 
     @classmethod
     def from_webhook(
-        cls, webhook, processing_time_ms: int = None
+        cls, webhook: Any, processing_time_ms: int | None = None
     ) -> "TextMessageMetadata":
         """Create TextMessageMetadata from InboundMessageWebhook."""
         text_content = webhook.get_message_text() or ""
@@ -98,7 +98,10 @@ class MediaMessageMetadata(BaseMessageMetadata):
 
     @classmethod
     def from_webhook(
-        cls, webhook, message_type: MessageType, processing_time_ms: int = None
+        cls,
+        webhook: Any,
+        message_type: MessageType,
+        processing_time_ms: int | None = None,
     ) -> "MediaMessageMetadata":
         """Create MediaMessageMetadata from InboundMessageWebhook."""
         # Extract media information from webhook
@@ -152,7 +155,7 @@ class LocationMessageMetadata(BaseMessageMetadata):
 
     @classmethod
     def from_webhook(
-        cls, webhook, processing_time_ms: int = None
+        cls, webhook: Any, processing_time_ms: int | None = None
     ) -> "LocationMessageMetadata":
         """Create LocationMessageMetadata from InboundMessageWebhook."""
         # Extract location data from webhook
@@ -189,7 +192,7 @@ class ContactMessageMetadata(BaseMessageMetadata):
 
     @classmethod
     def from_webhook(
-        cls, webhook, processing_time_ms: int = None
+        cls, webhook: Any, processing_time_ms: int | None = None
     ) -> "ContactMessageMetadata":
         """Create ContactMessageMetadata from InboundMessageWebhook."""
         # Extract contact data from webhook
@@ -244,7 +247,7 @@ class InteractiveMessageMetadata(BaseMessageMetadata):
 
     @classmethod
     def from_webhook(
-        cls, webhook, processing_time_ms: int = None
+        cls, webhook: Any, processing_time_ms: int | None = None
     ) -> "InteractiveMessageMetadata":
         """Create InteractiveMessageMetadata from InboundMessageWebhook."""
         # Extract interactive data
@@ -295,7 +298,7 @@ class UnknownMessageMetadata(BaseMessageMetadata):
 
     @classmethod
     def from_webhook(
-        cls, webhook, processing_time_ms: int = None
+        cls, webhook: Any, processing_time_ms: int | None = None
     ) -> "UnknownMessageMetadata":
         """Create UnknownMessageMetadata from InboundMessageWebhook."""
         # Capture raw message data for debugging

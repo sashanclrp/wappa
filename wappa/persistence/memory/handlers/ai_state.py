@@ -6,7 +6,7 @@ Provides AI agent state cache operations using in-memory storage.
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel
 
@@ -63,8 +63,11 @@ class MemoryAIState(IAIStateCache):
             AI agent state data or None if not found
         """
         key = self._key(agent_name)
-        return await storage_manager.get(
-            "ai_states", self.inbox, self.user_id, key, models
+        return cast(
+            dict[str, Any] | None,
+            await storage_manager.get(
+                "ai_states", self.inbox, self.user_id, key, models
+            ),
         )
 
     async def upsert(

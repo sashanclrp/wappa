@@ -16,6 +16,7 @@ it handles ONLY message processing and echo response building.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from wappa.webhooks import InboundMessageWebhook
@@ -40,7 +41,7 @@ class MessageHandlers:
     Follows Interface Segregation Principle - only depends on required dependencies.
     """
 
-    def __init__(self, messenger, cache_factory, logger):
+    def __init__(self, messenger: Any, cache_factory: Any, logger: Any) -> None:
         """
         Initialize message handlers.
 
@@ -240,7 +241,7 @@ class MessageHandlers:
         return response
 
     def _build_audio_response(
-        self, message, media_data: dict, message_count: int
+        self, message: Any, media_data: dict[str, Any], message_count: int
     ) -> str:
         """Build response for audio messages."""
         is_voice = (
@@ -281,7 +282,7 @@ class MessageHandlers:
         response += "Send '/CLOSE' to persist to DB"
         return response
 
-    def _build_location_response(self, message, message_count: int) -> str:
+    def _build_location_response(self, message: Any, message_count: int) -> str:
         """Build response for location messages."""
         response = "Location shared!\n"
         if hasattr(message, "latitude") and hasattr(message, "longitude"):
@@ -301,7 +302,7 @@ class MessageHandlers:
         response += "Send '/CLOSE' to persist to DB"
         return response
 
-    def _build_sticker_response(self, message, message_count: int) -> str:
+    def _build_sticker_response(self, message: Any, message_count: int) -> str:
         """Build response for sticker messages."""
         is_animated = (
             hasattr(message, "sticker")
@@ -326,9 +327,9 @@ class MessageHandlers:
 # Convenience function for direct use
 async def handle_message_by_type(
     webhook: InboundMessageWebhook,
-    messenger,
-    cache_factory,
-    logger,
+    messenger: Any,
+    cache_factory: Any,
+    logger: Any,
 ) -> dict:
     """
     Handle message based on its type (convenience function).

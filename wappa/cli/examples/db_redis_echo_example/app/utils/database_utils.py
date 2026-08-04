@@ -12,6 +12,7 @@ it handles ONLY database operations.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any, cast
 from uuid import UUID
 
 from sqlmodel import select
@@ -35,7 +36,7 @@ class DatabaseHelper:
     Follows Interface Segregation Principle - only depends on db_session_factory.
     """
 
-    def __init__(self, db_session_factory, logger=None):
+    def __init__(self, db_session_factory: Any, logger: Any = None) -> None:
         """
         Initialize DatabaseHelper.
 
@@ -195,7 +196,7 @@ class DatabaseHelper:
                 Chat.platform_user_id == user_id,
             )
             result = await session.execute(statement)
-            return result.scalars().first()
+            return cast(Chat | None, result.scalars().first())
 
     async def update_chat_activity(self, chat_id: str, is_inbound: bool = True) -> bool:
         """

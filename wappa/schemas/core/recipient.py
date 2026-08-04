@@ -336,7 +336,7 @@ class ResolvedRecipient(BaseModel):
 
     @property
     def transport_field(self) -> str:
-        """Return the provider field that should carry this identifier."""
+        """Return the platform request field that should carry this identifier."""
         return "recipient" if self.kind == RecipientKind.BSUID else "to"
 
     @property

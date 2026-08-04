@@ -28,7 +28,7 @@ class MessageSchemaRegistry:
     to enable dynamic schema selection based on incoming webhook data.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the schema registry."""
         self.logger = get_logger(__name__)
 
@@ -61,7 +61,7 @@ class MessageSchemaRegistry:
             from .whatsapp.message_types.video import WhatsAppVideoMessage
 
             # Register WhatsApp schemas
-            whatsapp_schemas = {
+            whatsapp_schemas: dict[MessageType, type[BaseMessage]] = {
                 MessageType.TEXT: WhatsAppTextMessage,
                 MessageType.INTERACTIVE: WhatsAppInteractiveMessage,
                 MessageType.IMAGE: WhatsAppImageMessage,
@@ -184,7 +184,10 @@ class MessageSchemaRegistry:
         Returns:
             Dictionary with registry statistics
         """
-        stats = {"total_platforms": len(self._message_schemas), "platforms": {}}
+        stats: dict[str, Any] = {
+            "total_platforms": len(self._message_schemas),
+            "platforms": {},
+        }
 
         for platform, schemas in self._message_schemas.items():
             stats["platforms"][platform.value] = {
@@ -203,7 +206,7 @@ class WebhookSchemaRegistry:
     for parsing platform-specific webhook structures.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the webhook schema registry."""
         self.logger = get_logger(__name__)
 
@@ -294,7 +297,7 @@ class SchemaFactory:
     and message type, with comprehensive error handling and validation.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the schema factory with registries."""
         self.logger = get_logger(__name__)
 
@@ -307,7 +310,7 @@ class SchemaFactory:
         platform: PlatformType,
         message_type: MessageType,
         message_data: dict[str, Any],
-        **kwargs,
+        **kwargs: Any,
     ) -> BaseMessage:
         """
         Create a message instance from raw data.
@@ -350,7 +353,10 @@ class SchemaFactory:
             raise
 
     def create_webhook_instance(
-        self, platform: PlatformType, webhook_data: dict[str, Any], **kwargs
+        self,
+        platform: PlatformType,
+        webhook_data: dict[str, Any],
+        **kwargs: Any,
     ) -> BaseWebhook:
         """
         Create a webhook container instance from raw data.
@@ -560,7 +566,7 @@ class SchemaFactory:
         platform: PlatformType,
         payload: dict[str, Any],
         webhook_type: str | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> "UniversalWebhook":
         """
         Create a Universal Webhook Interface from platform-specific payload.
@@ -588,12 +594,7 @@ class SchemaFactory:
             processor = processor_factory.get_processor(platform)
 
             # Use processor to create universal webhook
-            if hasattr(processor, "create_universal_webhook"):
-                return await processor.create_universal_webhook(payload, **kwargs)
-            else:
-                raise SchemaRegistryError(
-                    f"Processor for {platform.value} does not support universal webhook creation"
-                )
+            return await processor.create_universal_webhook(payload, **kwargs)
 
         except Exception as e:
             self.logger.error(
@@ -602,12 +603,12 @@ class SchemaFactory:
             )
             raise SchemaRegistryError(f"Failed to create universal webhook: {e}") from e
 
-    def create_universal_webhook_from_payload(
+    async def create_universal_webhook_from_payload(
         self,
         payload: dict[str, Any],
         url_path: str | None = None,
         headers: dict[str, str] | None = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> "UniversalWebhook":
         """
         Create Universal Webhook Interface with automatic platform detection.
@@ -631,7 +632,7 @@ class SchemaFactory:
             platform = PlatformDetector.detect_platform(payload, url_path, headers)
 
             # Create universal webhook for detected platform
-            return self.create_universal_webhook(platform, payload, **kwargs)
+            return await self.create_universal_webhook(platform, payload, **kwargs)
 
         except Exception as e:
             self.logger.error(

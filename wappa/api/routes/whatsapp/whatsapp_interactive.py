@@ -26,9 +26,12 @@ from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.interactive_models import (
     ButtonMessage,
     CTAMessage,
+    HeaderType,
+    InteractiveHeader,
     ListMessage,
     ListRow,
     ListSection,
+    ReplyButton,
 )
 
 # Error code groups for interactive operations
@@ -261,11 +264,11 @@ async def send_complex_button_message(
     """
     try:
         buttons = [
-            {"id": "yes_button", "title": "Yes"},
-            {"id": "no_button", "title": "No"},
-            {"id": "maybe_button", "title": "Maybe"},
+            ReplyButton(id="yes_button", title="Yes"),
+            ReplyButton(id="no_button", title="No"),
+            ReplyButton(id="maybe_button", title="Maybe"),
         ]
-        header = {"type": "text", "text": "Quick Decision Required"}
+        header = InteractiveHeader(type=HeaderType.TEXT, text="Quick Decision Required")
 
         result = await messenger.send_button_message(
             buttons=buttons,

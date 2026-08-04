@@ -7,6 +7,8 @@ This module handles all user-related operations including:
 - User activity tracking
 """
 
+from typing import cast
+
 from wappa.webhooks import InboundMessageWebhook
 
 from ..models.json_demo_models import User
@@ -92,7 +94,7 @@ class UserManagementScore(ScoreBase):
         try:
             # User identity is already bound in cache_factory, so no key needed
             # The IUserCache.get() method takes only an optional models parameter
-            user = await self.user_cache.get(models=User)
+            user = cast(User | None, await self.user_cache.get(models=User))
 
             if user:
                 # User exists, update name if provided and different
@@ -158,7 +160,7 @@ class UserManagementScore(ScoreBase):
             User profile or None if not found
         """
         try:
-            return await self.user_cache.get(models=User)
+            return cast(User | None, await self.user_cache.get(models=User))
         except Exception as e:
             self.logger.error(f"Error getting user profile: {e}")
             return None

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from wappa.core.events import WappaEventDispatcher
 from wappa.core.logging.context import set_request_context
@@ -235,15 +235,11 @@ class InboundRuntime:
     ) -> UniversalWebhook:
         try:
             processor = processor_factory.get_processor(platform)
-            if not hasattr(processor, "create_universal_webhook"):
-                raise UnsupportedPlatformError(
-                    f"Processor for {platform.value} does not support Universal Webhook Interface"
-                )
             universal_webhook = await processor.create_universal_webhook(
                 payload=payload,
                 inbox_id=inbox_id,
             )
-            return cast(UniversalWebhook, universal_webhook)
+            return universal_webhook
         except UnsupportedPlatformError:
             raise
         except ProcessorError as exc:

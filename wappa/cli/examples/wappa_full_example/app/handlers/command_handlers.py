@@ -6,6 +6,7 @@ that demonstrate interactive features and specialized messaging capabilities.
 """
 
 import time
+from typing import Any
 
 from wappa.messaging.whatsapp.models.interactive_models import (
     InteractiveHeader,
@@ -23,7 +24,7 @@ from ..utils.cache_utils import CacheHelper
 class CommandHandlers:
     """Collection of handlers for special commands."""
 
-    def __init__(self, messenger, cache_factory, logger):
+    def __init__(self, messenger: Any, cache_factory: Any, logger: Any) -> None:
         """
         Initialize command handlers.
 
@@ -38,7 +39,7 @@ class CommandHandlers:
 
     async def handle_button_command(
         self, webhook: InboundMessageWebhook, user_profile: UserProfile
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Handle /button command - creates interactive button message.
 
@@ -58,9 +59,7 @@ class CommandHandlers:
             self.logger.info(f"🔘 Processing /button command from {user_id}")
 
             # Clean up any existing button state
-            existing_state = await self.cache_helper.get_user_state(
-                user_id, StateType.BUTTON
-            )
+            existing_state = await self.cache_helper.get_user_state(StateType.BUTTON)
             if existing_state:
                 await self.cache_helper.remove_user_state(StateType.BUTTON)
 
@@ -143,7 +142,7 @@ class CommandHandlers:
 
     async def handle_list_command(
         self, webhook: InboundMessageWebhook, user_profile: UserProfile
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Handle /list command - creates interactive list message.
 
@@ -163,9 +162,7 @@ class CommandHandlers:
             self.logger.info(f"📋 Processing /list command from {user_id}")
 
             # Clean up any existing list state
-            existing_state = await self.cache_helper.get_user_state(
-                user_id, StateType.LIST
-            )
+            existing_state = await self.cache_helper.get_user_state(StateType.LIST)
             if existing_state:
                 await self.cache_helper.remove_user_state(StateType.LIST)
 
@@ -201,7 +198,7 @@ class CommandHandlers:
             # Create list state with 10 minute TTL
             list_state = ListState.create_list_state(
                 user_id=user_id,
-                sections=sections,
+                sections=[section.model_dump() for section in sections],
                 message_text="Choose the type of media file you want to receive!",
                 button_text="Choose Media",
                 ttl_seconds=600,  # 10 minutes
@@ -266,7 +263,7 @@ class CommandHandlers:
 
     async def handle_cta_command(
         self, webhook: InboundMessageWebhook, user_profile: UserProfile
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Handle /cta command - sends call-to-action message.
 
@@ -337,7 +334,7 @@ class CommandHandlers:
 
     async def handle_location_command(
         self, webhook: InboundMessageWebhook, user_profile: UserProfile
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Handle /location command - sends predefined location.
 
@@ -417,7 +414,7 @@ class CommandHandlers:
 
     async def handle_template_command(
         self, webhook: InboundMessageWebhook, user_profile: UserProfile
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Handle /template command - explains template state demonstration.
 
@@ -500,7 +497,7 @@ class CommandHandlers:
 
     async def handle_api_stats_command(
         self, webhook: InboundMessageWebhook, user_profile: UserProfile
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Handle /API-STATS command - displays comprehensive API activity statistics.
 
@@ -561,10 +558,11 @@ class CommandHandlers:
                 stats_message += "\n"
 
             if stats.first_message_sent:
+                last_message_sent = stats.last_message_sent or stats.first_message_sent
                 stats_message += (
                     f"*🕐 Timeline*\n"
                     f"• First: {stats.first_message_sent.strftime('%Y-%m-%d %H:%M UTC')}\n"
-                    f"• Last: {stats.last_message_sent.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+                    f"• Last: {last_message_sent.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
                 )
 
             # User activity logs
@@ -653,7 +651,7 @@ class CommandHandlers:
 
     async def handle_docs_command(
         self, webhook: InboundMessageWebhook, user_profile: UserProfile
-    ) -> dict[str, any]:
+    ) -> dict[str, Any]:
         """
         Handle /docs command - provides API documentation links and information.
         """
@@ -725,10 +723,10 @@ async def handle_command(
     command: str,
     webhook: InboundMessageWebhook,
     user_profile: UserProfile,
-    messenger,
-    cache_factory,
-    logger,
-) -> dict[str, any]:
+    messenger: Any,
+    cache_factory: Any,
+    logger: Any,
+) -> dict[str, Any]:
     """
     Handle command based on command string (convenience function).
 

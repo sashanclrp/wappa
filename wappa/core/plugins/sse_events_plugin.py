@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from ...api.routes.sse import router as sse_router
@@ -53,7 +54,9 @@ class SSEEventsPlugin:
         self._original_message_handler = None
         self._original_status_handler = None
         self._original_error_handler = None
-        self._api_post_process_hook = None
+        self._api_post_process_hook: (
+            Callable[[APIMessageEvent], Awaitable[None]] | None
+        ) = None
         self._event_hub: SSEEventHub | None = None
 
     def configure(self, builder: WappaBuilder) -> None:

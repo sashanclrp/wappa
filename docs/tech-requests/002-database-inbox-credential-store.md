@@ -1,3 +1,8 @@
+---
+status: implemented
+completed: 2026-08-03
+---
+
 # Tech Request: Database-Backed Inbox Credential Store
 
 **Priority:** High — blocks multi-inbox Symphonai deployments  
@@ -223,16 +228,16 @@ def with_inbox_credential_store(self, store: IInboxCredentialStore) -> Self:
 
 ## Acceptance Criteria
 
-- [ ] `WappaBuilder.with_inbox_credential_store(store)` wires a custom store
-- [ ] Default behavior (no custom store) uses `SettingsInboxCredentialStore` unchanged
-- [ ] `DatabaseInboxCredentialStore` resolves from Redis cache on hot path
-- [ ] Cache miss falls through to DB, populates cache, returns credentials
-- [ ] Unknown `inbox_id` raises `InboxNotFoundError`
-- [ ] `invalidate_cache(inbox_id)` removes the Redis key
-- [ ] `MessengerFactory`, `whatsapp_dependencies`, and `WebhookController` use the injected store from app state
-- [ ] No inline `SettingsInboxCredentialStore()` instantiation remains in consumers
-- [ ] All existing tests pass
-- [ ] New tests cover hit/miss/not-found/invalidation paths
+- [x] `WappaBuilder.with_inbox_credential_store(store)` wires a custom store.
+- [x] Default behavior uses `SettingsInboxCredentialStore`.
+- [x] `DatabaseInboxCredentialStore` resolves from Redis cache on the hot path.
+- [x] A cache miss falls through to DB, populates cache, and returns credentials.
+- [x] Unknown `inbox_id` raises `InboxNotFoundError`.
+- [x] `invalidate_cache(inbox_id)` removes the Redis key.
+- [x] `MessengerFactory`, API dependencies, and the Inbound Runtime use the injected store.
+- [x] Consumers do not construct `SettingsInboxCredentialStore` inline.
+- [x] The full test suite passes.
+- [x] Hit, miss, not-found, and invalidation paths have regression tests.
 
 ---
 

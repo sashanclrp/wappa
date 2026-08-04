@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from ....domain.interfaces.cache_interfaces import IStateCache
 from ..ops import hget, hincrby_with_expire, hset, scan_keys
+from ..redis_client import PoolAlias
 from .utils.inbox_cache import InboxCache
 from .utils.key_factory import default_key_factory
 from .utils.serde import dumps, loads
@@ -17,7 +18,7 @@ logger = logging.getLogger("RedisStateHandler")
 
 class RedisStateHandler(InboxCache, IStateCache):
     user_id: str = Field(..., min_length=1)
-    redis_alias: str = "state_handler"
+    redis_alias: PoolAlias = "state_handler"
 
     def _key(self, handler_name: str) -> str:
         return self.keys.handler(self.inbox, handler_name, self.user_id)
@@ -33,7 +34,10 @@ class RedisStateHandler(InboxCache, IStateCache):
         return result
 
     async def upsert(
-        self, handler_name: str, state_data: dict[str, Any], ttl: int | None = None
+        self,
+        handler_name: str,
+        state_data: dict[str, Any] | BaseModel,
+        ttl: int | None = None,
     ) -> bool:
         return await self._hset_with_ttl(self._key(handler_name), state_data, ttl)
 
@@ -115,10 +119,10 @@ class RedisStateHandler(InboxCache, IStateCache):
         return None
 
     async def get_ttl(self, handler_name: str) -> int:
-        return await super().get_ttl(self._key(handler_name))
+        return await self._get_ttl(self._key(handler_name))
 
     async def renew_ttl(self, handler_name: str, ttl: int) -> bool:
-        return await super().renew_ttl(self._key(handler_name), ttl)
+        return await self._renew_ttl(self._key(handler_name), ttl)
 
     async def delete_all_for_user(self) -> int:
         pattern = f"{self.inbox}:{self.keys.handler_prefix}:*:{self.user_id}"
@@ -184,7 +188,7 @@ class RedisStateHandler(InboxCache, IStateCache):
         key_prefix = f"{inbox_id}:{default_key_factory.handler_prefix}:{handler_name}:"
 
         user_ids: list[str] = []
-        cursor = "0"
+        cursor = 0
 
         try:
             while True:
@@ -197,7 +201,7 @@ class RedisStateHandler(InboxCache, IStateCache):
                 for key in keys_batch:
                     if key.startswith(key_prefix):
                         user_ids.append(key[len(key_prefix) :])
-                if next_cursor == "0":
+                if next_cursor == 0:
                     break
                 cursor = next_cursor
         except Exception as e:

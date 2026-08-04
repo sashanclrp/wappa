@@ -7,8 +7,10 @@ commands, state management, and all message type handling.
 """
 
 import time
+from typing import Any
 
 from wappa import WappaEventHandler
+from wappa.domain.events.api_message_event import APIMessageEvent
 from wappa.webhooks import ErrorWebhook, InboundMessageWebhook, StatusWebhook
 
 from .handlers.command_handlers import (
@@ -36,7 +38,7 @@ class WappaFullExampleHandler(WappaEventHandler):
     - State-based interactive workflows with TTL
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the comprehensive Wappa example handler."""
         super().__init__()
 
@@ -82,6 +84,8 @@ class WappaFullExampleHandler(WappaEventHandler):
             if not await self._setup_dependencies():
                 self._failed_processing += 1
                 return
+            assert self.messenger is not None
+            assert self.cache_factory is not None
 
             # 2. Handle user profile and first-time user welcome
             user_profile = await self._handle_user_profile_and_welcome(webhook)
@@ -169,6 +173,8 @@ class WappaFullExampleHandler(WappaEventHandler):
 
             # Send generic error response
             try:
+                if self.messenger is None:
+                    raise RuntimeError("Messenger is not configured")
                 await self.messenger.send_text(
                     recipient=webhook.user.user_id,
                     text="❌ Sorry, something went wrong processing your message. Please try again.",
@@ -224,7 +230,7 @@ class WappaFullExampleHandler(WappaEventHandler):
         except Exception as e:
             self.logger.error(f"❌ Error processing error webhook: {e}", exc_info=True)
 
-    async def process_api_message(self, event) -> None:
+    async def process_api_message(self, event: APIMessageEvent) -> None:
         """
         Process API-sent message events for comprehensive tracking.
 
@@ -332,6 +338,9 @@ class WappaFullExampleHandler(WappaEventHandler):
                 "❌ Cache factory not available - Redis caching unavailable"
             )
             return False
+        if self.messenger is None:
+            self.logger.error("❌ Messenger not available")
+            return False
 
         try:
             # Initialize helper instances
@@ -358,6 +367,7 @@ class WappaFullExampleHandler(WappaEventHandler):
     ) -> UserProfile | None:
         """Handle user profile caching and send welcome message to first-time users."""
         try:
+            assert self.cache_helper is not None
             user_id = webhook.user.user_id
             user_name = webhook.user.profile_name
 
@@ -415,6 +425,7 @@ class WappaFullExampleHandler(WappaEventHandler):
         )
 
         try:
+            assert self.messenger is not None
             result = await self.messenger.send_text(
                 recipient=user_id,
                 text=welcome_text,
@@ -434,6 +445,7 @@ class WappaFullExampleHandler(WappaEventHandler):
     async def _mark_message_as_read(self, webhook: InboundMessageWebhook) -> None:
         """Mark incoming message as read (as specified in requirements)."""
         try:
+            assert self.messenger is not None
             result = await self.messenger.mark_as_read(
                 message_id=webhook.message.message_id, typing=False
             )
@@ -453,6 +465,7 @@ class WappaFullExampleHandler(WappaEventHandler):
     ) -> None:
         """Handle special commands using command handlers."""
         try:
+            assert self.command_handlers is not None
             if command == "/button":
                 result = await self.command_handlers.handle_button_command(
                     webhook, user_profile
@@ -502,6 +515,7 @@ class WappaFullExampleHandler(WappaEventHandler):
     ) -> None:
         """Send user-friendly error response when processing fails."""
         try:
+            assert self.messenger is not None
             user_id = webhook.user.user_id
             message_id = webhook.message.message_id
 
@@ -545,7 +559,7 @@ class WappaFullExampleHandler(WappaEventHandler):
             f"interactions={self._interactive_responses}"
         )
 
-    async def get_handler_statistics(self) -> dict[str, any]:
+    async def get_handler_statistics(self) -> dict[str, Any]:
         """
         Get comprehensive handler statistics.
 

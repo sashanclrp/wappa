@@ -146,11 +146,11 @@ class WhatsAppWebhookError(BaseModel):
         error = self.primary_error
         return error.error_data.details
 
-    def get_documentation_url(self) -> str:
+    def get_documentation_url(self) -> str | None:
         """Get the URL to error documentation."""
         return self.primary_error.href
 
-    def to_summary_dict(self) -> dict[str, str | bool | int | list]:
+    def to_summary_dict(self) -> dict[str, str | bool | int | list | None]:
         """
         Create a summary dictionary for logging and analysis.
 

@@ -9,24 +9,24 @@ _NAMESPACES = ("users", "tables", "states", "ai_states")
 
 
 class MemoryStore:
-    def __init__(self):
+    def __init__(self) -> None:
         self._store: dict[str, dict[str, dict[str, tuple[Any, datetime | None]]]] = {
             ns: {} for ns in _NAMESPACES
         }
         self._locks = {ns: asyncio.Lock() for ns in _NAMESPACES}
-        self._cleanup_task: asyncio.Task | None = None
+        self._cleanup_task: asyncio.Task[None] | None = None
         self._cleanup_interval = 300  # 5 minutes
 
     def _require_namespace(self, namespace: str) -> None:
         if namespace not in self._locks:
             raise ValueError(f"Invalid namespace: {namespace}")
 
-    def start_cleanup_task(self):
+    def start_cleanup_task(self) -> None:
         if self._cleanup_task is None or self._cleanup_task.done():
             self._cleanup_task = asyncio.create_task(self._cleanup_expired_entries())
             logger.info("Started memory store TTL cleanup task")
 
-    def stop_cleanup_task(self):
+    def stop_cleanup_task(self) -> None:
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()
             logger.info("Stopped memory store TTL cleanup task")
@@ -143,7 +143,7 @@ class MemoryStore:
 
             return result
 
-    async def _cleanup_expired_entries(self):
+    async def _cleanup_expired_entries(self) -> None:
         while True:
             try:
                 await asyncio.sleep(self._cleanup_interval)

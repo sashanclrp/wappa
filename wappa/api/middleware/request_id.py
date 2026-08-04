@@ -14,8 +14,9 @@ from __future__ import annotations
 from uuid import uuid4
 
 from fastapi import Request
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
+from starlette.types import ASGIApp
 
 from wappa.core.logging.context import bind_request_id, reset_request_id
 
@@ -38,7 +39,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 
     def __init__(
         self,
-        app,
+        app: ASGIApp,
         header_name: str = DEFAULT_REQUEST_ID_HEADER,
         trust_inbound: bool = True,
     ) -> None:
@@ -46,7 +47,9 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         self.header_name = header_name
         self.trust_inbound = trust_inbound
 
-    async def dispatch(self, request: Request, call_next) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         request_id = self._resolve_request_id(request)
 
         request.state.request_id = request_id

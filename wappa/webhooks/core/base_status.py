@@ -63,20 +63,23 @@ class BaseMessageStatus(BaseModel, ABC):
 
     @property
     @abstractmethod
-    def conversation_id(self) -> str:
+    def conversation_id(self) -> str | None:
         """Get the conversation/chat identifier."""
         pass
 
+    @property
     @abstractmethod
     def is_delivered(self) -> bool:
         """Check if the message was delivered."""
         pass
 
+    @property
     @abstractmethod
     def is_read(self) -> bool:
         """Check if the message was read."""
         pass
 
+    @property
     @abstractmethod
     def is_failed(self) -> bool:
         """Check if the message delivery failed."""
@@ -137,14 +140,16 @@ class BaseMessageStatus(BaseModel, ABC):
             "conversation_id": self.conversation_id,
             "timestamp": self.timestamp,
             "processed_at": self.processed_at.isoformat(),
-            "is_delivered": self.is_delivered(),
-            "is_read": self.is_read(),
-            "is_failed": self.is_failed(),
+            "is_delivered": self.is_delivered,
+            "is_read": self.is_read,
+            "is_failed": self.is_failed,
         }
 
     @classmethod
     @abstractmethod
-    def from_platform_data(cls, data: dict[str, Any], **kwargs) -> "BaseMessageStatus":
+    def from_platform_data(
+        cls, data: dict[str, Any], **kwargs: Any
+    ) -> "BaseMessageStatus":
         """
         Create status instance from platform-specific data.
 
@@ -307,7 +312,7 @@ class BaseStatusWebhook(BaseModel, ABC):
     @classmethod
     @abstractmethod
     def from_platform_payload(
-        cls, payload: dict[str, Any], **kwargs
+        cls, payload: dict[str, Any], **kwargs: Any
     ) -> "BaseStatusWebhook":
         """
         Create status webhook instance from platform-specific payload.

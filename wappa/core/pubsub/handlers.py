@@ -14,6 +14,7 @@ Event Types:
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from ...domain.interfaces.pubsub_interface import PubSubEventType
@@ -109,7 +110,7 @@ class PubSubMessageHandler(DefaultMessageHandler):
                 content_preview_length=inner_handler.content_preview_length,
                 mask_sensitive_data=inner_handler.mask_sensitive_data,
             )
-            self._stats = inner_handler._stats.copy()
+            self._stats = replace(inner_handler._stats)
         else:
             super().__init__(
                 log_strategy=log_strategy,
@@ -152,7 +153,7 @@ class PubSubStatusHandler(DefaultStatusHandler):
                 log_strategy=inner_handler.log_strategy,
                 log_level=inner_handler.log_level,
             )
-            self._stats = inner_handler._stats.copy()
+            self._stats = replace(inner_handler._stats)
         else:
             super().__init__(
                 log_strategy=log_strategy,

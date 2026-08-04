@@ -19,6 +19,8 @@ Example:
         pass
 """
 
+from typing import Any, cast
+
 from wappa import expiry_registry
 from wappa.core.expiry import (
     CacheFactoryCreationError,
@@ -91,7 +93,9 @@ async def handle_user_inactivity(identifier: str, full_key: str) -> None:
     await _cleanup_user_cache(inbox_id, user_id)
 
 
-async def _retrieve_user_messages(inbox_id: str, user_id: str) -> list[dict] | None:
+async def _retrieve_user_messages(
+    inbox_id: str, user_id: str
+) -> list[dict[str, Any]] | None:
     """
     Retrieve accumulated messages from user cache.
 
@@ -121,7 +125,7 @@ async def _retrieve_user_messages(inbox_id: str, user_id: str) -> list[dict] | N
         )
         return None
 
-    return user_data.get("messages", [])
+    return cast(list[dict[str, Any]], user_data.get("messages", []))
 
 
 async def _send_echo_message(inbox_id: str, user_id: str, echo_text: str) -> bool:

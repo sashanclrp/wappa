@@ -6,6 +6,7 @@ InboundMessageWebhook objects based on message type.
 """
 
 import time
+from typing import Any
 
 from wappa.webhooks import InboundMessageWebhook
 
@@ -26,7 +27,7 @@ class MetadataExtractor:
 
     @staticmethod
     def extract_metadata(
-        webhook: InboundMessageWebhook, start_time: float = None
+        webhook: InboundMessageWebhook, start_time: float | None = None
     ) -> WebhookMetadata:
         """
         Extract appropriate metadata from webhook based on message type.
@@ -201,7 +202,7 @@ class MetadataExtractor:
         return "\n".join(lines)
 
     @staticmethod
-    def get_metadata_summary(metadata: WebhookMetadata) -> dict:
+    def get_metadata_summary(metadata: WebhookMetadata) -> dict[str, Any]:
         """
         Get a summary of metadata for logging/analytics.
 
@@ -218,7 +219,7 @@ class MetadataExtractor:
             else str(metadata.message_type)
         )
 
-        summary = {
+        summary: dict[str, Any] = {
             "message_id": metadata.message_id,
             "message_type": message_type_value,
             "user_id": metadata.user_id,
@@ -296,7 +297,7 @@ class MetadataExtractor:
 
 # Convenience functions for direct use
 def extract_webhook_metadata(
-    webhook: InboundMessageWebhook, start_time: float = None
+    webhook: InboundMessageWebhook, start_time: float | None = None
 ) -> WebhookMetadata:
     """
     Extract metadata from webhook (convenience function).
@@ -324,7 +325,7 @@ def format_metadata_message(metadata: WebhookMetadata) -> str:
     return MetadataExtractor.format_metadata_for_user(metadata)
 
 
-def get_processing_summary(metadata: WebhookMetadata) -> dict:
+def get_processing_summary(metadata: WebhookMetadata) -> dict[str, Any]:
     """
     Get processing summary (convenience function).
 

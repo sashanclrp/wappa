@@ -5,7 +5,7 @@ This module contains Pydantic models for processing WhatsApp audio messages,
 including voice recordings and audio files sent via Click-to-WhatsApp ads.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -148,7 +148,7 @@ class WhatsAppAudioMessage(WhatsAppMessageIdentity, BaseAudioMessage):
         return v
 
     @model_validator(mode="after")
-    def validate_message_consistency(self):
+    def validate_message_consistency(self) -> Self:
         """Validate message field consistency."""
         # If we have a referral, this should be from an ad
         if self.referral and self.context:
@@ -171,8 +171,9 @@ class WhatsAppAudioMessage(WhatsAppMessageIdentity, BaseAudioMessage):
     @property
     def is_forwarded(self) -> bool:
         """Check if this audio message was forwarded."""
-        return self.context is not None and (
-            self.context.forwarded or self.context.frequently_forwarded
+        return bool(
+            self.context is not None
+            and (self.context.forwarded or self.context.frequently_forwarded)
         )
 
     @property
@@ -362,6 +363,6 @@ class WhatsAppAudioMessage(WhatsAppMessageIdentity, BaseAudioMessage):
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppAudioMessage":
         return cls.model_validate(data)

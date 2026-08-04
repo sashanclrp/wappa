@@ -259,7 +259,7 @@ class WhatsAppOrderMessage(WhatsAppMessageIdentity, BaseMessage):
 
     def get_total_by_currency(self) -> dict[str, float]:
         """Get total amounts grouped by currency."""
-        totals = {}
+        totals: dict[str, float] = {}
         for item in self.order.product_items:
             if item.currency not in totals:
                 totals[item.currency] = 0
@@ -370,6 +370,6 @@ class WhatsAppOrderMessage(WhatsAppMessageIdentity, BaseMessage):
 
     @classmethod
     def from_platform_data(
-        cls, data: dict[str, Any], **kwargs
+        cls, data: dict[str, Any], **kwargs: Any
     ) -> "WhatsAppOrderMessage":
         return cls.model_validate(data)

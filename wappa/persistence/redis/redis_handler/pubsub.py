@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
@@ -65,7 +65,7 @@ class RedisPubSubPublisher(BaseModel, IPubSubPublisher):
                 logger.debug(
                     f"Published {event_type} to {channel}: {subscribers} subscriber(s)"
                 )
-                return subscribers
+                return cast(int, subscribers)
 
         except Exception as e:
             logger.error(f"Failed to publish to {channel}: {e}", exc_info=True)

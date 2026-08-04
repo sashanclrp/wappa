@@ -1,7 +1,7 @@
 import hashlib
 import hmac
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import ValidationError
 
@@ -14,8 +14,6 @@ from wappa.processors.base_processor import (
 from wappa.schemas.core.recipient import looks_like_bsuid, looks_like_phone_number
 from wappa.schemas.core.types import ErrorCode, MessageType, PlatformType
 from wappa.webhooks.core.base_message import BaseMessage
-from wappa.webhooks.core.base_status import BaseMessageStatus
-from wappa.webhooks.core.base_webhook import BaseWebhook
 
 if TYPE_CHECKING:
     from wappa.core.events.field_registry import FieldHandlerRegistry
@@ -36,12 +34,15 @@ if TYPE_CHECKING:
         UserBase,
         WhatsAppIncomingWebhookData,
     )
+    from wappa.webhooks.whatsapp.message_types.system import WhatsAppSystemMessage
+    from wappa.webhooks.whatsapp.status_models import WhatsAppMessageStatus
+    from wappa.webhooks.whatsapp.webhook_container import WhatsAppWebhook
 
 
 class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     """WhatsApp Business Platform webhook processor."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
         self._field_registry: FieldHandlerRegistry | None = None
@@ -122,7 +123,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         self.register_message_handler("revoke", self._create_lifecycle_message)
 
     def validate_webhook_signature(
-        self, payload: bytes, signature: str, **kwargs
+        self, payload: bytes, signature: str, **kwargs: Any
     ) -> bool:
         if not settings.wp_webhook_verify_token:
             self.logger.warning(
@@ -155,7 +156,9 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             )
             return False
 
-    def parse_webhook_container(self, payload: dict[str, Any], **kwargs) -> BaseWebhook:
+    def parse_webhook_container(
+        self, payload: dict[str, Any], **kwargs: Any
+    ) -> "WhatsAppWebhook":
         try:
             from wappa.webhooks.whatsapp.webhook_container import WhatsAppWebhook
 
@@ -177,7 +180,10 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         return self._capabilities.supported_message_types
 
     def create_message_from_data(
-        self, message_data: dict[str, Any], message_type: MessageType, **kwargs
+        self,
+        message_data: dict[str, Any],
+        message_type: MessageType,
+        **kwargs: Any,
     ) -> BaseMessage:
         message_type_str = message_type.value
         handler = self.get_message_handler(message_type_str)
@@ -186,11 +192,11 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
             raise UnsupportedMessageTypeError(message_type_str, self.platform)
 
-        return handler(message_data, **kwargs)
+        return cast(BaseMessage, handler(message_data, **kwargs))
 
     def create_status_from_data(
-        self, status_data: dict[str, Any], **kwargs
-    ) -> BaseMessageStatus:
+        self, status_data: dict[str, Any], **kwargs: Any
+    ) -> "WhatsAppMessageStatus":
         try:
             from wappa.webhooks.whatsapp.status_models import WhatsAppMessageStatus
 
@@ -203,14 +209,14 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     # Message creation handlers
 
     def _create_text_message(
-        self, message_data: dict[str, Any], **kwargs
+        self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.text import WhatsAppTextMessage
 
         return WhatsAppTextMessage.model_validate(message_data)
 
     def _create_interactive_message(
-        self, message_data: dict[str, Any], **kwargs
+        self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.interactive import (
             WhatsAppInteractiveMessage,
@@ -219,28 +225,28 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         return WhatsAppInteractiveMessage.model_validate(message_data)
 
     def _create_image_message(
-        self, message_data: dict[str, Any], **kwargs
+        self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.image import WhatsAppImageMessage
 
         return WhatsAppImageMessage.model_validate(message_data)
 
     def _create_audio_message(
-        self, message_data: dict[str, Any], **kwargs
+        self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.audio import WhatsAppAudioMessage
 
         return WhatsAppAudioMessage.model_validate(message_data)
 
     def _create_video_message(
-        self, message_data: dict[str, Any], **kwargs
+        self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.video import WhatsAppVideoMessage
 
         return WhatsAppVideoMessage.model_validate(message_data)
 
     def _create_document_message(
-        self, message_data: dict[str, Any], **kwargs
+        self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.document import (
             WhatsAppDocumentMessage,
@@ -249,14 +255,14 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         return WhatsAppDocumentMessage.model_validate(message_data)
 
     def _create_contact_message(
-        self, message_data: dict[str, Any], **kwargs
+        self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.contact import WhatsAppContactMessage
 
         return WhatsAppContactMessage.model_validate(message_data)
 
     def _create_location_message(
-        self, message_data: dict[str, Any], **kwargs
+        self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.location import (
             WhatsAppLocationMessage,
@@ -265,21 +271,21 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         return WhatsAppLocationMessage.model_validate(message_data)
 
     def _create_sticker_message(
-        self, message_data: dict[str, Any], **kwargs
+        self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.sticker import WhatsAppStickerMessage
 
         return WhatsAppStickerMessage.model_validate(message_data)
 
     def _create_system_message(
-        self, message_data: dict[str, Any], **kwargs
-    ) -> BaseMessage:
+        self, message_data: dict[str, Any], **kwargs: Any
+    ) -> "WhatsAppSystemMessage":
         from wappa.webhooks.whatsapp.message_types.system import WhatsAppSystemMessage
 
         return WhatsAppSystemMessage.model_validate(message_data)
 
     def _create_unsupported_message(
-        self, message_data: dict[str, Any], **kwargs
+        self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.unsupported import (
             WhatsAppUnsupportedMessage,
@@ -288,7 +294,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         return WhatsAppUnsupportedMessage.model_validate(message_data)
 
     def _create_reaction_message(
-        self, message_data: dict[str, Any], **kwargs
+        self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.reaction import (
             WhatsAppReactionMessage,
@@ -297,21 +303,21 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         return WhatsAppReactionMessage.model_validate(message_data)
 
     def _create_button_message(
-        self, message_data: dict[str, Any], **kwargs
+        self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.button import WhatsAppButtonMessage
 
         return WhatsAppButtonMessage.model_validate(message_data)
 
     def _create_order_message(
-        self, message_data: dict[str, Any], **kwargs
+        self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.order import WhatsAppOrderMessage
 
         return WhatsAppOrderMessage.model_validate(message_data)
 
     def _create_lifecycle_message(
-        self, message_data: dict[str, Any], **kwargs
+        self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.lifecycle import (
             WhatsAppLifecycleMessage,
@@ -322,13 +328,17 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     # ===== Universal Webhook Interface Creation Methods =====
 
     async def create_universal_webhook(
-        self, payload: dict[str, Any], inbox_id: str | None = None, **kwargs
+        self,
+        payload: dict[str, Any],
+        inbox_id: str | None = None,
+        **kwargs: Any,
     ) -> "UniversalWebhook":
         try:
             webhook = self.parse_webhook_container(payload)
             self.logger.debug("Raw WhatsApp webhook received: %s", payload)
 
             inbox_base = self._create_inbox_base(webhook, inbox_id)
+            universal_webhook: UniversalWebhook | None
 
             # System events are checked BEFORE incoming messages because system
             # messages (type=="system") arrive in the messages field.
@@ -400,7 +410,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             ) from e
 
     def _create_inbox_base(
-        self, webhook: BaseWebhook, inbox_id: str | None = None
+        self, webhook: "WhatsAppWebhook", inbox_id: str | None = None
     ) -> "InboxBase":
         from wappa.webhooks.core.webhook_interfaces import InboxBase
 
@@ -424,7 +434,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         )
 
     async def _create_incoming_message_webhook(
-        self, webhook: BaseWebhook, inbox_base: "InboxBase", **kwargs
+        self, webhook: "WhatsAppWebhook", inbox_base: "InboxBase", **kwargs: Any
     ) -> "InboundMessageWebhook":
         from wappa.webhooks.core.webhook_interfaces import InboundMessageWebhook
 
@@ -471,7 +481,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         )
 
     async def _create_call_webhook(
-        self, webhook: BaseWebhook, inbox_base: "InboxBase", **kwargs
+        self, webhook: "WhatsAppWebhook", inbox_base: "InboxBase", **kwargs: Any
     ) -> "CallWebhook":
         from wappa.webhooks.core.webhook_interfaces import CallWebhook
 
@@ -483,6 +493,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 PlatformType.WHATSAPP,
             )
 
+        event: str
         if value.calls:
             call = value.calls[0]
             if call.direction == "USER_INITIATED":
@@ -547,7 +558,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         )
 
     async def _create_status_webhook(
-        self, webhook: BaseWebhook, inbox_base: "InboxBase", **kwargs
+        self, webhook: "WhatsAppWebhook", inbox_base: "InboxBase", **kwargs: Any
     ) -> "StatusWebhook":
         from wappa.webhooks.core.webhook_interfaces import StatusWebhook
 
@@ -586,7 +597,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         return StatusWebhook(
             inbox=inbox_base,
             message_id=getattr(status, "message_id", ""),
-            status=getattr(status, "status", "unknown"),
+            status=status.status,
             recipient_phone_id=recipient_phone_id,
             recipient_bsuid=recipient_bsuid,
             recipient_parent_bsuid=recipient_parent_bsuid,
@@ -612,15 +623,16 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         )
 
     async def _create_error_webhook(
-        self, webhook: BaseWebhook, inbox_base: "InboxBase", **kwargs
+        self, webhook: "WhatsAppWebhook", inbox_base: "InboxBase", **kwargs: Any
     ) -> "ErrorWebhook":
         from wappa.webhooks.core.webhook_interfaces import ErrorDetailBase, ErrorWebhook
 
         webhook_errors: list[dict[str, Any]] = []
         for entry in webhook.entry:
             for change in entry.changes:
-                if change.value.errors:
-                    webhook_errors.extend(change.value.errors)
+                errors = getattr(change.value, "errors", None)
+                if isinstance(errors, list):
+                    webhook_errors.extend(errors)
 
         if not webhook_errors:
             raise ProcessorError(
@@ -660,10 +672,10 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
     async def _create_custom_webhook(
         self,
-        webhook: BaseWebhook,
+        webhook: "WhatsAppWebhook",
         inbox_base: "InboxBase",
         payload: dict[str, Any],
-        **kwargs,
+        **kwargs: Any,
     ) -> "CustomWebhook":
         """Build a CustomWebhook for an app-registered Meta webhook field.
 
@@ -675,7 +687,14 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
         change = webhook.entry[0].changes[0]
         field_name = change.field
-        handler_spec = self._field_registry.get(field_name)
+        registry = self._field_registry
+        if registry is None:
+            raise ProcessorError(
+                "No custom field registry is configured",
+                ErrorCode.PROCESSING_ERROR,
+                PlatformType.WHATSAPP,
+            )
+        handler_spec = registry.get(field_name)
         if handler_spec is None:
             raise ProcessorError(
                 f"No registered handler for webhook field '{field_name}'",
@@ -705,7 +724,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         )
 
     async def _create_system_webhook(
-        self, webhook: BaseWebhook, inbox_base: "InboxBase", **kwargs
+        self, webhook: "WhatsAppWebhook", inbox_base: "InboxBase", **kwargs: Any
     ) -> "SystemWebhook":
         # Handles direct fields and system messages carried by messages[].
         # - field: "user_preferences"           → MARKETING_PREFERENCE
@@ -984,6 +1003,13 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                     webhook, message.sender_id
                 )
 
+        if system_event_type is None or event_detail is None:
+            raise ProcessorError(
+                f"Unsupported system webhook field '{field}'",
+                ErrorCode.PROCESSING_ERROR,
+                PlatformType.WHATSAPP,
+            )
+
         return SystemWebhook(
             inbox=inbox_base,
             system_event_type=system_event_type,
@@ -995,7 +1021,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         )
 
     def _create_user_base_from_contacts(
-        self, webhook: BaseWebhook, sender_id: str
+        self, webhook: "WhatsAppWebhook", sender_id: str
     ) -> "UserBase":
         from wappa.webhooks.core.webhook_interfaces import UserBase
 
@@ -1024,7 +1050,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         )
 
     def _create_whatsapp_incoming_data(
-        self, webhook: BaseWebhook, sender_id: str
+        self, webhook: "WhatsAppWebhook", sender_id: str
     ) -> "WhatsAppIncomingWebhookData":
         from wappa.webhooks.core.webhook_interfaces import WhatsAppIncomingWebhookData
 
@@ -1047,7 +1073,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         )
 
     def _create_status_user_from_contacts(
-        self, webhook: BaseWebhook, recipient_id: str
+        self, webhook: "WhatsAppWebhook", recipient_id: str
     ) -> "UserBase | None":
         """Build status recipient data when Meta includes the contacts block."""
         contacts = webhook.get_contacts()

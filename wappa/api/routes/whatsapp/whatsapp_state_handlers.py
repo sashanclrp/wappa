@@ -9,6 +9,8 @@ The state handler API is message-agnostic and can be used after any message
 type (template, media, text, interactive, etc.) to assign workflow routing.
 """
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from wappa.api.dependencies.cache_dependencies import get_handler_state_service
@@ -123,7 +125,7 @@ async def get_handler_state(
         ),
     ),
     handler_service: HandlerStateService = Depends(get_handler_state_service),
-):
+) -> dict[str, Any]:
     """
     Get handler state for a user.
 
@@ -185,7 +187,7 @@ async def delete_handler_state(
         ),
     ),
     handler_service: HandlerStateService = Depends(get_handler_state_service),
-):
+) -> dict[str, Any]:
     """
     Delete handler state for a user.
 

@@ -21,7 +21,6 @@ from .specialized_models import (
     PersonalContact,
 )
 from .template_models import (
-    TemplateMessageStatus,
     TemplateParameter,
     TemplateParameterType,
     TemplateStateConfig,
@@ -51,7 +50,6 @@ __all__ = [
     "BusinessContact",
     "PersonalContact",
     "TemplateParameter",
-    "TemplateMessageStatus",
     "TemplateParameterType",
     "TemplateStateConfig",
     "WhatsAppTemplateMediaType",

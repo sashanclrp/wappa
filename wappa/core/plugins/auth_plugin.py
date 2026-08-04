@@ -75,6 +75,8 @@ class AuthPlugin:
         self.sse_token_param = sse_token_param
         self.expose_user = expose_user
         self.priority = middleware_priority
+        self.protect: list[str] | None
+        self.exclude: list[str] | None
 
         if protect is not None:
             # Protect mode: only these paths require auth

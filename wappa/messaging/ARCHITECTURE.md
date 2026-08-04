@@ -72,7 +72,7 @@ messaging/
 | `WhatsAppTemplateInfoService` | Stateless read service for WABA-scoped template metadata. Uses `WhatsAppManagementUrlBuilder`. |
 | `MessageResult` | Uniform result VO returned by every send method. |
 | `OutboundRuntime` | Deep public factory over credentials, sessions, Messenger construction, and Messenger Pipeline composition. |
-| `InboxTemplateTransport` | Small capability bound to one Inbox; accepts provider-facing typed requests and returns normalized transport evidence. |
+| `InboxTemplateTransport` | Small capability bound to one Inbox; accepts platform-facing typed requests and returns normalized transport evidence. |
 | `TemplateTransportResult` | Accepted/rejected/unavailable/indeterminate evidence. Acceptance requires a platform Message ID and does not imply delivery or local commit. |
 
 ## Design Patterns
@@ -102,7 +102,7 @@ Host application
 ```
 Host Application use case
   → OutboundRuntime.from_app(app).templates(inbox_id)
-  → InboxTemplateTransport.send(typed provider-facing request)
+  → InboxTemplateTransport.send(typed platform-facing request)
       → Inbox credential resolution + active SessionLifecycle client
       → WhatsApp Messenger construction + registered Messenger Pipeline
       → WhatsAppTemplateHandler endpoint/payload/media work
@@ -152,7 +152,7 @@ through both construction paths:
 
 `IMessenger` remains Wappa's general outbound interface. The Template transport
 is the first deliberately smaller capability because a real Host Application
-needed to depend on provider sending without receiving the rest of Messenger or
+needed to depend on platform sending without receiving the rest of Messenger or
 constructing its internal pipeline.
 
 **Why the seam stays whole:**

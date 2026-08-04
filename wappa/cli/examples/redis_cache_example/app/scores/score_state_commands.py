@@ -7,6 +7,8 @@ This module handles all state-related commands including:
 - WAPPA state message processing
 """
 
+from typing import cast
+
 from wappa.webhooks import InboundMessageWebhook
 
 from ..models.redis_demo_models import StateHandler
@@ -47,7 +49,10 @@ class StateCommandsScore(ScoreBase):
         # User identity is already bound in cache_factory
         try:
             # IStateCache.get() takes (handler_name, models=...)
-            state = await self.state_cache.get(WAPPA_HANDLER, models=StateHandler)
+            state = cast(
+                StateHandler | None,
+                await self.state_cache.get(WAPPA_HANDLER, models=StateHandler),
+            )
             return state is not None and state.is_wappa
         except Exception:
             return False
@@ -152,7 +157,10 @@ class StateCommandsScore(ScoreBase):
         """
         try:
             # Check if user has WAPPA state using IStateCache interface
-            state = await self.state_cache.get(WAPPA_HANDLER, models=StateHandler)
+            state = cast(
+                StateHandler | None,
+                await self.state_cache.get(WAPPA_HANDLER, models=StateHandler),
+            )
 
             if state and state.is_wappa:
                 # Calculate session stats
@@ -215,7 +223,10 @@ class StateCommandsScore(ScoreBase):
         """
         try:
             # Get state using IStateCache interface
-            state = await self.state_cache.get(WAPPA_HANDLER, models=StateHandler)
+            state = cast(
+                StateHandler | None,
+                await self.state_cache.get(WAPPA_HANDLER, models=StateHandler),
+            )
 
             if state and state.is_wappa:
                 # Update state with command processing
@@ -262,7 +273,10 @@ class StateCommandsScore(ScoreBase):
             True if user is in WAPPA state
         """
         try:
-            state = await self.state_cache.get(WAPPA_HANDLER, models=StateHandler)
+            state = cast(
+                StateHandler | None,
+                await self.state_cache.get(WAPPA_HANDLER, models=StateHandler),
+            )
             return state is not None and state.is_wappa
         except Exception as e:
             self.logger.error(f"Error checking WAPPA state: {e}")
