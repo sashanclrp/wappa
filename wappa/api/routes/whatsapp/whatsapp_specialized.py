@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_messenger
-from wappa.api.routes.whatsapp.route_families import outbound_and_service_routers
+from wappa.api.routes.whatsapp.route_families import RouteFamily
 from wappa.api.utils import dispatch_message_event, map_whatsapp_api_error_to_status
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.logger import get_logger
@@ -38,7 +38,7 @@ def _raise_for_whatsapp_error(result: MessageResult, operation_name: str) -> Non
 
 # Contact/location sends are omissible outbound mutations; the validation
 # endpoints touch no platform and stay mounted.
-send_router, router = outbound_and_service_routers(
+_family = RouteFamily(
     prefix="/specialized",
     tags=["WhatsApp - Specialized"],
     responses={
@@ -48,6 +48,8 @@ send_router, router = outbound_and_service_routers(
         500: {"description": "Internal server error"},
     },
 )
+send_router = _family.router()
+router = _family.router()
 
 
 # Request Models

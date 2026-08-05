@@ -8,7 +8,7 @@ Build intelligent WhatsApp bots, workflows, and chat applications with clean arc
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.137+-green.svg)](https://fastapi.tiangolo.com)
 [![WhatsApp Business API](https://img.shields.io/badge/WhatsApp-Business%20API-25D366.svg)](https://developers.facebook.com/docs/whatsapp)
-[![Version](https://img.shields.io/badge/version-0.26.0-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.26.1-orange.svg)](CHANGELOG.md)
 
 > **v0.13.0 — Clean-break release** — `inbox_id` replaces `tenant_id`/`owner_id` as core identity, all compatibility shims removed, webhook schemas consolidated under `wappa/webhooks/`, inbound dispatch context added for multi-inbox routing. See [CHANGELOG.md](CHANGELOG.md) for the full breakdown.
 
@@ -123,12 +123,17 @@ result = await transport.send(
 Application commit. Wappa's standalone Template HTTP routes are opt-in with
 `Wappa(include_template_transport_api=True)`.
 
-An embedding application that owns its own authenticated send boundary can also
-drop Wappa's ordinary outbound HTTP routes with
-`Wappa(include_outbound_transport_api=False)`. That removes only the send
-endpoints — media upload/download/lookup, limits, validation, Template info,
-state handlers, webhooks, health, and every `wappa.messaging` service stay
-exactly as they are. Standalone applications need no change.
+An embedding application that owns its own authenticated boundary drops Wappa's
+unauthenticated mutation surface with one argument:
+
+```python
+app = Wappa(cache="redis", route_profile="embedded")
+```
+
+That omits every route which sends a message, deletes a media asset, or
+rewrites a recipient's cached state. Media upload/download/lookup, limits,
+validation, Template info, webhooks, health, and every `wappa.messaging`
+service stay exactly as they are. Standalone applications need no change.
 
 ### 🏭 **Factory Pattern for Cross-Platform Messages** (v0.3.0)
 Text/read-status payloads and media payloads have separate owners:

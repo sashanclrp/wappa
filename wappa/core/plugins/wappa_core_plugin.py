@@ -27,12 +27,20 @@ class WappaCorePlugin:
         self,
         cache_type: CacheType = CacheType.MEMORY,
         *,
-        include_template_transport_api: bool = False,
-        include_outbound_transport_api: bool = True,
+        route_profile: str | None = None,
+        include_template_transport_api: bool | None = None,
+        include_outbound_transport_api: bool | None = None,
+        include_media_management_api: bool | None = None,
+        include_media_upload_api: bool | None = None,
+        include_state_handler_api: bool | None = None,
     ) -> None:
         self.cache_type = cache_type
+        self.route_profile = route_profile
         self.include_template_transport_api = include_template_transport_api
         self.include_outbound_transport_api = include_outbound_transport_api
+        self.include_media_management_api = include_media_management_api
+        self.include_media_upload_api = include_media_upload_api
+        self.include_state_handler_api = include_state_handler_api
         self._session_lifecycle: SessionLifecycle | None = None
         self._background_work_tracker: BackgroundWorkTracker | None = None
 
@@ -51,8 +59,12 @@ class WappaCorePlugin:
         builder.add_router(health_router, public=True)
         builder.add_router(
             create_whatsapp_router(
+                profile=self.route_profile,
                 include_template_transport=self.include_template_transport_api,
                 include_outbound_transport=self.include_outbound_transport_api,
+                include_media_management=self.include_media_management_api,
+                include_media_upload=self.include_media_upload_api,
+                include_state_handler_api=self.include_state_handler_api,
             )
         )
 

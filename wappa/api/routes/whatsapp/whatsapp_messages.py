@@ -18,7 +18,7 @@ from wappa.api.dependencies.whatsapp_dependencies import (
     get_whatsapp_message_factory,
     get_whatsapp_messenger,
 )
-from wappa.api.routes.whatsapp.route_families import outbound_and_service_routers
+from wappa.api.routes.whatsapp.route_families import RouteFamily
 from wappa.api.utils import dispatch_message_event
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.logger import get_logger
@@ -31,7 +31,7 @@ from wappa.messaging.whatsapp.models.basic_models import (
 )
 
 # Outbound mutations (`send_router`) are omissible; message limits are not.
-send_router, router = outbound_and_service_routers(
+_family = RouteFamily(
     prefix="/messages",
     tags=["WhatsApp - Messages"],
     responses={
@@ -41,6 +41,8 @@ send_router, router = outbound_and_service_routers(
         500: {"description": "Internal Server Error"},
     },
 )
+send_router = _family.router()
+router = _family.router()
 
 
 @send_router.post(

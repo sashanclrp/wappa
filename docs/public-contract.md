@@ -427,41 +427,56 @@ Wappa's standalone Template HTTP adapter is disabled by default. A standalone
 host opts in with `Wappa(include_template_transport_api=True)`. Embedding hosts
 receive no raw Template mutation routes unless they make that choice.
 
-## Outbound HTTP route composition
+## HTTP route composition
 
-Wappa's WhatsApp HTTP surface is composed from three independently selectable
-groups. See [ADR-0007](adr/0007-embedded-outbound-route-control.md).
+Wappa's WhatsApp surface is grouped by **what an unauthenticated caller could
+do**, not by which module a route lives in. See
+[ADR-0007](adr/0007-embedded-outbound-route-control.md) and
+[ADR-0009](adr/0009-route-capability-groups.md).
 
-| Capability | Standalone default | Embedded host |
+| Capability | `standalone` (default) | `embedded` |
 | --- | --- | --- |
-| Ordinary outbound mutations | mounted | omitted |
-| Interactive outbound mutations | mounted | omitted |
-| Template outbound mutations | omitted | omitted |
-| Media upload / download / lookup | mounted | mounted |
-| Webhooks, health, limits, validation, Template info, state handlers | mounted | mounted |
+| Ordinary + interactive outbound sends | mounted | **omitted** |
+| Template outbound sends | omitted | omitted |
+| `DELETE /media/{id}` (destroys a platform asset) | mounted | **omitted** |
+| `POST /media/upload` (creates a platform asset) | mounted | mounted |
+| `/state-handlers/*` (any recipient's cached state) | mounted | **omitted** |
+| Media download / info / limits | mounted | mounted |
+| Health, limits, validation, Template info | mounted | mounted |
 | `wappa.messaging` services | available | available |
 
-- `Wappa(include_outbound_transport_api=False)` omits every ordinary and
-  interactive outbound mutation route: `/messages/send-text`,
-  `/messages/mark-as-read`, `/media/send-{image,video,audio,document,sticker}`,
-  `/interactive/send-*`, and
-  `/specialized/send-{contact,location,location-request}`.
-- It removes nothing else. `/media/upload`, `/media/info/{id}`,
-  `/media/download/{id}`, `DELETE /media/{id}`, every `/limits` endpoint,
-  `/specialized/validate-*`, `/templates/info/*`, `/state-handlers/*`,
-  webhooks, and health all stay mounted.
-- `include_outbound_transport_api` defaults to `True`, so a standalone Wappa
-  application keeps the surface it has always had. Only an embedding host that
-  owns its own authenticated send boundary turns it off.
-- Route composition never gates sending. `IMessenger`, `OutboundRuntime`, and
-  `InboxTemplateTransport` behave identically either way; what the option
-  removes is the *unauthenticated* HTTP path to them.
-- `create_whatsapp_router(include_outbound_transport=..., include_template_transport=...)`
-  is the underlying composition function for hosts assembling routers directly.
+```python
+Wappa(route_profile="embedded")            # the whole group, one argument
+Wappa(route_profile="embedded", include_media_upload_api=False)   # and close upload
+```
 
-**Upgrade note.** No action is required. Hosts that previously copied or
-monkeypatched Wappa's routers to hide send endpoints should replace that with
-`include_outbound_transport_api=False`.
+Individual capabilities are also settable on their own and always win over the
+profile: `include_outbound_transport_api`, `include_template_transport_api`,
+`include_media_management_api`, `include_media_upload_api`,
+`include_state_handler_api`. Each defaults to `None`, meaning "take it from the
+profile".
+
+**Ejecting sends implies the embedded profile.** Passing
+`include_outbound_transport_api=False` without naming a profile also omits
+media management and the state-handler API, because a host that owns its send
+boundary owns the rest of the mutation surface too.
+
+Under `embedded`, the only mounted route that reaches the platform or rewrites
+stored state is `POST /media/upload`; one flag closes it. The
+`/specialized/validate-*` routes are `POST` because they take a body, but they
+perform no I/O and change nothing.
+
+Route composition never gates sending. `IMessenger`, `OutboundRuntime`, and
+`InboxTemplateTransport` behave identically under every profile; what a profile
+removes is the *unauthenticated HTTP path* to them.
+
+`create_whatsapp_router(profile=..., include_*=...)` is the underlying
+composition function for hosts assembling routers directly.
+
+**Upgrade note.** Standalone applications need no action. Hosts already passing
+`include_outbound_transport_api=False` get the wider gating automatically and
+should confirm they did not depend on Wappa serving `/state-handlers/*` or
+`DELETE /media/{id}` over an unauthenticated route.
 
 ## Outbound payload classification
 

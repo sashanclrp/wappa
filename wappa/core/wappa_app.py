@@ -65,8 +65,12 @@ class Wappa:
         cache: CacheTypeOptions = "memory",
         config: dict | None = None,
         inbox_credential_store: "IInboxCredentialStore | None" = None,
-        include_template_transport_api: bool = False,
-        include_outbound_transport_api: bool = True,
+        route_profile: str | None = None,
+        include_template_transport_api: bool | None = None,
+        include_outbound_transport_api: bool | None = None,
+        include_media_management_api: bool | None = None,
+        include_media_upload_api: bool | None = None,
+        include_state_handler_api: bool | None = None,
     ):
         """
         Initialize Wappa application with plugin-based architecture.
@@ -79,15 +83,28 @@ class Wappa:
             config: Optional configuration overrides for FastAPI app
             inbox_credential_store: Optional custom credential store for resolving
                 inbox credentials. Defaults to SettingsInboxCredentialStore.
-            include_template_transport_api: Mount Wappa's standalone Template
-                mutation routes. Disabled by default for embedding safety.
-            include_outbound_transport_api: Mount Wappa's ordinary outbound
-                mutation routes (text, media sends, interactive, contact,
-                location, mark-as-read). Enabled by default, matching a
-                standalone Wappa application. An embedding host that owns its
-                own authenticated send boundary disables it and keeps media
-                upload/download/lookup, limits, validation, Template info,
-                state handlers, health, and every `wappa.messaging` service.
+            route_profile: Which HTTP capability groups to mount.
+                "standalone" (default) is the surface a standalone Wappa app
+                has always had. "embedded" omits every route that sends,
+                deletes, or rewrites state — use it when your application owns
+                an authenticated boundary. Reads, lookups, media upload, and
+                every `wappa.messaging` service stay either way.
+            include_template_transport_api: Mount Template mutation routes.
+                Off under both profiles unless asked for.
+            include_outbound_transport_api: Mount ordinary send routes.
+                Passing False without a profile implies "embedded", so the
+                other unauthenticated mutations go with it.
+            include_media_management_api: Mount DELETE /media/{id}, which
+                destroys a media asset on the platform.
+            include_media_upload_api: Mount POST /media/upload. Kept under the
+                embedded profile because hosts still need Wappa's upload path;
+                pass False to close it.
+            include_state_handler_api: Mount /state-handlers/*, which reads,
+                overwrites, and deletes the cached conversational state of any
+                recipient named in the request.
+
+            Every include_* option defaults to None, meaning "take it from the
+            profile". Naming one explicitly always wins.
 
         Raises:
             ValueError: If cache type is not supported
@@ -105,8 +122,12 @@ class Wappa:
             self._builder.with_inbox_credential_store(inbox_credential_store)
         self._core_plugin = WappaCorePlugin(
             cache_type=self.cache_type,
+            route_profile=route_profile,
             include_template_transport_api=include_template_transport_api,
             include_outbound_transport_api=include_outbound_transport_api,
+            include_media_management_api=include_media_management_api,
+            include_media_upload_api=include_media_upload_api,
+            include_state_handler_api=include_state_handler_api,
         )
         self._builder.add_plugin(self._core_plugin)
 

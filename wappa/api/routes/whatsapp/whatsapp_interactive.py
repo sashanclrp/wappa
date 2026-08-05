@@ -16,7 +16,7 @@ from fastapi import Depends, HTTPException, Request
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_messenger
-from wappa.api.routes.whatsapp.route_families import outbound_and_service_routers
+from wappa.api.routes.whatsapp.route_families import RouteFamily
 from wappa.api.utils import (
     dispatch_message_event,
     raise_for_failed_result,
@@ -67,7 +67,7 @@ INTERACTIVE_ERROR_GROUPS = {
 
 # Interactive sends are omissible outbound mutations; the limits endpoint
 # is a read an embedding host still uses for admission checks.
-send_router, router = outbound_and_service_routers(
+_family = RouteFamily(
     prefix="/interactive",
     tags=["WhatsApp - Interactive"],
     responses={
@@ -79,6 +79,8 @@ send_router, router = outbound_and_service_routers(
         500: {"description": "Internal Server Error"},
     },
 )
+send_router = _family.router()
+router = _family.router()
 
 
 @send_router.post(

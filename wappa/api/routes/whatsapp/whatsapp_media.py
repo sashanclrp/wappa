@@ -30,7 +30,7 @@ from wappa.api.dependencies.whatsapp_dependencies import (
 from wappa.api.dependencies.whatsapp_media_dependencies import (
     get_whatsapp_media_factory,
 )
-from wappa.api.routes.whatsapp.route_families import outbound_and_service_routers
+from wappa.api.routes.whatsapp.route_families import RouteFamily
 from wappa.api.utils import dispatch_message_event
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.domain.factories.media_factory import MediaFactory
@@ -50,9 +50,9 @@ from wappa.messaging.whatsapp.models.media_models import (
     VideoMessage,
 )
 
-# Sending media is an omissible outbound mutation; uploading, downloading, and
-# inspecting media is infrastructure an embedding host still needs.
-send_router, router = outbound_and_service_routers(
+# One prefix, four capability groups. `DELETE /media/{id}` destroys a platform
+# asset, so it is gated apart from the reads it sits next to — see ADR-0009.
+_family = RouteFamily(
     prefix="/media",
     tags=["WhatsApp - Media"],
     responses={
@@ -65,9 +65,13 @@ send_router, router = outbound_and_service_routers(
         500: {"description": "Internal Server Error"},
     },
 )
+send_router = _family.router()  # sends media to a User
+upload_router = _family.router()  # creates a platform media asset
+management_router = _family.router()  # destroys a platform media asset
+router = _family.router()  # reads: download, info, limits
 
 
-@router.post(
+@upload_router.post(
     "/upload",
     response_model=MediaUploadResult,
     summary="Upload Media",
@@ -425,7 +429,7 @@ async def download_media(
         ) from e
 
 
-@router.delete(
+@management_router.delete(
     "/{media_id}",
     response_model=MediaDeleteResult,
     summary="Delete Media",

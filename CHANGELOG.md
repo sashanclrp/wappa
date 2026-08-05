@@ -5,6 +5,29 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.1] - 2026-08-05
+
+Security follow-up to 0.26.0. Ejecting Wappa's send routes left three unauthenticated routes that still mutate: `DELETE /media/{id}`, and the `/state-handlers/*` pair that reads, overwrites, and deletes the cached conversational state of **any** recipient named in the request. Route grouping is now drawn along what an unauthenticated caller could *do*, not along whether a route sends a message. Recorded in [ADR-0009](docs/adr/0009-route-capability-groups.md).
+
+Standalone applications are unaffected — the surface is byte-identical. Hosts already passing `include_outbound_transport_api=False` get the wider gating automatically, without changing a line.
+
+### Added
+- **`Wappa(route_profile="embedded")`** — one argument that omits every route which sends a message, destroys a media asset, or rewrites a recipient's cached state. Reads, lookups, media upload, Template info, webhooks, health, and every `wappa.messaging` service stay. `"standalone"` (the default) is the surface a standalone Wappa app has always had.
+- **Three further capability flags**, each defaulting to `None` ("take it from the profile") and each overriding the profile when named: `include_media_management_api` (`DELETE /media/{id}`), `include_media_upload_api` (`POST /media/upload`), `include_state_handler_api` (`/state-handlers/*`). Available on `Wappa`, `WappaCorePlugin`, and `create_whatsapp_router`.
+- `WhatsAppRouteProfile` and `WhatsAppRouteCapabilities` in `wappa.api.routes.whatsapp.route_families`, plus `RouteFamily`, which mints one router per capability group from a single prefix/tag/response description.
+
+### Changed
+- **`include_outbound_transport_api=False` now implies the embedded profile** when no profile is named. Ejecting sends also ejects media management and the state-handler API, because a host that owns its send boundary owns the rest of the mutation surface. Name any capability explicitly to override.
+- **`/state-handlers/get` is grouped with the state writes, not the reads.** It exposes an arbitrary recipient's state, so a host ejecting the writes almost never wants the read left open.
+- `POST /media/upload` and `DELETE /media/{id}` moved to their own routers inside `whatsapp_media.py`, so the media prefix now serves four capability groups instead of two.
+
+### Security
+- Under the embedded profile the only mounted route that reaches the platform or rewrites stored state is `POST /media/upload`, kept because an embedding host still needs Wappa's upload path and closable with `include_media_upload_api=False`. The `/specialized/validate-*` routes are `POST` because they take a body; they perform no I/O and change nothing.
+- The invariant is asserted directly against the composed route table rather than the constructor flags: `EVERY_MUTATION & mounted == MEDIA_UPLOAD_ROUTES`.
+
+### Verification
+`uv run ruff check .` clean, `uv run ruff format --check` clean, `uv run mypy wappa` clean, `uv run pytest` → 532 passed (11 new route-composition tests, 20 in that suite).
+
 ## [0.26.0] - 2026-08-05
 
 Hardening for embedding hosts: atomic cache transitions so a race has one winner, an explicit opt-out for Wappa's raw outbound HTTP routes, one classifier so nothing re-derives what kind of send a payload is, and two correctness fixes in the Redis cache layer. Every existing default is preserved, but **this release contains breaking changes** for hosts that implement `ITableCache` themselves or call `IExpiryCache.delete_all_for_user()`. See Fixed and the watch-outs below.

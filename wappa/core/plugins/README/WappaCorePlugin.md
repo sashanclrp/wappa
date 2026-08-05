@@ -95,19 +95,25 @@ When the shutdown hook fires (priority 90, after all other plugins have shut dow
 | Parameter    | Type        | Default            | Description                                |
 | ------------ | ----------- | ------------------ | ------------------------------------------ |
 | `cache_type` | `CacheType` | `CacheType.MEMORY` | Cache backend for the application to use.  |
-| `include_template_transport_api` | `bool` | `False` | Explicitly mount Wappa's standalone Template mutation adapter. |
-| `include_outbound_transport_api` | `bool` | `True` | Mount Wappa's ordinary outbound mutation routes (text, media sends, interactive, contact, location, mark-as-read). |
+| `route_profile` | `str \| None` | `None` → `"standalone"` | Which capability groups to mount: `"standalone"` or `"embedded"`. |
+| `include_template_transport_api` | `bool \| None` | profile | Template mutation routes. |
+| `include_outbound_transport_api` | `bool \| None` | profile | Ordinary + interactive send routes. `False` without a profile implies `"embedded"`. |
+| `include_media_management_api` | `bool \| None` | profile | `DELETE /media/{id}` — destroys a platform asset. |
+| `include_media_upload_api` | `bool \| None` | profile | `POST /media/upload` — creates a platform asset. |
+| `include_state_handler_api` | `bool \| None` | profile | `/state-handlers/*` — any recipient's cached state. |
 
-`Wappa` exposes the same choices as
-`Wappa(include_template_transport_api=True)` and
-`Wappa(include_outbound_transport_api=False)`.
+`Wappa` exposes all of these. An embedding host that owns an authenticated
+boundary uses one argument:
 
-Embedding hosts leave Template transport disabled and turn the outbound
-transport API off, so Wappa exposes no unauthenticated way to send. That
-removes only the send routes: media upload/download/lookup, every `/limits`
-endpoint, `/specialized/validate-*`, Template info, state handlers, webhooks,
-and health stay mounted, and `wappa.messaging` services are unaffected. See
-[ADR-0007](../../../../docs/adr/0007-embedded-outbound-route-control.md).
+```python
+app = Wappa(cache="redis", route_profile="embedded")
+```
+
+That omits every route which sends, deletes, or rewrites state, and keeps
+reads, lookups, media upload, Template info, webhooks, health, and every
+`wappa.messaging` service. Add `include_media_upload_api=False` to close the
+last platform-reaching route. See
+[ADR-0009](../../../../docs/adr/0009-route-capability-groups.md).
 
 Supported `CacheType` values are defined in `wappa.core.types`:
 
