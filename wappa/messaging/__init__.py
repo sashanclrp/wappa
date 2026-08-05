@@ -19,6 +19,13 @@ from wappa.core.messaging.pipeline import (
 )
 from wappa.domain.interfaces.messaging_interface import IMessenger
 
+from .classification import (
+    OutboundClassification,
+    OutboundTransportFamily,
+    OutboundTransportSubkind,
+    UnsupportedOutboundPayloadError,
+    classify_outbound_payload,
+)
 from .template_transport import (
     BsuidTemplateRecipient,
     InboxTemplateTransport,
@@ -52,6 +59,12 @@ __all__ = [
     "SendInvocation",
     "SendNext",
     "PRIORITY_CACHE",
+    # Outbound payload classification (transport shape, not authority)
+    "classify_outbound_payload",
+    "OutboundClassification",
+    "OutboundTransportFamily",
+    "OutboundTransportSubkind",
+    "UnsupportedOutboundPayloadError",
     # Inbox-scoped outbound Template transport
     "OutboundRuntime",
     "InboxTemplateTransport",

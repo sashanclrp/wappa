@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -75,6 +76,72 @@ class JSONStorageManager:
         except Exception as e:
             logger.error(f"Failed to set key '{key}' in {cache_type} cache: {e}")
             return False
+
+    async def create_if_absent(
+        self,
+        cache_type: str,
+        inbox_id: str,
+        user_id: str | None,
+        key: str,
+        value: Any,
+        ttl: int | None = None,
+    ) -> tuple[bool, Any]:
+        """Write a key only when the file holds no live entry for it.
+
+        Returns ``(created, existing)``. The read and the write share one file
+        lock, so two coroutines cannot both conclude the key was absent.
+        """
+        file_path = file_manager.get_cache_file_path(cache_type, inbox_id, user_id)
+        async with file_manager.locked(file_path):
+            cache_data = await self._read_live_data(file_path)
+            existing = cache_data.get(key)
+            if existing is not None:
+                return False, deserialize_from_json(existing)
+
+            cache_data[key] = serialize_for_json(value)
+            await file_manager.write_unlocked(
+                file_path, create_cache_file_data(cache_data, ttl)
+            )
+            return True, None
+
+    async def replace_if(
+        self,
+        cache_type: str,
+        inbox_id: str,
+        user_id: str | None,
+        key: str,
+        value: Any,
+        matches: Callable[[Any], bool],
+        ttl: int | None = None,
+    ) -> tuple[str, Any]:
+        """Replace a live entry only when ``matches`` accepts the current one.
+
+        Returns ``("replaced" | "condition_not_met" | "missing", current)``. A
+        refused replacement writes nothing, so the file's expiry survives it.
+        """
+        file_path = file_manager.get_cache_file_path(cache_type, inbox_id, user_id)
+        async with file_manager.locked(file_path):
+            cache_data = await self._read_live_data(file_path)
+            stored = cache_data.get(key)
+            if stored is None:
+                return "missing", None
+
+            current = deserialize_from_json(stored)
+            if not matches(current):
+                return "condition_not_met", current
+
+            cache_data[key] = serialize_for_json(value)
+            await file_manager.write_unlocked(
+                file_path, create_cache_file_data(cache_data, ttl)
+            )
+            return "replaced", None
+
+    async def _read_live_data(self, file_path: Path) -> dict[str, Any]:
+        """Read unexpired cache contents while the file lock is already held."""
+        file_data = await file_manager.read_unlocked(file_path)
+        if not file_data:
+            return {}
+        return extract_cache_file_data(file_data) or {}
 
     async def delete(
         self, cache_type: str, inbox_id: str, user_id: str | None, key: str

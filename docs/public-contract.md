@@ -427,6 +427,71 @@ Wappa's standalone Template HTTP adapter is disabled by default. A standalone
 host opts in with `Wappa(include_template_transport_api=True)`. Embedding hosts
 receive no raw Template mutation routes unless they make that choice.
 
+## Outbound HTTP route composition
+
+Wappa's WhatsApp HTTP surface is composed from three independently selectable
+groups. See [ADR-0007](adr/0007-embedded-outbound-route-control.md).
+
+| Capability | Standalone default | Embedded host |
+| --- | --- | --- |
+| Ordinary outbound mutations | mounted | omitted |
+| Interactive outbound mutations | mounted | omitted |
+| Template outbound mutations | omitted | omitted |
+| Media upload / download / lookup | mounted | mounted |
+| Webhooks, health, limits, validation, Template info, state handlers | mounted | mounted |
+| `wappa.messaging` services | available | available |
+
+- `Wappa(include_outbound_transport_api=False)` omits every ordinary and
+  interactive outbound mutation route: `/messages/send-text`,
+  `/messages/mark-as-read`, `/media/send-{image,video,audio,document,sticker}`,
+  `/interactive/send-*`, and
+  `/specialized/send-{contact,location,location-request}`.
+- It removes nothing else. `/media/upload`, `/media/info/{id}`,
+  `/media/download/{id}`, `DELETE /media/{id}`, every `/limits` endpoint,
+  `/specialized/validate-*`, `/templates/info/*`, `/state-handlers/*`,
+  webhooks, and health all stay mounted.
+- `include_outbound_transport_api` defaults to `True`, so a standalone Wappa
+  application keeps the surface it has always had. Only an embedding host that
+  owns its own authenticated send boundary turns it off.
+- Route composition never gates sending. `IMessenger`, `OutboundRuntime`, and
+  `InboxTemplateTransport` behave identically either way; what the option
+  removes is the *unauthenticated* HTTP path to them.
+- `create_whatsapp_router(include_outbound_transport=..., include_template_transport=...)`
+  is the underlying composition function for hosts assembling routers directly.
+
+**Upgrade note.** No action is required. Hosts that previously copied or
+monkeypatched Wappa's routers to hide send endpoints should replace that with
+`include_outbound_transport_api=False`.
+
+## Outbound payload classification
+
+`classify_outbound_payload(payload)` names the transport family of any
+validated Wappa outbound schema. It is pure, has no I/O, and reads nothing but
+the payload's own shape.
+
+- `OutboundClassification(family, subkind)` with `family` in `text`, `media`,
+  `interactive`, `location`, `contact`, `template`, `read_receipt`
+- `subkind` names the variant where a family has several: `image` / `video` /
+  `audio` / `document` / `sticker`, `button` / `list` / `cta` /
+  `location_request`, and `text_header` / `media_header` / `location_header`
+- `is_template` — whether the payload is a Template envelope
+- `message_type` — the label Wappa reports in outbound API events. Media and
+  interactive sends report their variant (`"image"`, `"button"`); every
+  Template reports `"template"`, because which header it carries does not
+  change what kind of send it was.
+- `UnsupportedOutboundPayloadError` for anything that is not an outbound send
+  schema, including a base class that names no concrete transport
+
+All three Template envelope variants classify as one `template` family and keep
+their header as a subkind. A Host Application subclass of a concrete schema
+classifies as the schema it extends.
+
+**Classification is transport shape, not product authority.** A payload is a
+Template because it is a Template envelope — never because of who is sending
+it, which Conversation or Campaign it belongs to, or what metadata rides along.
+Whether a given send is *permitted* is a Host Application question, and this
+function is deliberately unable to answer it.
+
 ## Canonical Import Paths (SDK Surface)
 
 Host applications should prefer these shallow imports over deep internal paths.
@@ -451,6 +516,8 @@ Internal module paths (`wappa.core.*`, `wappa.persistence.redis.redis_handler.*`
 
 - `IMessenger`
 - `MessengerMiddleware`, `MessengerPipeline`, `SendInvocation`, `SendNext`, `PRIORITY_CACHE`
+- `classify_outbound_payload`, `OutboundClassification`, `OutboundTransportFamily`,
+  `OutboundTransportSubkind`, `UnsupportedOutboundPayloadError`
 - `OutboundRuntime`, `InboxTemplateTransport`
 - `TextTemplateTransportRequest`, `MediaTemplateTransportRequest`, `LocationTemplateTransportRequest`
 - `TemplateTransportMediaHeader`, `TemplateTransportLocationHeader`, `TemplateTransportRouting`
@@ -467,6 +534,7 @@ construct or import them.
 
 - `create_cache_factory`, `get_cache_factory`, `ICacheFactory`
 - `TypedTableCache`, `VersionedTableCache`, `ITableCache`, `build_table_name`
+- `TableRowTransition`, `TableTransitionResult`, `TypedRowTransition`
 - `RedisCacheFactory`, `RedisClient`, `redis_ops`
 - `IUserCache`, `IStateCache`, `IExpiryCache`, `ITableCache`
 
@@ -478,11 +546,82 @@ construct or import them.
 - `delete(pkid) -> int`
 - `exists(pkid) -> bool`
 - `update_field(pkid, field, value, ttl=None) -> bool`
+- `create_if_absent(pkid, data, ttl=None) -> TypedRowTransition[T]`
+- `replace_if(pkid, data, expected, ttl=None) -> TypedRowTransition[T]`
 
 - `renew_ttl(pkid, ttl=None) -> bool`
 
 Inbox scoping still comes from the `ICacheFactory` / `ITableCache` that creates
 the underlying table cache.
+
+#### Atomic row transitions
+
+`create_if_absent` and `replace_if` each perform their condition and their
+write as one backend operation. Redis does it in a single server-side script;
+the memory and JSON backends do it under the lock that guards the namespace or
+the cache file. No backend reads, decides, and writes as separate steps, so a
+transition cannot be lost to an interleaved writer. The same two operations
+exist on `ITableCache` (untyped rows) and on `VersionedTableCache[T]`.
+
+`TableRowTransition` names the one thing a call proves:
+
+- `created` — this call created the row; no other caller had it
+- `replaced` — this call replaced the row, and `expected` still held
+- `already_exists` — another caller created it first
+- `condition_not_met` — the row exists but no longer matches `expected`
+- `missing` — there is no row to replace
+
+`written` is `True` for exactly `created` and `replaced`. On the two refusals
+that have something to report, `row` carries the state the backend actually
+holds — the winning row, or the row that moved on — so a caller does not need a
+follow-up read whose answer could already be stale. `TypedTableCache` validates
+that row against the configured model, exactly like every other read.
+
+`expected` maps field names to scalar values; every listed field must be
+present and equal. Values are compared through one canonical encoding, so
+`Status.PENDING` and `"pending"` match the same stored row on every backend.
+Containers are rejected: their encoded form depends on ordering, which no
+backend guarantees. An empty `expected` is rejected — that is `upsert`.
+
+A refused transition writes nothing and leaves the row's TTL untouched. A
+successful one applies the call's `ttl`, or the wrapper's `default_ttl`, or the
+backend default, in that order. Replacement is a whole-row write on every
+backend: fields the new row omits are gone, not merged.
+
+Wappa does not interpret the fields a caller conditions on. Status names,
+revision counters, and owner identifiers are Host Application concepts; this
+contract only guarantees that the comparison and the write cannot be separated.
+
+#### Stored value round trip
+
+Read a row through a Pydantic model and it round-trips losslessly on every
+backend — that is what `TypedTableCache[T]` and the `models=` parameter are
+for, and it is the supported path.
+
+Untyped dict reads are best-effort. On Redis a top-level boolean is stored as
+`"1"`/`"0"`, which an integer `1` and the string `"1"` also spell, so an
+untyped read of any of the three returns `True`. This is a deliberate
+compatibility contract, not a defect — Host Applications read these fields
+directly from outside Wappa. [ADR-0008](adr/0008-redis-hash-boolean-encoding.md)
+records the decision, the mitigation, and one hard rule: **never store `"1"` or
+`"0"` as a string value**, because a `str` field will then reject the `True` it
+reads back.
+
+#### Enumeration and identifier safety
+
+Bulk operations (`delete_table`, `list_pkids`, `get_all`, `find_by_field`,
+`delete_all_by_pkid`, `list_handlers`, `delete_by_handler_prefix`,
+`delete_all_by_identifier`) match the identifiers you gave them literally.
+An `inbox_id`, `cache_space`, table name, `pkid`, `user_id`, handler name, or
+trigger identifier containing `*`, `?`, `[`, `]`, or `\` is matched as those
+characters, not as pattern syntax. `:` is still folded to `_` inside a segment,
+as it always was.
+
+`IExpiryCache` has no `delete_all_for_user()`. A trigger key carries an action
+and an identifier, never a user, so the interface cannot know which triggers a
+user caused. Callers that use the user id as the trigger identifier say so:
+`delete_all_by_identifier(user_id)`. The identically named methods on
+`IStateCache` and `IAIStateCache` remain — their keys really are user-scoped.
 
 `cache_space` is an optional host-owned namespace segment folded into the table
 name as `"{cache_space}:{table_name}"`. Wappa never assigns one; omitting it

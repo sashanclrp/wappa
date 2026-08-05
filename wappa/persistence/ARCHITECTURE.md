@@ -11,6 +11,8 @@ This context owns:
 - Redis key namespace generation via `KeyFactory`
 - Context-bound cache handlers for each data domain
 - Typed table-cache ergonomics over the existing `ITableCache` contract
+- Atomic row transitions: create-if-absent and conditional replacement, with
+  one observable contract across all three backends
 - `ICacheFactory` implementation that creates those handlers
 - PubSub channel construction and subscription helpers
 - Backend selection between Redis, JSON-file, and in-memory backends
@@ -27,6 +29,7 @@ This context does NOT own:
 wappa/persistence/
 ├── cache_factory.py              # Selects backend (redis / memory / json)
 ├── cache_space.py                # Optional host-owned namespace segment for table names
+├── row_conditions.py             # Canonical encoding for conditional row comparisons
 ├── typed_table_cache.py          # TypedTableCache[T] convenience wrapper over ITableCache
 ├── versioned_table_cache.py      # VersionedTableCache[T] — bump-to-invalidate read models
 │
@@ -79,6 +82,11 @@ All keys are built exclusively through `KeyFactory`. The `inbox_id` value is alw
 | Expiry trigger | `{inbox_id}:EXPTRIGGER:{action}:{identifier}`        |
 | AI state      | `{inbox_id}:aistate:{agent_name}:{user_id}`           |
 | PubSub channel | `wappa:notify:{inbox_id}:{user_id}:{event_type}`     |
+
+Trigger keys carry an action and an identifier but no user, which is why
+`IExpiryCache` has no `delete_all_for_user()` — the key shape cannot answer
+"which triggers did this user cause". Callers keyed by user say
+`delete_all_by_identifier(user_id)`.
 
 ## Component Relationships
 
@@ -139,6 +147,29 @@ names and primary keys, forwards TTLs, and returns typed rows without changing
 backend key shapes. Inbox scoping still comes from the `ICacheFactory` /
 `ITableCache` instance.
 
+**Atomicity belongs to the backend, not the caller** — `create_if_absent` and
+`replace_if` each perform their condition and their write in one backend
+operation: Redis runs a Lua script, the memory store holds its namespace lock,
+the JSON store holds its file lock. Application-level read-then-write with a
+lock service was rejected: it would need a distributed lock Wappa does not own,
+and it would push a correctness obligation onto every caller. The two callers
+this exists for — claiming a handoff row, and settling one only while it is
+still unsettled — need "exactly one winner", which is not something a caller
+can retrofit onto `get` plus `upsert`.
+
+The condition is a map of expected scalar field values, not an integer
+revision. A revision would force every Host Application row model to carry a
+Wappa-owned field; exact field comparison lets a host condition on a
+discriminator it already has, and covers both monotonic status and handoff
+settlement. Comparison runs through `row_conditions.condition_token`, the one
+encoding shared by all three backends, so an enum member, its value, and the
+string a Redis hash actually stores all compare equal. Containers are rejected
+because their encoded form depends on ordering.
+
+A refused transition returns before any write, so the row and its TTL are
+untouched, and it carries back the row that blocked it — the caller learns the
+settled state without a follow-up read that could already be stale.
+
 **Cache space as an optional second segment** — Inbox scoping is Wappa's; a
 *cache space* is the host's. `build_table_name(table, cache_space)` folds it in
 as `"{cache_space}:{table}"`, so two host modules can use the same table name
@@ -164,6 +195,28 @@ carries a longer TTL, refreshed on every bump, so it can never expire back to
 **SCAN over KEYS** — All bulk enumeration (delete-by-pattern, find-by-field, list-handlers) uses cursor-based `SCAN` in batches of 100. `KEYS` is never used.
 
 **Stateless KeyFactory** — All key-string logic lives in one Pydantic model with no side effects. It can be instantiated anywhere and tested without a Redis connection.
+
+**Patterns are built, never formatted** — `SCAN` takes a glob, so a literal
+segment containing `*`, `?`, `[`, `]`, or `\` changes what the pattern means: a
+`delete_table` under an `inbox_id` of `a[1]` matched nothing and reported
+success. Every enumeration now builds its glob through a `KeyFactory.*_pattern()`
+helper, which escapes literal segments and renders `None` as the wildcard. No
+handler assembles a pattern with an f-string, because that is the form in which
+the escape is easy to forget. The key builders (`user`, `table`, `handler`,
+`trigger`, `aistate`) deliberately do *not* escape — they produce literal keys,
+and the stored key must keep the caller's characters.
+
+**Boolean spelling is a contract, not a detail** — A top-level hash field
+holding a boolean is stored as `"1"`/`"0"`; a boolean nested inside a JSON
+value keeps JSON spelling. Host Applications read these fields from outside
+Wappa, so the format cannot change on their behalf — see
+[ADR-0008](../../docs/adr/0008-redis-hash-boolean-encoding.md), which also
+records the accepted cost (an untyped read cannot tell `1` from `True`), the
+mitigation (read through a Pydantic model), and the prohibition on storing
+`"1"`/`"0"` as string values. `row_conditions` folds both sides of a
+conditional match through this same encoding, so a condition on a bare boolean
+also matches the corresponding integer — condition on a status string or an
+integer revision when that distinction matters.
 
 ## Inbox Identity Naming
 

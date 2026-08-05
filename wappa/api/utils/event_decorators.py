@@ -24,6 +24,7 @@ from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.context import get_current_inbox_context
 from wappa.domain.events.api_message_event import APIMessageEvent
 from wappa.domain.interfaces.identity_resolver import IIdentityResolver
+from wappa.messaging.classification import classify_outbound_payload
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 
 logger = logging.getLogger(__name__)
@@ -60,7 +61,7 @@ T = TypeVar("T")
 
 
 def dispatch_message_event(
-    message_type: str,
+    message_type: str | None = None,
     *,
     platform: str = "whatsapp",
     dispatcher_param: str = "api_dispatcher",
@@ -81,7 +82,10 @@ def dispatch_message_event(
         2. Any parameter that is a FastAPI Request instance
 
     Args:
-        message_type: Type of message for the event (e.g., "text", "image", "button")
+        message_type: Type of message for the event (e.g., "text", "image", "button").
+            Omit it — the default — and the label is classified from the route's
+            validated request payload, so a route cannot drift from what it
+            actually sends. Pass one only for a payload Wappa does not classify.
         platform: Messaging platform identifier (e.g., "whatsapp", "instagram", "telegram")
         dispatcher_param: Name of the dispatcher parameter in the route function
         request_param: Name of the Pydantic request model containing recipient and payload
@@ -93,7 +97,7 @@ def dispatch_message_event(
 
     Example:
         @router.post("/send-text")
-        @dispatch_message_event("text")
+        @dispatch_message_event()
         async def send_text_message(
             request: BasicTextMessage,
             fastapi_request: Request,  # Enables self.db in process_api_message
@@ -157,7 +161,8 @@ def dispatch_message_event(
             # Create and dispatch event asynchronously (fire-and-forget)
             # Pass FastAPI Request to enable DB session injection in handler
             event = APIMessageEvent(
-                message_type=message_type,
+                message_type=message_type
+                or classify_outbound_payload(request_obj).message_type,
                 message_id=message_result.message_id,
                 recipient=recipient,
                 user_id=user_id,

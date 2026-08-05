@@ -66,6 +66,7 @@ class Wappa:
         config: dict | None = None,
         inbox_credential_store: "IInboxCredentialStore | None" = None,
         include_template_transport_api: bool = False,
+        include_outbound_transport_api: bool = True,
     ):
         """
         Initialize Wappa application with plugin-based architecture.
@@ -80,6 +81,13 @@ class Wappa:
                 inbox credentials. Defaults to SettingsInboxCredentialStore.
             include_template_transport_api: Mount Wappa's standalone Template
                 mutation routes. Disabled by default for embedding safety.
+            include_outbound_transport_api: Mount Wappa's ordinary outbound
+                mutation routes (text, media sends, interactive, contact,
+                location, mark-as-read). Enabled by default, matching a
+                standalone Wappa application. An embedding host that owns its
+                own authenticated send boundary disables it and keeps media
+                upload/download/lookup, limits, validation, Template info,
+                state handlers, health, and every `wappa.messaging` service.
 
         Raises:
             ValueError: If cache type is not supported
@@ -98,6 +106,7 @@ class Wappa:
         self._core_plugin = WappaCorePlugin(
             cache_type=self.cache_type,
             include_template_transport_api=include_template_transport_api,
+            include_outbound_transport_api=include_outbound_transport_api,
         )
         self._builder.add_plugin(self._core_plugin)
 

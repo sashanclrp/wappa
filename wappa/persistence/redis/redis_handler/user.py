@@ -117,7 +117,7 @@ class RedisUser(InboxCache, IUserCache):
             value: Value to match
             models: Optional BaseModel class for full object reconstruction
         """
-        pattern = self.keys.user(self.inbox, "*")
+        pattern = self.keys.user_pattern(self.inbox)
         return await self._find_by_field(pattern, field, value, models=models)
 
     async def delete(self) -> int:

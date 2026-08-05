@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, cast
 
@@ -74,29 +76,49 @@ class FileManager:
             case _:
                 raise ValueError(f"Invalid cache_type: {cache_type}")
 
+    @asynccontextmanager
+    async def locked(self, file_path: Path) -> AsyncIterator[None]:
+        """Hold one file's lock across several reads and writes.
+
+        A conditional write has to decide and act without another coroutine
+        slipping in between. Use ``read_unlocked`` / ``write_unlocked`` inside
+        this block: the lock is not reentrant, so the public helpers would
+        deadlock.
+        """
+        async with self._get_file_lock(str(file_path)):
+            yield
+
+    async def read_unlocked(self, file_path: Path) -> dict[str, Any]:
+        """Read a cache file assuming the caller already holds its lock."""
+        if not file_path.exists():
+            return {}
+        try:
+            content = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
+            return cast(dict[str, Any], from_json_string(content))
+        except (OSError, json.JSONDecodeError) as e:
+            logger.error(f"Failed to read file {file_path}: {e}")
+            return {}
+
+    async def write_unlocked(self, file_path: Path, data: dict[str, Any]) -> bool:
+        """Write a cache file assuming the caller already holds its lock."""
+        try:
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            temp_file = file_path.with_suffix(file_path.suffix + ".tmp")
+            content = to_json_string(data)
+            await asyncio.to_thread(temp_file.write_text, content, encoding="utf-8")
+            await asyncio.to_thread(temp_file.replace, file_path)
+            return True
+        except OSError as e:
+            logger.error(f"Failed to write file {file_path}: {e}")
+            return False
+
     async def read_file(self, file_path: Path) -> dict[str, Any]:
         async with self._get_file_lock(str(file_path)):
-            if not file_path.exists():
-                return {}
-            try:
-                content = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
-                return cast(dict[str, Any], from_json_string(content))
-            except (OSError, json.JSONDecodeError) as e:
-                logger.error(f"Failed to read file {file_path}: {e}")
-                return {}
+            return await self.read_unlocked(file_path)
 
     async def write_file(self, file_path: Path, data: dict[str, Any]) -> bool:
         async with self._get_file_lock(str(file_path)):
-            try:
-                file_path.parent.mkdir(parents=True, exist_ok=True)
-                temp_file = file_path.with_suffix(file_path.suffix + ".tmp")
-                content = to_json_string(data)
-                await asyncio.to_thread(temp_file.write_text, content, encoding="utf-8")
-                await asyncio.to_thread(temp_file.replace, file_path)
-                return True
-            except OSError as e:
-                logger.error(f"Failed to write file {file_path}: {e}")
-                return False
+            return await self.write_unlocked(file_path, data)
 
     async def delete_file(self, file_path: Path) -> bool:
         async with self._get_file_lock(str(file_path)):

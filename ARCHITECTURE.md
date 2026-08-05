@@ -276,3 +276,4 @@ See [`docs/adr/`](./docs/adr/) for recorded decisions. Notable:
 
 - [ADR-0001: inbox_id as runtime scope](./docs/adr/0001-inbox-id-runtime-scope.md) — replaces tenant_id
 - [ADR-0005: Runtime primitives for host platforms](./docs/adr/0005-runtime-primitives-for-host-platforms.md) — signature verification, external event routing, versioned caches, request IDs, retry classification
+- [ADR-0007: Embedded outbound route control](./docs/adr/0007-embedded-outbound-route-control.md) — an embedding host omits Wappa's raw outbound mutation routes without losing media, read, or service routes

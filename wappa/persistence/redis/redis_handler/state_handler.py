@@ -125,7 +125,7 @@ class RedisStateHandler(InboxCache, IStateCache):
         return await self._renew_ttl(self._key(handler_name), ttl)
 
     async def delete_all_for_user(self) -> int:
-        pattern = f"{self.inbox}:{self.keys.handler_prefix}:*:{self.user_id}"
+        pattern = self.keys.handler_pattern(self.inbox, user_id=self.user_id)
         logger.debug(
             f"Deleting all handler states for user '{self.user_id}' "
             f"(pattern: '{pattern}')"
@@ -141,7 +141,9 @@ class RedisStateHandler(InboxCache, IStateCache):
         if not prefix:
             raise ValueError("prefix must not be empty")
 
-        pattern = f"{self.inbox}:{self.keys.handler_prefix}:{prefix}*:{self.user_id}"
+        pattern = self.keys.handler_pattern(
+            self.inbox, user_id=self.user_id, name_prefix=prefix
+        )
 
         logger.debug(
             f"Deleting state handlers with prefix '{prefix}' for user '{self.user_id}' "
@@ -163,9 +165,8 @@ class RedisStateHandler(InboxCache, IStateCache):
         return count
 
     async def list_handlers(self, prefix: str | None = None) -> list[str]:
-        safe_prefix = prefix or ""
-        pattern = (
-            f"{self.inbox}:{self.keys.handler_prefix}:{safe_prefix}*:{self.user_id}"
+        pattern = self.keys.handler_pattern(
+            self.inbox, user_id=self.user_id, name_prefix=prefix or ""
         )
 
         key_prefix = f"{self.inbox}:{self.keys.handler_prefix}:"
@@ -184,7 +185,7 @@ class RedisStateHandler(InboxCache, IStateCache):
     async def list_users_with_handler(
         cls, inbox_id: str, handler_name: str
     ) -> list[str]:
-        pattern = f"{inbox_id}:{default_key_factory.handler_prefix}:{handler_name}:*"
+        pattern = default_key_factory.handler_pattern(inbox_id, name=handler_name)
         key_prefix = f"{inbox_id}:{default_key_factory.handler_prefix}:{handler_name}:"
 
         user_ids: list[str] = []

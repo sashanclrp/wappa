@@ -8,6 +8,9 @@
 - Own outbound message construction for all WhatsApp message types: text, media,
   interactive, templates, contacts, locations, and contact-information requests.
 - Own recipient normalization (phone → E.164, BSUID detection) via `schemas.core.recipient`.
+- Own outbound payload classification: one pure function that names the
+  transport family of any validated outbound schema, so route and service
+  branches do not each re-derive it. Classification reads transport shape only.
 - Own read-only template metadata queries against the WABA-level Graph API.
 - Own the public `OutboundRuntime` and Inbox-scoped `InboxTemplateTransport`.
   This deep module resolves credentials and active clients, constructs the
@@ -28,12 +31,15 @@
 - Template authorization, attribution, idempotency, Campaigns, Conversation
   lifecycle, Reply State, Agent context, and Message persistence — owned by Host
   Applications and forbidden from the Template transport request.
+- Whether a classified send is *permitted*. `classify_outbound_payload` names
+  transport shape; admission is a Host Application decision.
 - `IMediaHandler` and `IMessenger` abstract contracts — defined in `domain/interfaces`.
 
 ## Module Structure
 
 ```
 messaging/
+  classification.py             # Pure outbound payload -> transport family classifier
   template_transport.py         # Public OutboundRuntime + Inbox Template capability
   whatsapp/
     client/
@@ -71,6 +77,7 @@ messaging/
 | `WhatsAppSpecializedHandler` | Sends contact cards, location pins, and location-request messages. |
 | `WhatsAppTemplateInfoService` | Stateless read service for WABA-scoped template metadata. Uses `WhatsAppManagementUrlBuilder`. |
 | `MessageResult` | Uniform result VO returned by every send method. |
+| `OutboundClassification` | Transport family (+ variant) of one validated outbound payload. Its `message_type` is the label Wappa reports in outbound API events, which is why route modules no longer restate it. |
 | `OutboundRuntime` | Deep public factory over credentials, sessions, Messenger construction, and Messenger Pipeline composition. |
 | `InboxTemplateTransport` | Small capability bound to one Inbox; accepts platform-facing typed requests and returns normalized transport evidence. |
 | `TemplateTransportResult` | Accepted/rejected/unavailable/indeterminate evidence. Acceptance requires a platform Message ID and does not imply delivery or local commit. |

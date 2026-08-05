@@ -1,10 +1,11 @@
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, ValidationError
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_messenger
+from wappa.api.routes.whatsapp.route_families import outbound_and_service_routers
 from wappa.api.utils import dispatch_message_event, map_whatsapp_api_error_to_status
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.logger import get_logger
@@ -12,10 +13,12 @@ from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.specialized_models import (
     ContactCard,
+    ContactMessage,
     ContactValidationResult,
+    LocationMessage,
+    LocationRequestMessage,
     LocationValidationResult,
 )
-from wappa.schemas.core.recipient import RecipientRequest
 
 logger = get_logger(__name__)
 
@@ -33,7 +36,9 @@ def _raise_for_whatsapp_error(result: MessageResult, operation_name: str) -> Non
     )
 
 
-router = APIRouter(
+# Contact/location sends are omissible outbound mutations; the validation
+# endpoints touch no platform and stay mounted.
+send_router, router = outbound_and_service_routers(
     prefix="/specialized",
     tags=["WhatsApp - Specialized"],
     responses={
@@ -46,43 +51,27 @@ router = APIRouter(
 
 
 # Request Models
-class ContactRequest(RecipientRequest):
-    contact: ContactCard = Field(..., description="Contact information to share")
-    reply_to_message_id: str | None = Field(
-        None, description="Optional message ID to reply to"
-    )
-
+#
+# Each extends the canonical outbound schema rather than restating its fields:
+# the HTTP boundary only adds `extra="forbid"` and, for location, wider
+# free-text limits. Sharing the schema is also what lets the outbound
+# classifier name these sends without this module telling it anything.
+class ContactRequest(ContactMessage):
     model_config = {"extra": "forbid"}
 
 
-class LocationRequest(RecipientRequest):
-    latitude: float = Field(
-        ..., ge=-90, le=90, description="Location latitude in decimal degrees"
-    )
-    longitude: float = Field(
-        ..., ge=-180, le=180, description="Location longitude in decimal degrees"
-    )
+class LocationRequest(LocationMessage):
     name: str | None = Field(
         None, max_length=1024, description="Optional location name"
     )
     address: str | None = Field(
         None, max_length=1024, description="Optional street address"
     )
-    reply_to_message_id: str | None = Field(
-        None, description="Optional message ID to reply to"
-    )
 
     model_config = {"extra": "forbid"}
 
 
-class LocationRequestRequest(RecipientRequest):
-    body: str = Field(
-        ..., min_length=1, max_length=1024, description="Request message text"
-    )
-    reply_to_message_id: str | None = Field(
-        None, description="Optional message ID to reply to"
-    )
-
+class LocationRequestRequest(LocationRequestMessage):
     model_config = {"extra": "forbid"}
 
 
@@ -96,8 +85,8 @@ class CoordinateValidationRequest(BaseModel):
 # API Endpoints
 
 
-@router.post("/send-contact", response_model=MessageResult)
-@dispatch_message_event("contact", platform="whatsapp")
+@send_router.post("/send-contact", response_model=MessageResult)
+@dispatch_message_event(platform="whatsapp")
 async def send_contact_card(
     request: ContactRequest,
     fastapi_request: Request,
@@ -136,8 +125,8 @@ async def send_contact_card(
         ) from e
 
 
-@router.post("/send-location", response_model=MessageResult)
-@dispatch_message_event("location", platform="whatsapp")
+@send_router.post("/send-location", response_model=MessageResult)
+@dispatch_message_event(platform="whatsapp")
 async def send_location_message(
     request: LocationRequest,
     fastapi_request: Request,
@@ -181,8 +170,8 @@ async def send_location_message(
         ) from e
 
 
-@router.post("/send-location-request", response_model=MessageResult)
-@dispatch_message_event("location_request", platform="whatsapp")
+@send_router.post("/send-location-request", response_model=MessageResult)
+@dispatch_message_event(platform="whatsapp")
 async def send_location_request_message(
     request: LocationRequestRequest,
     fastapi_request: Request,

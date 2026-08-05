@@ -12,10 +12,11 @@ Router configuration:
 - Full URL: /api/whatsapp/interactive/
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_messenger
+from wappa.api.routes.whatsapp.route_families import outbound_and_service_routers
 from wappa.api.utils import (
     dispatch_message_event,
     raise_for_failed_result,
@@ -64,8 +65,9 @@ INTERACTIVE_ERROR_GROUPS = {
     _VALIDATION_ERRORS: 400,
 }
 
-# Create router with WhatsApp Interactive configuration
-router = APIRouter(
+# Interactive sends are omissible outbound mutations; the limits endpoint
+# is a read an embedding host still uses for admission checks.
+send_router, router = outbound_and_service_routers(
     prefix="/interactive",
     tags=["WhatsApp - Interactive"],
     responses={
@@ -79,13 +81,13 @@ router = APIRouter(
 )
 
 
-@router.post(
+@send_router.post(
     "/send-buttons",
     response_model=MessageResult,
     summary="Send Button Message",
     description="Send an interactive button message with up to 3 quick reply buttons",
 )
-@dispatch_message_event("button", platform="whatsapp")
+@dispatch_message_event(platform="whatsapp")
 async def send_button_message(
     request: ButtonMessage,
     fastapi_request: Request,
@@ -119,13 +121,13 @@ async def send_button_message(
         ) from e
 
 
-@router.post(
+@send_router.post(
     "/send-list",
     response_model=MessageResult,
     summary="Send List Message",
     description="Send an interactive list message with sectioned rows",
 )
-@dispatch_message_event("list", platform="whatsapp")
+@dispatch_message_event(platform="whatsapp")
 async def send_list_message(
     request: ListMessage,
     fastapi_request: Request,
@@ -160,13 +162,13 @@ async def send_list_message(
         ) from e
 
 
-@router.post(
+@send_router.post(
     "/send-cta",
     response_model=MessageResult,
     summary="Send Call-to-Action Message",
     description="Send an interactive call-to-action message with URL button",
 )
-@dispatch_message_event("cta", platform="whatsapp")
+@dispatch_message_event(platform="whatsapp")
 async def send_cta_message(
     request: CTAMessage,
     fastapi_request: Request,
@@ -248,7 +250,7 @@ async def get_interactive_limits() -> dict:
 
 
 # Example endpoint demonstrating complex interactive message construction
-@router.post(
+@send_router.post(
     "/send-complex-buttons",
     response_model=MessageResult,
     summary="Send Complex Button Message (Example)",
@@ -293,7 +295,7 @@ async def send_complex_button_message(
 
 
 # Example endpoint for list messages
-@router.post(
+@send_router.post(
     "/send-menu-list",
     response_model=MessageResult,
     summary="Send Menu List Message (Example)",

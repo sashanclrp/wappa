@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from pydantic import BaseModel
@@ -67,6 +68,35 @@ class MemoryStorageManager:
         except Exception as e:
             logger.error(f"Failed to set key '{key}' in {cache_type} cache: {e}")
             return False
+
+    async def create_if_absent(
+        self,
+        cache_type: str,
+        inbox_id: str,
+        user_id: str | None,
+        key: str,
+        value: Any,
+        ttl: int | None = None,
+    ) -> tuple[bool, Any]:
+        context_key = self._build_context_key(cache_type, inbox_id, user_id)
+        return await self.memory_store.create_if_absent(
+            cache_type, context_key, key, self._serialize_data(value), ttl
+        )
+
+    async def replace_if(
+        self,
+        cache_type: str,
+        inbox_id: str,
+        user_id: str | None,
+        key: str,
+        value: Any,
+        matches: Callable[[Any], bool],
+        ttl: int | None = None,
+    ) -> tuple[str, Any]:
+        context_key = self._build_context_key(cache_type, inbox_id, user_id)
+        return await self.memory_store.replace_if(
+            cache_type, context_key, key, self._serialize_data(value), matches, ttl
+        )
 
     async def delete(
         self, cache_type: str, inbox_id: str, user_id: str | None, key: str

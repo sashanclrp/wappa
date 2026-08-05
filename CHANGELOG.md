@@ -5,6 +5,47 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] - 2026-08-05
+
+Hardening for embedding hosts: atomic cache transitions so a race has one winner, an explicit opt-out for Wappa's raw outbound HTTP routes, one classifier so nothing re-derives what kind of send a payload is, and two correctness fixes in the Redis cache layer. Every existing default is preserved, but **this release contains breaking changes** for hosts that implement `ITableCache` themselves or call `IExpiryCache.delete_all_for_user()`. See Fixed and the watch-outs below.
+
+### Upgrade watch-outs
+
+- **A custom `ITableCache` implementation will not instantiate** until it adds `create_if_absent` and `replace_if`. The two methods are abstract on the interface. Wappa's own three backends implement them; nothing else in this repo does. If you subclass `ITableCache` in your host, add both before upgrading.
+- **`IExpiryCache.delete_all_for_user()` is gone.** Replace `expiry_cache.delete_all_for_user()` with `expiry_cache.delete_all_by_identifier(user_id)` — that is exactly what it did. See Fixed for why the name was removed rather than kept.
+
+### Added
+- **Atomic table-cache row transitions.** `ITableCache.create_if_absent(...)` and `ITableCache.replace_if(..., expected=...)` perform their condition and their write as one backend operation — a Lua script on Redis, the namespace lock in memory, the file lock in JSON — so a transition cannot be lost to an interleaved write. `TypedTableCache[T]` and `VersionedTableCache[T]` expose typed equivalents returning `TypedRowTransition[T]`.
+  - `TableRowTransition` distinguishes `created`, `replaced`, `already_exists`, `condition_not_met`, and `missing`; `written` is true for the first two.
+  - A refusal carries back the row that blocked it — the winner of a create race, or the row that moved on — already validated against the model, so no follow-up read is needed.
+  - `expected` compares scalar field values through one canonical encoding, so `Status.PENDING` and `"pending"` match the same stored row on every backend. Containers and empty conditions are rejected.
+  - A refused transition writes nothing and leaves the row's TTL untouched. A successful replacement is a whole-row write on every backend, not a field merge.
+- **`Wappa(include_outbound_transport_api=False)`** — an embedding host that owns its own authenticated send boundary omits every ordinary and interactive outbound mutation route (`/messages/send-text`, `/messages/mark-as-read`, `/media/send-*`, `/interactive/send-*`, `/specialized/send-*`) and keeps everything else: media upload/download/lookup, every `/limits` endpoint, `/specialized/validate-*`, Template info, state handlers, webhooks, and health. `wappa.messaging` services are unaffected. Defaults to `True`, so standalone applications see no change. Reasoning in [ADR-0007](docs/adr/0007-embedded-outbound-route-control.md).
+- **`classify_outbound_payload(payload)`** (`from wappa.messaging import ...`) — one pure classifier over Wappa's validated outbound schemas, returning an `OutboundClassification` with a `family` (text, media, interactive, location, contact, template, read_receipt) and a `subkind` where the family has several. All three Template envelope variants collapse to one `template` family, keeping their header as a subkind. Classification is transport shape only: a payload is a Template because it is a Template envelope, never because of actor, Origin, or metadata. Whether a send is *permitted* remains a Host Application question.
+
+- **`scripts/verify_redis_cache_live.py`** — a live verification harness for `RedisCacheFactory`. It exercises all five caches, the atomic transitions, the boolean encoding contract, and the glob hazard against a real server, printing what each step expects, what it observed, the raw keys with their TTLs and field values, and per-call timings. Namespaced under `wappa-verify-<pid>:*`, cleans up after itself (`--keep` to inspect), exits non-zero on any failure.
+
+### Changed
+- **`create_whatsapp_router()` takes `include_outbound_transport` (default `True`)** alongside the existing `include_template_transport`. Route modules that mix sends with reads now expose a `send_router` and a `router`.
+- **`dispatch_message_event()`'s `message_type` argument is optional.** Omitted — now the default on every Wappa route — the label is classified from the route's validated request payload instead of restated as a literal, so a route cannot drift from what it actually sends. Emitted `APIMessageEvent.message_type` values are unchanged.
+- **The specialized route models extend the canonical outbound schemas** (`ContactRequest(ContactMessage)`, `LocationRequest(LocationMessage)`, `LocationRequestRequest(LocationRequestMessage)`) rather than restating their fields. Accepted request bodies are unchanged.
+- `FileManager` gained `locked()` / `read_unlocked()` / `write_unlocked()` so a conditional write can hold one file lock across its read and write. `MemoryStore` gained the equivalent compound operations under its namespace lock.
+
+### Fixed
+- **Bulk Redis operations no longer silently match nothing** when an identifier contains glob syntax. Every enumeration (`delete_table`, `list_pkids`, `get_all`, `find_by_field`, `delete_all_by_pkid`, `list_handlers`, `delete_by_handler_prefix`, `delete_all_by_identifier`, the AI-state and PubSub patterns) is a SCAN glob, and a literal segment containing `*`, `?`, `[`, `]`, or `\` changed what the glob meant — so a delete built from an `inbox_id` of `a[1]` matched nothing and reported success. Patterns are now built through `KeyFactory.*_pattern()` helpers that escape literal segments and place wildcards deliberately; no handler builds a glob with an f-string. Meta `phone_number_id`s are digits, so production was not affected, but a host-chosen `cache_space`, table name, or `user_id` could be.
+- **`IExpiryCache.delete_all_for_user()` removed** rather than renamed. A trigger key is `{inbox}:EXPTRIGGER:{action}:{identifier}` and carries no user, so the method actually deleted triggers whose *identifier* happened to equal the `user_id` — a different meaning from the identically named methods on `IStateCache` and `IAIStateCache`, which are genuinely user-scoped. Same name, two meanings, reached through the same factory. It was a one-line alias for `delete_all_by_identifier(self.user_id)`, so callers now write that and the ambiguity has nowhere to live.
+
+### Documentation
+- **[ADR-0007](docs/adr/0007-embedded-outbound-route-control.md)** records why the two route-composition defaults are asymmetric: Template mutations stay opt-in because nothing ever depended on them being mounted, while ordinary mutations stay mounted by default because they are the documented standalone surface and flipping them would be a silent break for every existing deployment.
+- **[ADR-0008](docs/adr/0008-redis-hash-boolean-encoding.md)** records the Redis hash boolean encoding (`"1"`/`"0"` for a top-level bool, JSON spelling when nested) as a deliberate compatibility contract rather than an implementation detail. Host Applications read these fields outside Wappa, so the spelling cannot change on their behalf. The ADR states the accepted cost — an untyped read cannot tell `1` from `True` — its mitigation (read through a Pydantic model) and its one hard prohibition (never store `"1"`/`"0"` as a *string* value). `tests/test_redis_value_encoding.py` pins all of it.
+
+### Verification
+`uv run ruff check .` clean, `uv run ruff format --check` clean, `uv run mypy wappa` clean, `uv run pytest` → 521 passed (up from 402 at 0.25.0; 119 new tests).
+
+The cache-transition suite runs one contract against all three backends, including Redis contention tests for a single create winner and no lost conditional replacement. The globbing suite was confirmed to fail against the pre-fix code (9 of 12) before being confirmed to pass against the fix. Redis-backed tests skip when no server is reachable at `WAPPA_TEST_REDIS_URL` (default `redis://localhost:6379`) and were run against a live Redis for this change.
+
+`uv run python scripts/verify_redis_cache_live.py` exercises all five caches, the atomic transitions, the boolean encoding contract, and the glob hazard against a real server: 68 checks, exit 0, no keys left behind. No live provider sends were exercised.
+
 ## [0.25.0] - 2026-08-03
 
 Finishes the clean break started in 0.24.0. The unused repository-interface family is gone, so Wappa now has exactly one persistence contract family — the type-specific cache interfaces — instead of two overlapping ones. The rest of the release is a repository-wide typing pass: explicit annotations, narrowed return types on the WhatsApp processor, and typed stats containers in the default handlers, with the Pydantic mypy plugin enabled and the blanket `ignore_missing_imports` overrides for `redis`, `openai`, and `cv2` removed. No runtime behavior changes.

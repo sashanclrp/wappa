@@ -27,6 +27,8 @@ from ..domain.interfaces.cache_interfaces import (
     IStateCache,
     ITableCache,
     IUserCache,
+    TableRowTransition,
+    TableTransitionResult,
 )
 from .cache_factory import create_cache_factory, get_cache_factory
 from .cache_space import build_table_name
@@ -35,7 +37,7 @@ from .cache_space import build_table_name
 from .redis import RedisClient
 from .redis import ops as redis_ops
 from .redis.redis_cache_factory import RedisCacheFactory
-from .typed_table_cache import TypedTableCache
+from .typed_table_cache import TypedRowTransition, TypedTableCache
 from .versioned_table_cache import VersionedTableCache
 
 __all__ = [
@@ -52,6 +54,10 @@ __all__ = [
     "ITableCache",
     "TypedTableCache",
     "VersionedTableCache",
+    # Atomic row transitions
+    "TableRowTransition",
+    "TableTransitionResult",
+    "TypedRowTransition",
     # Redis implementations
     "RedisCacheFactory",
     "RedisClient",

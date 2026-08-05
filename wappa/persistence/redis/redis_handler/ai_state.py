@@ -124,7 +124,7 @@ class RedisAIState(InboxCache, IAIStateCache):
         return await self._renew_ttl(self._key(agent_name), ttl)
 
     async def delete_all_for_user(self) -> int:
-        pattern = f"{self.inbox}:{self.keys.aistate_prefix}:*:{self.user_id}"
+        pattern = self.keys.aistate_pattern(self.inbox, user_id=self.user_id)
         logger.debug(
             f"Deleting all AI agent states for user '{self.user_id}' "
             f"(pattern: '{pattern}')"
@@ -140,9 +140,8 @@ class RedisAIState(InboxCache, IAIStateCache):
         if not prefix:
             raise ValueError("prefix must not be empty")
 
-        safe_prefix = prefix.replace(":", "_")
-        pattern = (
-            f"{self.inbox}:{self.keys.aistate_prefix}:{safe_prefix}*:{self.user_id}"
+        pattern = self.keys.aistate_pattern(
+            self.inbox, user_id=self.user_id, name_prefix=prefix
         )
 
         logger.debug(

@@ -96,9 +96,18 @@ When the shutdown hook fires (priority 90, after all other plugins have shut dow
 | ------------ | ----------- | ------------------ | ------------------------------------------ |
 | `cache_type` | `CacheType` | `CacheType.MEMORY` | Cache backend for the application to use.  |
 | `include_template_transport_api` | `bool` | `False` | Explicitly mount Wappa's standalone Template mutation adapter. |
+| `include_outbound_transport_api` | `bool` | `True` | Mount Wappa's ordinary outbound mutation routes (text, media sends, interactive, contact, location, mark-as-read). |
 
-`Wappa` exposes the same choice as
-`Wappa(include_template_transport_api=True)`. Embedding hosts leave it disabled.
+`Wappa` exposes the same choices as
+`Wappa(include_template_transport_api=True)` and
+`Wappa(include_outbound_transport_api=False)`.
+
+Embedding hosts leave Template transport disabled and turn the outbound
+transport API off, so Wappa exposes no unauthenticated way to send. That
+removes only the send routes: media upload/download/lookup, every `/limits`
+endpoint, `/specialized/validate-*`, Template info, state handlers, webhooks,
+and health stay mounted, and `wappa.messaging` services are unaffected. See
+[ADR-0007](../../../../docs/adr/0007-embedded-outbound-route-control.md).
 
 Supported `CacheType` values are defined in `wappa.core.types`:
 

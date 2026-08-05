@@ -25,16 +25,21 @@ one, bumped generations would linger forever.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from pydantic import BaseModel
 
-from wappa.domain.interfaces.cache_interfaces import ITableCache
+from wappa.domain.interfaces.cache_interfaces import (
+    ITableCache,
+    TableTransitionResult,
+)
 from wappa.persistence.cache_space import (
     build_table_name,
     require_non_empty,
     validate_segment,
 )
+from wappa.persistence.typed_table_cache import TypedRowTransition
 
 # Table holding the generation counter for every versioned table in this
 # Inbox (and cache space). Kept separate from the data tables so a bump never
@@ -158,6 +163,43 @@ class VersionedTableCache[T: BaseModel]:
             ttl=self._resolve_ttl(ttl),
         )
 
+    async def create_if_absent(
+        self,
+        pkid: str,
+        data: T | dict[str, Any],
+        ttl: int | None = None,
+    ) -> TypedRowTransition[T]:
+        """Claim a row inside the current generation."""
+        result = await self.cache.create_if_absent(
+            await self._table(),
+            require_non_empty(pkid, "pkid"),
+            self._validate(data),
+            ttl=self._resolve_ttl(ttl),
+        )
+        return self._typed(result)
+
+    async def replace_if(
+        self,
+        pkid: str,
+        data: T | dict[str, Any],
+        expected: Mapping[str, Any],
+        ttl: int | None = None,
+    ) -> TypedRowTransition[T]:
+        """Replace a row inside the current generation, conditionally.
+
+        A bump between the generation read and the transition makes the row
+        unreachable rather than silently overwritten: the transition lands in
+        the old generation and reports ``MISSING`` on the next lookup.
+        """
+        result = await self.cache.replace_if(
+            await self._table(),
+            require_non_empty(pkid, "pkid"),
+            self._validate(data),
+            expected,
+            ttl=self._resolve_ttl(ttl),
+        )
+        return self._typed(result)
+
     async def delete(self, pkid: str) -> int:
         return await self.cache.delete(
             await self._table(),
@@ -199,6 +241,10 @@ class VersionedTableCache[T: BaseModel]:
 
     async def _table(self) -> str:
         return f"{self.base_table_name}@v{await self.current_version()}"
+
+    def _typed(self, result: TableTransitionResult) -> TypedRowTransition[T]:
+        row = None if result.row is None else self._validate(result.row)
+        return TypedRowTransition(result.transition, row)
 
     def _validate(self, data: T | dict[str, Any]) -> T:
         if isinstance(data, self.model):

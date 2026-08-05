@@ -329,6 +329,33 @@ async def rpush_and_sadd(
             return None, None  # Indicate pipeline execution failure
 
 
+async def eval_script(
+    script: str,
+    keys: Sequence[str],
+    args: Sequence[str | int | float],
+    *,
+    alias: PoolAlias = "users",
+) -> object:
+    """
+    Run a Lua script server-side, so a condition and its write cannot interleave.
+
+    Raises instead of swallowing errors: a caller reaching for a script needs a
+    conditional write to either happen or visibly fail, and a `None` fallback
+    would read as "condition not met".
+
+    Args:
+        script: Lua source.
+        keys: Redis keys the script touches (KEYS[1..n]).
+        args: Script arguments (ARGV[1..n]).
+        alias: Redis pool alias to use.
+
+    Returns:
+        The script's reply, converted by redis-py.
+    """
+    async with RedisClient.connection(alias=alias) as redis:
+        return await _await_command(redis.eval(script, len(keys), *keys, *args))
+
+
 # =========================================================================
 # SECTION: Scan Operations
 # =========================================================================

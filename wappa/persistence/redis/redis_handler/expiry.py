@@ -152,8 +152,7 @@ class RedisExpiry(InboxCache, IExpiryCache):
             # Delete all triggers for transaction (reminder, expiry, etc.)
             count = await expiry.delete_all_by_identifier("TXN_123")
         """
-        safe_ident = identifier.replace(":", "_")
-        pattern = f"{self.inbox}:{self.keys.trigger_prefix}:*:{safe_ident}"
+        pattern = self.keys.trigger_pattern(self.inbox, ident=identifier)
 
         logger.debug(
             f"Deleting all expiry triggers for identifier '{identifier}' "
@@ -169,20 +168,6 @@ class RedisExpiry(InboxCache, IExpiryCache):
         else:
             logger.debug(f"No expiry triggers found for identifier '{identifier}'")
 
-        return count
-
-    async def delete_all_for_user(self) -> int:
-        safe_user = self.user_id.replace(":", "_")
-        pattern = f"{self.inbox}:{self.keys.trigger_prefix}:*:{safe_user}"
-        logger.debug(
-            f"Deleting all expiry triggers for user '{self.user_id}' "
-            f"(pattern: '{pattern}')"
-        )
-        count = await self._delete_by_pattern(pattern)
-        if count > 0:
-            logger.info(f"Deleted {count} expiry trigger(s) for user '{self.user_id}'")
-        else:
-            logger.debug(f"No expiry triggers found for user '{self.user_id}'")
         return count
 
     async def exists(self, action: str, identifier: str) -> bool:

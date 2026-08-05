@@ -13,9 +13,51 @@ Each interface defines methods specific to its domain:
 """
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel
+
+
+class TableRowTransition(StrEnum):
+    """The one thing an atomic row transition proves about a table row.
+
+    ``CREATED`` and ``REPLACED`` are the only outcomes that wrote. The other
+    three are refusals, and each names a different reason so a caller can tell
+    "someone else got there first" apart from "the row moved on without me"
+    apart from "there is nothing here to move".
+    """
+
+    CREATED = "created"
+    REPLACED = "replaced"
+    ALREADY_EXISTS = "already_exists"
+    CONDITION_NOT_MET = "condition_not_met"
+    MISSING = "missing"
+
+
+@dataclass(frozen=True, slots=True)
+class TableTransitionResult:
+    """Outcome of one atomic row transition, plus the row that blocked it.
+
+    ``row`` carries the state the backend actually holds when the transition
+    was refused — the winning row for ``ALREADY_EXISTS``, the current row for
+    ``CONDITION_NOT_MET``. That saves the caller a follow-up read whose answer
+    could already be stale. It is ``None`` after a successful write (the caller
+    supplied that data) and after ``MISSING`` (there is nothing to report).
+    """
+
+    transition: TableRowTransition
+    row: dict[str, Any] | None = None
+
+    @property
+    def written(self) -> bool:
+        """Whether this call is the one that wrote the row."""
+        return self.transition in (
+            TableRowTransition.CREATED,
+            TableRowTransition.REPLACED,
+        )
 
 
 class IUserCache(ABC):
@@ -492,6 +534,65 @@ class ITableCache(ABC):
         pass
 
     @abstractmethod
+    async def create_if_absent(
+        self,
+        table_name: str,
+        pkid: str,
+        data: dict[str, Any] | BaseModel,
+        ttl: int | None = None,
+    ) -> TableTransitionResult:
+        """
+        Create a row only when none exists, in one backend operation.
+
+        Concurrent callers racing for the same pkid produce exactly one
+        ``CREATED``; every other caller gets ``ALREADY_EXISTS`` carrying the
+        winning row. The TTL of an existing row is never touched.
+
+        Args:
+            table_name: Table name identifier
+            pkid: Primary key ID
+            data: Full row to write when absent
+            ttl: Time to live in seconds, applied only on a successful create
+
+        Returns:
+            ``CREATED`` or ``ALREADY_EXISTS``
+        """
+        pass
+
+    @abstractmethod
+    async def replace_if(
+        self,
+        table_name: str,
+        pkid: str,
+        data: dict[str, Any] | BaseModel,
+        expected: Mapping[str, Any],
+        ttl: int | None = None,
+    ) -> TableTransitionResult:
+        """
+        Replace a row only when its current fields match ``expected``.
+
+        The comparison and the write happen in one backend operation, so a
+        transition can never be lost to an interleaved write. ``expected``
+        holds scalar field values only; every listed field must be present and
+        equal. A refused transition leaves both the row and its TTL untouched.
+
+        Args:
+            table_name: Table name identifier
+            pkid: Primary key ID
+            data: Full replacement row
+            expected: Field values the current row must hold
+            ttl: Time to live in seconds, applied only on a successful replace
+
+        Returns:
+            ``REPLACED``, ``CONDITION_NOT_MET`` (with the current row), or
+            ``MISSING``
+
+        Raises:
+            ValueError: If ``expected`` is empty or holds a non-scalar value
+        """
+        pass
+
+    @abstractmethod
     async def delete(self, table_name: str, pkid: str) -> int:
         """
         Delete table row data.
@@ -770,18 +871,14 @@ class IExpiryCache(ABC):
         """
         pass
 
-    @abstractmethod
-    async def delete_all_for_user(self) -> int:
-        """
-        Delete every expiry trigger whose identifier matches this cache's
-        user_id, regardless of action.
-
-        Pattern matched: {inbox}:EXPTRIGGER:*:{user_id}
-
-        Returns:
-            Count of deleted triggers
-        """
-        pass
+    # Note: there is deliberately no `delete_all_for_user()` here, unlike
+    # IStateCache and IAIStateCache. A trigger key carries an action and an
+    # identifier, never a user, so this interface cannot know which triggers a
+    # user caused. The method that used to sit here matched
+    # `{inbox}:EXPTRIGGER:*:{user_id}` — that is, triggers whose *identifier*
+    # happened to be the user id — which is a different meaning under the same
+    # name as its siblings. Callers that use the user id as the identifier say
+    # so explicitly: `delete_all_by_identifier(cache.user_id)`.
 
     @abstractmethod
     async def exists(self, action: str, identifier: str) -> bool:

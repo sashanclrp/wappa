@@ -63,6 +63,9 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **Outbound Runtime** | The public Wappa factory that resolves Inbox credentials and active HTTP clients, constructs the platform Messenger and Messenger Pipeline, and returns small Inbox-scoped outbound capabilities. Host Applications do not construct those internals. |
 | **Template Transport** | An Inbox-scoped outbound capability that accepts only platform-facing Template values and returns evidence about the platform call. It performs no Host Application governance, attribution, state, lifecycle, or persistence work. |
 | **Template Transport Outcome** | Wappa's bounded statement about one Template call: `accepted`, `rejected`, `transport_unavailable`, or `indeterminate`. Acceptance proves platform acceptance and a platform Message ID; it never claims delivery, read, reply, or Host Application commit. |
+| **Transport Family** | The kind of send a validated outbound payload represents — text, media, interactive, location, contact, Template, or read receipt — decided from the payload schema alone. It is a statement about shape, never about whether the send is permitted. |
+| **Transport Subkind** | The concrete variant inside a Transport Family that has several: the media type, the interactive type, or which header a Template envelope carries. |
+| **Outbound Transport API** | Wappa's own HTTP routes that mutate — that send something to a User. Distinct from the service routes (media upload/download/lookup, limits, validation, Template info, state handlers, health) that share their URL prefixes. An embedding Host Application omits the former and keeps the latter. |
 | **External Webhook Source** | A non-messaging system that sends webhooks into Wappa, such as MercadoPago, Stripe, Wompi, GitHub, or a CRM. |
 | **External Webhook Runtime** | The Wappa module that turns an accepted External Webhook Source request into a context-bound `process_external_event()` dispatch. It owns Inbox mismatch checks, Dispatch Context creation, handler cloning, and event dispatch. |
 | **Payment Provider** | A payment-specific External Webhook Source, such as MercadoPago, Stripe, or Wompi. This term is allowed for payment integrations, not for messaging platforms. |
@@ -82,6 +85,8 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **Cache Space** | An optional Host Application-owned namespace segment folded into a table name (`{cache_space}:{table_name}`). Separates unrelated read models that share a table name inside one Inbox. Wappa never assigns one; the host passes it explicitly. |
 | **Table Generation** | The version suffix (`{table}@v{n}`) identifying the live generation of a versioned Table Cache. |
 | **Version Bump** | Incrementing a versioned Table Cache's generation counter to invalidate every row at once, without enumerating keys. Orphaned generations expire by TTL. |
+| **Row Transition** | An atomic table-cache write whose condition and mutation are one backend operation: create-if-absent, or replace-only-while-the-row-still-matches. Its result names exactly one of `created`, `replaced`, `already_exists`, `condition_not_met`, or `missing`. |
+| **Row Condition** | The map of expected scalar field values a Row Transition compares against the stored row. Wappa does not interpret the fields; it only guarantees the comparison and the write cannot be separated. |
 
 ## Real-Time
 
@@ -109,7 +114,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | Term | Definition |
 |------|-----------|
 | **Expiry Action** | A time-triggered handler that fires when a Redis key expires. Registered via decorator. |
-| **Expiry Key** | Redis key with TTL. Format: `{inbox_id}:EXPTRIGGER:{action}:{identifier}`. Parsed on expiration to route to the correct handler. |
+| **Expiry Key** | Redis key with TTL. Format: `{inbox_id}:EXPTRIGGER:{action}:{identifier}`. Parsed on expiration to route to the correct handler. It carries no User dimension — a trigger belongs to an action and an identifier, which may or may not be a `user_id`. |
 
 ## HTTP Client Lifecycle
 

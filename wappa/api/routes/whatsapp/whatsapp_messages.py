@@ -11,13 +11,14 @@ Router configuration:
 - Full URL: /api/whatsapp/messages/
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.whatsapp_dependencies import (
     get_whatsapp_message_factory,
     get_whatsapp_messenger,
 )
+from wappa.api.routes.whatsapp.route_families import outbound_and_service_routers
 from wappa.api.utils import dispatch_message_event
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.logger import get_logger
@@ -29,8 +30,8 @@ from wappa.messaging.whatsapp.models.basic_models import (
     ReadStatusMessage,
 )
 
-# Create router with WhatsApp Messages configuration
-router = APIRouter(
+# Outbound mutations (`send_router`) are omissible; message limits are not.
+send_router, router = outbound_and_service_routers(
     prefix="/messages",
     tags=["WhatsApp - Messages"],
     responses={
@@ -42,13 +43,13 @@ router = APIRouter(
 )
 
 
-@router.post(
+@send_router.post(
     "/send-text",
     response_model=MessageResult,
     summary="Send Text Message",
     description="Send a text message via WhatsApp with optional reply and preview control",
 )
-@dispatch_message_event("text", platform="whatsapp")
+@dispatch_message_event(platform="whatsapp")
 async def send_text_message(
     request: BasicTextMessage,
     fastapi_request: Request,
@@ -111,7 +112,7 @@ async def send_text_message(
         ) from e
 
 
-@router.post(
+@send_router.post(
     "/mark-as-read",
     response_model=MessageResult,
     summary="Mark Message as Read",

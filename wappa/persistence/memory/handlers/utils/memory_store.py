@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -36,13 +37,7 @@ class MemoryStore:
 
         async with self._locks[namespace]:
             context_store = self._store[namespace].get(context_key, {})
-            if key not in context_store:
-                return None
-            data, expires_at = context_store[key]
-            if expires_at and datetime.now() > expires_at:
-                del context_store[key]
-                return None
-            return data
+            return self._live_entry(context_store, key)
 
     async def set(
         self,
@@ -54,7 +49,7 @@ class MemoryStore:
     ) -> bool:
         self._require_namespace(namespace)
 
-        expires_at = datetime.now() + timedelta(seconds=ttl) if ttl else None
+        expires_at = self._expires_at(ttl)
 
         try:
             async with self._locks[namespace]:
@@ -65,6 +60,74 @@ class MemoryStore:
         except Exception as e:
             logger.error(f"Failed to set key '{key}' in {namespace}: {e}")
             return False
+
+    async def create_if_absent(
+        self,
+        namespace: str,
+        context_key: str,
+        key: str,
+        data: Any,
+        ttl: int | None = None,
+    ) -> tuple[bool, Any]:
+        """Store data only when the key holds no live entry.
+
+        Returns ``(created, existing)``. The whole check-and-write runs under
+        the namespace lock, so concurrent callers cannot both see "absent".
+        """
+        self._require_namespace(namespace)
+
+        async with self._locks[namespace]:
+            context_store = self._store[namespace].setdefault(context_key, {})
+            existing = self._live_entry(context_store, key)
+            if existing is not None:
+                return False, existing
+            context_store[key] = (data, self._expires_at(ttl))
+            self.start_cleanup_task()
+            return True, None
+
+    async def replace_if(
+        self,
+        namespace: str,
+        context_key: str,
+        key: str,
+        data: Any,
+        matches: Callable[[Any], bool],
+        ttl: int | None = None,
+    ) -> tuple[str, Any]:
+        """Replace a live entry only when ``matches`` accepts the current one.
+
+        Returns ``("replaced" | "condition_not_met" | "missing", current)``. A
+        refused replacement leaves the stored value and its expiry untouched.
+        """
+        self._require_namespace(namespace)
+
+        async with self._locks[namespace]:
+            context_store = self._store[namespace].setdefault(context_key, {})
+            current = self._live_entry(context_store, key)
+            if current is None:
+                return "missing", None
+            if not matches(current):
+                return "condition_not_met", current
+            context_store[key] = (data, self._expires_at(ttl))
+            self.start_cleanup_task()
+            return "replaced", None
+
+    @staticmethod
+    def _expires_at(ttl: int | None) -> datetime | None:
+        return datetime.now() + timedelta(seconds=ttl) if ttl else None
+
+    @staticmethod
+    def _live_entry(
+        context_store: dict[str, tuple[Any, datetime | None]], key: str
+    ) -> Any:
+        """Read an unexpired entry, dropping it if its TTL has passed."""
+        if key not in context_store:
+            return None
+        data, expires_at = context_store[key]
+        if expires_at and datetime.now() > expires_at:
+            del context_store[key]
+            return None
+        return data
 
     async def delete(self, namespace: str, context_key: str, key: str) -> bool:
         self._require_namespace(namespace)

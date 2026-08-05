@@ -5,11 +5,17 @@ Provides table cache operations using in-memory storage.
 """
 
 import logging
+from collections.abc import Mapping
 from typing import Any, cast
 
 from pydantic import BaseModel
 
-from ....domain.interfaces.cache_interfaces import ITableCache
+from ....domain.interfaces.cache_interfaces import (
+    ITableCache,
+    TableRowTransition,
+    TableTransitionResult,
+)
+from ...row_conditions import require_full_row, row_predicate
 from ..storage_manager import storage_manager
 from .utils.key_factory import default_key_factory
 
@@ -86,6 +92,51 @@ class MemoryTable(ITableCache):
         """
         key = self._key(table_name, pkid)
         return await storage_manager.set("tables", self.inbox, None, key, data, ttl)
+
+    async def create_if_absent(
+        self,
+        table_name: str,
+        pkid: str,
+        data: dict[str, Any] | BaseModel,
+        ttl: int | None = None,
+    ) -> TableTransitionResult:
+        """Create a row only when absent, under the namespace lock."""
+        created, existing = await storage_manager.create_if_absent(
+            "tables",
+            self.inbox,
+            None,
+            self._key(table_name, pkid),
+            require_full_row(data),
+            ttl,
+        )
+        if created:
+            return TableTransitionResult(TableRowTransition.CREATED)
+        return TableTransitionResult(TableRowTransition.ALREADY_EXISTS, existing)
+
+    async def replace_if(
+        self,
+        table_name: str,
+        pkid: str,
+        data: dict[str, Any] | BaseModel,
+        expected: Mapping[str, Any],
+        ttl: int | None = None,
+    ) -> TableTransitionResult:
+        """Replace a row only when the stored one still matches ``expected``."""
+        matches = row_predicate(expected)
+        outcome, current = await storage_manager.replace_if(
+            "tables",
+            self.inbox,
+            None,
+            self._key(table_name, pkid),
+            require_full_row(data),
+            matches,
+            ttl,
+        )
+        if outcome == "replaced":
+            return TableTransitionResult(TableRowTransition.REPLACED)
+        if outcome == "missing":
+            return TableTransitionResult(TableRowTransition.MISSING)
+        return TableTransitionResult(TableRowTransition.CONDITION_NOT_MET, current)
 
     async def delete(self, table_name: str, pkid: str) -> int:
         """

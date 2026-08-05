@@ -18,6 +18,25 @@ class KeyFactory(BaseModel):
     pubsub_prefix: str = Field(default="notify")
     pk_marker: str = Field(default="pkid")
 
+    # ---- pattern segments -------------------------------------------------
+    @staticmethod
+    def glob_escape(segment: str) -> str:
+        """Escape a literal segment so Redis SCAN matches it character for character.
+
+        SCAN takes a glob, so a value containing ``*``, ``?``, ``[``, ``]``, or
+        ``\\`` changes what the pattern means. An `inbox_id` of ``a[1]`` would
+        otherwise build a pattern matching ``a1`` and never its own keys —
+        a delete that silently removes nothing.
+        """
+        escaped = segment.replace("\\", "\\\\")
+        for char in "*?[]":
+            escaped = escaped.replace(char, f"\\{char}")
+        return escaped
+
+    def _segment(self, value: str | None) -> str:
+        """Render one pattern segment: ``None`` means "any", anything else is literal."""
+        return "*" if value is None else self.glob_escape(value.replace(":", "_"))
+
     # ---- builders ---------------------------------------------------------
     def user(self, inbox: str, user_id: str) -> str:
         return f"{inbox}:{self.user_prefix}:{user_id}"
@@ -79,6 +98,66 @@ class KeyFactory(BaseModel):
         safe_agent = agent_name.replace(":", "_")
         return f"{inbox}:{self.aistate_prefix}:{safe_agent}:{user_id}"
 
+    # ---- SCAN patterns ----------------------------------------------------
+    # Every enumeration (delete-by-pattern, find-by-field, list-*) builds its
+    # glob here rather than with an f-string, so no caller can forget to escape
+    # a literal segment. Pass ``None`` for the dimension you want to range over.
+
+    def user_pattern(self, inbox: str, user_id: str | None = None) -> str:
+        return f"{self._segment(inbox)}:{self.user_prefix}:{self._segment(user_id)}"
+
+    def handler_pattern(
+        self,
+        inbox: str,
+        name: str | None = None,
+        user_id: str | None = None,
+        *,
+        name_prefix: str | None = None,
+    ) -> str:
+        """Pattern over handler states. ``name_prefix`` matches names starting with it."""
+        if name_prefix is not None:
+            handler = f"{self.glob_escape(name_prefix)}*"
+        else:
+            handler = self._segment(name)
+        return (
+            f"{self._segment(inbox)}:{self.handler_prefix}:{handler}"
+            f":{self._segment(user_id)}"
+        )
+
+    def table_pattern(
+        self, inbox: str, table: str | None = None, pkid: str | None = None
+    ) -> str:
+        return (
+            f"{self._segment(inbox)}:{self.table_prefix}:{self._segment(table)}"
+            f":{self.pk_marker}:{self._segment(pkid)}"
+        )
+
+    def trigger_pattern(
+        self, inbox: str, action: str | None = None, ident: str | None = None
+    ) -> str:
+        return (
+            f"{self._segment(inbox)}:{self.trigger_prefix}:{self._segment(action)}"
+            f":{self._segment(ident)}"
+        )
+
+    def aistate_pattern(
+        self,
+        inbox: str,
+        agent_name: str | None = None,
+        user_id: str | None = None,
+        *,
+        name_prefix: str | None = None,
+    ) -> str:
+        """Pattern over AI agent states. ``name_prefix`` matches names starting with it."""
+        if name_prefix is not None:
+            agent = f"{self.glob_escape(name_prefix)}*"
+        else:
+            agent = self._segment(agent_name)
+        return (
+            f"{self._segment(inbox)}:{self.aistate_prefix}:{agent}"
+            f":{self._segment(user_id)}"
+        )
+
     def channel(self, inbox: str, user_id: str, event_type: str) -> str:
         """
         Build PubSub channel name for real-time notifications.
@@ -130,9 +209,12 @@ class KeyFactory(BaseModel):
             >>> keys.channel_pattern("mimeia", event_type="status_change")
             "wappa:notify:mimeia:*:status_change"
         """
-        safe_user = user_id.replace(":", "_") if user_id != "*" else "*"
-        safe_event = event_type.replace(":", "_").lower() if event_type != "*" else "*"
-        return f"wappa:{self.pubsub_prefix}:{inbox}:{safe_user}:{safe_event}"
+        safe_user = "*" if user_id == "*" else self._segment(user_id)
+        safe_event = "*" if event_type == "*" else self._segment(event_type.lower())
+        return (
+            f"wappa:{self.pubsub_prefix}:{self._segment(inbox)}"
+            f":{safe_user}:{safe_event}"
+        )
 
     # ---- parsers ----------------------------------------------------------
     def parse_trigger(self, key: str) -> tuple[str, str, str] | None:

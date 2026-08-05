@@ -2,12 +2,39 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel
 
-from wappa.domain.interfaces.cache_interfaces import ITableCache
+from wappa.domain.interfaces.cache_interfaces import (
+    ITableCache,
+    TableRowTransition,
+    TableTransitionResult,
+)
 from wappa.persistence.cache_space import build_table_name, require_non_empty
+
+
+@dataclass(frozen=True, slots=True)
+class TypedRowTransition[T: BaseModel]:
+    """The outcome of an atomic transition, with any blocking row validated.
+
+    ``row`` is the state the backend actually holds when the transition was
+    refused — the winner of a create race, or the row that moved on before a
+    conditional replace. It is ``None`` on success and on a missing row.
+    """
+
+    transition: TableRowTransition
+    row: T | None = None
+
+    @property
+    def written(self) -> bool:
+        """Whether this call is the one that wrote the row."""
+        return self.transition in (
+            TableRowTransition.CREATED,
+            TableRowTransition.REPLACED,
+        )
 
 
 class TypedTableCache[T: BaseModel]:
@@ -60,6 +87,48 @@ class TypedTableCache[T: BaseModel]:
             ttl=self._resolve_ttl(ttl),
         )
 
+    async def create_if_absent(
+        self,
+        pkid: str,
+        data: T | dict[str, Any],
+        ttl: int | None = None,
+    ) -> TypedRowTransition[T]:
+        """Claim a row: exactly one concurrent caller gets ``CREATED``.
+
+        A losing caller receives ``ALREADY_EXISTS`` together with the row that
+        won, so it can act on the settled state without a follow-up read that
+        might already be stale.
+        """
+        result = await self.cache.create_if_absent(
+            self.table_name,
+            require_non_empty(pkid, "pkid"),
+            self._validate(data),
+            ttl=self._resolve_ttl(ttl),
+        )
+        return self._typed(result)
+
+    async def replace_if(
+        self,
+        pkid: str,
+        data: T | dict[str, Any],
+        expected: Mapping[str, Any],
+        ttl: int | None = None,
+    ) -> TypedRowTransition[T]:
+        """Replace a row only while it still holds ``expected``.
+
+        The comparison and the write are one backend operation, so a
+        transition can never be lost to an interleaved write. A refused
+        transition leaves the row and its TTL exactly as they were.
+        """
+        result = await self.cache.replace_if(
+            self.table_name,
+            require_non_empty(pkid, "pkid"),
+            self._validate(data),
+            expected,
+            ttl=self._resolve_ttl(ttl),
+        )
+        return self._typed(result)
+
     async def delete(self, pkid: str) -> int:
         return await self.cache.delete(
             self.table_name,
@@ -99,6 +168,10 @@ class TypedTableCache[T: BaseModel]:
             require_non_empty(pkid, "pkid"),
             resolved,
         )
+
+    def _typed(self, result: TableTransitionResult) -> TypedRowTransition[T]:
+        row = None if result.row is None else self._validate(result.row)
+        return TypedRowTransition(result.transition, row)
 
     def _validate(self, data: T | dict[str, Any]) -> T:
         if isinstance(data, self.model):

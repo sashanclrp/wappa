@@ -19,7 +19,7 @@ Router configuration:
 
 from collections.abc import Iterator
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
@@ -30,6 +30,7 @@ from wappa.api.dependencies.whatsapp_dependencies import (
 from wappa.api.dependencies.whatsapp_media_dependencies import (
     get_whatsapp_media_factory,
 )
+from wappa.api.routes.whatsapp.route_families import outbound_and_service_routers
 from wappa.api.utils import dispatch_message_event
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.domain.factories.media_factory import MediaFactory
@@ -49,8 +50,9 @@ from wappa.messaging.whatsapp.models.media_models import (
     VideoMessage,
 )
 
-# Create router with WhatsApp Media configuration
-router = APIRouter(
+# Sending media is an omissible outbound mutation; uploading, downloading, and
+# inspecting media is infrastructure an embedding host still needs.
+send_router, router = outbound_and_service_routers(
     prefix="/media",
     tags=["WhatsApp - Media"],
     responses={
@@ -122,13 +124,13 @@ async def upload_media(
         ) from e
 
 
-@router.post(
+@send_router.post(
     "/send-image",
     response_model=MessageResult,
     summary="Send Image Message",
     description="Send an image message with optional caption and reply context",
 )
-@dispatch_message_event("image", platform="whatsapp")
+@dispatch_message_event(platform="whatsapp")
 async def send_image_message(
     request: ImageMessage,
     fastapi_request: Request,
@@ -161,13 +163,13 @@ async def send_image_message(
         ) from e
 
 
-@router.post(
+@send_router.post(
     "/send-video",
     response_model=MessageResult,
     summary="Send Video Message",
     description="Send a video message with optional caption and reply context",
 )
-@dispatch_message_event("video", platform="whatsapp")
+@dispatch_message_event(platform="whatsapp")
 async def send_video_message(
     request: VideoMessage,
     fastapi_request: Request,
@@ -201,13 +203,13 @@ async def send_video_message(
         ) from e
 
 
-@router.post(
+@send_router.post(
     "/send-audio",
     response_model=MessageResult,
     summary="Send Audio Message",
     description="Send an audio message with optional reply context",
 )
-@dispatch_message_event("audio", platform="whatsapp")
+@dispatch_message_event(platform="whatsapp")
 async def send_audio_message(
     request: AudioMessage,
     fastapi_request: Request,
@@ -241,13 +243,13 @@ async def send_audio_message(
         ) from e
 
 
-@router.post(
+@send_router.post(
     "/send-document",
     response_model=MessageResult,
     summary="Send Document Message",
     description="Send a document message with optional filename and reply context",
 )
-@dispatch_message_event("document", platform="whatsapp")
+@dispatch_message_event(platform="whatsapp")
 async def send_document_message(
     request: DocumentMessage,
     fastapi_request: Request,
@@ -281,13 +283,13 @@ async def send_document_message(
         ) from e
 
 
-@router.post(
+@send_router.post(
     "/send-sticker",
     response_model=MessageResult,
     summary="Send Sticker Message",
     description="Send a sticker message with optional reply context",
 )
-@dispatch_message_event("sticker", platform="whatsapp")
+@dispatch_message_event(platform="whatsapp")
 async def send_sticker_message(
     request: StickerMessage,
     fastapi_request: Request,
