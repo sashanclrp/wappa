@@ -5,6 +5,19 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.2] - 2026-08-06
+
+Default Graph API version moves to **v26.0** (released 2026-07-29, current latest). v26.0 ships no WhatsApp Cloud API changes — its removals are Commerce Order Management, the Instagram Explore placement, Delivery Estimate fields, and legacy protocol behaviors, none of which Wappa touches; the WhatsApp-related additions are Marketing API Status Ads. Messaging, media, Template, and webhook payload contracts are unchanged, so this is a default bump with no code path affected. Override with `META_API_VERSION` as before.
+
+### Changed
+- **`META_API_VERSION` defaults to `v26.0`** (was `v25.0`) in `wappa/core/config/settings.py`. Applied consistently across the scaffolding template (`cli/templates/env.template`), the root `.env.example`, all six example `.env.example` files, and `wappa_full_example/docker-compose.yml`.
+
+### Fixed
+- **`json_cache_example/README.md` documented an unreadable env block.** It listed `WHATSAPP_API_URL=https://graph.facebook.com/v18.0` plus `WHATSAPP_ACCESS_TOKEN` / `WHATSAPP_PHONE_NUMBER_ID` / `WHATSAPP_WEBHOOK_VERIFY_TOKEN` / `WHATSAPP_WEBHOOK_SECRET` and `LOG_LEVEL` / `ENVIRONMENT` — names `settings.py` stopped reading in 0.19.0. Anyone copying that block got empty credentials and a failed startup validation. Rewritten to the canonical `META_BASE_URL` / `META_API_VERSION` / `WP_*` / `SYSTEM_*` names.
+
+### Verification
+`uv run ruff check .` clean, `uv run ruff format --check` clean, `uv run pytest` → 532 passed. The Template transport golden contract stays pinned to its v25.0-captured fixtures — v26.0 changes no `marketing_messages` payload shape, and re-labelling fixtures without re-capturing them against a live v26.0 response would misstate their provenance; the pinning rationale is now recorded in the test's docstring.
+
 ## [0.26.1] - 2026-08-05
 
 Security follow-up to 0.26.0. Ejecting Wappa's send routes left three unauthenticated routes that still mutate: `DELETE /media/{id}`, and the `/state-handlers/*` pair that reads, overwrites, and deletes the cached conversational state of **any** recipient named in the request. Route grouping is now drawn along what an unauthenticated caller could *do*, not along whether a route sends a message. Recorded in [ADR-0009](docs/adr/0009-route-capability-groups.md).

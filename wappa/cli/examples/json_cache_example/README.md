@@ -57,16 +57,17 @@ Each score handles a single responsibility:
 ### Environment Variables
 ```bash
 # WhatsApp Business API (required)
-WHATSAPP_API_URL=https://graph.facebook.com/v18.0
-WHATSAPP_ACCESS_TOKEN=your_access_token
-WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
-WHATSAPP_WEBHOOK_VERIFY_TOKEN=your_webhook_verify_token
-WHATSAPP_WEBHOOK_SECRET=your_webhook_secret
+META_BASE_URL=https://graph.facebook.com/
+META_API_VERSION=v26.0
+WP_ACCESS_TOKEN=your_access_token
+WP_PHONE_ID=your_phone_number_id
+WP_BID=your_business_account_id
+WP_WEBHOOK_VERIFY_TOKEN=your_webhook_verify_token
 
 # Application Settings
 PORT=8000
-LOG_LEVEL=INFO
-ENVIRONMENT=development
+SYSTEM_LOG_LEVEL=INFO
+SYSTEM_ENVIRONMENT=DEV
 ```
 
 **Note**: No Redis configuration needed - JSON cache uses the file system!

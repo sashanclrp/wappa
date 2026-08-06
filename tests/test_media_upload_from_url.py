@@ -10,7 +10,7 @@ from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
 def _make_handler() -> WhatsAppMediaHandler:
     client = MagicMock()
     client.url_builder.get_media_url.return_value = (
-        "https://graph.facebook.com/v25.0/123/media"
+        "https://graph.facebook.com/v26.0/123/media"
     )
     client.post_request = AsyncMock(return_value={"id": "media_id_abc"})
     return WhatsAppMediaHandler(

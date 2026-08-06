@@ -72,7 +72,7 @@ class Settings:
         )
 
         # ── Meta / WhatsApp (META_* / WP_*) ─────────────────────
-        self.api_version: str = os.getenv("META_API_VERSION", "v25.0")
+        self.api_version: str = os.getenv("META_API_VERSION", "v26.0")
         self.base_url: str = os.getenv("META_BASE_URL", "https://graph.facebook.com/")
 
         self.wp_access_token: str | None = os.getenv("WP_ACCESS_TOKEN")

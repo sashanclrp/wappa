@@ -1,4 +1,11 @@
-"""Golden Meta v25.0 Template transport contracts checked on 2026-08-03."""
+"""Golden Meta v25.0 Template transport contracts checked on 2026-08-03.
+
+Graph API v26.0 (released 2026-07-29) ships no Template / ``marketing_messages``
+changes, so these v25.0-captured fixtures remain the authoritative contract even
+though ``META_API_VERSION`` now defaults to v26.0. Re-capture the fixtures under
+a new ``fixtures/meta/<version>/`` directory only when Meta actually changes the
+payload shape.
+"""
 
 from __future__ import annotations
 
