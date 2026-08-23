@@ -5,6 +5,20 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.3] - 2026-08-23
+
+Meta omits `ctwa_clid` from the `referral` object for WhatsApp Status ad placements. Wappa's provider-facing schema declared it required, so every message arriving from a Status ad failed validation before a universal webhook could be built — the processor reported "Failed to create universal webhook" and the message never reached the host application. Only the click ID is now nullable; the referral and its `source_id` survive, so ad context and analytics keep working and downstream attribution can filter on a null click ID.
+
+### Fixed
+- **`AdReferral.ctwa_clid` is now `str | None`** in `wappa/webhooks/whatsapp/base_models.py`. It was `Field(...)` — required — which contradicted the universal `AdReferralBase`, where `click_id` has always been optional. The strict provider layer was the only thing rejecting these payloads.
+- **The emptiness guard split in two.** `source_id` keeps its required non-empty check; `ctwa_clid` passes `None` through and rejects only a present-but-blank string. Previously one shared validator applied the required-ID rule to both fields.
+
+### Documentation
+- `docs/public-contract.md` records that Click-to-WhatsApp referrals accept an omitted `ctwa_clid`, and that such referrals reach handlers as `click_id=None`.
+
+### Verification
+`uv run ruff check .` clean, `uv run ruff format --check` clean, `uv run pytest` → 533 passed. The new case parses a production-shaped Status-ad payload end to end and asserts `referral.ctwa_clid is None`, `get_ad_context() == ("status-ad-123", None)`, and `webhook.ad_referral.click_id is None`.
+
 ## [0.26.2] - 2026-08-06
 
 Default Graph API version moves to **v26.0** (released 2026-07-29, current latest). v26.0 ships no WhatsApp Cloud API changes — its removals are Commerce Order Management, the Instagram Explore placement, Delivery Estimate fields, and legacy protocol behaviors, none of which Wappa touches; the WhatsApp-related additions are Marketing API Status Ads. Messaging, media, Template, and webhook payload contracts are unchanged, so this is a default bump with no code path affected. Override with `META_API_VERSION` as before.

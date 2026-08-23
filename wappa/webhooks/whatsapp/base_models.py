@@ -282,7 +282,12 @@ class AdReferral(BaseModel):
         None, description="Ad video thumbnail URL (only for video ads)"
     )
 
-    ctwa_clid: str = Field(..., description="Click-to-WhatsApp ad click ID")
+    ctwa_clid: str | None = Field(
+        None,
+        description=(
+            "Click-to-WhatsApp ad click ID; omitted for WhatsApp Status ad placements"
+        ),
+    )
     welcome_message: WelcomeMessage = Field(..., description="Ad greeting message")
 
     @field_validator("source_url", "image_url", "video_url", "thumbnail_url")
@@ -296,12 +301,22 @@ class AdReferral(BaseModel):
                 raise ValueError("URLs must start with http:// or https://")
         return v
 
-    @field_validator("source_id", "ctwa_clid")
+    @field_validator("source_id")
     @classmethod
-    def validate_ids(cls, v: str) -> str:
-        """Validate required IDs are not empty."""
+    def validate_source_id(cls, v: str) -> str:
+        """Validate the required ad ID is not empty."""
         if not v.strip():
-            raise ValueError("Ad IDs cannot be empty")
+            raise ValueError("Ad ID cannot be empty")
+        return v.strip()
+
+    @field_validator("ctwa_clid")
+    @classmethod
+    def validate_click_id(cls, v: str | None) -> str | None:
+        """Validate the click ID when Meta includes one."""
+        if v is None:
+            return None
+        if not v.strip():
+            raise ValueError("Ad click ID cannot be empty")
         return v.strip()
 
 

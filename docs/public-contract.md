@@ -51,6 +51,7 @@ Public inbound imports include:
 - `from wappa.webhooks.whatsapp.*` platform payload schemas
 
 WhatsApp built-in payload schemas are strict (`extra="forbid"`).
+Click-to-WhatsApp referrals accept an omitted `ctwa_clid`, as Meta does not send that field for WhatsApp Status ad placements. The universal `AdReferralBase` retains those referrals with `click_id=None`.
 `MessageContext.from_bsuid` maps Meta's `context.from_user_id` reply identifier.
 Incoming WhatsApp models also retain optional portfolio-parent identifiers,
 group identifiers, username-only contacts, and call-permission replies. Status

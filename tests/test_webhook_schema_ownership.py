@@ -22,6 +22,7 @@ from wappa.webhooks.core.webhook_interfaces import (
     SystemWebhook,
     UserBase,
 )
+from wappa.webhooks.whatsapp.message_types.text import WhatsAppTextMessage
 
 
 def _metadata() -> dict[str, str]:
@@ -119,6 +120,53 @@ async def test_whatsapp_message_payload_parses_to_pydantic_universal_model() -> 
     assert webhook.message.context is not None
     assert webhook.message.context.from_bsuid == "CO.1057044516887193"
     assert webhook.message.context.from_parent_bsuid == "CO.ENT.1057044516887193"
+
+
+@pytest.mark.asyncio
+async def test_whatsapp_status_ad_referral_accepts_missing_click_id() -> None:
+    processor = WhatsAppWebhookProcessor()
+    webhook = await processor.create_universal_webhook(
+        _payload(
+            "messages",
+            {
+                "messaging_product": "whatsapp",
+                "metadata": _metadata(),
+                "contacts": [
+                    {
+                        "profile": {"name": "Sasha Nicolai Canal"},
+                        "wa_id": "573168227670",
+                    }
+                ],
+                "messages": [
+                    {
+                        "from": "573168227670",
+                        "id": "wamid.status-ad-message-001",
+                        "timestamp": "1776696189",
+                        "text": {"body": "Hola"},
+                        "type": "text",
+                        "referral": {
+                            "source_url": "https://facebook.com/status-ad",
+                            "source_id": "status-ad-123",
+                            "source_type": "ad",
+                            "body": "Reserva una clase",
+                            "headline": "LifePro",
+                            "media_type": "image",
+                            "image_url": "https://example.com/status-ad.jpg",
+                            "welcome_message": {"text": "Hola"},
+                        },
+                    }
+                ],
+            },
+        )
+    )
+
+    assert isinstance(webhook, InboundMessageWebhook)
+    assert isinstance(webhook.message, WhatsAppTextMessage)
+    assert webhook.message.referral is not None
+    assert webhook.message.referral.ctwa_clid is None
+    assert webhook.message.get_ad_context() == ("status-ad-123", None)
+    assert webhook.ad_referral is not None
+    assert webhook.ad_referral.click_id is None
 
 
 @pytest.mark.asyncio
