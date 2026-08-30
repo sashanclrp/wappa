@@ -30,7 +30,7 @@ wappa/core/plugins/
 │
 │   ── Core ──
 ├── wappa_core_plugin.py         # WappaCorePlugin: logging setup, HTTP client, core middleware
-│                                #   (OwnerMiddleware, ErrorHandlerMiddleware, RequestLoggingMiddleware),
+│                                #   (InboxMiddleware, ErrorHandlerMiddleware, RequestLoggingMiddleware),
 │                                #   health and WhatsApp routers. Priority 10/90.
 │
 │   ── Infrastructure ──

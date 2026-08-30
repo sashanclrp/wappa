@@ -1,92 +1,30 @@
-"""
-Inbox middleware for extracting inbox ID from webhook URLs.
+"""Per-request isolation of the ambient Inbox logging context.
 
-Simple middleware that extracts the inbox_id from webhook URL paths and sets it in context.
+Inbox selection no longer happens here. Inbox-dependent routes resolve one
+``InboxExecutionContext`` through a FastAPI dependency; local-only routes
+never touch the Inbox Directory. This middleware only guarantees that an
+Inbox value bound during one request cannot survive into the next request
+served by the same worker.
 """
 
-from fastapi import HTTPException, Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import Request
 from starlette.responses import Response
 
-from wappa.core.config.settings import settings
-from wappa.core.logging.context import set_request_context
-from wappa.core.logging.logger import get_logger
+from wappa.api.dependencies.inbox_context import INBOX_ID_HEADER
+from wappa.core.logging.context import bind_inbox_context, reset_inbox_context
 
-logger = get_logger(__name__)
+__all__ = ["INBOX_ID_HEADER", "InboxMiddleware"]
 
 
 class InboxMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware to extract inbox_id from webhook URLs and set in context.
-
-    URL Pattern: /webhook/inboxes/{inbox_id}/whatsapp
-    Purpose: Extract inbox_id and set it in the context system.
-
-    That's it. Nothing more.
-    """
+    """Reset the ambient Inbox context around every request."""
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        """Extract inbox_id from URL path and set in context."""
-        inbox_id = None
-
+        token = bind_inbox_context(None)
         try:
-            # Extract inbox_id from webhook URL pattern: /webhook/inboxes/{inbox_id}/{platform}
-            if request.url.path.startswith("/webhook/"):
-                path_parts = request.url.path.strip("/").split("/")
-
-                if len(path_parts) >= 4:
-                    # path_parts = ["webhook", "inboxes", "inbox_id", "platform"]
-                    inbox_id = path_parts[2]
-
-                    if self._is_valid_inbox_id(inbox_id):
-                        set_request_context(inbox_id=inbox_id)
-                    else:
-                        logger.error("Invalid inbox ID format: %s", inbox_id)
-                        raise HTTPException(
-                            status_code=400, detail=f"Invalid inbox ID: {inbox_id}"
-                        )
-                else:
-                    logger.warning(
-                        "Webhook URL does not have enough parts: %s", path_parts
-                    )
-
-            # For non-webhook endpoints (API routes), use default inbox from settings.
-            elif not self._is_public_endpoint(request.url.path):
-                set_request_context(inbox_id=settings.inbox_id)
-
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error("Error in inbox middleware: %s", e, exc_info=True)
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    f"InboxMiddleware failed while resolving inbox context for "
-                    f"path '{request.url.path}': {type(e).__name__}: {e}"
-                ),
-            ) from e
-
-        # Inbox resolution succeeded — run the downstream app OUTSIDE the guard
-        # so route/handler exceptions surface with their true origin instead of
-        # being re-labeled as an inbox-resolution failure.
-        return await call_next(request)
-
-    def _is_valid_inbox_id(self, inbox_id: str) -> bool:
-        """Validate inbox ID format."""
-        if not inbox_id or not isinstance(inbox_id, str):
-            return False
-
-        if not inbox_id.replace("_", "").replace("-", "").isalnum():
-            return False
-
-        return not (len(inbox_id) < 3 or len(inbox_id) > 50)
-
-    def _is_public_endpoint(self, path: str) -> bool:
-        """Check if endpoint is public and doesn't require inbox context."""
-        public_paths = {"/"}
-        public_prefixes = ("/health", "/docs", "/redoc", "/openapi.json")
-        return path in public_paths or any(
-            path.startswith(prefix) for prefix in public_prefixes
-        )
+            return await call_next(request)
+        finally:
+            reset_inbox_context(token)

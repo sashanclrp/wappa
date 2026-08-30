@@ -12,6 +12,7 @@ from ....domain.interfaces.cache_interfaces import (
     TableTransitionResult,
 )
 from ...row_conditions import condition_tokens, require_full_row
+from ...scope import resolve_table_context_id
 from ..ops import eval_script, hget, hincrby_with_expire
 from ..redis_client import PoolAlias
 from .utils.inbox_cache import InboxCache
@@ -67,6 +68,11 @@ class RedisTable(InboxCache, ITableCache):
     """
     Repository for table data management (generic DataFrames/rows).
 
+    The first key segment is a Table Cache ``context_id``: the reserved System
+    Scope, a Host-defined business scope, or an Inbox namespace. Construct it
+    positionally or with ``context_id=``; the former ``inbox=`` keyword is gone
+    and raises ``TypeError`` rather than silently binding a stale name.
+
     Extracted from RedisHandler SECTION: Table Data Management:
     - set_table_data() -> upsert()
     - get_table_data() -> get()
@@ -83,6 +89,31 @@ class RedisTable(InboxCache, ITableCache):
     """
 
     redis_alias: PoolAlias = "table"
+
+    def __init__(
+        self,
+        context_id: str | None = None,
+        *,
+        redis_alias: PoolAlias = "table",
+        ttl_default: int = 86400,
+        **renamed: object,
+    ) -> None:
+        """Bind this repository to one Table Cache Scope.
+
+        ``**renamed`` traps the pre-v0.27 ``inbox_id=`` / ``inbox=`` keywords
+        so they fail with migration guidance rather than an opaque
+        "unexpected keyword argument".
+        """
+        super().__init__(
+            inbox=resolve_table_context_id(context_id, **renamed),
+            redis_alias=redis_alias,
+            ttl_default=ttl_default,
+        )
+
+    @property
+    def context_id(self) -> str:
+        """The Table Cache Scope this repository is bound to."""
+        return self.inbox
 
     def _key(self, table_name: str, pkid: str) -> str:
         """Build table key using KeyFactory"""

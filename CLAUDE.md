@@ -90,7 +90,7 @@ The project has been successfully refactored into a modular library with clean a
 
 ## DDD and Architecture Grounding
 
-Wappa is a provider-facing messaging runtime. It should not define business tenancy for host applications.
+Wappa is a Platform-facing messaging runtime. It should not define business tenancy for host applications.
 
 Before non-trivial code, schema, architecture, public contract, or documentation changes:
 
@@ -112,11 +112,12 @@ For architecture work, DDD naming, SOLID cleanup, or design discussion:
 
 ### Canonical Wappa Runtime Language
 
-- **Inbox**: the provider-facing message ingress/egress identity used to receive webhooks, send messages, scope runtime caches, and subscribe to event streams.
-- `inbox_id`: the stable identifier of an Inbox inside Wappa. For WhatsApp, this maps to Meta `phone_number_id`.
-- **Provider**: an external messaging platform such as WhatsApp.
-- **Provider Account**: provider-side account metadata such as WABA ID. This is not Wappa's runtime identity.
-- **User**: the end-user/contact identity inside a provider conversation.
+- **Inbox**: the Platform-facing message ingress/egress identity used to receive webhooks, send messages, scope runtime caches, and subscribe to event streams.
+- `inbox_id`: the stable Platform-native identifier of an Inbox. It is unique only inside one Platform; the globally unique identity is `InboxRef(platform, inbox_id)`. For WhatsApp, `inbox_id` maps to Meta `phone_number_id`.
+- **Platform**: an external messaging platform such as WhatsApp. (Older instructions said "Provider"; Platform is canonical, matching `PlatformType`.)
+- **Platform Account**: Platform-side account metadata such as WABA ID, identified globally by `PlatformAccountRef(platform, platform_account_id)`. This is not Wappa's runtime identity.
+- **Inbox Routing Mode**: `legacy` (settings-backed single Inbox) or `explicit` (Wappa's encrypted Inbox Directory over the Host's `IInboxDirectorySource`). No third mode exists.
+- **User**: the end-user/contact identity inside a Platform conversation.
 - **Host Application**: the application embedding Wappa and owning business concepts such as Owner, Channel, customer, or workflow.
 
 Avoid `tenant`, `tenant_id`, and `multi-tenant` as Wappa runtime language. Wappa may carry optional host metadata, but it does not define business tenancy, Owner, or Channel.
@@ -124,11 +125,11 @@ Avoid `tenant`, `tenant_id`, and `multi-tenant` as Wappa runtime language. Wappa
 ### Wappa Architectural Defaults
 
 - Host applications own business language and business invariants.
-- Wappa owns provider webhook intake, message sending, event dispatch, runtime cache scoping, and public contract stability.
-- API route modules adapt HTTP to Wappa modules; they should not own provider parsing, credential lookup, cache namespace rules, or dispatch policy.
-- Provider adapters own SDK/client construction, credentials, request/response translation, provider errors, and provider-specific identity mapping.
+- Wappa owns Platform webhook intake, message sending, event dispatch, runtime cache scoping, and public contract stability.
+- API route modules adapt HTTP to Wappa modules; they should not own Platform parsing, credential lookup, cache namespace rules, or dispatch policy.
+- Platform adapters own SDK/client construction, credentials, request/response translation, Platform errors, and Platform-specific identity mapping.
 - Keep the WhatsApp `inbox_id == phone_number_id` mapping explicit inside the WhatsApp adapter.
-- Cache, SSE, expiry, and event modules scope runtime data by `inbox_id` where provider-facing identity is required.
+- Cache, SSE, expiry, and event modules scope runtime data by Inbox identity where Platform-facing identity is required; only Table Cache accepts a general `context_id`.
 - Prefer deep modules: keep interfaces small and place behavior behind them for leverage and locality.
 - Avoid pass-through modules that fail the deletion test.
 - Treat the public import surface, CLI templates, webhook routes, event envelopes, cache namespace shape, and generated examples as Wappa's public contract.
@@ -197,9 +198,11 @@ class MasterEventHandler(WappaEventHandler):
         )
 
 
-# Minimal application setup. Credentials are read from the environment
-# (.env): WP_ACCESS_TOKEN, WP_PHONE_ID, WP_BID. The constructor only
-# selects the cache backend ("memory" | "redis" | "json").
+# Minimal application setup (legacy single-Inbox mode). Credentials are
+# read from the environment (.env): META_APP_SECRET, WP_WEBHOOK_VERIFY_TOKEN,
+# WP_ACCESS_TOKEN, WP_PHONE_ID, WP_BID. The constructor selects the cache
+# backend ("memory" | "redis" | "json") and, optionally, the Inbox Routing
+# Mode plus an IInboxDirectorySource for explicit multi-Inbox routing.
 app = Wappa(cache="memory")
 
 # Register the event handler

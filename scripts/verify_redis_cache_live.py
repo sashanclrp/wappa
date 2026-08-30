@@ -898,7 +898,7 @@ async def check_glob_safety(url: str) -> None:
     )
     print(f"      {dim('segment would build a pattern that matches nothing at all.')}")
 
-    table = RedisTable(inbox=hostile)
+    table = RedisTable(hostile)
     try:
         step("Writing two rows under that inbox, then dropping the table")
         expect("delete_table reports 2, not a silent 0")

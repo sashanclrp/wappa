@@ -2,7 +2,7 @@
 
 Internal structure, responsibilities, and design decisions for the Persistence context.
 
-Cross-references: [root ARCHITECTURE.md](../../../ARCHITECTURE.md) · [CONTEXT.md](CONTEXT.md) · [root CONTEXT.md](../../../CONTEXT.md)
+Cross-references: [root ARCHITECTURE.md](../../ARCHITECTURE.md) · [CONTEXT.md](CONTEXT.md) · [root CONTEXT.md](../../CONTEXT.md)
 
 ## Responsibilities
 
@@ -28,6 +28,8 @@ This context does NOT own:
 ```
 wappa/persistence/
 ├── cache_factory.py              # Selects backend (redis / memory / json)
+├── scope.py                      # SYSTEM_SCOPE, context_id rules, create_system_table_cache()
+├── inbox_directory.py            # InboxDirectoryTable — Wappa-owned rows on a System-Scope table
 ├── cache_space.py                # Optional host-owned namespace segment for table names
 ├── row_conditions.py             # Canonical encoding for conditional row comparisons
 ├── typed_table_cache.py          # TypedTableCache[T] convenience wrapper over ITableCache
@@ -72,13 +74,15 @@ All pools are created at startup via `RedisClient.setup_single_url(base_url)`, w
 
 ## Key Patterns
 
-All keys are built exclusively through `KeyFactory`. The `inbox_id` value is always the first segment — it is the namespace boundary for all Wappa runtime data.
+All keys are built exclusively through `KeyFactory`. The first segment is the namespace boundary: the Inbox Namespace for User, State, Expiry, and AI State data, and the Table Cache Scope (`context_id`) for table records.
 
 | Data domain   | Key pattern                                           |
 |---------------|-------------------------------------------------------|
 | User          | `{inbox_id}:user:{user_id}`                           |
 | State         | `{inbox_id}:state:{handler_name}:{user_id}`           |
-| Table record  | `{inbox_id}:df:{table_name}:pkid:{pkid}`              |
+| Table record  | `{context_id}:df:{table_name}:pkid:{pkid}`            |
+| Inbox Directory row | `__system__:df:wappa_inbox_directory:pkid:{inbox_namespace}` |
+| Platform Account index | `__system__:df:wappa_inbox_directory_account_index:pkid:{platform}__{account_id}` |
 | Expiry trigger | `{inbox_id}:EXPTRIGGER:{action}:{identifier}`        |
 | AI state      | `{inbox_id}:aistate:{agent_name}:{user_id}`           |
 | PubSub channel | `wappa:notify:{inbox_id}:{user_id}:{event_type}`     |
@@ -192,6 +196,26 @@ carries a longer TTL, refreshed on every bump, so it can never expire back to
 
 **Hybrid context pattern** — `RedisCacheFactory` is constructed once per request with `(inbox_id, user_id)` defaults. Any `create_*_cache()` call can override either dimension without constructing a new factory. This avoids threading context through every call site while still supporting API-event scenarios where the canonical user differs from the sender.
 
+**Table Cache Scope is the only general namespace** — Table Cache stores typed
+records and DB-derived read models, so its first segment is a general
+`context_id`: the reserved System Scope, a Host-defined business scope, or an
+Inbox Namespace. The three are siblings; nothing falls back or cascades between
+them. Every other cache family keeps `inbox_id` because its records have no
+valid System or business meaning. The rename from `inbox_id` to `context_id`
+changed the parameter name only: key values, TTLs, serialization, and stored
+data are untouched, which is why existing WhatsApp keys need no migration.
+
+**The Inbox Directory reuses this contract** — `InboxDirectoryTable` layers
+Wappa's directory rows on a System-Scope `ITableCache` and its existing `table`
+pool. It relies on `create_if_absent` / `replace_if` for versioned
+compare-and-set on `credential_version` (primary rows) and `index_version`
+(account indexes) and applies the 60-minute TTL to every write; sliding versus
+fixed behaviour comes from whether the service renews. No directory-specific
+Redis adapter or Redis Set exists, so memory and JSON run the same conformance
+suite. The JSON backend keeps one file-level expiry per scope, which is why it
+cannot distinguish sliding from fixed TTLs and stays a single-process
+development backend.
+
 **SCAN over KEYS** — All bulk enumeration (delete-by-pattern, find-by-field, list-handlers) uses cursor-based `SCAN` in batches of 100. `KEYS` is never used.
 
 **Stateless KeyFactory** — All key-string logic lives in one Pydantic model with no side effects. It can be instantiated anywhere and tested without a Redis connection.
@@ -220,14 +244,17 @@ integer revision when that distinction matters.
 
 ## Inbox Identity Naming
 
-The persistence context uses `inbox_id` as the cache namespace boundary.
-Legacy `tenant_id` names were removed by ADR 0001 and the v0.13 clean-break
-release. Current persistence code should use:
+The persistence context uses `inbox_id` as the cache namespace boundary for
+Inbox-owned families and `context_id` for Table Cache. Legacy `tenant_id`
+names were removed by ADR 0001 and the v0.13 clean-break release. Current
+persistence code should use:
 
 - `ICacheFactory.__init__(inbox_id, user_id)`
 - `ICacheFactory._resolve_context(inbox_id, user_id)`
-- `create_*_cache(inbox_id=..., user_id=...)`
-- Redis key patterns whose first segment is the Inbox ID
+- `create_user_cache(inbox_id=..., user_id=...)`, `create_state_cache(...)`, `create_expiry_cache(...)`, `create_ai_state_cache(...)`
+- `create_table_cache(context_id=...)`, `RedisTable(context_id)`, `MemoryTable(context_id)`, `JSONTable(context_id)`
+- `create_system_table_cache(cache_type)` for the System Scope
+- Redis key patterns whose first segment is the Inbox Namespace or the Table Cache Scope
 
 For WhatsApp, the first key segment contains the Inbox's Meta
 `phone_number_id`; the adapter owns that mapping.

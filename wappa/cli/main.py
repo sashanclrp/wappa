@@ -177,10 +177,18 @@ def _initialize_project(directory: str) -> None:
         typer.echo("3. Start development: uv run wappa dev app/main.py")
         typer.echo()
         typer.echo("🔧 Required environment variables (.env file):")
+        typer.echo("   META_APP_SECRET=your_meta_app_secret")
+        typer.echo("   WP_WEBHOOK_VERIFY_TOKEN=your_webhook_verify_token")
         typer.echo("   WP_ACCESS_TOKEN=your_access_token")
         typer.echo("   WP_PHONE_ID=your_phone_id")
         typer.echo("   WP_BID=your_business_id")
-        typer.echo("   WP_WEBHOOK_VERIFY_TOKEN=your_webhook_verify_token")
+        typer.echo()
+        typer.echo("📡 Configure this one callback URL in the Meta App:")
+        typer.echo("   https://your-domain.com/webhook/inboxes/whatsapp")
+        typer.echo(
+            "   Wappa authenticates every POST with META_APP_SECRET; "
+            "WP_WEBHOOK_VERIFY_TOKEN answers only the GET challenge."
+        )
 
     except Exception as e:
         typer.echo(f"❌ Failed to initialize project: {e}", err=True)

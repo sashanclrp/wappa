@@ -92,17 +92,20 @@ The plugin operates in one of two **mutually exclusive** modes. Passing both `pr
 
 **All paths require auth** except those matching an exclude prefix. This is the default when you pass neither parameter or only `exclude`.
 
-Default excluded paths are always included:
+Two independent things keep a path unauthenticated, and it matters which one you are relying on.
 
-- `/health`
+**1. `DEFAULT_EXCLUDES`** — always added to your `exclude` list by `AuthPlugin`:
+
 - `/api/sse/status`
-- `/webhook/messenger`
-- `/webhook/inboxes`
 - `/docs`
 - `/openapi.json`
 - `/redoc`
 
-`/webhook/messenger` is retained for verify-only callbacks (for example, `GET /webhook/messenger/{platform}/verify`), while platform webhook processing is served under `/webhook/inboxes/{inbox_id}/{platform}`.
+**2. Public route prefixes** — routers registered with `builder.add_router(..., public=True)` publish their prefix to `app.state.public_route_prefixes`, and `AuthMiddleware` skips those too. `WappaCorePlugin` registers the health router this way, and `Wappa` registers the webhook router this way, so in an application built through `Wappa` or `WappaBuilder` **`/health` and `/webhook/...` are already unauthenticated** without appearing in `DEFAULT_EXCLUDES`.
+
+If you mount `AuthMiddleware` on a bare FastAPI app that never set `public_route_prefixes`, those paths are *not* exempt — list them in `exclude` yourself.
+
+Meta verification and delivery share `GET + POST /webhook/inboxes/whatsapp`, and Wappa derives the Inbox from authenticated POST content; webhook URLs never carry an Inbox ID. Leave that callback out of `AuthPlugin`: it authenticates itself by verifying Meta's `X-Hub-Signature-256` against `META_APP_SECRET`, and a Host bearer token in front of it would only stop Meta from delivering.
 
 Add your own exclusions on top of the defaults:
 

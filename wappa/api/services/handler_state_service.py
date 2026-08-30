@@ -51,7 +51,10 @@ class HandlerStateService:
 
     async def _resolve_user_id(self, recipient: str, user_id: str | None) -> str:
         """Return explicit ``user_id`` when provided, else resolver output."""
-        return user_id or await self.identity_resolver.resolve(recipient)
+        return user_id or await self.identity_resolver.resolve(
+            recipient,
+            inbox_id=self.cache_factory.inbox_id,
+        )
 
     async def set_handler_state(
         self,

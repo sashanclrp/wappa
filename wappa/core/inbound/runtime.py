@@ -2,20 +2,30 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from wappa.core.dispatch.context_builder import (
+    DispatchContextBuilder,
+    RuntimeCapabilities,
+)
 from wappa.core.events import WappaEventDispatcher
-from wappa.core.logging.context import set_request_context
+from wappa.core.logging.context import (
+    bind_inbox_context,
+    bind_user_context,
+    reset_inbox_context,
+    reset_user_context,
+    set_request_context,
+)
 from wappa.core.logging.logger import get_logger
-from wappa.core.messaging.pipeline import MessengerPipeline
 from wappa.core.sse.context import (
     classify_meta_identifier,
     derive_identifiers,
     sse_event_scope,
 )
-from wappa.domain.factories import MessengerFactory
-from wappa.domain.interfaces.inbox_credential_store import IInboxCredentialStore
+from wappa.domain.inbox.errors import InboxDirectoryError
+from wappa.domain.inbox.identity import InboxRef
 from wappa.persistence.cache_factory import create_cache_factory
 from wappa.processors.base_processor import ProcessorError
 from wappa.processors.factory import processor_factory
@@ -29,14 +39,13 @@ from wappa.webhooks.core.webhook_interfaces import (
     UniversalWebhook,
 )
 
+from .webhook_routing import RoutedWebhookDelivery
+
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
-
-    import httpx
-
     from wappa.core.events.event_handler import WappaEventHandler
-    from wappa.domain.interfaces.cache_factory import ICacheFactory
-    from wappa.domain.interfaces.messaging_interface import IMessenger
+
+# Kept as the public name for the capability bundle the runtime consumes.
+InboundRuntimeDependencies = RuntimeCapabilities
 
 
 class InboundRuntimeError(Exception):
@@ -47,10 +56,6 @@ class UnsupportedPlatformError(InboundRuntimeError):
     """Raised when a route names a platform Wappa does not support."""
 
 
-class InvalidInboxError(InboundRuntimeError):
-    """Raised when the routed inbox is missing or not recognized."""
-
-
 class PayloadInboxMismatchError(InboundRuntimeError):
     """Raised when platform payload identity conflicts with the routed inbox."""
 
@@ -59,25 +64,15 @@ class ProcessorFailureError(InboundRuntimeError):
     """Raised when platform payload translation fails."""
 
 
-@dataclass(frozen=True)
-class InboundRuntimeDependencies:
-    """Dependencies needed to build a Dispatch Context for one inbound event."""
-
-    session_provider: Callable[[], httpx.AsyncClient]
-    inbox_credential_store: IInboxCredentialStore
-    messenger_middleware: Sequence[Any]
-    cache_type: str
-    background_work_tracker: Any
-    media_download_client_provider: Callable[[], httpx.AsyncClient]
-    redis_manager: Any | None = None
-    postgres_session_manager: Any | None = None
+class DispatchContextError(InboundRuntimeError):
+    """Raised when a Dispatch Context cannot be built for a non-directory reason."""
 
 
 @dataclass(frozen=True)
 class DispatchContext:
     """Per-event runtime bundle used for handler dispatch."""
 
-    inbox_id: str
+    inbox_ref: InboxRef
     user_id: str
     platform: PlatformType
     universal_webhook: UniversalWebhook
@@ -87,6 +82,10 @@ class DispatchContext:
     sse_phone_number: str | None
     sse_platform: str
     background_work_tracker: Any = None
+
+    @property
+    def inbox_id(self) -> str:
+        return self.inbox_ref.inbox_id
 
 
 class InboundRuntime:
@@ -98,53 +97,74 @@ class InboundRuntime:
         self._system_user_fallback = "__system__"
         self._status_cache_scan_user = "__scan__"
 
-    async def accept_webhook(
+    async def accept_webhook_batch(
         self,
         *,
-        platform: PlatformType,
-        inbox_id: str,
-        payload: dict[str, Any],
-        dependencies: InboundRuntimeDependencies,
+        deliveries: Sequence[RoutedWebhookDelivery],
+        dependencies: RuntimeCapabilities,
     ) -> dict[str, str]:
-        """Validate, build Dispatch Context, and schedule event dispatch."""
-        dispatch_context = await self.build_dispatch_context(
-            platform=platform,
-            inbox_id=inbox_id,
-            payload=payload,
-            dependencies=dependencies,
-        )
-        dependencies.background_work_tracker.track(
-            self.dispatch(dispatch_context),
-            name=f"inbound:{dispatch_context.inbox_id}:{dispatch_context.user_id}",
-        )
+        """Build every Dispatch Context, then schedule the whole batch.
+
+        A failure while building item N schedules none of items 1..N-1.
+        """
+        builder = DispatchContextBuilder(dependencies)
+        dispatch_contexts = [
+            await self.build_dispatch_context(delivery, builder=builder)
+            for delivery in deliveries
+        ]
+        for dispatch_context in dispatch_contexts:
+            dependencies.background_work_tracker.track(
+                self.dispatch(dispatch_context),
+                name=f"inbound:{dispatch_context.inbox_id}:{dispatch_context.user_id}",
+            )
         return {"status": "accepted"}
 
     async def build_dispatch_context(
         self,
+        delivery: RoutedWebhookDelivery,
         *,
-        platform: PlatformType,
-        inbox_id: str,
-        payload: dict[str, Any],
-        dependencies: InboundRuntimeDependencies,
+        builder: DispatchContextBuilder | None = None,
+        dependencies: RuntimeCapabilities | None = None,
     ) -> DispatchContext:
-        if not inbox_id:
-            raise InvalidInboxError("Inbox ID is required")
+        if builder is None:
+            if dependencies is None:
+                raise ValueError(
+                    "build_dispatch_context needs a builder or dependencies"
+                )
+            builder = DispatchContextBuilder(dependencies)
 
-        if not await dependencies.inbox_credential_store.validate_inbox(inbox_id):
-            raise InvalidInboxError(f"Invalid or inactive inbox: {inbox_id}")
-
+        inbox_ref = delivery.inbox_ref
+        platform = inbox_ref.platform
         universal_webhook = await self._create_universal_webhook(
-            platform=platform,
-            inbox_id=inbox_id,
-            payload=payload,
+            platform=platform, inbox_id=inbox_ref.inbox_id, payload=delivery.payload
         )
-        self._validate_payload_inbox(inbox_id, universal_webhook)
+        self._validate_payload_inbox(inbox_ref.inbox_id, universal_webhook)
 
         if isinstance(universal_webhook, StatusWebhook):
-            await self._enrich_status_user_id(universal_webhook, inbox_id, dependencies)
+            await self._enrich_status_user_id(
+                universal_webhook, inbox_ref, builder.capabilities
+            )
 
         user_id = self._resolve_handler_user_id(universal_webhook)
-        set_request_context(inbox_id=inbox_id, user_id=user_id)
+
+        # Bind identity only for the build of this delivery; build-phase logs
+        # of a later delivery must not be attributed to this one.
+        inbox_token = bind_inbox_context(inbox_ref.inbox_id)
+        user_token = bind_user_context(user_id)
+        try:
+            request_handler = await self._create_dispatch_handler(
+                builder=builder, delivery=delivery, user_id=user_id
+            )
+            self.logger.info(
+                "Created %s from %s (inbox: %s, user: %s)",
+                type(universal_webhook).__name__,
+                platform.value,
+                inbox_ref.inbox_id,
+                user_id,
+            )
+        finally:
+            reset_user_context(user_token)
+            reset_inbox_context(inbox_token)
 
         sse_user_id, sse_bsuid, sse_phone_number = self._derive_sse_identity(
             universal_webhook, user_id
@@ -155,23 +175,8 @@ class InboundRuntime:
             else platform.value
         )
 
-        request_handler = await self._create_dispatch_handler(
-            platform=platform,
-            inbox_id=inbox_id,
-            user_id=user_id,
-            dependencies=dependencies,
-        )
-
-        self.logger.info(
-            "Created %s from %s (inbox: %s, user: %s)",
-            type(universal_webhook).__name__,
-            platform.value,
-            inbox_id,
-            user_id,
-        )
-
         return DispatchContext(
-            inbox_id=inbox_id,
+            inbox_ref=inbox_ref,
             user_id=user_id,
             platform=platform,
             universal_webhook=universal_webhook,
@@ -180,7 +185,7 @@ class InboundRuntime:
             sse_bsuid=sse_bsuid,
             sse_phone_number=sse_phone_number,
             sse_platform=sse_platform,
-            background_work_tracker=dependencies.background_work_tracker,
+            background_work_tracker=builder.capabilities.background_work_tracker,
         )
 
     async def dispatch(self, dispatch_context: DispatchContext) -> None:
@@ -218,6 +223,13 @@ class InboundRuntime:
                     dispatch_context.inbox_id,
                     dispatch_result.get("error"),
                 )
+        except InboxDirectoryError as exc:
+            self.logger.error(
+                "Inbox Directory failure while dispatching for inbox %s: %s: %s",
+                dispatch_context.inbox_id,
+                type(exc).__name__,
+                exc,
+            )
         except Exception as exc:
             self.logger.error(
                 "Error dispatching inbound webhook for inbox %s: %s",
@@ -235,11 +247,9 @@ class InboundRuntime:
     ) -> UniversalWebhook:
         try:
             processor = processor_factory.get_processor(platform)
-            universal_webhook = await processor.create_universal_webhook(
-                payload=payload,
-                inbox_id=inbox_id,
+            return await processor.create_universal_webhook(
+                payload=payload, inbox_id=inbox_id
             )
-            return universal_webhook
         except UnsupportedPlatformError:
             raise
         except ProcessorError as exc:
@@ -250,95 +260,49 @@ class InboundRuntime:
             ) from exc
 
     def _validate_payload_inbox(
-        self,
-        routed_inbox_id: str,
-        universal_webhook: UniversalWebhook,
+        self, routed_inbox_id: str, universal_webhook: UniversalWebhook
     ) -> None:
         payload_inbox_id = getattr(universal_webhook.inbox, "inbox_id", None)
         if payload_inbox_id and payload_inbox_id != routed_inbox_id:
             raise PayloadInboxMismatchError(
-                f"Payload inbox_id {payload_inbox_id!r} does not match routed inbox_id {routed_inbox_id!r}"
+                f"Payload inbox_id {payload_inbox_id!r} does not match routed "
+                f"inbox_id {routed_inbox_id!r}"
             )
 
     async def _create_dispatch_handler(
         self,
         *,
-        platform: PlatformType,
-        inbox_id: str,
+        builder: DispatchContextBuilder,
+        delivery: RoutedWebhookDelivery,
         user_id: str,
-        dependencies: InboundRuntimeDependencies,
     ) -> WappaEventHandler:
+        base_handler = self.event_dispatcher.event_handler
+        if not base_handler:
+            raise DispatchContextError(
+                "No WappaEventHandler registered with the event dispatcher — "
+                "call app.set_event_handler() or WappaBuilder.with_event_handler() "
+                "before processing webhooks"
+            )
         try:
-            messenger_factory = MessengerFactory(
-                session_provider=dependencies.session_provider,
-                credential_store=dependencies.inbox_credential_store,
-                media_download_client_provider=dependencies.media_download_client_provider,
+            messenger = await builder.messenger(
+                delivery.inbox_ref, credentials=delivery.credentials
             )
-            raw_messenger = await messenger_factory.create_messenger(
-                platform=platform,
-                inbox_id=inbox_id,
-            )
-            messenger: IMessenger = MessengerPipeline(
-                raw=raw_messenger,
-                middleware=dependencies.messenger_middleware,
-            )
-
-            cache_factory = self._create_cache_factory(
-                dependencies=dependencies,
-                inbox_id=inbox_id,
-                user_id=user_id,
-            )
-
-            session_manager = dependencies.postgres_session_manager
-            db = session_manager.get_session if session_manager else None
-            db_read = session_manager.get_read_session if session_manager else None
-
-            base_handler = self.event_dispatcher.event_handler
-            if not base_handler:
-                raise RuntimeError(
-                    "No WappaEventHandler registered with the event dispatcher — "
-                    "call app.register_handler() or WappaBuilder.with_event_handler() "
-                    "before processing webhooks"
-                )
-
-            return base_handler.with_context(
-                inbox_id=inbox_id,
-                user_id=user_id,
-                messenger=messenger,
-                cache_factory=cache_factory,
-                db=db,
-                db_read=db_read,
-            )
+            cache_factory = builder.cache_factory(delivery.inbox_ref, user_id)
+        except InboxDirectoryError:
+            raise
         except Exception as exc:
-            raise RuntimeError(
-                f"Dispatch Context creation failed for inbox '{inbox_id}', "
-                f"user '{user_id}', platform '{platform.value}': "
+            raise DispatchContextError(
+                f"Dispatch Context creation failed for inbox '{delivery.inbox_id}', "
+                f"user '{user_id}', platform '{delivery.inbox_ref.platform.value}': "
                 f"{type(exc).__name__}: {exc}"
             ) from exc
-
-    def _create_cache_factory(
-        self,
-        *,
-        dependencies: InboundRuntimeDependencies,
-        inbox_id: str,
-        user_id: str,
-    ) -> ICacheFactory:
-        cache_type = dependencies.cache_type
-        if cache_type == "redis":
-            redis_manager = dependencies.redis_manager
-            if redis_manager is None:
-                raise RuntimeError(
-                    "Redis cache requested but RedisPlugin not available. "
-                    "Ensure Wappa(cache='redis') is used or RedisPlugin is added manually."
-                )
-            if not redis_manager.is_initialized():
-                raise RuntimeError(
-                    "Redis cache requested but RedisManager not initialized. "
-                    "Check Redis server connectivity and startup logs."
-                )
-
-        factory_class = create_cache_factory(cache_type)
-        return factory_class(inbox_id=inbox_id, user_id=user_id)
+        return builder.bind_handler(
+            base_handler,
+            inbox_ref=delivery.inbox_ref,
+            user_id=user_id,
+            messenger=messenger,
+            cache_factory=cache_factory,
+        )
 
     def _resolve_handler_user_id(self, universal_webhook: UniversalWebhook) -> str:
         if isinstance(universal_webhook, InboundMessageWebhook):
@@ -355,9 +319,7 @@ class InboundRuntime:
         return self._system_user_fallback
 
     def _derive_sse_identity(
-        self,
-        webhook: UniversalWebhook,
-        fallback_user_id: str,
+        self, webhook: UniversalWebhook, fallback_user_id: str
     ) -> tuple[str, str | None, str | None]:
         if isinstance(webhook, InboundMessageWebhook) and webhook.user:
             bsuid, phone = derive_identifiers(webhook.user)
@@ -382,21 +344,21 @@ class InboundRuntime:
     async def _enrich_status_user_id(
         self,
         status: StatusWebhook,
-        inbox_id: str,
-        dependencies: InboundRuntimeDependencies,
+        inbox_ref: InboxRef,
+        capabilities: RuntimeCapabilities,
     ) -> None:
         phone = status.recipient_phone_id
-        if not phone or dependencies.cache_type != "redis":
+        if not phone or capabilities.cache_type != "redis":
             return
 
         try:
-            redis_manager = dependencies.redis_manager
+            redis_manager = capabilities.redis_manager
             if redis_manager is None or not redis_manager.is_initialized():
                 return
 
             factory_class = create_cache_factory("redis")
             cache_factory = factory_class(
-                inbox_id=inbox_id,
+                inbox_id=inbox_ref.cache_namespace,
                 user_id=self._status_cache_scan_user,
             )
             user_cache: Any = cache_factory.create_user_cache()

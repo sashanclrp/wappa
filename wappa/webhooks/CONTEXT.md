@@ -13,6 +13,7 @@ Terms specific to this bounded context. Shared kernel terms (`inbox_id`, `user_i
 | `CustomWebhookValue` | Permissive value container for app-registered Meta webhook fields not natively understood by Wappa (e.g. `message_template_status_update`). Parsed downstream by the app's registered parser. |
 | `WebhookChange` | A single entry in the `changes` array. Routes its `value` to either `WebhookValue` (built-in fields) or `CustomWebhookValue` (registered fields). |
 | `WebhookEntry` | Wraps the `platform_account_id` and its associated `changes` array. |
+| **Routed Webhook Delivery** | One Meta change paired with one payload-derived `inbox_id` before processor translation. WABA-only changes produce one delivery per registered Inbox. |
 | `BaseWebhook` | Abstract contract all platform webhook containers must implement. Exposes platform-agnostic inspection methods (`is_incoming_message`, `is_status_update`, `has_errors`, etc.). |
 | `BaseMessage` | Abstract contract all per-type message models must implement. |
 | `InboundMessageWebhook` | Canonical name for the Universal Model representing a message sent by a User to an Inbox. |

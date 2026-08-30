@@ -1,27 +1,25 @@
 """
 WhatsApp messaging dependency injection.
 
-Provides dependency injection for WhatsApp messaging services including
-factory pattern, client management, and messenger implementations.
+Every Inbox-dependent capability derives from one ``InboxExecutionContext``
+resolved per request. Dependencies never repeat the directory lookup and
+never see a raw header.
 """
 
 from collections.abc import Callable
-from typing import cast
 
-from fastapi import Depends, Request
+from fastapi import Depends
 
+from wappa.api.dependencies.inbox_context import (
+    InboxExecutionContext,
+    get_inbox_execution_context,
+)
 from wappa.api.dependencies.whatsapp_media_dependencies import (
     get_whatsapp_media_factory,
 )
-from wappa.api.utils.inbox_helpers import require_inbox_context
-from wappa.core.logging.logger import get_logger
 from wappa.domain.builders.message_builder import MessageBuilder
 from wappa.domain.factories.media_factory import WhatsAppMediaFactory
 from wappa.domain.factories.message_factory import WhatsAppMessageFactory
-from wappa.domain.interfaces.inbox_credential_store import (
-    IInboxCredentialStore,
-    InboxCredentials,
-)
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
@@ -41,158 +39,65 @@ from wappa.messaging.whatsapp.services import WhatsAppTemplateInfoService
 
 
 async def get_whatsapp_message_factory() -> WhatsAppMessageFactory:
-    """Get WhatsApp message factory.
-
-    Returns:
-        WhatsAppMessageFactory instance for WhatsApp platform
-    """
+    """Get WhatsApp message factory (local, no Inbox needed)."""
     return WhatsAppMessageFactory()
 
 
-def get_inbox_credential_store(request: Request) -> IInboxCredentialStore:
-    """Get the app-scoped inbox credential store."""
-    store = getattr(request.app.state, "inbox_credential_store", None)
-    if store is None:
-        raise RuntimeError(
-            "IInboxCredentialStore not found in app.state — ensure "
-            "WappaBuilder.with_whatsapp() or a credential store plugin "
-            "was configured before startup"
-        )
-    return cast(IInboxCredentialStore, store)
-
-
-async def _resolve_inbox_credentials(
-    request: Request, inbox_id: str
-) -> InboxCredentials:
-    credential_store = get_inbox_credential_store(request)
-    return await credential_store.get_credentials(inbox_id)
-
-
-async def get_whatsapp_client(request: Request) -> WhatsAppClient:
-    """Get configured WhatsApp client with inbox-specific credentials.
-
-    Args:
-        request: FastAPI request object containing HTTP session
-
-    Returns:
-        Configured WhatsApp client with persistent session and inbox credentials
-
-    Raises:
-        ValueError: If inbox credentials are invalid
-    """
-    session_lifecycle = getattr(request.app.state, "session_lifecycle", None)
-    if not session_lifecycle:
-        raise RuntimeError(
-            "SessionLifecycle not available in app.state — "
-            "WappaCorePlugin must be configured and started before "
-            "handling WhatsApp API requests"
-        )
-    session = session_lifecycle.get_session()
-
-    # Get inbox ID from context (set by webhook processing or API middleware)
-    inbox_id = require_inbox_context()
-
-    credential_store = get_inbox_credential_store(request)
-    if not await credential_store.validate_inbox(inbox_id):
-        raise ValueError(
-            f"Inbox '{inbox_id}' failed credential validation — either the "
-            f"inbox does not exist in the credential store, or its credentials "
-            f"are missing/inactive. Check your IInboxCredentialStore configuration."
-        )
-
-    credentials = await _resolve_inbox_credentials(request, inbox_id)
-    logger = get_logger(__name__)
-
-    return WhatsAppClient(
-        session=session,
-        access_token=credentials.access_token,
-        phone_number_id=inbox_id,  # inbox_id IS the phone_number_id
-        logger=logger,
-    )
+async def get_whatsapp_client(
+    context: InboxExecutionContext = Depends(get_inbox_execution_context),
+) -> WhatsAppClient:
+    """WhatsApp client for the selected Inbox Execution Context."""
+    return context.whatsapp_client()
 
 
 async def get_whatsapp_media_handler(
-    request: Request,
+    context: InboxExecutionContext = Depends(get_inbox_execution_context),
     client: WhatsAppClient = Depends(get_whatsapp_client),
 ) -> WhatsAppMediaHandler:
-    """Get configured WhatsApp media handler with inbox-specific context.
-
-    Args:
-        request: FastAPI request for accessing pooled media download client
-        client: Configured WhatsApp client with persistent session
-
-    Returns:
-        Configured WhatsApp media handler for upload/download operations
-    """
-    inbox_id = require_inbox_context()
-    lifecycle = getattr(request.app.state, "session_lifecycle", None)
-    if lifecycle is None:
-        raise RuntimeError("SessionLifecycle is required for media handling")
-    media_client = lifecycle.get_media_download_client()
     return WhatsAppMediaHandler(
-        client=client, inbox_id=inbox_id, media_download_client=media_client
+        client=client,
+        inbox_id=context.inbox_id,
+        media_download_client=context.media_download_client_provider(),
     )
 
 
 async def get_whatsapp_interactive_handler(
+    context: InboxExecutionContext = Depends(get_inbox_execution_context),
     client: WhatsAppClient = Depends(get_whatsapp_client),
 ) -> WhatsAppInteractiveHandler:
-    """Get configured WhatsApp interactive handler with inbox-specific context.
-
-    Args:
-        client: Configured WhatsApp client with persistent session
-
-    Returns:
-        Configured WhatsApp interactive handler for button/list/CTA operations
-    """
-    inbox_id = require_inbox_context()
-    return WhatsAppInteractiveHandler(client=client, inbox_id=inbox_id)
+    return WhatsAppInteractiveHandler(client=client, inbox_id=context.inbox_id)
 
 
 async def get_whatsapp_template_handler(
+    context: InboxExecutionContext = Depends(get_inbox_execution_context),
     client: WhatsAppClient = Depends(get_whatsapp_client),
 ) -> WhatsAppTemplateHandler:
-    """Get configured WhatsApp template handler with inbox-specific context.
-
-    Args:
-        client: Configured WhatsApp client with persistent session
-
-    Returns:
-        Configured WhatsApp template handler for business template operations
-    """
-    inbox_id = require_inbox_context()
-    return WhatsAppTemplateHandler(client=client, inbox_id=inbox_id)
+    return WhatsAppTemplateHandler(client=client, inbox_id=context.inbox_id)
 
 
 async def get_whatsapp_specialized_handler(
+    context: InboxExecutionContext = Depends(get_inbox_execution_context),
     client: WhatsAppClient = Depends(get_whatsapp_client),
 ) -> WhatsAppSpecializedHandler:
-    """Get configured WhatsApp specialized handler with inbox-specific context.
-
-    Args:
-        client: Configured WhatsApp client with persistent session
-
-    Returns:
-        Configured WhatsApp specialized handler for contact and location operations
-    """
-    inbox_id = require_inbox_context()
-    return WhatsAppSpecializedHandler(client=client, inbox_id=inbox_id)
+    return WhatsAppSpecializedHandler(client=client, inbox_id=context.inbox_id)
 
 
 async def get_whatsapp_template_info_service(
-    request: Request,
+    context: InboxExecutionContext = Depends(get_inbox_execution_context),
     client: WhatsAppClient = Depends(get_whatsapp_client),
 ) -> WhatsAppTemplateInfoService:
-    """Get configured WhatsApp template info service with WABA context."""
-    inbox_id = require_inbox_context()
-    credentials = await _resolve_inbox_credentials(request, inbox_id)
+    """Template info service whose WABA comes from the canonical Inbox record.
+
+    Callers never supply a second WABA argument, so an Inbox and a foreign
+    account cannot be paired.
+    """
     return WhatsAppTemplateInfoService(
-        client=client,
-        business_account_id=credentials.platform_account_id or "",
+        client=client, business_account_id=context.platform_account_id
     )
 
 
 async def get_whatsapp_messenger(
+    context: InboxExecutionContext = Depends(get_inbox_execution_context),
     client: WhatsAppClient = Depends(get_whatsapp_client),
     media_handler: WhatsAppMediaHandler = Depends(get_whatsapp_media_handler),
     interactive_handler: WhatsAppInteractiveHandler = Depends(
@@ -205,15 +110,14 @@ async def get_whatsapp_messenger(
     message_factory: WhatsAppMessageFactory = Depends(get_whatsapp_message_factory),
     media_factory: WhatsAppMediaFactory = Depends(get_whatsapp_media_factory),
 ) -> IMessenger:
-    """Get unified WhatsApp messenger implementation with complete functionality."""
-    inbox_id = require_inbox_context()
+    """Unified WhatsApp messenger for the selected Inbox."""
     return WhatsAppMessenger(
         client=client,
         media_handler=media_handler,
         interactive_handler=interactive_handler,
         template_handler=template_handler,
         specialized_handler=specialized_handler,
-        inbox_id=inbox_id,
+        inbox_id=context.inbox_id,
         message_factory=message_factory,
         media_factory=media_factory,
     )
@@ -222,17 +126,7 @@ async def get_whatsapp_messenger(
 async def get_message_builder(
     factory: WhatsAppMessageFactory = Depends(get_whatsapp_message_factory),
 ) -> Callable[[str], MessageBuilder]:
-    """Get a factory callable for fluent message construction.
-
-    Returns a callable that accepts a recipient string and produces a
-    ``MessageBuilder`` scoped to that recipient.
-
-    Args:
-        factory: Message factory for creating platform-specific payloads
-
-    Returns:
-        Callable ``(recipient: str) -> MessageBuilder``
-    """
+    """Factory callable for fluent message construction."""
 
     def create_builder(recipient: str) -> MessageBuilder:
         return MessageBuilder(factory, recipient)

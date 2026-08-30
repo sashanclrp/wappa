@@ -12,6 +12,7 @@ Clean Import Interface (SRP Compliance):
 
 # Framework Essentials Only (SRP: Framework Foundation)
 # Dynamic version from pyproject.toml
+from .core.config.meta_application import MetaApplicationConfig
 from .core.config.settings import settings
 from .core.context import WappaContext
 from .core.events.event_handler import WappaEventHandler
@@ -26,6 +27,13 @@ from .core.plugins import ExpiryPlugin
 from .core.wappa_app import Wappa
 from .domain.events.cron_event import CronEvent
 from .domain.events.external_event import ExternalEvent
+from .domain.inbox import (
+    IInboxDirectorySource,
+    InboxCredentialService,
+    InboxRef,
+    InboxRoutingMode,
+    PlatformAccountRef,
+)
 from .domain.interfaces.identity_resolver import (
     IIdentityResolver,
     PassthroughIdentityResolver,
@@ -58,4 +66,11 @@ __all__ = [
     # Identity Resolution
     "IIdentityResolver",
     "PassthroughIdentityResolver",
+    # Inbox identity, routing, and directory
+    "InboxRef",
+    "PlatformAccountRef",
+    "InboxRoutingMode",
+    "IInboxDirectorySource",
+    "InboxCredentialService",
+    "MetaApplicationConfig",
 ]

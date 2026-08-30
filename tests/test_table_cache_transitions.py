@@ -64,15 +64,15 @@ async def table(
 
     match request.param:
         case "memory":
-            yield MemoryTable(inbox=inbox)
+            yield MemoryTable(context_id=inbox)
         case "json":
             file_manager._cache_root = tmp_path / "cache"
             file_manager.ensure_cache_directories()
-            yield JSONTable(inbox=inbox)
+            yield JSONTable(context_id=inbox)
         case _:
             if not await _open_redis_pools():
                 pytest.skip(f"No Redis reachable at {REDIS_URL}")
-            cache = RedisTable(inbox=inbox)
+            cache = RedisTable(context_id=inbox)
             try:
                 yield cache
             finally:

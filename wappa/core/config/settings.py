@@ -14,6 +14,7 @@ Naming policy
 import os
 import sys
 import tomllib
+from importlib import metadata
 from pathlib import Path
 from typing import cast
 
@@ -23,6 +24,12 @@ load_dotenv(".env")
 
 
 def _get_version_from_pyproject() -> str:
+    """Resolve the package version.
+
+    A source checkout reads ``pyproject.toml``; an installed distribution has
+    no ``pyproject.toml`` on the import path, so the packaging metadata is the
+    authority there. ``0.1.0`` is only the last-resort fallback.
+    """
     current_path = Path(__file__)
     for parent in [current_path.parent, *current_path.parents]:
         pyproject_path = parent / "pyproject.toml"
@@ -30,24 +37,27 @@ def _get_version_from_pyproject() -> str:
             try:
                 with open(pyproject_path, "rb") as f:
                     pyproject_data = tomllib.load(f)
-                    version = pyproject_data.get("project", {}).get("version")
-                    if version:
-                        return cast(str, version)
+                    if pyproject_data.get("project", {}).get("name") == "wappa":
+                        version = pyproject_data["project"].get("version")
+                        if version:
+                            return cast(str, version)
             except (OSError, tomllib.TOMLDecodeError):
                 continue
-    return "0.1.0"
+    try:
+        return metadata.version("wappa")
+    except metadata.PackageNotFoundError:
+        return "0.1.0"
 
 
 def _is_cli_context() -> bool:
-    if len(sys.argv) > 1:
-        cli_only_commands = {"--help", "-h", "init", "examples"}
-        for arg in sys.argv[1:]:
-            if arg in cli_only_commands:
-                return True
-        if any("wappa" in arg for arg in sys.argv):
-            server_commands = {"dev", "prod"}
-            if not any(cmd in sys.argv for cmd in server_commands):
-                return True
+    """Return whether settings are loading for a non-server CLI command."""
+    if len(sys.argv) <= 1:
+        return False
+    cli_only_commands = {"--help", "-h", "init", "examples"}
+    if any(argument in cli_only_commands for argument in sys.argv[1:]):
+        return True
+    if any("wappa" in argument for argument in sys.argv):
+        return not any(command in sys.argv for command in {"dev", "prod"})
     return False
 
 
@@ -75,10 +85,22 @@ class Settings:
         self.api_version: str = os.getenv("META_API_VERSION", "v26.0")
         self.base_url: str = os.getenv("META_BASE_URL", "https://graph.facebook.com/")
 
+        # Meta Application Configuration (one Meta App per Wappa application).
+        self.meta_app_secret: str | None = os.getenv("META_APP_SECRET")
+        self.wp_webhook_verify_token: str | None = os.getenv("WP_WEBHOOK_VERIFY_TOKEN")
+
+        # Legacy single-Inbox bundle. Only the legacy settings adapter built by
+        # ``wappa.core.factory.inbox_assembly`` may consume these three values.
         self.wp_access_token: str | None = os.getenv("WP_ACCESS_TOKEN")
         self.wp_phone_id: str | None = os.getenv("WP_PHONE_ID")
         self.wp_bid: str | None = os.getenv("WP_BID")
-        self.wp_webhook_verify_token: str | None = os.getenv("WP_WEBHOOK_VERIFY_TOKEN")
+
+        # Inbox Routing Mode and explicit-mode credential encryption.
+        self.inbox_routing_mode: str | None = os.getenv("SYSTEM_INBOX_ROUTING_MODE")
+        self.system_token_enc_key: str | None = os.getenv("SYSTEM_TOKEN_ENC_KEY")
+        self.system_token_enc_previous_keys: str | None = os.getenv(
+            "SYSTEM_TOKEN_ENC_PREVIOUS_KEYS"
+        )
 
         # ── AI (OPENAI_*) ────────────────────────────────────────
         self.openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
@@ -94,8 +116,6 @@ class Settings:
         )
 
         self._validate_settings()
-        if not _is_cli_context():
-            self._validate_whatsapp_credentials()
 
     def _validate_settings(self) -> None:
         valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR"]
@@ -106,33 +126,6 @@ class Settings:
         if self.environment.upper() not in ("DEV", "PROD"):
             self.environment = "DEV"
         self.environment = self.environment.upper()
-
-    def _validate_whatsapp_credentials(self) -> None:
-        missing = [
-            name
-            for name, val in [
-                ("WP_ACCESS_TOKEN", self.wp_access_token),
-                ("WP_PHONE_ID", self.wp_phone_id),
-                ("WP_BID", self.wp_bid),
-                ("WP_WEBHOOK_VERIFY_TOKEN", self.wp_webhook_verify_token),
-            ]
-            if not val
-        ]
-        if missing:
-            raise OSError(
-                f"[wappa] Missing required WhatsApp credentials: {', '.join(missing)}"
-            )
-
-    @property
-    def inbox_id(self) -> str:
-        if not self.wp_phone_id:
-            raise ValueError(
-                "WP_PHONE_ID environment variable is required — this is the "
-                "WhatsApp phone number ID from Meta Business dashboard "
-                "(Settings > Phone Numbers > Phone Number ID). "
-                "Set it in your .env file: WP_PHONE_ID=your_phone_number_id"
-            )
-        return self.wp_phone_id
 
     @property
     def has_redis(self) -> bool:

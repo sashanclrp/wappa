@@ -17,11 +17,7 @@ The `Wappa` class adds `WappaCorePlugin` automatically -- no action required:
 ```python
 from wappa import Wappa
 
-app = Wappa(
-    whatsapp_token="...",
-    whatsapp_phone_id="...",
-    whatsapp_business_id="...",
-)
+app = Wappa(cache="memory")  # legacy mode reads WP_ACCESS_TOKEN / WP_PHONE_ID / WP_BID from the environment
 # WappaCorePlugin is already registered internally.
 ```
 
@@ -45,7 +41,7 @@ During `configure()`, the plugin registers the following components with `WappaB
 
 | Middleware                 | Priority | Role                                      |
 | ------------------------- | -------- | ----------------------------------------- |
-| `InboxMiddleware`         | 90       | Inbox context extraction (innermost layer) |
+| `InboxMiddleware`         | 90       | per-request isolation of the ambient Inbox logging context (innermost layer) |
 | `ErrorHandlerMiddleware`  | 80       | Global error handling                     |
 | `RequestLoggingMiddleware`| 70       | HTTP request/response logging             |
 | `RequestIdMiddleware`     | 60       | Request correlation (outermost layer)     |
@@ -69,7 +65,7 @@ During `configure()`, the plugin registers the following components with `WappaB
 When the startup hook fires (priority 10, before any other plugin), the following sequence executes:
 
 1. **Initialize logging** -- calls `setup_app_logging()` and obtains the application logger.
-2. **Log environment info** -- version, environment, owner ID, log level, cache type.
+2. **Log environment info** -- version, environment, Inbox Routing Mode, Meta callback readiness, log level, cache type.
 3. **Set cache type in `app.state`** -- stores `app.state.wappa_cache_type` so the webhook controller and other components can detect the active cache backend.
 4. **Create the session lifecycle** -- `SessionLifecycle` owns the authenticated
    Meta client and the isolated unauthenticated media-download client. Wappa
@@ -151,4 +147,4 @@ Higher priority numbers execute closer to the route handler (added to the ASGI s
   Response
 ```
 
-**Reading the diagram**: a request first hits `RequestLoggingMiddleware` (logs the incoming request), then `ErrorHandlerMiddleware` (catches exceptions), then `OwnerMiddleware` (extracts tenant context), and finally reaches the route handler. The response travels back through the same layers in reverse order.
+**Reading the diagram**: a request first hits `RequestLoggingMiddleware` (logs the incoming request), then `ErrorHandlerMiddleware` (catches exceptions), then `InboxMiddleware` (isolates the Inbox logging context for the request), and finally reaches the route handler. The response travels back through the same layers in reverse order.

@@ -49,9 +49,13 @@ class _Runtime:
     def __init__(self, messenger: object | None = None, error: Exception | None = None):
         self.messenger = messenger
         self.error = error
+        self.credentials_seen: list[Any] = []
 
-    async def _messenger(self, inbox_id: str):
+    async def _messenger(self, inbox_id: str, *, credentials: Any = None):
         assert inbox_id == "inbox-1"
+        # Record what the transport forwarded so a caller-supplied record is
+        # visibly reused instead of forcing a second directory lookup.
+        self.credentials_seen.append(credentials)
         if self.error:
             raise self.error
         return self.messenger
@@ -358,3 +362,36 @@ def test_template_routes_require_explicit_capability_and_mount_once() -> None:
     assert not any("/templates/send-" in path for path in default_paths)
     for suffix in ("text", "media", "location"):
         assert enabled_paths.count(f"/api/whatsapp/templates/send-{suffix}") == 1
+
+
+@pytest.mark.asyncio
+async def test_transport_reuses_credentials_the_caller_already_resolved() -> None:
+    """A route holding an InboxExecutionContext must not make the directory answer twice."""
+    messenger = _Messenger(MessageResult(success=True, message_id="wamid.reuse"))
+    runtime = _Runtime(messenger)
+    resolved = object()
+
+    transport = InboxTemplateTransport(
+        runtime=runtime,  # type: ignore[arg-type]
+        inbox_id="inbox-1",
+        credentials=resolved,  # type: ignore[arg-type]
+    )
+    result = await transport.send(_text_request())
+
+    assert result.outcome is TemplateTransportOutcome.ACCEPTED
+    assert runtime.credentials_seen == [resolved]
+
+
+@pytest.mark.asyncio
+async def test_transport_without_caller_credentials_resolves_through_the_runtime() -> (
+    None
+):
+    """Non-HTTP callers pass nothing and let the runtime resolve the Inbox itself."""
+    messenger = _Messenger(MessageResult(success=True, message_id="wamid.noreuse"))
+    runtime = _Runtime(messenger)
+
+    transport = InboxTemplateTransport(runtime=runtime, inbox_id="inbox-1")  # type: ignore[arg-type]
+    result = await transport.send(_text_request())
+
+    assert result.outcome is TemplateTransportOutcome.ACCEPTED
+    assert runtime.credentials_seen == [None]

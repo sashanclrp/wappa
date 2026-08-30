@@ -41,7 +41,8 @@ class ICacheFactory(ABC):
         via ``WappaBuilder.with_identity_resolver``, framework-internal
         services (``TemplateStateService``, ``HandlerStateService``, the
         APIMessageEvent pipeline, pub/sub envelopes) resolve transport
-        recipients into canonical ids before calling these factory methods.
+        recipients into canonical ids within this factory's ``inbox_id``
+        scope before calling these factory methods.
         Caller-controlled call sites should follow the same convention:
         prefer the resolved canonical id (e.g. ``event.user_id`` on
         APIMessageEvent, ``webhook.user.user_id`` on incoming webhooks)
@@ -158,15 +159,20 @@ class ICacheFactory(ABC):
     @abstractmethod
     def create_table_cache(
         self,
-        inbox_id: str | None = None,
+        context_id: str | None = None,
     ) -> ITableCache:
         """
-        Create table cache instance with context binding.
+        Create a Table Cache bound to one Table Cache Scope.
 
-        Used for shared data, lookup tables, and inbox-wide information.
+        Table Cache is the only cache family that accepts a general
+        ``context_id``: the reserved System Scope, a Host-defined business
+        scope, or an Inbox namespace. When omitted, the factory's own Inbox
+        namespace is used. There is no ``inbox_id`` keyword on this method;
+        a stale ``inbox_id=`` call fails at the call site.
 
         Args:
-            inbox_id: Optional override (uses default if None)
+            context_id: Table Cache Scope override (defaults to this factory's
+                Inbox namespace)
 
         Returns:
             Context-bound table cache instance implementing ITableCache

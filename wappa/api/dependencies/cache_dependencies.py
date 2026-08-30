@@ -1,104 +1,60 @@
 """
-Cache dependency injection for API routes.
+Cache dependency injection for Inbox-dependent API routes.
 
-Provides cache factory access for API-level state management.
-This enables features like template state management where we need
-to set user state when sending messages via the REST API.
+State Handler and Template state services read or mutate Inbox- and
+User-scoped Wappa state, so they resolve the Inbox Execution Context first.
 """
 
-from fastapi import Request
+from fastapi import Depends, Request
 
+from wappa.api.dependencies.inbox_context import (
+    InboxExecutionContext,
+    get_inbox_execution_context,
+)
 from wappa.api.services.handler_state_service import HandlerStateService
 from wappa.api.services.template_state_service import TemplateStateService
-from wappa.core.logging.context import get_current_inbox_context
 from wappa.domain.interfaces.cache_factory import ICacheFactory
 from wappa.domain.interfaces.identity_resolver import IIdentityResolver
 from wappa.persistence.cache_factory import create_cache_factory
 
 
-async def get_cache_factory(
-    request: Request, recipient: str | None = None
+def build_cache_factory(
+    request: Request,
+    context: InboxExecutionContext,
+    recipient: str | None = None,
 ) -> ICacheFactory:
-    """
-    Get cache factory for API routes.
+    """Create an Inbox-scoped cache factory for an API route.
 
-    Creates an inbox-scoped cache factory for state management.
-    For API routes (unlike webhooks), the user_id is the message recipient.
-
-    Args:
-        request: FastAPI request object
-        recipient: Optional recipient phone number for user-scoped caches
-
-    Returns:
-        ICacheFactory instance with inbox context
-
-    Raises:
-        RuntimeError: If cache factory cannot be created
+    For API routes (unlike webhooks) the user is the message recipient; a
+    placeholder is used until the service learns the recipient.
     """
     cache_type = getattr(request.app.state, "wappa_cache_type", "memory")
-    inbox_id = get_current_inbox_context()
-
-    if not inbox_id:
-        raise RuntimeError("No inbox context available for cache factory")
-
-    # For API routes, user_id is the recipient phone number.
-    # Use a placeholder when recipient is not yet known.
-    user_id = recipient or "api-route"
-
     factory_class = create_cache_factory(cache_type)
-    return factory_class(inbox_id=inbox_id, user_id=user_id)
+    return factory_class(
+        inbox_id=context.inbox_ref.cache_namespace,
+        user_id=recipient or "api-route",
+    )
 
 
 def _get_identity_resolver(request: Request) -> IIdentityResolver | None:
-    """
-    Return the application-level ``IIdentityResolver``, or ``None`` if none
-    was registered.  ``TemplateStateService`` owns the passthrough default.
-    """
     return getattr(request.app.state, "identity_resolver", None)
 
 
 async def get_template_state_service(
     request: Request,
+    context: InboxExecutionContext = Depends(get_inbox_execution_context),
 ) -> TemplateStateService:
-    """
-    Get template state service with cache factory and identity resolver.
-
-    Creates a TemplateStateService instance with a cache factory configured
-    for the current request context and an identity resolver pulled from
-    application state (set via ``WappaBuilder.with_identity_resolver`` or
-    ``Wappa.set_identity_resolver``).
-
-    Args:
-        request: FastAPI request object
-
-    Returns:
-        TemplateStateService instance
-    """
-    # For template state service, we use a placeholder user_id
-    # The actual recipient is passed to the service methods
-    cache_factory = await get_cache_factory(request, recipient="template-api")
-    identity_resolver = _get_identity_resolver(request)
-    return TemplateStateService(cache_factory, identity_resolver=identity_resolver)
+    cache_factory = build_cache_factory(request, context, recipient="template-api")
+    return TemplateStateService(
+        cache_factory, identity_resolver=_get_identity_resolver(request)
+    )
 
 
 async def get_handler_state_service(
     request: Request,
+    context: InboxExecutionContext = Depends(get_inbox_execution_context),
 ) -> HandlerStateService:
-    """
-    Get handler state service with cache factory.
-
-    Creates a HandlerStateService instance with a cache factory configured
-    for the current request context. The recipient will be set when the
-    service methods are called.
-
-    Args:
-        request: FastAPI request object
-
-    Returns:
-        HandlerStateService instance
-    """
-    # For handler state service, we use a placeholder user_id
-    # The actual recipient is passed to the service methods
-    cache_factory = await get_cache_factory(request, recipient="handler-api")
-    identity_resolver = _get_identity_resolver(request)
-    return HandlerStateService(cache_factory, identity_resolver=identity_resolver)
+    cache_factory = build_cache_factory(request, context, recipient="handler-api")
+    return HandlerStateService(
+        cache_factory, identity_resolver=_get_identity_resolver(request)
+    )

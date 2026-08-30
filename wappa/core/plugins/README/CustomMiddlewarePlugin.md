@@ -95,7 +95,7 @@ Priority controls when middleware runs relative to other middleware. Lower value
 
 | Range | Use case | Examples |
 |---|---|---|
-| 90+ | Outermost concerns | Owner identification, request ID injection |
+| 90+ | Outermost concerns | Inbox context isolation, request ID injection |
 | 80-89 | Error handling | Global error handler, exception formatting |
 | 70-79 | Observability | Request logging, metrics collection |
 | 60-69 | Authentication / Authorization | Auth checks, token validation |
@@ -109,7 +109,7 @@ Choose a priority that reflects where your middleware should sit in the request/
 ## Middleware execution order
 
 ```
-Request -> Owner(90) -> ErrorHandler(80) -> Logging(70) -> Auth(60) -> Custom(50) -> Route
+Request -> Inbox(90) -> ErrorHandler(80) -> Logging(70) -> Auth(60) -> Custom(50) -> Route
 ```
 
 `CustomMiddlewarePlugin` is a middleware-only plugin (Pattern 1 in the architecture). It registers the provided middleware class during `configure()` via `builder.add_middleware()`, while `startup()` and `shutdown()` simply emit debug log messages.

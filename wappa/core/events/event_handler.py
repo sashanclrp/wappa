@@ -184,6 +184,21 @@ class WappaEventHandler(ABC):
 
         return handler
 
+    def require_database(
+        self,
+    ) -> Callable[[], AbstractAsyncContextManager["AsyncSession"]]:
+        """Return the Primary Session Factory or raise one direct error.
+
+        ``db`` stays optional; Wappa never installs a fake session factory.
+        Use this when a handler cannot do its work without the database.
+        """
+        if self.db is None:
+            raise RuntimeError(
+                "self.db is not available — PostgresDatabasePlugin is not "
+                "configured for this application"
+            )
+        return self.db
+
     async def handle_message(self, webhook: "InboundMessageWebhook") -> None:
         """
         Handle incoming message webhook using Template Method pattern.

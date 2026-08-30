@@ -50,7 +50,7 @@ wappa/core/expiry/
 | `ExpiryDispatcher` | Creates an `asyncio.Task` per event via `_run_with_sse_scope`. Logs completion or errors via done-callback. |
 | `RedisConnectionManager` | Obtains a Redis client from the pool, enables `notify-keyspace-events=Ex`, creates and manages a PubSub subscription. |
 | `ReconnectionStrategy` | Tracks failure count, computes `base_delay × 2^(n-1)` (capped at `max_delay`), exposes `should_retry()` and `async wait()`. |
-| `AppContext` | Module-level singleton holding a `FastAPI` reference; accessed by context helpers to reach the core-owned `SessionLifecycle` and credential store. |
+| `AppContext` | Module-level singleton holding a `FastAPI` reference; accessed by context helpers to reach the core-owned `SessionLifecycle` and the `DispatchContextBuilder` that resolves Inbox credentials. |
 
 ## Design Patterns
 

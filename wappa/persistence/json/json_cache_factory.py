@@ -13,6 +13,7 @@ from ...domain.interfaces.cache_interfaces import (
     ITableCache,
     IUserCache,
 )
+from ..scope import resolve_table_context_id
 from .handlers.ai_state import JSONAIState
 from .handlers.state_handler import JSONStateHandler
 from .handlers.table_handler import JSONTable
@@ -76,19 +77,23 @@ class JSONCacheFactory(ICacheFactory):
 
     def create_table_cache(
         self,
-        inbox_id: str | None = None,
+        context_id: str | None = None,
+        **renamed: object,
     ) -> ITableCache:
         """
         Create JSON table cache instance.
 
         Args:
-            inbox_id: Optional override (uses default if None)
+            context_id: Table Cache Scope override. Defaults to this
+                factory's Inbox namespace.
 
         Returns:
             JSONTable implementing ITableCache
         """
-        effective_inbox, _ = self._resolve_context(inbox_id, None)
-        return JSONTable(inbox=effective_inbox)
+        if renamed:
+            resolve_table_context_id(context_id, **renamed)
+        effective_context = self.inbox_id if context_id is None else context_id
+        return JSONTable(effective_context)
 
     def create_expiry_cache(
         self,

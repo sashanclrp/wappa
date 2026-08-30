@@ -8,7 +8,8 @@ maintain a canonical platform user id (BSUID, account id, household id, …)
 that survives across channels.
 
 ``IIdentityResolver`` is the single seam where Wappa asks the host: "given
-this transport recipient, what id should I scope state under?". The default
+this transport recipient in this Inbox, what id should I scope state under?".
+The default
 ``PassthroughIdentityResolver`` returns the recipient unchanged, preserving
 today's behavior. Host applications register their own resolver via
 ``WappaBuilder.with_identity_resolver`` (or ``Wappa.set_identity_resolver``)
@@ -28,13 +29,16 @@ class IIdentityResolver(ABC):
     """
 
     @abstractmethod
-    async def resolve(self, recipient: str) -> str:
+    async def resolve(self, recipient: str, *, inbox_id: str) -> str:
         """
         Map ``recipient`` to the canonical user id used for cache scoping.
 
         Args:
             recipient: Transport identifier from the webhook or API request
                 (typically the WhatsApp phone number).
+            inbox_id: Inbox in which Wappa observed or will address the
+                recipient. Host resolvers must treat it as part of the lookup
+                scope.
 
         Returns:
             The canonical user id to use as ``user_id`` when scoping caches,
@@ -46,5 +50,5 @@ class IIdentityResolver(ABC):
 class PassthroughIdentityResolver(IIdentityResolver):
     """Default resolver: returns the recipient unchanged."""
 
-    async def resolve(self, recipient: str) -> str:
+    async def resolve(self, recipient: str, *, inbox_id: str) -> str:
         return recipient

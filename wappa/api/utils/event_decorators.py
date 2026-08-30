@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, cast
 from fastapi import Request as FastAPIRequest
 
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
-from wappa.core.logging.context import get_current_inbox_context
+from wappa.core.logging.context import require_inbox_context
 from wappa.domain.events.api_message_event import APIMessageEvent
 from wappa.domain.interfaces.identity_resolver import IIdentityResolver
 from wappa.messaging.classification import classify_outbound_payload
@@ -34,6 +34,8 @@ async def resolve_event_user_id(
     recipient: str,
     explicit_user_id: str | None,
     fastapi_request: "FastAPIRequest | Request | None",
+    *,
+    inbox_id: str,
 ) -> str:
     """
     Resolve the canonical ``user_id`` for an APIMessageEvent.
@@ -41,6 +43,9 @@ async def resolve_event_user_id(
     Precedence: caller-provided ``explicit_user_id`` > registered
     ``IIdentityResolver`` on ``app.state`` > raw ``recipient``.
     """
+    if not inbox_id:
+        raise ValueError("Identity resolution requires a non-empty inbox_id")
+
     if explicit_user_id:
         return explicit_user_id
 
@@ -49,7 +54,7 @@ async def resolve_event_user_id(
         resolver = getattr(fastapi_request.app.state, "identity_resolver", None)
 
     if resolver is not None:
-        return await resolver.resolve(recipient)
+        return await resolver.resolve(recipient, inbox_id=inbox_id)
     return recipient
 
 
@@ -152,10 +157,12 @@ def dispatch_message_event(
                 request_obj.model_dump() if hasattr(request_obj, "model_dump") else {}
             )
             recipient: str = getattr(request_obj, "recipient", "")
+            inbox_id = require_inbox_context()
             user_id = await resolve_event_user_id(
                 recipient=recipient,
                 explicit_user_id=getattr(request_obj, "user_id", None),
                 fastapi_request=fastapi_request,
+                inbox_id=inbox_id,
             )
 
             # Create and dispatch event asynchronously (fire-and-forget)
@@ -170,7 +177,7 @@ def dispatch_message_event(
                 response_success=message_result.success,
                 response_error=message_result.error,
                 meta_response=getattr(message_result, "raw_response", None),
-                inbox_id=get_current_inbox_context() or "unknown",
+                inbox_id=inbox_id,
                 platform=platform,
             )
             tracker = (
@@ -234,11 +241,14 @@ def fire_api_event(
     if dispatcher is None:
         return
 
+    inbox_id = require_inbox_context()
+
     async def _build_and_dispatch() -> None:
         resolved_user_id = await resolve_event_user_id(
             recipient=recipient,
             explicit_user_id=user_id,
             fastapi_request=fastapi_request,
+            inbox_id=inbox_id,
         )
         event = APIMessageEvent(
             message_type=message_type,
@@ -249,7 +259,7 @@ def fire_api_event(
             response_success=result.success,
             response_error=result.error,
             meta_response=getattr(result, "raw_response", None),
-            inbox_id=get_current_inbox_context() or "unknown",
+            inbox_id=inbox_id,
             platform=platform,
         )
         assert fastapi_request is not None

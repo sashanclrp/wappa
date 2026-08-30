@@ -12,12 +12,18 @@ from typing import TYPE_CHECKING, Any, cast
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from ...domain.inbox.ports import IInboxDirectorySource
+from ...domain.inbox.routing import InboxRoutingMode
 from ...domain.interfaces.identity_resolver import IIdentityResolver
-from ...domain.interfaces.inbox_credential_store import IInboxCredentialStore
-from ...domain.services.inbox_credentials_service import SettingsInboxCredentialStore
+from ..config.meta_application import (
+    MetaApplicationConfig,
+    resolve_meta_application_config,
+)
+from ..config.settings import settings
 from ..events.field_registry import FieldHandlerRegistry
 from ..logging.logger import get_app_logger
 from ..messaging.pipeline import MessengerMiddleware, MiddlewareEntry
+from .inbox_assembly import assemble_inbox_runtime, resolve_routing_mode
 
 if TYPE_CHECKING:
     from wappa.webhooks.core.webhook_interfaces import CustomWebhook
@@ -58,9 +64,11 @@ class WappaBuilder:
         self.config_overrides: dict[str, Any] = {}
         self.field_registry: FieldHandlerRegistry = FieldHandlerRegistry()
         self.identity_resolver: IIdentityResolver | None = None
-        self.inbox_credential_store: IInboxCredentialStore = (
-            SettingsInboxCredentialStore()
-        )
+        self.inbox_directory_source: IInboxDirectorySource | None = None
+        self.inbox_routing_mode: InboxRoutingMode | None = None
+        self.meta_application_config: MetaApplicationConfig | None = None
+        self.persistence_backend: str = "memory"
+        self._whatsapp_callback_mounted = False
         self._public_prefixes: list[str] = []
 
     def add_plugin(self, plugin: "WappaPlugin") -> "WappaBuilder":
@@ -309,24 +317,52 @@ class WappaBuilder:
         Example::
 
             class CanonicalIdResolver(IIdentityResolver):
-                async def resolve(self, recipient: str) -> str:
-                    return await db.lookup_canonical_id(recipient)
+                async def resolve(self, recipient: str, *, inbox_id: str) -> str:
+                    return await db.lookup_canonical_id(inbox_id, recipient)
 
             builder.with_identity_resolver(CanonicalIdResolver())
         """
         self.identity_resolver = resolver
         return self
 
-    def with_inbox_credential_store(
-        self, store: IInboxCredentialStore
+    def with_inbox_directory_source(
+        self, source: IInboxDirectorySource
     ) -> "WappaBuilder":
         """
-        Register the credential store used to resolve inbox credentials.
+        Register the Host's read-only Inbox Directory source.
 
-        When omitted, Wappa uses ``SettingsInboxCredentialStore`` for the
-        single-inbox environment-variable deployment path.
+        Explicit Inbox routing requires it; legacy routing rejects it. The
+        source maps the Host's durable schema to Wappa's canonical records.
+        Wappa constructs and runs the Inbox Directory itself.
         """
-        self.inbox_credential_store = store
+        self.inbox_directory_source = source
+        return self
+
+    def with_inbox_routing(self, mode: InboxRoutingMode | str) -> "WappaBuilder":
+        """Select ``legacy`` (settings-backed single Inbox) or ``explicit`` routing."""
+        self.inbox_routing_mode = resolve_routing_mode(mode, settings)
+        return self
+
+    def with_meta_application_config(
+        self, config: MetaApplicationConfig
+    ) -> "WappaBuilder":
+        """Supply the one Meta Application Configuration explicitly.
+
+        Configuring it here while ``META_APP_SECRET`` or
+        ``WP_WEBHOOK_VERIFY_TOKEN`` is also set in the environment fails at
+        build time; there is no precedence between the two sources.
+        """
+        self.meta_application_config = config
+        return self
+
+    def with_persistence_backend(self, cache_type: str) -> "WappaBuilder":
+        """Name the Table Cache backend the Inbox Directory reuses."""
+        self.persistence_backend = cache_type
+        return self
+
+    def mount_whatsapp_callback(self) -> "WappaBuilder":
+        """Record that the WhatsApp callback will be served by this app."""
+        self._whatsapp_callback_mounted = True
         return self
 
     def configure(self, **overrides: Any) -> "WappaBuilder":
@@ -416,7 +452,19 @@ class WappaBuilder:
         if self.identity_resolver is not None:
             app.state.identity_resolver = self.identity_resolver
 
-        app.state.inbox_credential_store = self.inbox_credential_store
+        inbox_runtime = assemble_inbox_runtime(
+            mode=resolve_routing_mode(self.inbox_routing_mode, settings),
+            source=self.inbox_directory_source,
+            settings=settings,
+            cache_type=self.persistence_backend,
+        )
+        app.state.inbox_runtime = inbox_runtime
+        app.state.inbox_routing_mode = inbox_runtime.mode
+        app.state.meta_application_config = resolve_meta_application_config(
+            self.meta_application_config,
+            settings,
+            callback_mounted=self._whatsapp_callback_mounted,
+        )
         app.state.public_route_prefixes = tuple(self._public_prefixes)
 
         # Step 3: Add all middleware via app.add_middleware()

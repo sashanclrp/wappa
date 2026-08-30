@@ -11,7 +11,7 @@ from contextvars import ContextVar, Token
 # Context variables for automatic propagation
 _inbox_context: ContextVar[str | None] = ContextVar(
     "inbox_id", default=None
-)  # From middleware (URL path extraction)
+)  # From HTTP middleware or payload-routed Dispatch Context construction
 _user_context: ContextVar[str | None] = ContextVar(
     "user_id", default=None
 )  # From webhook JSON
@@ -52,6 +52,26 @@ def get_current_inbox_context() -> str | None:
         Current inbox ID, or None if not set
     """
     return _inbox_context.get()
+
+
+def bind_inbox_context(inbox_id: str | None) -> Token[str | None]:
+    """Bind Inbox scope for one request and return its reset token."""
+    return _inbox_context.set(inbox_id)
+
+
+def reset_inbox_context(token: Token[str | None]) -> None:
+    """Restore the Inbox scope that existed before request handling."""
+    _inbox_context.reset(token)
+
+
+def bind_user_context(user_id: str | None) -> Token[str | None]:
+    """Bind User scope for one unit of work and return its reset token."""
+    return _user_context.set(user_id)
+
+
+def reset_user_context(token: Token[str | None]) -> None:
+    """Restore the User scope that existed before the bound work."""
+    _user_context.reset(token)
 
 
 def get_current_user_context() -> str | None:

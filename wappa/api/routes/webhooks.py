@@ -13,9 +13,9 @@ from fastapi.responses import PlainTextResponse
 from wappa.api.controllers import WebhookController
 from wappa.core.events import (
     WappaEventDispatcher,
-    WebhookEndpointType,
     webhook_url_factory,
 )
+from wappa.core.inbound import SIGNATURE_HEADER
 from wappa.core.logging.logger import get_logger
 from wappa.schemas.core.types import PlatformType
 
@@ -38,14 +38,15 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         prefix="/webhook",
         tags=["Webhooks"],
         responses={
-            400: {"description": "Bad Request - Invalid webhook payload"},
-            401: {"description": "Unauthorized - Invalid inbox credentials"},
-            403: {"description": "Forbidden - Webhook verification failed"},
+            400: {"description": "Bad Request - unroutable authenticated payload"},
+            401: {"description": "Unauthorized - missing or invalid Meta signature"},
+            403: {"description": "Forbidden - GET verify token mismatch"},
+            503: {"description": "Inbox Directory or runtime dependency unavailable"},
             500: {"description": "Internal Server Error"},
         },
     )
 
-    @router.get("/messenger/{platform}/verify")
+    @router.get("/inboxes/{platform}")
     async def verify_webhook(
         request: Request,
         platform: str,
@@ -57,6 +58,8 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         Handle webhook verification (challenge-response) for messaging platforms.
 
         Delegates verification policy to WebhookController while handling HTTP concerns.
+        GET verification uses the Meta Application Configuration verify token
+        only; it never reads the Inbox Directory or the App Secret.
 
         Args:
             request: FastAPI request object
@@ -76,71 +79,29 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
             hub_challenge=hub_challenge,
         )
 
-    @router.get("/inboxes/{inbox_id}/{platform}")
-    async def verify_webhook_at_inbox_url(
-        request: Request,
-        inbox_id: str,
-        platform: str,
-        hub_mode: str = Query(None, alias="hub.mode"),
-        hub_verify_token: str = Query(None, alias="hub.verify_token"),
-        hub_challenge: str = Query(None, alias="hub.challenge"),
-    ) -> PlainTextResponse:
-        """
-        Handle webhook verification at the same URL used for processing.
-
-        WhatsApp and other platforms send verification requests to the same URL
-        they use for webhook processing. This handles GET requests with verification.
-        """
-        return await webhook_controller.verify_webhook(
-            request=request,
-            platform=platform,
-            hub_mode=hub_mode,
-            hub_verify_token=hub_verify_token,
-            hub_challenge=hub_challenge,
-        )
-
-    @router.post("/inboxes/{inbox_id}/{platform}")
+    @router.post("/inboxes/{platform}")
     async def process_webhook(
         request: Request,
-        inbox_id: str,
         platform: str,
     ) -> dict[str, str]:
         """
-        Process incoming webhook payload from a messaging platform.
+        Accept one authenticated Meta callback batch.
 
-        Parses JSON and delegates accepted payloads to the Inbound Runtime.
-
-        Args:
-            request: FastAPI request object
-            inbox_id: Inbox identifier (extracted by middleware)
-            platform: The messaging platform (whatsapp, telegram, teams, instagram)
-
-        Returns:
-            Dict with status confirmation
+        The route reads the exact request bytes once and hands them, with the
+        ``X-Hub-Signature-256`` header, to the controller. Authentication
+        happens before JSON parsing; the route parses nothing itself.
         """
-        try:
-            payload = await request.json()
-        except Exception as exc:
-            logger.error("Failed to parse webhook payload: %s", exc)
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Webhook payload is not valid JSON for inbox '{inbox_id}' "
-                    f"on platform '{platform}': {type(exc).__name__}: {exc}"
-                ),
-            ) from exc
-
+        body = await request.body()
         return await webhook_controller.process_webhook(
             request=request,
-            inbox_id=inbox_id,
             platform=platform,
-            payload=payload,
+            body=body,
+            signature=request.headers.get(SIGNATURE_HEADER),
         )
 
-    @router.get("/inboxes/{inbox_id}/{platform}/status")
+    @router.get("/inboxes/{platform}/status")
     async def webhook_status(
         request: Request,
-        inbox_id: str,
         platform: str,
     ) -> dict[str, Any]:
         """
@@ -150,13 +111,12 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
 
         Args:
             request: FastAPI request object
-            inbox_id: Inbox identifier
             platform: The messaging platform
 
         Returns:
             Dict with webhook status information
         """
-        logger.info("Status check for %s webhook - inbox: %s", platform, inbox_id)
+        logger.info("Status check for %s webhook", platform)
 
         try:
             platform_type = PlatformType(platform.lower())
@@ -165,19 +125,15 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
                 status_code=400, detail=f"Unsupported platform: {platform}"
             ) from exc
 
-        webhook_url = webhook_url_factory.generate_webhook_url(platform_type, inbox_id)
-        verify_url = webhook_url_factory.generate_webhook_url(
-            platform_type, "", WebhookEndpointType.VERIFY
-        )
+        webhook_url = webhook_url_factory.generate_webhook_url(platform_type)
 
         controller_status = webhook_controller.get_health_status()
 
         return {
             "status": "active",
             "platform": platform,
-            "inbox_id": inbox_id,
             "webhook_url": webhook_url,
-            "verify_url": verify_url,
+            "verify_url": webhook_url,
             "controller_status": controller_status,
             "supported_platforms": [p.value.lower() for p in PlatformType],
         }
@@ -195,8 +151,8 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
         return {
             "supported_platforms": list(patterns.keys()),
             "platform_details": patterns,
-            "webhook_pattern": "/webhook/inboxes/{inbox_id}/{platform}",
-            "verify_pattern": "/webhook/messenger/{platform}/verify",
+            "webhook_pattern": "/webhook/inboxes/{platform}",
+            "verify_pattern": "/webhook/inboxes/{platform}",
             "features": [
                 "Challenge-response verification",
                 "Multi-platform support",

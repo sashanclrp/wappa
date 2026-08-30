@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import weakref
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from wappa.core.logging.logger import get_logger
-from wappa.domain.interfaces.inbox_credential_store import IInboxCredentialStore
+from wappa.domain.inbox.errors import InboxDirectoryError
+from wappa.domain.inbox.identity import InboxRef
+from wappa.domain.inbox.ports import IInboxCredentialResolver, ResolvedInboxCredentials
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.interfaces.session_provider import HTTPSessionClosedError
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
@@ -30,19 +33,34 @@ if TYPE_CHECKING:
 
 
 class MessengerFactory:
-    """Factory for creating platform-specific messenger implementations."""
+    """Build and cache one Messenger per qualified Inbox.
+
+    Credentials come from the internal ``IInboxCredentialResolver`` or from a
+    ``ResolvedInboxCredentials`` value the caller already holds. Directory
+    failures propagate as their typed categories; they are never reported as
+    an unknown Inbox or an unclassified runtime error.
+    """
 
     def __init__(
         self,
         session_provider: Callable[[], httpx.AsyncClient],
         media_download_client_provider: Callable[[], httpx.AsyncClient],
-        credential_store: IInboxCredentialStore | None = None,
+        credential_resolver: IInboxCredentialResolver | None = None,
     ) -> None:
         self._session_provider = session_provider
-        self._credential_store = credential_store
+        self._credential_resolver = credential_resolver
         self._media_download_client_provider = media_download_client_provider
         self.logger = get_logger(__name__)
         self._messenger_cache: dict[str, IMessenger] = {}
+        if credential_resolver is not None:
+            self_ref = weakref.ref(self)
+
+            def _on_evict(inbox_ref: InboxRef) -> None:
+                factory = self_ref()
+                if factory is not None:
+                    factory.evict(inbox_ref)
+
+            credential_resolver.subscribe_evictions(_on_evict)
 
     def _get_session(self) -> httpx.AsyncClient:
         """Return the HTTP session via the lifecycle-aware provider."""
@@ -51,10 +69,18 @@ class MessengerFactory:
     def _get_media_download_client(self) -> httpx.AsyncClient:
         return self._media_download_client_provider()
 
+    @staticmethod
+    def _cache_key(inbox_ref: InboxRef) -> str:
+        return str(inbox_ref)
+
     async def create_messenger(
-        self, platform: PlatformType, inbox_id: str, force_recreate: bool = False
+        self,
+        inbox_ref: InboxRef,
+        *,
+        credentials: ResolvedInboxCredentials | None = None,
+        force_recreate: bool = False,
     ) -> IMessenger:
-        cache_key = f"{platform.value}:{inbox_id}"
+        cache_key = self._cache_key(inbox_ref)
 
         if not force_recreate and cache_key in self._messenger_cache:
             try:
@@ -67,52 +93,48 @@ class MessengerFactory:
                 )
                 del self._messenger_cache[cache_key]
 
-        self.logger.debug(
-            "Creating new messenger for platform: %s, inbox: %s",
-            platform.value,
-            inbox_id,
-        )
+        self.logger.debug("Creating new messenger for %s", cache_key)
+
+        if inbox_ref.platform is not PlatformType.WHATSAPP:
+            raise ValueError(f"Unsupported platform: {inbox_ref.platform.value}")
+
+        resolved = credentials
+        if resolved is None:
+            if self._credential_resolver is None:
+                raise RuntimeError(
+                    "MessengerFactory has no credential resolver and received no "
+                    f"credentials for {inbox_ref}"
+                )
+            # Typed directory failures propagate unchanged.
+            resolved = await self._credential_resolver.resolve_credentials(inbox_ref)
+        if resolved.inbox_ref != inbox_ref:
+            raise ValueError(
+                f"credentials for {resolved.inbox_ref} cannot build a Messenger "
+                f"for {inbox_ref}"
+            )
 
         try:
-            if platform == PlatformType.WHATSAPP:
-                messenger = await self._create_whatsapp_messenger(inbox_id)
-            else:
-                raise ValueError(f"Unsupported platform: {platform.value}")
-
-            self._messenger_cache[cache_key] = messenger
-            return messenger
-
+            messenger = self._create_whatsapp_messenger(resolved)
+        except InboxDirectoryError:
+            raise
         except Exception as e:
-            self.logger.error(
-                "Failed to create messenger for platform %s: %s", platform.value, e
-            )
+            self.logger.error("Failed to create messenger for %s: %s", cache_key, e)
             raise RuntimeError(f"Messenger creation failed: {e}") from e
 
-    async def _create_whatsapp_messenger(self, inbox_id: str) -> WhatsAppMessenger:
-        self.logger.debug("Creating WhatsApp messenger for inbox: %s", inbox_id)
+        self._messenger_cache[cache_key] = messenger
+        return messenger
 
-        if self._credential_store is None:
-            raise RuntimeError(
-                "MessengerFactory._credential_store is None — cannot resolve "
-                f"credentials for inbox '{inbox_id}'. Ensure an "
-                "IInboxCredentialStore is wired (check WappaBuilder or "
-                "InboundRuntime dependency construction)."
-            )
-
+    def _create_whatsapp_messenger(
+        self, credentials: ResolvedInboxCredentials
+    ) -> WhatsAppMessenger:
+        inbox_id = credentials.inbox_id
         session = self._get_session()
-
-        if not await self._credential_store.validate_inbox(inbox_id):
-            raise ValueError(f"Invalid or inactive inbox: {inbox_id}")
-
-        credentials = await self._credential_store.get_credentials(inbox_id)
-
         client = WhatsAppClient(
             session=session,
-            access_token=credentials.access_token,
+            access_token=credentials.access_token.get_secret_value(),
             phone_number_id=inbox_id,
             logger=self.logger,
         )
-
         messenger = WhatsAppMessenger(
             client=client,
             media_handler=WhatsAppMediaHandler(
@@ -129,10 +151,7 @@ class MessengerFactory:
             ),
             inbox_id=inbox_id,
         )
-
-        self.logger.info(
-            "✅ WhatsApp messenger created successfully for inbox: %s", inbox_id
-        )
+        self.logger.info("✅ WhatsApp messenger created for inbox: %s", inbox_id)
         return messenger
 
     def get_supported_platforms(self) -> list[PlatformType]:
@@ -141,31 +160,14 @@ class MessengerFactory:
     def is_platform_supported(self, platform: PlatformType) -> bool:
         return platform in self.get_supported_platforms()
 
-    def clear_cache(
-        self, platform: PlatformType | None = None, inbox_id: str | None = None
-    ) -> None:
-        if platform and inbox_id:
-            cache_key = f"{platform.value}:{inbox_id}"
-            self._messenger_cache.pop(cache_key, None)
-            self.logger.debug("Cleared messenger cache for %s", cache_key)
-        elif platform:
-            to_remove = [
-                key
-                for key in self._messenger_cache
-                if key.startswith(f"{platform.value}:")
-            ]
-            for key in to_remove:
-                del self._messenger_cache[key]
-            self.logger.debug(
-                "Cleared messenger cache for platform: %s", platform.value
-            )
-        elif inbox_id:
-            to_remove = [
-                key for key in self._messenger_cache if key.endswith(f":{inbox_id}")
-            ]
-            for key in to_remove:
-                del self._messenger_cache[key]
-            self.logger.debug("Cleared messenger cache for inbox: %s", inbox_id)
-        else:
-            self._messenger_cache.clear()
-            self.logger.debug("Cleared entire messenger cache")
+    def evict(self, inbox_ref: InboxRef) -> None:
+        """Drop the cached Messenger for one Inbox (after rotation or deactivation)."""
+        if self._messenger_cache.pop(self._cache_key(inbox_ref), None) is not None:
+            self.logger.debug("Evicted cached messenger for %s", inbox_ref)
+
+    def clear_cache(self, inbox_ref: InboxRef | None = None) -> None:
+        if inbox_ref is not None:
+            self.evict(inbox_ref)
+            return
+        self._messenger_cache.clear()
+        self.logger.debug("Cleared entire messenger cache")

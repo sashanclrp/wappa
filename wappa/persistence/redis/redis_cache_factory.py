@@ -13,6 +13,7 @@ from ...domain.interfaces.cache_interfaces import (
     ITableCache,
     IUserCache,
 )
+from ..scope import resolve_table_context_id
 from .redis_handler.ai_state import RedisAIState
 from .redis_handler.expiry import RedisExpiry
 from .redis_handler.state_handler import RedisStateHandler
@@ -89,19 +90,23 @@ class RedisCacheFactory(ICacheFactory):
 
     def create_table_cache(
         self,
-        inbox_id: str | None = None,
+        context_id: str | None = None,
+        **renamed: object,
     ) -> ITableCache:
         """
         Create Redis table cache instance.
 
         Args:
-            inbox_id: Optional override (uses default if None)
+            context_id: Table Cache Scope override. Defaults to this
+                factory's Inbox namespace.
 
         Returns:
             RedisTable implementing ITableCache configured for table pool
         """
-        effective_inbox, _ = self._resolve_context(inbox_id, None)
-        return RedisTable(inbox=effective_inbox, redis_alias="table")
+        if renamed:
+            resolve_table_context_id(context_id, **renamed)
+        effective_context = self.inbox_id if context_id is None else context_id
+        return RedisTable(effective_context, redis_alias="table")
 
     def create_expiry_cache(
         self,

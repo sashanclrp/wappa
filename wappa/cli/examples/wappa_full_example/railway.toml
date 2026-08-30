@@ -17,10 +17,11 @@ restartPolicyMaxRetries = 10
 # ================================================================
 # Required variables to set in Railway:
 #
+# META_APP_SECRET=your_meta_app_secret        (authenticates every webhook POST)
+# WP_WEBHOOK_VERIFY_TOKEN=your_verify_token   (Meta's GET challenge only)
 # WP_ACCESS_TOKEN=your_whatsapp_access_token
-# WP_PHONE_ID=your_phone_number_id  
+# WP_PHONE_ID=your_phone_number_id
 # WP_BID=your_business_id
-# WHATSAPP_WEBHOOK_VERIFY_TOKEN=your_webhook_token
 # REDIS_URL=redis://redis.railway.internal:6379
 # OPENAI_API_KEY=your_openai_key (optional)
 #

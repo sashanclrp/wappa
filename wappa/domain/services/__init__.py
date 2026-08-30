@@ -1,14 +1,7 @@
 """
 Domain services.
 
-Contains business logic that doesn't belong to a specific entity.
+Inbox Directory orchestration and credential commands live in
+``wappa.domain.inbox``; this package stays for future business-neutral
+domain services.
 """
-
-from .database_inbox_credential_store import DatabaseInboxCredentialStore, WappaInbox
-from .inbox_credentials_service import SettingsInboxCredentialStore
-
-__all__ = [
-    "DatabaseInboxCredentialStore",
-    "WappaInbox",
-    "SettingsInboxCredentialStore",
-]

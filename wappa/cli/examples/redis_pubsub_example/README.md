@@ -1,23 +1,23 @@
-# Redis PubSub Example - MULTI-TENANT SELF-SUBSCRIBING App
+# Redis PubSub Example - Multi-Inbox Self-Subscribing App
 
-Demonstrates **multi-tenant self-subscribing** pattern: the app publishes events AND subscribes to them across ALL tenants, dynamically creating messengers per tenant and reacting by sending WhatsApp messages.
+Demonstrates the **multi-Inbox self-subscribing** pattern: the app publishes events AND subscribes to them across every Inbox, building a messenger per Inbox on demand and reacting by sending WhatsApp messages.
 
 ## Architecture
 
 ```
 User Message → Webhook → RedisPubSubPlugin → Redis PubSub
                                                     ↓
-                                    Subscriber (this app, ALL tenants)
+                                    Subscriber (this app, every Inbox)
                                                     ↓
-                                    Creates Messenger per Tenant (cached)
+                                    Builds a Messenger per Inbox (cached)
                                                     ↓
                                             WhatsApp Message
 ```
 
-**Multi-Tenant Flow**:
+**Multi-Inbox Flow**:
 - App PUBLISHES events via RedisPubSubPlugin
-- App SUBSCRIBES to ALL tenants via background task
-- App CREATES messengers dynamically per tenant
+- App SUBSCRIBES to every Inbox via a background task
+- App BUILDS a messenger per Inbox on demand
 - App REACTS to events by sending WhatsApp messages
 
 ## Features
@@ -114,20 +114,22 @@ App sends: "📤 PubSub Event Received - API Message Sent"
 
 All notifications follow the pattern:
 ```
-wappa:notify:{tenant}:{user_id}:{event_type}
+wappa:notify:{inbox}:{user_id}:{event_type}
 ```
 
+The `{inbox}` segment is the Inbox cache namespace: the raw `inbox_id` for WhatsApp (Meta `phone_number_id`), or `<platform>__<id>` for any other Platform.
+
 Examples:
-- `wappa:notify:mimeia:5511999887766:incoming_message`
-- `wappa:notify:mimeia:5511999887766:status_change`
-- `wappa:notify:mimeia:5511999887766:outgoing_message`
+- `wappa:notify:15551234567890:5511999887766:incoming_message`
+- `wappa:notify:15551234567890:5511999887766:status_change`
+- `wappa:notify:15551234567890:5511999887766:outgoing_message`
 
 ## Notification Payload
 
 ```json
 {
   "event": "incoming_message",
-  "tenant": "mimeia",
+  "inbox": "15551234567890",
   "user_id": "5511999887766",
   "platform": "whatsapp",
   "data": {
@@ -152,18 +154,23 @@ RedisPubSubPlugin(
 )
 ```
 
-## Multi-Tenant Support
+## Multi-Inbox Support
 
-**This example IS MULTI-TENANT.** It subscribes to ALL tenants and creates messengers dynamically.
+**This example is multi-Inbox.** It subscribes to every Inbox and builds messengers on demand.
 
 ### How It Works
 
-The notification contains Inbox information:
+`subscribe()` yields a `Notification` (`wappa.persistence.redis.pubsub_subscriber.Notification`) with these fields:
 
 ```python
-notification.inbox_id  # "508386009032748"
-notification.user_id   # "5511999887766"
-notification.platform  # "whatsapp"
+notification.event      # "incoming_message"
+notification.inbox      # "15551234567890"  (Inbox cache namespace)
+notification.user_id    # "5511999887766"
+notification.platform   # "whatsapp"
+notification.data       # {"message_id": "wamid.xxx", "message_type": "text"}
+notification.timestamp  # ISO-8601
+notification.channel    # the channel the message arrived on
+notification.version    # payload version, currently "1"
 ```
 
 The subscriber:
@@ -174,27 +181,28 @@ The subscriber:
 
 ```python
 # From app/pubsub_listener.py
-messenger_cache = {}  # Cache messengers by Inbox {inbox_id: IMessenger}
+messenger_cache = {}  # Cache messengers by Inbox {inbox: IMessenger}
 
 async for notification in subscribe(redis, patterns=["wappa:notify:*:*:*"]):
-    inbox_id = notification.inbox_id
+    inbox = notification.inbox
 
-    # MULTI-INBOX: Get or create messenger for this Inbox
-    if inbox_id not in messenger_cache:
-        logger.info(f"Creating new messenger for inbox: {inbox_id}")
-        messenger_cache[inbox_id] = await messenger_factory.create_messenger(
-            platform=PlatformType(platform),
-            inbox_id=inbox_id,
+    # Multi-Inbox: get or build a messenger for this Inbox
+    if inbox not in messenger_cache:
+        messenger_cache[inbox] = await context_builder.messenger(
+            InboxRef(platform=PlatformType(notification.platform), inbox_id=inbox)
         )
 
     # Use the Inbox-specific messenger
-    active_messenger = messenger_cache[inbox_id]
-    await send_event_notification(active_messenger, user_id, event_type, data)
+    await send_event_notification(
+        messenger_cache[inbox], notification.user_id, notification.event, notification.data
+    )
 ```
+
+`context_builder` is a `DispatchContextBuilder`; `builder.messenger(InboxRef(...))` resolves that Inbox's credentials through the Inbox Directory and returns a ready messenger. It raises an `InboxDirectoryError` subclass when the Inbox is unknown, unavailable, or misconfigured — the listener logs and skips that notification rather than dying.
 
 ### Requirements
 
-Each tenant must have its own WhatsApp credentials configured in the system.
+Every Inbox you expect to reply on must be resolvable: present in the legacy `WP_*` bundle in legacy mode, or in the Inbox Directory in explicit mode.
 
 ## Advanced: External Subscriber (No Loop Risk)
 
@@ -207,7 +215,7 @@ from wappa.persistence.redis.pubsub_subscriber import subscribe
 async for notification in subscribe(redis, patterns=["wappa:notify:*"]):
     # This service receives events but doesn't send WhatsApp messages
     # So no loop!
-    print(f"Tenant: {notification.tenant}")
+    print(f"Inbox: {notification.inbox}")
     print(f"User: {notification.user_id}")
     print(f"Event: {notification.event}, Data: {notification.data}")
 ```

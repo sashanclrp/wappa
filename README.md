@@ -8,9 +8,9 @@ Build intelligent WhatsApp bots, workflows, and chat applications with clean arc
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.137+-green.svg)](https://fastapi.tiangolo.com)
 [![WhatsApp Business API](https://img.shields.io/badge/WhatsApp-Business%20API-25D366.svg)](https://developers.facebook.com/docs/whatsapp)
-[![Version](https://img.shields.io/badge/version-0.26.3-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.27.0-orange.svg)](CHANGELOG.md)
 
-> **v0.13.0 — Clean-break release** — `inbox_id` replaces `tenant_id`/`owner_id` as core identity, all compatibility shims removed, webhook schemas consolidated under `wappa/webhooks/`, inbound dispatch context added for multi-inbox routing. See [CHANGELOG.md](CHANGELOG.md) for the full breakdown.
+> **v0.27.0 — Multi-Inbox hardening** — one authenticated Meta callback for every WhatsApp Inbox under a Meta App, qualified `InboxRef` identity, an encrypted Wappa-owned Inbox Directory for explicit multi-Inbox routing, `legacy`/`explicit` routing modes, and `X-Wappa-Inbox-ID` for Inbox-dependent HTTP operations. See [CHANGELOG.md](CHANGELOG.md) and [the migration guide](docs/migration/v0.27.0-multi-inbox.md).
 
 ---
 
@@ -205,9 +205,10 @@ wappa init .
 1. Visit [Meta for Developers](https://developers.facebook.com)
 2. Create a WhatsApp Business App
 3. Get your credentials:
-   - **Access Token**
-   - **Phone Number ID** 
-   - **Business Account ID**
+   - **App Secret** (`META_APP_SECRET`) — Wappa verifies every webhook POST body with it; there is no development bypass
+   - A verify token you choose (`WP_WEBHOOK_VERIFY_TOKEN`) — used only for Meta's GET challenge
+   - **Access Token**, **Phone Number ID**, **Business Account ID** (`WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID`) — the legacy single-Inbox bundle
+4. Configure the one callback URL in the Meta App: `https://<host>/webhook/inboxes/whatsapp`
 
 ### 2. Create Your Bot
 
@@ -234,6 +235,22 @@ uv run python -m app.main
 ### 4. Test Your Bot
 
 Send a message to your WhatsApp Business number and watch it echo back!
+
+### Many Inboxes under one Meta App (explicit mode)
+
+Wappa has exactly two Inbox Routing Modes and they never mix. `legacy` (the default) runs the single Inbox from the `WP_*` bundle. `explicit` runs any number of Inboxes through Wappa's encrypted Inbox Directory: you implement a read-only `IInboxDirectorySource` over your own database, Wappa owns encryption (`SYSTEM_TOKEN_ENC_KEY`), caching, the WABA reverse index, and Messenger eviction.
+
+```python
+from wappa import Wappa, InboxRoutingMode
+
+app = Wappa(
+    cache="redis",
+    inbox_routing=InboxRoutingMode.EXPLICIT,
+    inbox_directory_source=MyInboxSource(db),   # implements IInboxDirectorySource
+)
+```
+
+Explicit mode rejects `WP_ACCESS_TOKEN`, `WP_PHONE_ID`, and `WP_BID` at startup, and every Inbox-dependent `/api/whatsapp/*` call sends `X-Wappa-Inbox-ID` — a selector, not a credential; your authentication decides who may use it. The ordered setup, the credential commands, and the key-rotation runbook are in [docs/migration/v0.27.0-multi-inbox.md](docs/migration/v0.27.0-multi-inbox.md).
 
 ## 🎛️ Architecture Overview
 
@@ -299,19 +316,22 @@ wappa examples redis-cache-demo
 ### Builder Pattern for Complex Apps
 
 ```python
-from wappa import WappaBuilder
+from wappa import Wappa, WappaBuilder
+from wappa.core.plugins import CORSPlugin, RateLimitPlugin, RateLimitProfile, RedisPlugin
 
-app = await (WappaBuilder()
-             .with_whatsapp(
-                 token="your_token",
-                 phone_id="your_phone_id", 
-                 business_id="your_business_id"
-             )
-             .with_redis_cache("redis://localhost:6379")
-             .with_cors_enabled()
-             .with_rate_limiting(requests_per_minute=100)
-             .build())
+fastapi_app = (
+    WappaBuilder()
+    .with_inbox_routing("explicit")
+    .with_inbox_directory_source(MyInboxSource(db))
+    .add_plugin(RedisPlugin())
+    .add_plugin(CORSPlugin(allow_origins=["*"]))
+    .add_plugin(RateLimitPlugin([RateLimitProfile(name="default", limit=100, window_seconds=60)]))
+    .configure(title="My Wappa App")
+    .build()
+)
 
+app = Wappa()
+app.set_app(fastapi_app)
 app.set_event_handler(MyAdvancedHandler())
 app.run()
 ```
@@ -357,7 +377,9 @@ railway init
 railway add redis
 railway up
 
-# Set environment variables
+# Set environment variables (legacy single-Inbox mode)
+railway variables set META_APP_SECRET=your_meta_app_secret
+railway variables set WP_WEBHOOK_VERIFY_TOKEN=your_verify_token
 railway variables set WP_ACCESS_TOKEN=your_token
 railway variables set WP_PHONE_ID=your_phone_id
 railway variables set WP_BID=your_business_id

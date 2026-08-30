@@ -1,5 +1,7 @@
 # ADR-0002: Inbound Runtime, Dispatch Context, and Clean-Break Runtime Language
 
+> The URL-routing portion of this historical decision is superseded by [ADR-0010](0010-payload-routed-whatsapp-webhook.md), and the `IInboxCredentialStore` it names was replaced by the internal `IInboxCredentialResolver` and the Wappa-owned Inbox Directory in [ADR-0011](0011-encrypted-inbox-directory.md). The Inbound Runtime and Dispatch Context boundaries remain accepted.
+
 ## Status
 
 Accepted

@@ -42,6 +42,8 @@ This example demonstrates a production-ready WhatsApp Business application that 
 
 4. **Configure your WhatsApp Business API credentials in `.env`:**
    ```env
+   META_APP_SECRET=your_meta_app_secret_here
+   WP_WEBHOOK_VERIFY_TOKEN=your_verify_token_here
    WP_ACCESS_TOKEN=your_access_token_here
    WP_PHONE_ID=your_phone_number_id_here
    WP_BID=your_business_id_here
@@ -245,12 +247,14 @@ The application provides comprehensive statistics:
 
 | Variable | Description | Required | Default |
 |----------|-------------|----------|---------|
-| `WP_ACCESS_TOKEN` | WhatsApp Business API access token | Yes | - |
-| `WP_PHONE_ID` | WhatsApp phone number ID | Yes | - |
-| `WP_BID` | WhatsApp Business ID | Yes | - |
+| `META_APP_SECRET` | Meta app secret; authenticates every webhook POST body | Yes | - |
+| `WP_WEBHOOK_VERIFY_TOKEN` | Token Meta echoes during the GET verification challenge | Yes | - |
+| `WP_ACCESS_TOKEN` | WhatsApp Business API access token (legacy mode) | Yes | - |
+| `WP_PHONE_ID` | WhatsApp phone number ID — the Inbox ID (legacy mode) | Yes | - |
+| `WP_BID` | WhatsApp Business ID (legacy mode) | Yes | - |
 | `REDIS_URL` | Redis connection URL | Yes | `redis://localhost:6379` |
-| `LOG_LEVEL` | Application log level | No | `INFO` |
-| `ENVIRONMENT` | Environment (dev/prod) | No | `development` |
+| `SYSTEM_LOG_LEVEL` | Application log level | No | `INFO` |
+| `SYSTEM_ENVIRONMENT` | Environment (`DEV` / `PROD`) | No | `DEV` |
 
 ### Redis Configuration
 
@@ -306,7 +310,7 @@ This example is part of the Wappa framework project. To contribute:
 
 ## 📝 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Wappa, and this example, are licensed under the Apache License 2.0 — see [LICENSE](https://github.com/sashanclrp/wappa/blob/main/LICENSE) for details.
 
 ## 🙋‍♀️ Support
 

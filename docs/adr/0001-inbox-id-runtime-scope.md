@@ -1,5 +1,7 @@
 # ADR-0001: inbox_id as Wappa's Runtime Identity Scope
 
+> The route shape in this historical decision is superseded by [ADR-0010](0010-payload-routed-whatsapp-webhook.md). Inbox remains the runtime identity, but WhatsApp now derives it from authenticated webhook content rather than a URL segment, and the globally unique identity is `InboxRef(platform, inbox_id)`; the raw `inbox_id` is unique only inside one Platform. The `InboxCredentialsService` named below was replaced by the Wappa-owned Inbox Directory in [ADR-0011](0011-encrypted-inbox-directory.md).
+
 **Status:** Accepted  
 **Date:** 2026-05-16  
 **Deciders:** Symphonai Platform Team

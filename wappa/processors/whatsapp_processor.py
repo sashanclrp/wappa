@@ -1,11 +1,8 @@
-import hashlib
-import hmac
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import ValidationError
 
-from wappa.core.config.settings import settings
 from wappa.processors.base_processor import (
     BaseWebhookProcessor,
     ProcessorCapabilities,
@@ -121,40 +118,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         self.register_message_handler("order", self._create_order_message)
         self.register_message_handler("edit", self._create_lifecycle_message)
         self.register_message_handler("revoke", self._create_lifecycle_message)
-
-    def validate_webhook_signature(
-        self, payload: bytes, signature: str, **kwargs: Any
-    ) -> bool:
-        if not settings.wp_webhook_verify_token:
-            self.logger.warning(
-                "WhatsApp webhook verification token not configured - skipping signature validation"
-            )
-            return True
-
-        try:
-            if not signature.startswith("sha256="):
-                self.logger.error(
-                    "Invalid signature format - must start with 'sha256='"
-                )
-                return False
-
-            provided_hash = signature.removeprefix("sha256=")
-            expected_hash = hmac.new(
-                settings.wp_webhook_verify_token.encode("utf-8"),
-                payload,
-                hashlib.sha256,
-            ).hexdigest()
-
-            is_valid = hmac.compare_digest(expected_hash, provided_hash)
-            if not is_valid:
-                self.logger.error("Webhook signature validation failed")
-            return is_valid
-
-        except Exception as e:
-            self.logger.error(
-                "Error validating webhook signature: %s", e, exc_info=True
-            )
-            return False
 
     def parse_webhook_container(
         self, payload: dict[str, Any], **kwargs: Any
@@ -416,7 +379,8 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
         # Built-in field payloads carry value.metadata with phone number info.
         # Custom registered fields (e.g. message_template_status_update) do
-        # not — fall back to the WABA ID + URL-supplied inbox_id.
+        # not. Payload routing has already resolved WABA scope and supplies the
+        # per-delivery inbox_id.
         first_value = webhook.entry[0].changes[0].value
         metadata = getattr(first_value, "metadata", None)
         waba_id = webhook.entry[0].id

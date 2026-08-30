@@ -10,8 +10,10 @@ This is a comprehensive demonstration of the Wappa framework capabilities includ
 - Professional error handling and logging
 
 SETUP REQUIRED:
-1. Create a .env file with your WhatsApp Business API credentials:
-   WP_ACCESS_TOKEN=your_access_token_here
+1. Create a .env file with your Meta application and WhatsApp credentials:
+   META_APP_SECRET=your_meta_app_secret_here      # authenticates every webhook POST
+   WP_WEBHOOK_VERIFY_TOKEN=your_verify_token      # GET verification challenge only
+   WP_ACCESS_TOKEN=your_access_token_here         # legacy single-Inbox bundle
    WP_PHONE_ID=your_phone_number_id_here
    WP_BID=your_business_id_here
 
@@ -61,6 +63,12 @@ def validate_configuration() -> bool:
 
     if not settings.wp_bid:
         missing_configs.append("WP_BID")
+
+    if not settings.meta_app_secret:
+        missing_configs.append("META_APP_SECRET")
+
+    if not settings.wp_webhook_verify_token:
+        missing_configs.append("WP_WEBHOOK_VERIFY_TOKEN")
 
     if not settings.has_redis:
         missing_configs.append("REDIS_URL")

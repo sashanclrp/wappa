@@ -11,7 +11,7 @@ Host platforms building on Wappa (Symphonai, and the minimal Mimeia platform bef
 
 Each of those is generic. Implementing them per host means every host re-derives the same trade-offs — and gets them subtly different. The alternative to promoting them is worse: hosts grow a parallel framework layer above Wappa, reaching into `wappa.core.*` internals to stay consistent with it.
 
-The constraint is that promoting them must not import host business language into Wappa. Wappa owns provider intake, sending, dispatch, runtime cache scoping, and contract stability. It does not own Owner, Channel, Campaign, or any host tenancy concept.
+The constraint is that promoting them must not import host business language into Wappa. Wappa owns Platform webhook intake, sending, dispatch, runtime cache scoping, and contract stability. It does not own Owner, Channel, Campaign, or any host tenancy concept.
 
 ## Decision
 

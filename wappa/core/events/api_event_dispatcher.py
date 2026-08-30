@@ -6,8 +6,6 @@ Follows Single Responsibility Principle:
 - Does not handle webhook events (that's WappaEventDispatcher)
 """
 
-from collections.abc import Callable
-from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING
 
 from wappa.core.logging.logger import get_logger
@@ -16,7 +14,6 @@ from wappa.domain.events.api_message_event import APIMessageEvent
 
 if TYPE_CHECKING:
     from fastapi import Request
-    from sqlalchemy.ext.asyncio import AsyncSession
 
     from wappa.core.events.event_handler import WappaEventHandler
 
@@ -138,14 +135,12 @@ class APIEventDispatcher:
         Returns:
             Context-bound WappaEventHandler instance
         """
-        # Get database session factories if PostgresDatabasePlugin is registered
-        db: Callable[[], AbstractAsyncContextManager[AsyncSession]] | None = None
-        db_read: Callable[[], AbstractAsyncContextManager[AsyncSession]] | None = None
+        # The same helper every dispatch path uses supplies ``db`` / ``db_read``.
+        from wappa.core.dispatch.context_builder import resolve_database_factories
 
-        session_manager = getattr(request.app.state, "postgres_session_manager", None)
-        if session_manager:
-            db = session_manager.get_session
-            db_read = session_manager.get_read_session
+        db, db_read = resolve_database_factories(
+            getattr(request.app.state, "postgres_session_manager", None)
+        )
 
         self.logger.debug(
             "API handler context: inbox=%s, db_available=%s",

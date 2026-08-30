@@ -57,9 +57,9 @@ class WappaContextFactory:
     """
     Factory for creating WappaContext instances from app.state.
 
-    Reuses the same connection pools, session managers, and cache backends
-    as the WhatsApp webhook pipeline. Stored on app.state.wappa_context_factory
-    during startup.
+    Delegates to the shared ``DispatchContextBuilder`` so cron jobs and
+    External Webhook Sources bind the same capabilities as webhook intake.
+    Stored on app.state.wappa_context_factory during startup.
     """
 
     def __init__(self, app: FastAPI):
@@ -78,7 +78,14 @@ class WappaContextFactory:
         Create a WappaContext with infrastructure dependencies from app.state.
 
         Args:
-            inbox_id: Inbox identifier
+            inbox_id: Inbox identifier. A db-only context (no user, no
+                messenger) does not validate it, so system-level work may
+                pass a placeholder.
+
+        Raises:
+            InboxDirectoryError: the Inbox Directory could not answer for this
+                Inbox. Cron and External Webhook Source callers see the typed
+                category instead of a silently context-less handler.
             user_id: Optional user identifier (can be set later via ctx.with_user())
             include_messenger: Whether to create a messenger instance
             platform: Messaging platform for messenger creation
@@ -86,17 +93,53 @@ class WappaContextFactory:
         Returns:
             WappaContext with available infrastructure bound
         """
-        session_manager = getattr(self._app.state, "postgres_session_manager", None)
-        db = session_manager.get_session if session_manager else None
-        db_read = session_manager.get_read_session if session_manager else None
-
-        cache_factory = (
-            self._create_cache_factory(inbox_id, user_id) if user_id else None
+        from wappa.core.dispatch.context_builder import (
+            DispatchContextBuilder,
+            resolve_database_factories,
         )
+        from wappa.domain.inbox.errors import InboxDirectoryError
+        from wappa.domain.inbox.identity import InboxRef
 
-        messenger = None
-        if include_messenger:
-            messenger = await self._create_messenger(inbox_id, user_id, platform)
+        builder: DispatchContextBuilder | None
+        try:
+            builder = DispatchContextBuilder.from_app(self._app)
+            db, db_read = builder.database_factories()
+        except RuntimeError as exc:
+            # The application has not finished startup. Fall back to the same
+            # helper every dispatch path uses, so there is one definition of
+            # what ``db`` / ``db_read`` mean.
+            self.logger.warning("Dispatch Context builder unavailable: %s", exc)
+            builder = None
+            db, db_read = resolve_database_factories(
+                getattr(self._app.state, "postgres_session_manager", None)
+            )
+
+        cache_factory: ICacheFactory | None = None
+        messenger: IMessenger | None = None
+        if builder is not None and (user_id or include_messenger):
+            inbox_ref = InboxRef(platform=platform, inbox_id=inbox_id)
+            if user_id:
+                try:
+                    cache_factory = builder.cache_factory(inbox_ref, user_id)
+                except InboxDirectoryError:
+                    # A directory failure is a typed category the caller must
+                    # see. Degrading to cache_factory=None would surface later
+                    # as an unclassified AttributeError inside Host code.
+                    raise
+                except Exception as e:
+                    self.logger.error("Cache factory creation failed: %s", e)
+            if include_messenger:
+                try:
+                    messenger = await builder.messenger(inbox_ref)
+                except InboxDirectoryError:
+                    raise
+                except Exception as e:
+                    self.logger.error(
+                        "Messenger creation failed for %s: %s: %s",
+                        inbox_ref,
+                        type(e).__name__,
+                        e,
+                    )
 
         ctx = WappaContext(
             inbox_id=inbox_id,
@@ -117,69 +160,3 @@ class WappaContextFactory:
         )
 
         return ctx
-
-    def _create_cache_factory(
-        self, inbox_id: str, user_id: str
-    ) -> ICacheFactory | None:
-        """Create cache factory using same logic as WebhookController."""
-        try:
-            from wappa.persistence.cache_factory import create_cache_factory
-
-            cache_type = getattr(self._app.state, "wappa_cache_type", "memory")
-
-            if cache_type == "redis":
-                redis_manager = getattr(self._app.state, "redis_manager", None)
-                if not redis_manager or not redis_manager.is_initialized():
-                    self.logger.warning(
-                        "Redis requested but not available, skipping cache"
-                    )
-                    return None
-
-            factory_class = create_cache_factory(cache_type)
-            return factory_class(inbox_id=inbox_id, user_id=user_id)
-
-        except Exception as e:
-            self.logger.error("Cache factory creation failed: %s", e)
-            return None
-
-    async def _create_messenger(
-        self,
-        inbox_id: str,
-        user_id: str | None,
-        platform: PlatformType,
-    ) -> IMessenger | None:
-        """Create messenger using SessionLifecycle provider."""
-        try:
-            from wappa.domain.factories.messenger_factory import MessengerFactory
-
-            session_lifecycle = getattr(self._app.state, "session_lifecycle", None)
-            if not session_lifecycle:
-                self.logger.warning(
-                    "SessionLifecycle not available, skipping messenger"
-                )
-                return None
-
-            credential_store = getattr(self._app.state, "inbox_credential_store", None)
-            messenger_factory = MessengerFactory(
-                credential_store=credential_store,
-                session_provider=session_lifecycle.get_session,
-                media_download_client_provider=(
-                    session_lifecycle.get_media_download_client
-                ),
-            )
-            raw_messenger = await messenger_factory.create_messenger(
-                platform=platform,
-                inbox_id=inbox_id,
-            )
-
-            from wappa.core.messaging.pipeline import MessengerPipeline
-
-            messenger_middleware = getattr(self._app.state, "messenger_middleware", ())
-            return MessengerPipeline(
-                raw=raw_messenger,
-                middleware=messenger_middleware,
-            )
-
-        except Exception as e:
-            self.logger.error("Messenger creation failed: %s", e)
-            return None

@@ -483,10 +483,13 @@ class ITableCache(ABC):
     Interface for table/row cache operations.
 
     Data is keyed by composite key (table_name + pkid).
-    Inbox identity is established via constructor parameters.
+
+    The namespace is a Table Cache Scope, not necessarily an Inbox: the
+    reserved System Scope, a Host-defined business scope, or an Inbox
+    namespace. It is established by the ``context_id`` constructor parameter.
 
     Example:
-        table = RedisTable(inbox="myapp")
+        table = RedisTable(context_id="myapp")
         await table.upsert("products", "sku123", {"name": "Widget", "price": 99})
         data = await table.get("products", "sku123")
     """

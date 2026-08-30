@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
@@ -34,10 +34,29 @@ def test_validate_session_closed():
 
 @pytest.fixture
 def mock_credential_store():
-    store = AsyncMock()
-    store.validate_inbox = AsyncMock(return_value=True)
-    store.get_credentials = AsyncMock(return_value=MagicMock(access_token="test-token"))
-    return store
+    """A minimal IInboxCredentialResolver test double."""
+    from pydantic import SecretStr
+
+    from wappa.domain.inbox import (
+        IInboxCredentialResolver,
+        InboxRef,
+        PlatformAccountRef,
+        ResolvedInboxCredentials,
+    )
+
+    class _Resolver(IInboxCredentialResolver):
+        async def resolve_credentials(self, inbox_ref: InboxRef):
+            return ResolvedInboxCredentials(
+                inbox_ref=inbox_ref,
+                account_ref=PlatformAccountRef.whatsapp("waba"),
+                access_token=SecretStr("test-token"),
+                credential_version=1,
+            )
+
+        async def list_inbox_refs_for_platform_account(self, account_ref):
+            return ()
+
+    return _Resolver()
 
 
 @pytest.fixture
@@ -83,7 +102,7 @@ class TestMessengerFactorySessionGuard:
         self, closed_session, mock_credential_store
     ):
         from wappa.domain.factories.messenger_factory import MessengerFactory
-        from wappa.schemas.core.types import PlatformType
+        from wappa.domain.inbox import InboxRef
 
         def bad_provider():
             raise HTTPSessionClosedError("session closed")
@@ -91,27 +110,25 @@ class TestMessengerFactorySessionGuard:
         factory = MessengerFactory(
             session_provider=bad_provider,
             media_download_client_provider=bad_provider,
-            credential_store=mock_credential_store,
+            credential_resolver=mock_credential_store,
         )
         with pytest.raises(RuntimeError, match="Messenger creation failed"):
-            await factory.create_messenger(
-                platform=PlatformType.WHATSAPP, inbox_id="12345"
-            )
+            await factory.create_messenger(InboxRef.whatsapp("12345"))
 
     @pytest.mark.asyncio
     async def test_cached_messenger_evicted_when_session_closes(
         self, open_session, mock_credential_store
     ):
         from wappa.domain.factories.messenger_factory import MessengerFactory
-        from wappa.schemas.core.types import PlatformType
+        from wappa.domain.inbox import InboxRef
 
         factory = MessengerFactory(
             session_provider=lambda: open_session,
             media_download_client_provider=lambda: open_session,
-            credential_store=mock_credential_store,
+            credential_resolver=mock_credential_store,
         )
 
-        await factory.create_messenger(platform=PlatformType.WHATSAPP, inbox_id="12345")
+        await factory.create_messenger(InboxRef.whatsapp("12345"))
         assert "whatsapp:12345" in factory._messenger_cache
 
         # Provider now raises — next access should evict + fail
@@ -119,9 +136,7 @@ class TestMessengerFactorySessionGuard:
             HTTPSessionClosedError("closed")
         )
         with pytest.raises(RuntimeError, match="Messenger creation failed"):
-            await factory.create_messenger(
-                platform=PlatformType.WHATSAPP, inbox_id="12345"
-            )
+            await factory.create_messenger(InboxRef.whatsapp("12345"))
 
         assert "whatsapp:12345" not in factory._messenger_cache
 
@@ -191,18 +206,18 @@ class TestExpiryMessengerSessionGuard:
 class TestContextFactorySessionGuard:
     @pytest.mark.asyncio
     async def test_returns_none_when_no_session_lifecycle(self):
-        from wappa.schemas.core.types import PlatformType
-
-        mock_app = MagicMock()
-        mock_app.state.session_lifecycle = None
+        from types import SimpleNamespace
 
         from wappa.core.context import WappaContextFactory
 
-        factory = WappaContextFactory(app=mock_app)
-        result = await factory._create_messenger(
-            inbox_id="12345", user_id="user1", platform=PlatformType.WHATSAPP
+        mock_app = SimpleNamespace(state=SimpleNamespace(session_lifecycle=None))
+
+        factory = WappaContextFactory(app=mock_app)  # type: ignore[arg-type]
+        context = await factory.create_context(
+            inbox_id="12345", user_id="user1", include_messenger=True
         )
-        assert result is None
+        assert context.messenger is None
+        assert context.cache_factory is None
 
 
 # --- WappaCorePlugin session recreation ---

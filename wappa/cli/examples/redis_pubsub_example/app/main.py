@@ -21,10 +21,11 @@ MULTI-INBOX SUPPORT:
 
 SETUP REQUIRED:
 1. Create a .env file with your WhatsApp Business API credentials:
-    WP_ACCESS_TOKEN=your_access_token_here
+    META_APP_SECRET=your_meta_app_secret   # authenticates every webhook POST
+    WP_WEBHOOK_VERIFY_TOKEN=your_verify_token
+    WP_ACCESS_TOKEN=your_access_token_here  # legacy single-Inbox bundle
     WP_PHONE_ID=your_phone_number_id_here
     WP_BID=your_business_id_here
-    WP_WEBHOOK_VERIFY_TOKEN=your_verify_token_here
 
 2. Set up Redis:
     REDIS_URL=redis://localhost:6379
@@ -60,6 +61,12 @@ def validate_configuration() -> bool:
 
     if not settings.wp_bid:
         missing_configs.append("WP_BID")
+
+    if not settings.meta_app_secret:
+        missing_configs.append("META_APP_SECRET")
+
+    if not settings.wp_webhook_verify_token:
+        missing_configs.append("WP_WEBHOOK_VERIFY_TOKEN")
 
     if not settings.has_redis:
         missing_configs.append("REDIS_URL")
@@ -154,9 +161,6 @@ def create_wappa_application() -> Wappa:
                 )
                 return
 
-            credential_store = getattr(
-                fastapi_app.state, "inbox_credential_store", None
-            )
             tracker = getattr(fastapi_app.state, "background_work_tracker", None)
             if not tracker:
                 logger.error(
@@ -164,11 +168,7 @@ def create_wappa_application() -> Wappa:
                 )
                 return
 
-            coro = start_pubsub_listener(
-                session_lifecycle.get_session,
-                session_lifecycle.get_media_download_client,
-                credential_store,
-            )
+            coro = start_pubsub_listener(fastapi_app)
             tracker.track(coro, name="pubsub_listener")
 
             logger.info("✅ Redis PubSub subscriber started")

@@ -37,6 +37,7 @@ from .cache_space import build_table_name
 from .redis import RedisClient
 from .redis import ops as redis_ops
 from .redis.redis_cache_factory import RedisCacheFactory
+from .scope import SYSTEM_SCOPE, create_system_table_cache, validate_context_id
 from .typed_table_cache import TypedRowTransition, TypedTableCache
 from .versioned_table_cache import VersionedTableCache
 
@@ -46,6 +47,10 @@ __all__ = [
     "get_cache_factory",
     # Cache key composition
     "build_table_name",
+    # Table Cache Scope
+    "SYSTEM_SCOPE",
+    "create_system_table_cache",
+    "validate_context_id",
     # Core Interfaces
     "ICacheFactory",
     "IUserCache",

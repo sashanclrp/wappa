@@ -21,11 +21,11 @@ Example:
 
 from wappa.core.expiry.app_context import get_app_context
 from wappa.core.logging.logger import get_logger
-from wappa.domain.factories.messenger_factory import MessengerFactory
+from wappa.domain.inbox.errors import InboxDirectoryError
+from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.cache_factory import ICacheFactory
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.persistence.cache_factory import create_cache_factory
-from wappa.schemas.core.types import PlatformType
 
 logger = get_logger(__name__)
 
@@ -90,6 +90,8 @@ async def create_expiry_messenger(inbox_id: str) -> IMessenger:
             "FastAPI app not registered - ensure ExpiryPlugin is configured"
         )
 
+    from wappa.core.dispatch.context_builder import DispatchContextBuilder
+
     session_lifecycle = getattr(app.state, "session_lifecycle", None)
     if not session_lifecycle:
         raise SessionLifecycleNotAvailableError(
@@ -97,23 +99,16 @@ async def create_expiry_messenger(inbox_id: str) -> IMessenger:
             "WappaCorePlugin is configured and has started"
         )
 
-    credential_store = getattr(app.state, "inbox_credential_store", None)
-
     try:
-        messenger_factory = MessengerFactory(
-            credential_store=credential_store,
-            session_provider=session_lifecycle.get_session,
-            media_download_client_provider=(
-                session_lifecycle.get_media_download_client
-            ),
-        )
-        messenger = await messenger_factory.create_messenger(
-            platform=PlatformType.WHATSAPP,
-            inbox_id=inbox_id,
+        builder = DispatchContextBuilder.from_app(app)
+        messenger = await builder.messenger_factory.create_messenger(
+            InboxRef.whatsapp(inbox_id)
         )
         logger.debug("Created expiry messenger for inbox: %s", inbox_id)
         return messenger
 
+    except InboxDirectoryError:
+        raise
     except Exception as e:
         logger.error("Failed to create messenger for inbox %s: %s", inbox_id, e)
         raise MessengerCreationError(

@@ -40,7 +40,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             "set-cookie",
             "x-access-token",
             "x-auth-token",
-            "x-whatsapp-hub-signature",
+            # Meta's callback signature header (see wappa.core.inbound.SIGNATURE_HEADER).
+            "x-hub-signature-256",
         }
 
     async def dispatch(

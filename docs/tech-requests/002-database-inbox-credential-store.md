@@ -1,9 +1,13 @@
 ---
-status: implemented
+status: superseded
 completed: 2026-08-03
+superseded_by: docs/adr/0011-encrypted-inbox-directory.md
+superseded_on: 2026-08-30
 ---
 
 # Tech Request: Database-Backed Inbox Credential Store
+
+> **Superseded by [ADR-0011](../adr/0011-encrypted-inbox-directory.md) in v0.27.0.** Everything this document specifies was shipped in v0.26 and then removed: `IInboxCredentialStore`, `SettingsInboxCredentialStore`, `DatabaseInboxCredentialStore`, the prescribed `wappa_inboxes` table, `with_inbox_credential_store`, and plaintext credentials in the cache no longer exist. Wappa now owns the Inbox Directory outright; a Host adapts its durable schema through the read-only `IInboxDirectorySource` and never writes directory rows or handles plaintext tokens. This file is kept as the record of a design that was tried and reversed — do not implement against it. See [`docs/migration/v0.27.0-multi-inbox.md`](../migration/v0.27.0-multi-inbox.md) for the replacement mapping.
 
 **Priority:** High — blocks multi-inbox Symphonai deployments  
 **Effort:** 1 focused session  

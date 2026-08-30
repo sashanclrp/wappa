@@ -92,7 +92,10 @@ class TemplateStateService:
             True if state was created successfully, False otherwise.
         """
         try:
-            cache_user_id = user_id or await self.identity_resolver.resolve(recipient)
+            cache_user_id = user_id or await self.identity_resolver.resolve(
+                recipient,
+                inbox_id=self.cache_factory.inbox_id,
+            )
 
             state_key = self._make_state_key(state_config.state_value)
             state_data = {

@@ -2,40 +2,224 @@
 
 This file tracks Wappa surfaces that host applications may import, call, configure, subscribe to, or depend on.
 
-## Inbox Credentials
+## Inbox identity
 
-Host applications may configure the credential lookup strategy through:
+Wappa's globally unique runtime identity is qualified by Platform. A raw `inbox_id` is unique only inside one Platform.
 
-- `WappaBuilder.with_inbox_credential_store(store)`
-- `Wappa(inbox_credential_store=store)`
-- `Wappa.set_inbox_credential_store(store)`
+- `InboxRef(platform, inbox_id)` — for WhatsApp, `inbox_id` is Meta's exact `phone_number_id`. `InboxRef.whatsapp(phone_number_id)` is the shorthand.
+- `PlatformAccountRef(platform, platform_account_id)` — for WhatsApp, the WABA ID (`entry[].id`).
+- Both are frozen, hashable, orderable (Platform first, then native identifier), reject blank or unsafe values (`:`, glob characters, whitespace, `__`), and expose one Wappa-owned `cache_namespace`. WhatsApp keeps its raw `phone_number_id` as the namespace so existing keys stay readable; every other Platform is qualified as `<platform>__<inbox_id>`. Hosts never rebuild the namespace by concatenation.
 
-The store must implement `IInboxCredentialStore`:
+Public imports: `from wappa import InboxRef, PlatformAccountRef` or `from wappa.domain.inbox import ...`.
 
-- `get_credentials(inbox_id) -> InboxCredentials`
-- `validate_inbox(inbox_id) -> bool`
-- `invalidate_cache(inbox_id) -> None`
+## Inbox Routing Mode
 
-When no custom store is configured, Wappa uses `SettingsInboxCredentialStore`, which resolves the single configured Inbox from `WP_PHONE_ID`, `WP_ACCESS_TOKEN`, and `WP_BID`.
+`InboxRoutingMode` has exactly two members; an omitted mode is `legacy`. The modes never fall back to one another and a mixed configuration fails at build time with `InboxConfigurationError`.
 
-`DatabaseInboxCredentialStore` is provided for host-owned `wappa_inboxes` tables. Wappa reads the table but does not own inbox CRUD, migrations, token rotation, or encryption policy.
+| | `legacy` | `explicit` |
+| --- | --- | --- |
+| Selected by | default, `Wappa(inbox_routing="legacy")`, `SYSTEM_INBOX_ROUTING_MODE=legacy` | `Wappa(inbox_routing="explicit")`, `WappaBuilder.with_inbox_routing("explicit")`, `SYSTEM_INBOX_ROUTING_MODE=explicit` |
+| Requires | the complete `WP_ACCESS_TOKEN` + `WP_PHONE_ID` + `WP_BID` bundle | an `IInboxDirectorySource` and `SYSTEM_TOKEN_ENC_KEY` |
+| Rejects | any `IInboxDirectorySource` | any of `WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID` |
+| Inboxes | one: `WP_PHONE_ID`, with `WP_BID` as its Platform Account | every active record the source returns |
+| HTTP default Inbox | `WP_PHONE_ID` when `X-Wappa-Inbox-ID` is absent | none; the header is required |
+
+Only the legacy settings adapter built by Wappa's assembly reads the three `WP_*` variables. `WP_ACCESS_TOKEN` keeps its name as a legacy WhatsApp input; it is not renamed `META_ACCESS_TOKEN`.
+
+Health (`/health`, `/health/detailed`) reports `inbox_routing_mode`, whether the Inbox Directory is configured (and, detailed, reachable), whether a legacy default Inbox exists and its `inbox_id`, and Meta callback readiness. It never returns tokens, envelopes, App Secrets, encryption keys, full records, or raw exception strings.
+
+## Inbox Directory (explicit mode)
+
+Wappa ships one mandatory `InboxDirectory` over `InboxDirectoryTable`, a Wappa-owned Table Cache under the System Scope. Hosts cannot replace its model, cache shape, TTL rules, indexes, or mutation behaviour. The Host's only adaptation point is the read-only source:
+
+```python
+class IInboxDirectorySource(Protocol):
+    async def get_inbox(self, inbox_ref: InboxRef) -> InboxCredentialRecord | None: ...
+    async def list_inboxes_for_platform_account(
+        self, account_ref: PlatformAccountRef
+    ) -> tuple[InboxCredentialRecord, ...]: ...
+```
+
+Both reads use the Host's primary database path by default. A Host that serves them from a replica accepts the stale-credential risk itself.
+
+### Canonical records
+
+`from wappa.domain.inbox import ...`
+
+- `WhatsAppActiveInboxCredentialRecord`: `schema_version=1`, `platform="whatsapp"`, `status="active"`, `inbox_id`, `platform_account_id`, `access_token: EncryptedSecretEnvelope`, `credential_version` (positive, monotonic across the Inbox's lifetime), `updated_at` (timezone-aware).
+- `WhatsAppInactiveInboxCredentialRecord`: the same fields without `access_token`. An inactive record cannot carry credential material.
+- `InboxCredentialRecord`: the Platform- and status-discriminated union (v0.27 ships only WhatsApp members). `parse_inbox_credential_record(data)` validates any object into it; `dump_record_for_storage(record)` is the only dump that carries ciphertext. Every other `model_dump`, `repr`, or log masks it, and a masked envelope cannot be re-loaded.
+- `EncryptedSecretEnvelope(format_version=1, ciphertext)`: Wappa's authenticated, context-bound secret. Hosts persist and return it, never construct, alter, or decrypt it.
+- `PlatformAccountActiveIndexRecord` / `PlatformAccountEmptyIndexRecord`: the cached reverse index rows. They are projections, never authority.
+
+### Wappa-owned commands
+
+`runtime = app.state.inbox_runtime` after build exposes `credential_service` (`InboxCredentialService`) and `directory` (`InboxDirectory`) in explicit mode.
+
+- `create_active_record(inbox_ref=, account_ref=, access_token=SecretStr, credential_version=1)` → active record. Call it before persisting; store what it returns.
+- `rotate_active_record(previous, access_token=SecretStr, account_ref=None)` → version + 1.
+- `create_inactive_record(previous)` → version + 1, no token.
+- `rotate_encrypted_record(record)` → the same record re-encrypted under the active key, without exposing plaintext.
+- `await directory.refresh_inbox(inbox_ref)` → reloads through the source after the Host commits, validates, updates the primary row and both affected account indexes, evicts cached Messengers, returns the record (or `None` when the source confirms absence). Idempotent; raises on failure.
+- `await directory.deactivate_inbox(inbox_ref)` → the same, requiring the source to report the Inbox inactive; raises `InboxMutationConflictError` if it is still active and `InboxNotFoundError` if it is absent.
+
+There is no `upsert(record)`, no Host-written cache row, and no normal hard-delete command.
+
+### Freshness, versions, and repair
+
+| Record | TTL | Read behaviour |
+| --- | --- | --- |
+| Active Inbox primary row | 60 min | renewed on every validated hit |
+| Active Platform Account index | 60 min | renewed on every validated hit |
+| Inactive Inbox row | fixed 60 min | never renewed |
+| Confirmed absent Inbox row | fixed 60 min | never renewed |
+| Confirmed empty account index | fixed 60 min | never renewed |
+
+A cache miss makes one source call. Source or cache failures raise `InboxDirectoryUnavailableError` and never create a negative record. A higher `credential_version` wins; a lower one is stale (`InboxMutationConflictError`); an equal version is accepted only for an identical record, and that retry still repairs indexes and evicts Messengers. Primary rows are written before indexes; retrying the same command repairs partial work. TTL is never the revocation mechanism: call `deactivate_inbox`.
+
+The Platform Account index is validated on every use: each listed member must be active, be the same `InboxRef`, and belong to the requested `PlatformAccountRef`. Any corruption triggers one synchronous source reload and repair; repair failure is unavailable (503). A valid index cannot detect an omitted member, so Hosts must call `refresh_inbox` after onboarding, rotation, WABA reassignment, and deactivation.
+
+### Encryption boundary and key rotation
+
+```text
+SYSTEM_TOKEN_ENC_KEY=<active Fernet key>
+SYSTEM_TOKEN_ENC_PREVIOUS_KEYS=<optional, ordered, comma-separated older keys>
+```
+
+Wappa encrypts a document binding `format_version`, `platform`, `inbox_id`, the credential field name, and the plaintext. Decryption re-checks those bindings, so ciphertext copied into another Inbox or field fails with `InboxCredentialIntegrityError`. Reads try the active key first and then the previous keys; a cache read that only succeeds under a previous key is rewritten under the active key. Durable rows are migrated with `rotate_encrypted_record`. Remove an old key only after every durable record is re-encrypted and committed, every deployment reads the active key, at least the 60-minute directory TTL has passed since the last old-key cache write, and the deployment overlap window has ended. Losing every accepted key makes stored credentials unrecoverable. Startup rejects a missing or malformed key without echoing key material.
+
+Tokens are never hashed. Wappa has to reproduce the exact bearer value to place it in Meta's `Authorization` header, and a cryptographic hash is intentionally irreversible, so a hashed token could never authenticate an outbound call. The only valid representations for a stored Inbox credential are Wappa's reversible `EncryptedSecretEnvelope` or an external secret manager; plaintext is never a valid durable or cache value, and `SecretStr` alone is not storage protection because it masks representations without encrypting anything.
+
+`CredentialCodec` and `SecretBinding` (`from wappa.core.security import ...`) are the codec surface; Hosts do not need them beyond `CredentialCodec.generate_key()`.
+
+### Typed failures
+
+`from wappa.domain.inbox import ...` — all subclass `InboxDirectoryError`:
+
+| Error | Meaning |
+| --- | --- |
+| `InboxConfigurationError` | startup cannot select one credential authority or Meta configuration |
+| `InboxNotFoundError` | a healthy lookup confirmed the Inbox unknown or inactive |
+| `InboxMembershipError` | known identities contradict the required Platform Account relation |
+| `InboxDirectoryUnavailableError` | cache, source, or another required dependency failed |
+| `InboxCredentialIntegrityError` | the record or envelope failed validation and cannot be used |
+| `InboxMutationConflictError` | a mutation lost to a newer or conflicting version |
+
+Messages may name qualified identity; they never contain tokens, ciphertext, keys, payloads, or source queries. Programmatic entry points raise these; HTTP boundaries map them as documented below.
+
+## Meta Application Configuration
+
+One Wappa application binds to one Meta App. `MetaApplicationConfig(app_secret, whatsapp_webhook_verify_token, graph_api_version="v26.0", graph_base_url="https://graph.facebook.com/")` is supplied explicitly (`Wappa(meta_application_config=...)`, `WappaBuilder.with_meta_application_config`) **or** built from the environment:
+
+| Variable | Meaning |
+| --- | --- |
+| `META_APP_SECRET` | the Meta App's HMAC secret for POST callbacks |
+| `WP_WEBHOOK_VERIFY_TOKEN` | the shared value for the GET challenge only |
+| `META_API_VERSION` | Graph API version |
+| `META_BASE_URL` | Graph API base URL |
+
+Supplying an explicit object while either environment secret is set fails startup; there is no precedence. Mounting the WhatsApp callback requires both secrets in every environment with no development bypass. An outbound-only application that mounts no callback needs neither. `META_APP_SECRET` is application-scoped: it never enters an Inbox record and `SYSTEM_TOKEN_ENC_KEY` does not encrypt it.
+
+## Inbox Execution Context (`X-Wappa-Inbox-ID`)
+
+Wappa's own HTTP operations have no Meta payload to route from, so an authorized caller selects the Inbox with `X-Wappa-Inbox-ID: <phone_number_id>`. **The header selects runtime scope and proves only that Wappa knows an active Inbox. It is not a credential and grants no permission.** Host authentication and authorization (for example `AuthPlugin`) decide whether the caller may operate that Inbox, and they run before Inbox resolution.
+
+Resolution happens once per request through `get_inbox_execution_context` (`from wappa.api.dependencies import ...`): Host auth → read the header → combine with the route's Platform (WhatsApp) → legacy default when the header is absent → resolve the active record through the credential resolver → build the required capabilities → share the `InboxExecutionContext` with every dependency in the route. The context exposes `inbox_ref`, `inbox_id`, `account_ref`, `platform_account_id`, and `routing_mode`; it never exposes the decrypted token.
+
+| Operation family | Inbox required |
+| --- | ---: |
+| Send text; mark read or typing | yes |
+| Send image, video, audio, document, sticker | yes |
+| Send buttons, list, CTA | yes |
+| Send contact, location, location request | yes |
+| Send text-, media-, or location-header Template | yes |
+| Upload, inspect, download, or delete media | yes (download resolves the media object with the selected token first) |
+| Get Template by ID/name, list Templates, get namespace | yes (WABA comes from the record; no caller-supplied WABA) |
+| Inbox-specific WhatsApp health (`/api/whatsapp/health`) | yes |
+| State Handler set, get, delete | yes |
+| Validate contact or coordinates | no |
+| Text, media, interactive, Template limits | no |
+| Root health, docs, OpenAPI | no |
+
+Local-only routes ignore a supplied header entirely: they do not validate it, bind it, or read the directory, so an unknown header or an unavailable directory cannot make them fail.
+
+| Condition | Status |
+| --- | ---: |
+| Inbox-dependent route, no header, no legacy default | 400 |
+| Header format invalid (checked before any directory call) | 400 |
+| Healthy directory confirms unknown or inactive Inbox | 404 |
+| Directory, source, cache, or decrypt unavailable | 503 |
+| Host authentication or authorization failure | the Auth plugin's status |
+| Local-only route with any header | normal local response |
+
+In legacy mode the header may repeat the configured `WP_PHONE_ID`; any other value answers 404. No Inbox context leaks between sequential requests on one worker.
+
+The former demonstration routes `/interactive/send-complex-buttons` and `/interactive/send-menu-list` are not part of the HTTP contract; their code lives in the full example.
+
+## Dispatch Context, `db`, and `db_read`
+
+Webhook, API-message, cron, and External Webhook Source paths bind handler clones through one `DispatchContextBuilder` (`from wappa.core.dispatch import ...`). Each background task binds its own Inbox and User context before handler work and resets it afterwards.
+
+- `db` is the Primary Session Factory: writes and primary-consistent reads.
+- `db_read` is the Read-Intent Session Factory: eventual consistency; may use a replica or the current fallback behaviour.
+- Both stay optional `SessionFactory | None`. Wappa never installs a fake session. `WappaEventHandler.require_database()` turns `None` into one direct `RuntimeError`.
+- Wappa supplies sessions only. It adds no Inbox predicates, Owner authorization, row-level security, or Host repository invariants. A Host that writes and must read its write uses `db`, preferably in one transaction.
+- v0.27 does **not** claim database-enforced read-only `db_read`, replica cooldown, or configurable primary fallback; that is separate PostgreSQL plugin work.
+
+## Inbox-aware identity resolution
+
+Host applications may register `IIdentityResolver` through `WappaBuilder.with_identity_resolver(resolver)` or `Wappa.set_identity_resolver(resolver)`. Its public contract is `resolve(recipient, *, inbox_id) -> str`.
+
+`inbox_id` is required for every resolution. A resolver must scope its lookup by both the transport recipient and the Inbox, so the same recipient can resolve to different canonical Users in different Inboxes. `PassthroughIdentityResolver` accepts the same contract and returns the recipient unchanged.
+
+Wappa passes the active Inbox to identity resolution from the Inbox-scoped cache factory or the current outbound API context. API event construction fails when the runtime has no Inbox context; it does not create an event with an `"unknown"` Inbox.
 
 ## Universal Webhooks
 
 Host applications import inbound webhook schemas and Universal Models from
 `wappa.webhooks`.
 
-Canonical messaging webhook routes are:
+The canonical and only Meta WhatsApp callback is `GET + POST /webhook/inboxes/whatsapp`. GET answers Meta's challenge with `MetaApplicationConfig.whatsapp_webhook_verify_token` and reads nothing else. POST is authenticated before it is parsed:
 
-- `GET /webhook/inboxes/{inbox_id}/{platform}` for platform verification at the
-  same URL used for processing.
-- `POST /webhook/inboxes/{inbox_id}/{platform}` for inbound platform webhook
-  processing.
-- `GET /webhook/messenger/{platform}/verify` for retained verify-only callbacks.
+1. Wappa reads the exact body bytes once and requires `X-Hub-Signature-256: sha256=<hex HMAC-SHA256>` computed with `META_APP_SECRET`. A missing, malformed, or mismatched signature answers the same generic `401` before any JSON decoding, directory read, payload logging, or work scheduling. `MetaCallbackAuthenticator(app_secret).sign(body)` (`from wappa.core.inbound import ...`) produces the header for tests and local tools.
+2. Only then is JSON decoded; a non-object root is `400`.
+3. Each `entry[].changes[]` is routed: `value.metadata.phone_number_id` (or a flat `value.phone_number_id`) becomes `InboxRef.whatsapp(...)`, whose active record must belong to `PlatformAccountRef.whatsapp(entry[].id)` — a mismatch rejects the whole callback with `400`. A change without a phone number fans out to every validated active member of that WABA, sorted and duplicate-free. `entry[].id` is never an Inbox; a flat `value.waba_id` must match it.
+4. Every Dispatch Context in the batch is built before any delivery is scheduled. A failure at item N schedules none of items 1..N-1.
 
-Wappa does not provide an inbox-scoped `/webhook/messenger/{inbox_id}/{platform}`
-processing route.
-Wappa also does not process platform webhooks on `/webhook/messenger/*` paths.
+| Condition | Status |
+| --- | ---: |
+| Missing, malformed, or invalid Meta POST signature | 401 |
+| Invalid GET verify token | 403 |
+| Malformed JSON or non-object root | 400 |
+| Invalid Inbox identifier format in the authenticated payload | 400 |
+| Confirmed unknown or inactive payload Inbox | 400 |
+| Inbox and WABA membership mismatch | 400 |
+| Confirmed WABA with no active Inboxes | 400 |
+| Other structurally unroutable authenticated payload | 400 |
+| Directory, cache, source, decrypt, or runtime dependency unavailable | 503 |
+| Unexpected Wappa defect | 500 |
+
+The removed `/webhook/inboxes/{inbox_id}/whatsapp` and `/webhook/messenger/{platform}/verify` routes return 404. There is no alias, redirect, flag, or deprecation route.
+
+### Callback cutover and rollback
+
+Deploy the version that answers `/webhook/inboxes/whatsapp` with `META_APP_SECRET`, change the Meta callback URL, complete GET verification, then send one real message to every active Inbox. Rollback needs both the previous package and the previous callback URL; reverting one alone stops delivery.
+
+### Delivery semantics
+
+Wappa delivers Platform events **at least once**. It does not deduplicate them, and it does not guarantee ordering across the deliveries derived from a single HTTP request.
+
+One Platform event can reach a handler more than once through three independent multipliers:
+
+1. Meta retries a callback it considers unacknowledged or failed.
+2. Batch splitting turns one HTTP request into one delivery per entry/change pair.
+3. WABA fan-out turns one account-scoped change into one delivery per active Inbox under that Platform Account.
+
+The third multiplier is the one that changes host obligations. A WABA carrying `N` active Inboxes multiplies every account-level change by `N`, so an account-event handler that mutates shared, Inbox-independent state — a WABA-level counter, a shared billing record, an operator notification — performs that work `N` times per change.
+
+Wappa guarantees that each delivery carries exactly one Platform change, is scoped to exactly one Inbox whose active record and WABA membership were proven, and is emitted in a deterministic Inbox order, so replaying the same payload behaves identically.
+
+Host applications must make account-scoped handlers idempotent, key side effects on a Platform-supplied identifier rather than on arrival, and never assume one handler invocation equals one Platform event. Wappa does not supply a delivery fingerprint; deduplication is the host's responsibility.
 
 Public inbound imports include:
 
@@ -520,6 +704,7 @@ Internal module paths (`wappa.core.*`, `wappa.persistence.redis.redis_handler.*`
 - `IIdentityResolver`, `PassthroughIdentityResolver`, `IWebhookProcessor`
 - `HMACSignatureVerifier`, `ExternalEventRegistry`, `DispatchReport`
 - `CustomWebhook`, `WappaContext`
+- `InboxRef`, `PlatformAccountRef`, `InboxRoutingMode`, `IInboxDirectorySource`, `InboxCredentialService`, `MetaApplicationConfig`
 
 ### SSE (`from wappa.sse import ...`)
 
@@ -549,6 +734,7 @@ construct or import them.
 ### Persistence (`from wappa.persistence import ...`)
 
 - `create_cache_factory`, `get_cache_factory`, `ICacheFactory`
+- `SYSTEM_SCOPE`, `create_system_table_cache`, `validate_context_id`
 - `TypedTableCache`, `VersionedTableCache`, `ITableCache`, `build_table_name`
 - `TableRowTransition`, `TableTransitionResult`, `TypedRowTransition`
 - `RedisCacheFactory`, `RedisClient`, `redis_ops`
@@ -569,6 +755,22 @@ construct or import them.
 
 Inbox scoping still comes from the `ICacheFactory` / `ITableCache` that creates
 the underlying table cache.
+
+#### Table Cache Scope (`context_id`)
+
+Table Cache is the one cache family whose namespace is a general `context_id`:
+the reserved System Scope (`SYSTEM_SCOPE == "__system__"`), a Host-defined
+business scope (for example an Owner identifier), or an Inbox namespace
+(`InboxRef.cache_namespace`). The scopes are siblings: nothing falls back or
+cascades between them. `ICacheFactory.create_table_cache(context_id=None)`
+defaults to the factory's Inbox namespace; `create_system_table_cache(cache_type)`
+builds a System-Scope table on the configured backend. `RedisTable`,
+`MemoryTable`, and `JSONTable` take `context_id` positionally or by keyword.
+This is a naming change only: `context_id="123"` builds exactly the key that
+`inbox_id="123"` built before, and no Redis data migration is needed. The old
+`inbox_id=` / `inbox=` keywords raise `TypeError` at construction; there is no
+alias. User, State, AI State, Expiry, PubSub, and SSE caches remain
+Inbox-scoped and keep `inbox_id`.
 
 #### Atomic row transitions
 
@@ -683,14 +885,22 @@ Platform Account (WABA), not a User. Consumers handle them in `process_system_we
 
 - `IMessenger`, `IMediaHandler`, `ICacheFactory`
 - `IExpiryCache`, `IStateCache`, `ITableCache`, `IUserCache`
-- `IInboxCredentialStore`, `InboxCredentials`, `InboxNotFoundError`
 - `IIdentityResolver`, `PassthroughIdentityResolver`
+
+### Inbox identity and directory (`from wappa.domain.inbox import ...`)
+
+- `InboxRef`, `PlatformAccountRef`, `InboxRoutingMode`
+- `IInboxDirectorySource`, `InboxCredentialService`, `InboxDirectory`
+- `EncryptedSecretEnvelope`, `InboxCredentialRecord`, `InboxCredentialStatus`, `WhatsAppActiveInboxCredentialRecord`, `WhatsAppInactiveInboxCredentialRecord`, `PlatformAccountActiveIndexRecord`, `PlatformAccountEmptyIndexRecord`, `parse_inbox_credential_record`, `dump_record_for_storage`
+- `InboxDirectoryError`, `InboxConfigurationError`, `InboxNotFoundError`, `InboxMembershipError`, `InboxDirectoryUnavailableError`, `InboxCredentialIntegrityError`, `InboxMutationConflictError`
+- `MetaApplicationConfig` (`from wappa import ...` or `wappa.core.config.meta_application`), `CredentialCodec` / `SecretBinding` (`from wappa.core.security import ...`), `InboxDirectoryTable` (`wappa.persistence.inbox_directory`)
+- `INBOX_ID_HEADER`, `InboxExecutionContext`, `get_inbox_execution_context` (`from wappa.api.dependencies import ...`); `SIGNATURE_HEADER`, `MetaCallbackAuthenticator`, `route_whatsapp_payload`, `RoutedWebhookDelivery` (`from wappa.core.inbound import ...`)
 
 ### API (`from wappa.api import ...`)
 
 - `TemplateStateService`
 - `convert_body_parameters`, `raise_for_failed_result`, `require_inbox_context`
-- `dispatch_message_event`, `fire_api_event`, `resolve_event_user_id`
+- `dispatch_message_event`, `fire_api_event`, `resolve_event_user_id(recipient, explicit_user_id, fastapi_request, *, inbox_id)`
 
 ### Schemas (`from wappa.schemas import ...`)
 
@@ -718,6 +928,10 @@ Platform Account (WABA), not a User. Consumers handle them in `process_system_we
 - `expiry_registry`, `run_expiry_listener`
 - `get_app_context`, `AppContext`
 - `create_expiry_messenger`, `create_expiry_cache_factory`, `parse_inbox_from_expired_key`
+
+### Migration Notes (v0.27.0)
+
+See [`docs/migration/v0.27.0-multi-inbox.md`](migration/v0.27.0-multi-inbox.md) for the ordered legacy and explicit Host paths, the breaking public imports, the key rotation runbook, and the callback cutover.
 
 ### Migration Notes (v0.13.0)
 

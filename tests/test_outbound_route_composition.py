@@ -36,6 +36,10 @@ INTERACTIVE_OUTBOUND_ROUTES = {
     ("/api/whatsapp/interactive/send-buttons", "POST"),
     ("/api/whatsapp/interactive/send-list", "POST"),
     ("/api/whatsapp/interactive/send-cta", "POST"),
+}
+
+# Demonstration endpoints removed from the production contract in v0.27.
+REMOVED_DEMO_ROUTES = {
     ("/api/whatsapp/interactive/send-complex-buttons", "POST"),
     ("/api/whatsapp/interactive/send-menu-list", "POST"),
 }
@@ -129,6 +133,19 @@ def test_standalone_default_keeps_every_route_it_always_had() -> None:
 
 def test_the_explicit_standalone_profile_matches_the_default() -> None:
     assert routes_of(profile="standalone") == routes_of()
+
+
+def test_demonstration_send_endpoints_are_not_mounted_under_any_profile() -> None:
+    """Their code lives in the full example, not in Wappa's HTTP contract."""
+    assert not (REMOVED_DEMO_ROUTES & routes_of())
+    assert not (REMOVED_DEMO_ROUTES & routes_of(profile="embedded"))
+
+    from wappa.cli.examples.wappa_full_example.app.handlers.interactive_demos import (
+        send_complex_button_demo,
+        send_menu_list_demo,
+    )
+
+    assert callable(send_complex_button_demo) and callable(send_menu_list_demo)
 
 
 # ── embedded: the security invariant ────────────────────────────────────────

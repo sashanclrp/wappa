@@ -16,7 +16,7 @@ Today Wappa is **WhatsApp-opinionated**: the WhatsApp adapter is the only fully 
 | **Builder** | `WappaBuilder` | Assemble complex application configurations step-by-step with plugin composition |
 | **Plugin** | `WappaPlugin`, `WappaBuilder.with_*()` | Open/Closed principle — extend framework behavior without modifying core |
 | **Pipeline (Middleware)** | `MessengerPipeline` | Composable outbound message middleware (SSE lifecycle, PubSub notification) wrapping the messenger |
-| **Strategy** | `IInboxCredentialStore`, `ICacheFactory` backends | Swap implementations (settings vs DB lookup, Redis vs Memory vs JSON) without changing callers |
+| **Strategy** | `IInboxCredentialResolver` (internal), `IIdentityResolver`, `ICacheFactory` backends | Swap the credential authority (legacy settings vs. Inbox Directory), Inbox-aware identity, and persistence implementations without changing callers |
 | **Adapter** | `wappa/messaging/whatsapp/`, `wappa/webhooks/whatsapp/` | Translate between platform-specific APIs and Wappa's universal interfaces |
 | **Observer** | SSE/PubSub, Expiry keyspace notifications | Decouple event producers from consumers; fan-out without tight coupling |
 
@@ -25,30 +25,42 @@ Today Wappa is **WhatsApp-opinionated**: the WhatsApp adapter is the only fully 
 ```
 Platform (WhatsApp, etc.)
     │
-    │ POST /webhook/inboxes/{inbox_id}/{platform}
+    │ POST /webhook/inboxes/whatsapp
     ▼
 ┌─────────────────────────────────┐
 │  API Layer (routes + controller)│
 │                                 │
-│  1. Parse JSON body             │
-│  2. Validate platform enum      │
-│  3. InboxMiddleware sets        │
-│     inbox_id in HTTP context    │
-│  4. Delegate to Inbound Runtime │
+│  1. Read exact body bytes once  │
+│  2. Verify X-Hub-Signature-256  │
+│     with META_APP_SECRET (401)  │
+│  3. Decode JSON, require object │
+│  4. Delegate: routing + runtime │
+└────────────────┬────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────┐
+│  WhatsApp Payload Routing       │
+│                                 │
+│  1. Split every entry/change    │
+│  2. InboxRef from phone_number_id│
+│     or WABA fan-out via the     │
+│     Platform Account Index      │
+│  3. Resolve credentials through │
+│     IInboxCredentialResolver    │
+│  4. Prove Inbox ∈ entry[].id    │
 └────────────────┬────────────────┘
                  │
                  ▼
 ┌─────────────────────────────────┐
 │  Inbound Runtime                │
 │                                 │
-│  1. Validate routed inbox_id    │
-│  2. Call platform processor     │
-│  3. Validate payload inbox      │
-│  4. Create Dispatch Context     │
-│  5. Clone handler via           │
-│     with_context(inbox_id,      │
-│     user_id, messenger, cache)  │
-│  6. Open SSE scope + dispatch   │
+│  1. Call platform processor     │
+│  2. Validate payload inbox      │
+│  3. Build EVERY Dispatch Context│
+│     (DispatchContextBuilder:    │
+│     messenger, cache, db)       │
+│  4. Only then schedule the batch│
+│  5. Open SSE scope + dispatch   │
 └────────────────┬────────────────┘
                  │
                  ▼
@@ -97,11 +109,32 @@ Platform (WhatsApp, etc.)
 `WappaEventHandler`. Platform processors are pure translators and must not mutate
 ContextVars, build messengers, resolve cache factories, or clone handlers.
 
-**Inbox authority:** The URL `inbox_id` is the routing authority and is validated
-through the configured `IInboxCredentialStore`. If a platform payload also carries
-an inbox identifier, Wappa validates that it matches the routed Inbox. For WhatsApp,
-payload `metadata.phone_number_id` maps to `inbox_id`; `entry[].id` maps to
-`platform_account_id` (WABA ID). Mismatches are rejected, not silently overridden.
+**Callback authentication:** The canonical Meta callback is `GET + POST /webhook/inboxes/whatsapp`. GET compares `hub.verify_token` with the Meta Application Configuration's verify token and reads nothing else. POST verifies the exact body bytes against `X-Hub-Signature-256` with `META_APP_SECRET` before JSON parsing, directory reads, payload logging, or scheduling; missing, malformed, and mismatched signatures all answer a generic 401. One Wappa application binds to one Meta App; there is no development bypass.
+
+**Inbox authority:** Identity crossing Platforms is `InboxRef(platform, inbox_id)` and `PlatformAccountRef(platform, platform_account_id)`. `value.metadata.phone_number_id`, or a flat `value.phone_number_id`, maps to `InboxRef.whatsapp(...)`; `entry[].id` maps only to `PlatformAccountRef.whatsapp(...)` and is never an Inbox. A phone-scoped change must prove its active record belongs to that WABA (400 otherwise). A change without a phone number fans out to every validated member of the Platform Account Index; a stale index is repaired from the source once, and a failed repair is 503 with nothing dispatched. Wappa builds every Dispatch Context before scheduling any handler work.
+
+**Credential authority:** `wappa/core/factory/inbox_assembly.py` is the only code that reads `WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID`, and `SYSTEM_TOKEN_ENC_KEY`. It selects exactly one `InboxRoutingMode` — `legacy` (settings-backed single Inbox) or `explicit` (Inbox Directory over the Host's `IInboxDirectorySource`) — and rejects mixed configuration. Every runtime component then consumes the resulting `InboxRuntimeConfiguration` (`app.state.inbox_runtime`) through the internal `IInboxCredentialResolver`; none read those variables again.
+
+**Inbox Directory dependency direction:**
+
+```text
+Host durable schema
+  -> IInboxDirectorySource                 (Host adapter, read-only)
+  -> InboxDirectory                        (wappa/domain/inbox/services.py: read-through,
+                                            versions, index repair, refresh/deactivate)
+  -> InboxDirectoryTable on ITableCache    (wappa/persistence/inbox_directory.py,
+                                            context_id = SYSTEM_SCOPE)
+  -> CredentialCodec                       (wappa/core/security: Fernet, context-bound)
+  -> IInboxCredentialResolver              (internal read port)
+  -> DispatchContextBuilder / InboxExecutionContext
+  -> WhatsApp client and Messenger construction
+```
+
+The API layer receives an Inbox Execution Context and knows nothing about Table Cache names, source queries, encryption keys, or token values. The persistence class never imports Host repositories or WhatsApp clients.
+
+**Outbound HTTP scope:** Inbox-dependent routes depend on `get_inbox_execution_context`, which reads `X-Wappa-Inbox-ID`, falls back to the legacy default only in legacy mode, resolves the active record once, and shares the `InboxExecutionContext` with every dependency in the route. Local-only routes (limits, local validation, root health, docs) never resolve an Inbox and never depend on directory health. The header selects scope; Host authentication and authorization decide permission and run first. `InboxMiddleware` only isolates the ambient logging context per request.
+
+**Failure classes:** `InboxNotFoundError`, `InboxMembershipError`, `InboxDirectoryUnavailableError`, `InboxCredentialIntegrityError`, and `InboxMutationConflictError` are the stable categories. The callback maps them to 400/400/503/503/503; Wappa HTTP operations map unknown to 404 and unavailable to 503; programmatic entry points raise them unchanged. A directory outage during Messenger construction is never an unclassified 500.
 
 ## Message Flow — Outbound (Host sends a reply)
 
@@ -246,11 +279,11 @@ Wappa today is WhatsApp-only in implementation but multi-platform in design:
 2. **Platform Adapters** (`wappa/webhooks/whatsapp/`, `wappa/messaging/whatsapp/`): Parse WhatsApp-specific payloads into universal models; construct WhatsApp-specific API requests from universal send calls.
 3. **Shared Schema Primitives** (`wappa/schemas/core/types.py`, `wappa/schemas/core/recipient.py`): Cross-cutting enums and outbound recipient normalization shared by inbound, outbound, API, and runtime modules. Inbound webhook schemas do not live here.
 4. **PlatformType enum**: New platforms add a value here. The router, dispatcher, and factory resolve the correct adapter.
-5. **Inbox Credential Store** (`IInboxCredentialStore`): Resolves the credentials for a concrete `inbox_id`. The default `SettingsInboxCredentialStore` supports a single settings-backed WhatsApp Inbox; hosts that manage many Inboxes inject their own store, including the provided database-backed implementation.
+5. **Inbox Directory** (`wappa/domain/inbox/`): Wappa's canonical, Platform-discriminated credential records and the read-through directory that resolves them. Hosts supply only an `IInboxDirectorySource`; Wappa owns encryption, caching, versions, indexes, and Messenger eviction. The `InboxCredentialRecord` union grows one member per Platform.
 6. **Adding a new platform** requires:
    - A webhook processor implementing the platform's payload → universal model mapping
    - A messenger implementing `IMessenger` for that platform's send API
-   - A credential resolver for that platform's auth (implementing `IInboxCredentialStore`)
+   - A Platform member of `InboxCredentialRecord` naming the credential its adapter consumes, plus the Platform's `InboxRef.cache_namespace` encoding
    - Registration in `PlatformType` and the messenger/webhook factories
 
 No changes to `WappaEventHandler`, `CacheFactory`, `SSE`, `Expiry`, or `Plugins` are needed.
@@ -279,3 +312,5 @@ See [`docs/adr/`](./docs/adr/) for recorded decisions. Notable:
 - [ADR-0007: Embedded outbound route control](./docs/adr/0007-embedded-outbound-route-control.md) — an embedding host omits Wappa's raw outbound mutation routes without losing media, read, or service routes
 - [ADR-0008: Redis hash boolean encoding](./docs/adr/0008-redis-hash-boolean-encoding.md) — `"1"`/`"0"` is a compatibility contract, not an implementation detail
 - [ADR-0009: Route capability groups](./docs/adr/0009-route-capability-groups.md) — "mutation" means every route that sends, deletes, or rewrites state, not only sends
+- [ADR-0010: Authenticated, payload-routed WhatsApp webhook](./docs/adr/0010-payload-routed-whatsapp-webhook.md) — one callback, raw-body HMAC, qualified routing, WABA membership, all-or-nothing admission
+- [ADR-0011: Encrypted Inbox Directory](./docs/adr/0011-encrypted-inbox-directory.md) — Wappa-owned directory on Table Cache under the System Scope, Host-owned schema through one source, encrypted records, TTL and version rules

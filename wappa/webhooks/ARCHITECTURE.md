@@ -5,8 +5,8 @@
 - Parse and validate raw HTTP payloads from messaging platforms into typed Pydantic models.
 - Produce `UniversalWebhook` instances (`InboundMessageWebhook`, `CallWebhook`,
   `StatusWebhook`, `ErrorWebhook`, `SystemWebhook`, `CustomWebhook`) for downstream dispatch.
-- Validate the platform payload's inbox identifier against the URL `inbox_id` when
-  the platform provides one.
+- Validate provider schemas after the API boundary has split a batch and derived
+  its Inbox from the payload.
 - Own every inbound webhook Pydantic schema, including platform payload schemas
   and Universal Model forms.
 - Gate unknown Meta `change.field` values against a runtime registry; reject unregistered fields.

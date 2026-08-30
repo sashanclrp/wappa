@@ -258,7 +258,9 @@ builder.add_plugin(SSEEventsPlugin())
 
 ## Future work
 
-A full **Domain Event Bus** (where SSE, pub/sub, and app caches become *subscribers* of typed domain events rather than middleware in the send path) is tracked in `backlog/260420-messenger-middleware-domain-event-bus.md`. It is **not** planned for the next release — the bus has value only once there are multiple observers of the same event, which the current middleware surface already handles adequately.
+A full **Domain Event Bus** (where SSE, pub/sub, and app caches become *subscribers* of typed domain events rather than middleware in the send path) is **deferred**, not planned. The bus has value only once several observers watch the same event, which the current middleware surface already handles adequately; it will be reconsidered when at least five observers of one event exist in production, or when cross-event subscriber composition becomes necessary.
+
+Its original backlog entry was deleted when the idea was deferred — per [`docs/backlog/README.md`](../../../../docs/backlog/README.md), git history is the archive. Recover it with `git log --diff-filter=D -- '*messenger-middleware-domain-event-bus*'`.
 
 ## Related docs
 

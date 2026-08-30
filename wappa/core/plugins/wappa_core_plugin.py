@@ -51,6 +51,7 @@ class WappaCorePlugin:
         # Higher priority numbers run closer to routes (inner middleware).
         # RequestIdMiddleware is outermost so the correlation ID exists for
         # every downstream middleware, route, log line, and error response.
+        builder.with_persistence_backend(self.cache_type.value)
         builder.add_middleware(InboxMiddleware, priority=90)
         builder.add_middleware(ErrorHandlerMiddleware, priority=80)
         builder.add_middleware(RequestLoggingMiddleware, priority=70)
@@ -90,7 +91,26 @@ class WappaCorePlugin:
 
             logger.info("🚀 Starting Wappa Framework v%s", settings.version)
             logger.info("📊 Environment: %s", settings.environment)
-            logger.info("📥 Inbox ID: %s", settings.inbox_id)
+            inbox_runtime = getattr(app.state, "inbox_runtime", None)
+            if inbox_runtime is None:
+                raise RuntimeError(
+                    "app.state.inbox_runtime is not set — build the application "
+                    "through Wappa or WappaBuilder so an Inbox Routing Mode is "
+                    "assembled before startup"
+                )
+            logger.info("📥 Inbox routing mode: %s", inbox_runtime.mode.value)
+            if inbox_runtime.default_inbox_ref is not None:
+                logger.info(
+                    "📥 Legacy default Inbox: %s",
+                    inbox_runtime.default_inbox_ref.inbox_id,
+                )
+            else:
+                logger.info("📥 Inbox Directory: configured (explicit mode)")
+            meta_config = getattr(app.state, "meta_application_config", None)
+            logger.info(
+                "🔐 Meta callback authentication: %s",
+                "configured" if meta_config is not None else "not mounted",
+            )
             logger.info("📝 Log level: %s", settings.log_level)
             logger.info("💾 Cache type: %s", self.cache_type.value)
 
@@ -128,7 +148,7 @@ class WappaCorePlugin:
                 logger.info("📖 API docs disabled in production")
             logger.info("============================")
 
-            await self._display_webhook_urls(logger, base_url)
+            await self._display_webhook_urls(app, logger, base_url)
 
             logger.info("✅ Wappa core startup completed successfully")
 
@@ -197,18 +217,22 @@ class WappaCorePlugin:
             )
         await self._session_lifecycle.recreate()
 
-    async def _display_webhook_urls(self, logger: ContextLogger, base_url: str) -> None:
+    async def _display_webhook_urls(
+        self, app: FastAPI, logger: ContextLogger, base_url: str
+    ) -> None:
         try:
             # Imported here to avoid circular imports during startup
             from ..events.webhook_factory import webhook_url_factory
 
-            whatsapp_webhook_url = webhook_url_factory.generate_whatsapp_webhook_url()
-
             logger.info("=== WHATSAPP WEBHOOK URL ===")
-            logger.info("📍 Primary Webhook URL: %s", whatsapp_webhook_url)
-            logger.info("   • Use this single URL in WhatsApp Business settings")
+            logger.info(
+                "📍 WhatsApp Webhook URL: %s",
+                webhook_url_factory.generate_whatsapp_webhook_url(),
+            )
+            logger.info("   • Configure this one URL in the Meta App")
+            logger.info("   • POST bodies are authenticated with META_APP_SECRET")
+            logger.info("   • POST routing uses metadata.phone_number_id or WABA scope")
             logger.info("   • Handles both verification (GET) and webhooks (POST)")
-            logger.info("   • Auto-configured with your WP_PHONE_ID from .env")
             logger.info("=============================")
             logger.info("")
 

@@ -48,7 +48,7 @@ uv run wappa --help
 
 ## Security & Configuration Tips
 - Never commit secrets. Use `.env` (see `wappa/core/config/settings.py`).
-- Example vars (from docs/examples): `WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID`.
+- Example vars (from docs/examples): `META_APP_SECRET`, `WP_WEBHOOK_VERIFY_TOKEN`, and in legacy mode `WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID`; explicit mode uses `SYSTEM_TOKEN_ENC_KEY` instead of the `WP_*` bundle.
 - Validate inputs at boundaries (API routes, webhook parsing) and log safely.
 
 ## Architecture Notes
@@ -57,7 +57,7 @@ uv run wappa --help
 
 ## DDD Grounding Workflow
 
-Wappa is a provider-facing messaging runtime, not a business-tenancy system. Every non-trivial code, schema, architecture, public contract, or documentation change must start by grounding the work in the repository language:
+Wappa is a Platform-facing messaging runtime, not a business-tenancy system. Every non-trivial code, schema, architecture, public contract, or documentation change must start by grounding the work in the repository language:
 
 1. Read root `CONTEXT.md` for Wappa's canonical domain language. If it does not exist yet, treat the current task as documentation bootstrap and create it before making broad terminology changes.
 2. Read `CONTEXT-MAP.md` if present to locate the target context. If absent, assume Wappa is a single-context repo until a real second context exists.
@@ -79,20 +79,24 @@ New work must leave the documentation graph consistent. If a change introduces o
 
 Use these Wappa architectural defaults unless an ADR says otherwise:
 
-- Wappa's core runtime identity is **Inbox**. Use `inbox_id` for the stable provider-facing ingress/egress identity.
+- Wappa's core runtime identity is **Inbox**. Use `InboxRef(platform, inbox_id)` when identity crosses Platform boundaries; keep raw `inbox_id` inside a known Platform boundary. Platform Accounts follow the same rule through `PlatformAccountRef`.
+- Inbox credentials have exactly two authorities, selected by `InboxRoutingMode` (`legacy` or `explicit`); never add an `auto` mode or a precedence rule. Only `wappa/core/factory/inbox_assembly.py` reads `WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID`, and `SYSTEM_TOKEN_ENC_KEY`.
+- The Inbox Directory is Wappa-owned. Hosts adapt through `IInboxDirectorySource` only; they never write directory rows, build envelopes, or decrypt them.
+- Meta POST callbacks are authenticated with `META_APP_SECRET` against the exact body bytes before anything else; `WP_WEBHOOK_VERIFY_TOKEN` is only the GET challenge value. Never add a development bypass.
+- Table Cache is the only cache family with a general `context_id` (System Scope, Host-defined scope, or Inbox namespace). Every other cache family keeps `inbox_id`.
 - For WhatsApp, `inbox_id` maps to Meta `phone_number_id`. Keep that mapping explicit inside the WhatsApp adapter; do not let `phone_number_id` become generic Wappa vocabulary.
-- Use **Provider** for an external messaging platform such as WhatsApp. Use **Provider Account** for provider-side account metadata such as WABA ID.
+- Use **Platform** for an external messaging platform such as WhatsApp. Use **Platform Account** for Platform-side account metadata such as WABA ID.
 - Do not use `tenant`, `tenant_id`, or `multi-tenant` as Wappa runtime language. Wappa may carry optional host metadata, but it does not define business tenancy, Owner, or Channel.
-- Host applications own business language and business invariants. Wappa owns provider webhook intake, message sending, event dispatch, runtime cache scoping, and public contract stability.
-- API route modules adapt HTTP to Wappa modules; they should not own provider parsing, credential lookup, cache namespace rules, or dispatch policy.
-- Provider adapters own SDK/client construction, credentials, request/response translation, provider errors, and provider-specific identity mapping.
-- Cache, SSE, expiry, and event modules must scope runtime data by `inbox_id` where provider-facing identity is required.
+- Host applications own business language and business invariants. Wappa owns Platform webhook intake, message sending, event dispatch, runtime cache scoping, and public contract stability.
+- API route modules adapt HTTP to Wappa modules; they should not own Platform parsing, credential lookup, cache namespace rules, or dispatch policy.
+- Platform adapters own SDK/client construction, credentials, request/response translation, Platform errors, and Platform-specific identity mapping.
+- Cache, SSE, expiry, and event modules use Inbox Reference when identity can cross Platforms. A Platform adapter may use raw `inbox_id` inside its known Platform boundary.
 - Prefer deep modules: keep interfaces small and place behavior behind them for leverage and locality. Avoid pass-through modules that fail the deletion test.
 - Treat the public import surface, CLI templates, webhook routes, event envelopes, cache namespace shape, and generated examples as Wappa's public contract.
 
 ## Commit Rules
 
-- Keep commits scoped by Wappa area: runtime, provider adapter, API contract, persistence, CLI/templates, docs, or tests.
+- Keep commits scoped by Wappa area: runtime, Platform adapter, API contract, persistence, CLI/templates, docs, or tests.
 - Use the repository commit format:
   `[ACTION] [SCOPE] Short description`
 - Preferred workflow for generated or local-only artifacts: leave them untracked, visible in `git status`, and do not `git add` them unless the task explicitly requires committing generated artifacts.

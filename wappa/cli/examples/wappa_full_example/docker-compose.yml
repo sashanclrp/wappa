@@ -51,27 +51,30 @@ services:
       - "8000:8000"
     environment:
       # Production environment variables
-      ENVIRONMENT: PROD
-      LOG_LEVEL: INFO
+      SYSTEM_ENVIRONMENT: PROD
+      SYSTEM_LOG_LEVEL: INFO
       PORT: 8000
       
       # Redis configuration
       REDIS_URL: redis://redis:6379/
       REDIS_MAX_CONNECTIONS: 64
       
-      # WhatsApp API credentials (from .env file)
+      # Meta Application Configuration (required with the callback)
+      META_APP_SECRET: ${META_APP_SECRET}
+      WP_WEBHOOK_VERIFY_TOKEN: ${WP_WEBHOOK_VERIFY_TOKEN}
+
+      # Legacy single-Inbox bundle (from .env file)
       WP_ACCESS_TOKEN: ${WP_ACCESS_TOKEN}
       WP_PHONE_ID: ${WP_PHONE_ID}
       WP_BID: ${WP_BID}
-      WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${WHATSAPP_WEBHOOK_VERIFY_TOKEN}
       
       # Optional AI tools
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       
       # Framework configuration
-      BASE_URL: https://graph.facebook.com/
-      API_VERSION: v26.0
-      TIME_ZONE: America/Bogota
+      META_BASE_URL: https://graph.facebook.com/
+      META_API_VERSION: v26.0
+      SYSTEM_TIME_ZONE: America/Bogota
     volumes:
       # Persistent logs
       - app_logs:/app/logs

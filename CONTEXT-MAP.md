@@ -6,10 +6,10 @@ Wappa is a multi-context library. Each bounded context owns its own language, in
 
 | Context | Path | CONTEXT.md | ARCHITECTURE.md | Responsibility |
 |---------|------|------------|-----------------|----------------|
-| **Root (Shared Kernel)** | `/` | [`CONTEXT.md`](./CONTEXT.md) | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Cross-cutting terms, message flow overview, design patterns |
+| **Root (Shared Kernel)** | `/` | [`CONTEXT.md`](./CONTEXT.md) | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Cross-cutting terms, message flow overview, design patterns; owns the qualified identities `InboxRef` / `PlatformAccountRef`, `InboxRoutingMode`, and the Wappa-owned Inbox Directory |
 | **Webhooks** | `wappa/webhooks/` | [`CONTEXT.md`](./wappa/webhooks/CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/webhooks/ARCHITECTURE.md) | Platform-specific webhook parsing into universal models |
 | **Messaging** | `wappa/messaging/` | [`CONTEXT.md`](./wappa/messaging/CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/messaging/ARCHITECTURE.md) | Platform-specific outbound message construction and delivery |
-| **Persistence** | `wappa/persistence/` | [`CONTEXT.md`](./wappa/persistence/CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/persistence/ARCHITECTURE.md) | Cache backends scoped by inbox and user identity |
+| **Persistence** | `wappa/persistence/` | [`CONTEXT.md`](./wappa/persistence/CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/persistence/ARCHITECTURE.md) | Cache backends scoped by Inbox and user identity; Table Cache alone takes a general `context_id` (System Scope `__system__`, a Host-defined scope, or an Inbox namespace) and hosts the Inbox Directory tables |
 | **SSE / PubSub** | `wappa/core/sse/`, `wappa/core/pubsub/` | [`CONTEXT.md`](./wappa/core/sse/CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/core/sse/ARCHITECTURE.md) | Real-time event streaming and subscriber fan-out |
 | **Expiry** | `wappa/core/expiry/` | [`CONTEXT.md`](./wappa/core/expiry/CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/core/expiry/ARCHITECTURE.md) | Time-based automation via Redis keyspace notifications |
 | **Plugins** | `wappa/core/plugins/` | [`CONTEXT.md`](./wappa/core/plugins/CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/core/plugins/ARCHITECTURE.md) | Composable framework extensions (auth, CORS, rate limiting, Redis, DB) |

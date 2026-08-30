@@ -57,7 +57,7 @@ Both `dev` and `prod` construct the import string as `<module>:<app_var>.asgi` w
 2. List existing files, excluding `pyproject.toml`, `uv.lock`, `README.md`. Prompt to continue if any are found.
 3. Create `app/` and `app/scores/` directories.
 4. Read each template from `cli/templates/` and write it to the corresponding output path.
-5. Print next-step instructions listing the four required environment variables (`WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID`, `WP_WEBHOOK_VERIFY_TOKEN`).
+5. Print next-step instructions listing the required environment variables — the Meta Application Configuration (`META_APP_SECRET`, `WP_WEBHOOK_VERIFY_TOKEN`) and the legacy single-Inbox bundle (`WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID`) — plus the one canonical callback URL, `/webhook/inboxes/whatsapp`.
 
 The scaffolded `app/main.py` imports `Wappa` and calls `app.set_event_handler(MasterEventHandler())`. The Host Application fills in `MasterEventHandler` with business logic.
 

@@ -26,11 +26,13 @@ After deployment, configure these environment variables in Railway Dashboard:
 ### Required Variables
 
 ```bash
-# WhatsApp Business API
+# Meta Application Configuration (required with the callback, no dev bypass)
+META_APP_SECRET=your_meta_app_secret_here
+WP_WEBHOOK_VERIFY_TOKEN=your_verify_token_here
+# Legacy single-Inbox bundle (this example runs legacy mode)
 WP_ACCESS_TOKEN=your_access_token_here
 WP_PHONE_ID=your_phone_number_id_here
 WP_BID=your_business_id_here
-WHATSAPP_WEBHOOK_VERIFY_TOKEN=your_webhook_token_here
 
 # Redis (if using Railway Redis plugin)
 REDIS_URL=redis://redis.railway.internal:6379
@@ -80,7 +82,7 @@ After deployment, configure your WhatsApp webhook:
 
 2. **Set webhook in Facebook Developer Console**:
    ```
-   Webhook URL: https://your-app-name.up.railway.app/webhook/inboxes/YOUR_PHONE_ID/whatsapp
+   Webhook URL: https://your-app-name.up.railway.app/webhook/inboxes/whatsapp
    Verify Token: your_webhook_token_here
    ```
 
@@ -117,10 +119,11 @@ railway up
 
 ```bash
 # Set variables via CLI
+railway variables set META_APP_SECRET=your_meta_app_secret
+railway variables set WP_WEBHOOK_VERIFY_TOKEN=your_verify_token
 railway variables set WP_ACCESS_TOKEN=your_token
 railway variables set WP_PHONE_ID=your_phone_id
 railway variables set WP_BID=your_business_id
-railway variables set WHATSAPP_WEBHOOK_VERIFY_TOKEN=your_webhook_token
 
 # Or use Railway Dashboard for easier management
 ```
@@ -257,10 +260,10 @@ railway variables get REDIS_URL
 railway logs
 
 # Verify webhook URL format:
-# https://your-app.up.railway.app/webhook/inboxes/PHONE_ID/whatsapp
+# https://your-app.up.railway.app/webhook/inboxes/whatsapp
 
 # Test webhook endpoint
-curl -X GET "https://your-app.up.railway.app/webhook/inboxes/YOUR_PHONE_ID/whatsapp?hub.verify_token=YOUR_TOKEN&hub.challenge=test"
+curl -X GET "https://your-app.up.railway.app/webhook/inboxes/whatsapp?hub.verify_token=YOUR_TOKEN&hub.challenge=test"
 ```
 
 ## 💰 Railway Pricing Considerations
@@ -323,10 +326,7 @@ After Railway deployment, use these URLs:
 
 ```bash
 # Platform webhook processing + GET verification URL
-https://your-app.up.railway.app/webhook/inboxes/YOUR_PHONE_ID/whatsapp
-
-# Optional retained verify-only callback URL
-https://your-app.up.railway.app/webhook/messenger/whatsapp/verify
+https://your-app.up.railway.app/webhook/inboxes/whatsapp
 
 # Health check
 https://your-app.up.railway.app/health
@@ -367,3 +367,11 @@ https://your-app.up.railway.app/docs
 Railway provides the easiest path to production for your WhatsApp Business application with automatic scaling, SSL, and global CDN.
 
 **Built with ❤️ using the Wappa Framework**
+
+## Callback cutover and rollback
+
+1. Deploy the version that serves `/webhook/inboxes/whatsapp` with `META_APP_SECRET` configured.
+2. Change the Meta callback URL and complete GET verification.
+3. Send one real message to every active Inbox and confirm the reply comes from the right number.
+
+Rollback is a two-step operation: revert **both** the deployed Wappa version and the Meta callback URL. Reverting only one stops webhook delivery.

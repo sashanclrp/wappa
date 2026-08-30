@@ -16,8 +16,9 @@ from typing import TYPE_CHECKING, Any
 from redis.asyncio import Redis
 
 from wappa.core.config.settings import settings
+from wappa.core.dispatch.context_builder import DispatchContextBuilder
 from wappa.core.logging import get_logger
-from wappa.domain.factories.messenger_factory import MessengerFactory
+from wappa.domain.inbox import InboxRef
 from wappa.persistence.redis.pubsub_subscriber import subscribe
 from wappa.schemas.core.types import PlatformType
 
@@ -27,11 +28,7 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
-async def start_pubsub_listener(
-    session_provider: Any,
-    media_download_client_provider: Any,
-    credential_store: Any,
-) -> None:
+async def start_pubsub_listener(app: Any) -> None:
     """
     Start Redis PubSub subscriber in background with multi-inbox support.
 
@@ -44,8 +41,8 @@ async def start_pubsub_listener(
     - Each inbox uses its own WhatsApp credentials
 
     Args:
-        session_provider: Callable returning httpx.AsyncClient (from SessionLifecycle)
-        credential_store: IInboxCredentialStore for resolving inbox credentials
+        app: The running FastAPI app; Wappa's Dispatch Context builder resolves
+            each Inbox's credentials through the configured Inbox Routing Mode.
     """
     redis = None
     messenger_cache: dict[str, IMessenger] = {}
@@ -53,11 +50,7 @@ async def start_pubsub_listener(
     try:
         logger.info("🔄 Creating messenger factory for multi-inbox subscriber...")
 
-        messenger_factory = MessengerFactory(
-            session_provider=session_provider,
-            media_download_client_provider=media_download_client_provider,
-            credential_store=credential_store,
-        )
+        context_builder = DispatchContextBuilder.from_app(app)
 
         logger.info("✅ Messenger factory ready for multi-inbox support")
         logger.info("🔄 Connecting to Redis for PubSub subscription...")
@@ -74,7 +67,7 @@ async def start_pubsub_listener(
         # Pattern: wappa:notify:*:*:*
         pattern = "wappa:notify:*:*:*"
 
-        logger.info(f"📡 Subscribing to MULTI-TENANT pattern: {pattern}")
+        logger.info(f"📡 Subscribing to multi-Inbox pattern: {pattern}")
         logger.info("🌐 Will create messengers dynamically per inbox")
 
         # Subscribe and listen for notifications
@@ -95,11 +88,8 @@ async def start_pubsub_listener(
                 if inbox not in messenger_cache:
                     logger.info(f"🔨 Creating new messenger for inbox: {inbox}")
                     try:
-                        messenger_cache[
-                            inbox
-                        ] = await messenger_factory.create_messenger(
-                            platform=PlatformType(platform),
-                            inbox_id=inbox,
+                        messenger_cache[inbox] = await context_builder.messenger(
+                            InboxRef(platform=PlatformType(platform), inbox_id=inbox)
                         )
                         logger.info(f"✅ Messenger created for inbox: {inbox}")
                     except Exception as e:

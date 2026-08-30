@@ -101,7 +101,7 @@ async def redis_ready() -> AsyncIterator[None]:
 async def test_delete_table_removes_rows_under_a_hostile_inbox(
     redis_ready: None,
 ) -> None:
-    table = RedisTable(inbox=HOSTILE)
+    table = RedisTable(HOSTILE)
     try:
         await table.upsert("rows", "a", {"v": 1}, ttl=60)
         await table.upsert("rows", "b", {"v": 2}, ttl=60)
@@ -120,7 +120,7 @@ async def test_delete_table_removes_rows_under_a_hostile_inbox(
 async def test_delete_all_by_pkid_spans_tables_under_a_hostile_inbox(
     redis_ready: None,
 ) -> None:
-    table = RedisTable(inbox=HOSTILE)
+    table = RedisTable(HOSTILE)
     try:
         await table.upsert("t1", "shared[1]", {"v": 1}, ttl=60)
         await table.upsert("t2", "shared[1]", {"v": 2}, ttl=60)

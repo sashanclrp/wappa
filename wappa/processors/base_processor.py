@@ -31,6 +31,10 @@ class ProcessorCapabilities:
         platform: PlatformType,
         supported_message_types: set[MessageType],
         supports_status_updates: bool = True,
+        # Whether the Platform signs its callbacks at all. Wappa verifies
+        # WhatsApp signatures in wappa.core.inbound.MetaCallbackAuthenticator,
+        # before the payload reaches a Processor — Processors are pure
+        # translators and never authenticate.
         supports_signature_validation: bool = True,
         supports_error_webhooks: bool = True,
         max_payload_size: int | None = None,
@@ -99,23 +103,6 @@ class BaseWebhookProcessor(ABC):
         self, payload: dict[str, Any], **kwargs: Any
     ) -> UniversalWebhook:
         """Convert a provider payload to Wappa's universal webhook contract."""
-        pass
-
-    @abstractmethod
-    def validate_webhook_signature(
-        self, payload: bytes, signature: str, **kwargs: Any
-    ) -> bool:
-        """
-        Validate webhook signature for security.
-
-        Args:
-            payload: Raw webhook payload bytes
-            signature: Platform-specific signature header
-            **kwargs: Additional validation parameters
-
-        Returns:
-            True if signature is valid, False otherwise
-        """
         pass
 
     @abstractmethod

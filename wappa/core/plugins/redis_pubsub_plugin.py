@@ -58,10 +58,10 @@ class RedisPubSubPlugin:
 
     Subscription Examples:
         # All events for a user
-        PSUBSCRIBE wappa:notify:mimeia:5511999887766:*
+        PSUBSCRIBE wappa:notify:15551234567890:5511999887766:*
 
         # All bot replies for an inbox
-        PSUBSCRIBE wappa:notify:mimeia:*:bot_reply
+        PSUBSCRIBE wappa:notify:15551234567890:*:bot_reply
     """
 
     def __init__(

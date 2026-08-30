@@ -16,6 +16,7 @@ from ....domain.interfaces.cache_interfaces import (
     TableTransitionResult,
 )
 from ...row_conditions import require_full_row, row_predicate
+from ...scope import resolve_table_context_id
 from ..storage_manager import storage_manager
 from .utils.key_factory import default_key_factory
 
@@ -30,22 +31,23 @@ class JSONTable(ITableCache):
     Maintains the same API for seamless cache backend switching.
     """
 
-    def __init__(self, inbox: str):
+    def __init__(self, context_id: str | None = None, **renamed: object):
         """
         Initialize JSON table handler.
 
         Args:
-            inbox: Inbox identifier
+            context_id: Table Cache Scope — the reserved System Scope, a
+                Host-defined business scope, or an Inbox namespace.
+            **renamed: Traps the pre-v0.27 ``inbox_id=`` / ``inbox=`` keywords
+                so they fail with migration guidance instead of an opaque
+                "unexpected keyword argument".
         """
-        if not inbox:
-            raise ValueError(f"Missing required parameter: inbox={inbox}")
-
-        self.inbox = inbox
+        self.context_id = resolve_table_context_id(context_id, **renamed)
         self.keys = default_key_factory
 
     def _key(self, table_name: str, pkid: str) -> str:
         """Build table key using KeyFactory (same as Redis)."""
-        return self.keys.table(self.inbox, table_name, pkid)
+        return self.keys.table(self.context_id, table_name, pkid)
 
     # ---- Public API matching RedisTable ----
     async def get(
@@ -68,7 +70,7 @@ class JSONTable(ITableCache):
         key = self._key(table_name, pkid)
         return cast(
             dict[str, Any] | None,
-            await storage_manager.get("tables", self.inbox, None, key, models),
+            await storage_manager.get("tables", self.context_id, None, key, models),
         )
 
     async def upsert(
@@ -91,7 +93,9 @@ class JSONTable(ITableCache):
             True if successful, False otherwise
         """
         key = self._key(table_name, pkid)
-        return await storage_manager.set("tables", self.inbox, None, key, data, ttl)
+        return await storage_manager.set(
+            "tables", self.context_id, None, key, data, ttl
+        )
 
     async def create_if_absent(
         self,
@@ -103,7 +107,7 @@ class JSONTable(ITableCache):
         """Create a row only when absent, under the cache file's lock."""
         created, existing = await storage_manager.create_if_absent(
             "tables",
-            self.inbox,
+            self.context_id,
             None,
             self._key(table_name, pkid),
             require_full_row(data),
@@ -125,7 +129,7 @@ class JSONTable(ITableCache):
         matches = row_predicate(expected)
         outcome, current = await storage_manager.replace_if(
             "tables",
-            self.inbox,
+            self.context_id,
             None,
             self._key(table_name, pkid),
             require_full_row(data),
@@ -150,7 +154,7 @@ class JSONTable(ITableCache):
             1 if deleted, 0 if didn't exist
         """
         key = self._key(table_name, pkid)
-        success = await storage_manager.delete("tables", self.inbox, None, key)
+        success = await storage_manager.delete("tables", self.context_id, None, key)
         return 1 if success else 0
 
     async def exists(self, table_name: str, pkid: str) -> bool:
@@ -165,7 +169,7 @@ class JSONTable(ITableCache):
             True if exists, False otherwise
         """
         key = self._key(table_name, pkid)
-        return await storage_manager.exists("tables", self.inbox, None, key)
+        return await storage_manager.exists("tables", self.context_id, None, key)
 
     async def get_field(self, table_name: str, pkid: str, field: str) -> Any | None:
         """
@@ -309,7 +313,7 @@ class JSONTable(ITableCache):
         Returns:
             Remaining TTL in seconds, -1 if no expiry, -2 if doesn't exist
         """
-        return await storage_manager.get_ttl("tables", self.inbox, None)
+        return await storage_manager.get_ttl("tables", self.context_id, None)
 
     async def renew_ttl(self, table_name: str, pkid: str, ttl: int) -> bool:
         """
@@ -323,7 +327,7 @@ class JSONTable(ITableCache):
         Returns:
             True if successful, False otherwise
         """
-        return await storage_manager.set_ttl("tables", self.inbox, None, ttl)
+        return await storage_manager.set_ttl("tables", self.context_id, None, ttl)
 
     async def get_all(
         self,
@@ -341,10 +345,12 @@ class JSONTable(ITableCache):
             List of table row data dictionaries
         """
         results: list[dict[str, Any]] = []
-        key_prefix = self.keys.table(self.inbox, table_name, "")
+        key_prefix = self.keys.table(self.context_id, table_name, "")
 
         try:
-            all_keys = await storage_manager.get_all_keys("tables", self.inbox, None)
+            all_keys = await storage_manager.get_all_keys(
+                "tables", self.context_id, None
+            )
 
             for key, value in all_keys.items():
                 if key.startswith(key_prefix):
@@ -370,11 +376,11 @@ class JSONTable(ITableCache):
             raise ValueError("table_name must be non-empty")
 
         deleted = 0
-        key_prefix = self.keys.table(self.inbox, table_name, "")
-        all_keys = await storage_manager.get_all_keys("tables", self.inbox, None)
+        key_prefix = self.keys.table(self.context_id, table_name, "")
+        all_keys = await storage_manager.get_all_keys("tables", self.context_id, None)
         for key in all_keys:
             if key.startswith(key_prefix) and await storage_manager.delete(
-                "tables", self.inbox, None, key
+                "tables", self.context_id, None, key
             ):
                 deleted += 1
         return deleted
@@ -384,8 +390,8 @@ class JSONTable(ITableCache):
         if not table_name:
             raise ValueError("table_name must be non-empty")
 
-        key_prefix = self.keys.table(self.inbox, table_name, "")
-        all_keys = await storage_manager.get_all_keys("tables", self.inbox, None)
+        key_prefix = self.keys.table(self.context_id, table_name, "")
+        all_keys = await storage_manager.get_all_keys("tables", self.context_id, None)
         return sorted(
             key.removeprefix(key_prefix)
             for key in all_keys

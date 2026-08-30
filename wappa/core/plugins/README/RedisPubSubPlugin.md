@@ -74,12 +74,12 @@ RedisPubSubPlugin(
 All notifications are published to channels following this pattern:
 
 ```
-wappa:notify:{tenant}:{user_id}:{event_type}
+wappa:notify:{inbox}:{user_id}:{event_type}
 ```
 
 | Segment | Description | Example |
 |---|---|---|
-| `tenant` | Tenant key from webhook context | `mimeia` |
+| `inbox` | Inbox cache namespace — the raw `inbox_id` for WhatsApp (Meta `phone_number_id`), `<platform>__<id>` for any other Platform | `15551234567890` |
 | `user_id` | WhatsApp phone number or user identifier | `5511999887766` |
 | `event_type` | One of the four event types below | `incoming_message` |
 
@@ -132,15 +132,15 @@ The legacy `PubSubMessengerWrapper` import was removed in the clean-break compat
 
 ```bash
 # All events for a specific user
-redis-cli PSUBSCRIBE "wappa:notify:mimeia:5511999887766:*"
+redis-cli PSUBSCRIBE "wappa:notify:15551234567890:5511999887766:*"
 
-# All incoming messages for a tenant
-redis-cli PSUBSCRIBE "wappa:notify:mimeia:*:incoming_message"
+# All incoming messages for one Inbox
+redis-cli PSUBSCRIBE "wappa:notify:15551234567890:*:incoming_message"
 
-# All bot replies for a tenant
-redis-cli PSUBSCRIBE "wappa:notify:mimeia:*:bot_reply"
+# All bot replies for one Inbox
+redis-cli PSUBSCRIBE "wappa:notify:15551234567890:*:bot_reply"
 
-# All status changes across all tenants
+# All status changes across every Inbox
 redis-cli PSUBSCRIBE "wappa:notify:*:*:status_change"
 
 # Everything
@@ -155,7 +155,7 @@ import redis.asyncio as redis
 r = redis.from_url("redis://localhost:6379")
 pubsub = r.pubsub()
 
-await pubsub.psubscribe("wappa:notify:mimeia:*:incoming_message")
+await pubsub.psubscribe("wappa:notify:15551234567890:*:incoming_message")
 
 async for message in pubsub.listen():
     if message["type"] == "pmessage":
@@ -173,11 +173,11 @@ plugin = RedisPubSubPlugin()
 
 # Specific user, all events
 pattern = plugin.get_channel_pattern("mimeia", "5511999887766")
-# -> "wappa:notify:mimeia:5511999887766:*"
+# -> "wappa:notify:15551234567890:5511999887766:*"
 
 # All users, specific event
 pattern = plugin.get_channel_pattern("mimeia", event_type="bot_reply")
-# -> "wappa:notify:mimeia:*:bot_reply"
+# -> "wappa:notify:15551234567890:*:bot_reply"
 ```
 
 ## Dependencies

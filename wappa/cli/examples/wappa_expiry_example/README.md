@@ -101,9 +101,11 @@ wappa_expiry_example/
 
 2. **Environment variables** in `.env`:
    ```env
-   WHATSAPP_TOKEN=your_whatsapp_token
-   WHATSAPP_PHONE_ID=your_phone_id
-   WHATSAPP_BUSINESS_ID=your_business_id
+   META_APP_SECRET=your_meta_app_secret
+   WP_WEBHOOK_VERIFY_TOKEN=your_verify_token
+   WP_ACCESS_TOKEN=your_whatsapp_access_token
+   WP_PHONE_ID=your_phone_id
+   WP_BID=your_business_id
    REDIS_URL=redis://localhost:6379
    ```
 
@@ -310,10 +312,10 @@ Look for these log messages:
 
 ## 📚 Further Reading
 
-- [ExpiryActions System Documentation](../../core/expiry/README.md)
+- [Expiry context architecture](https://github.com/sashanclrp/wappa/blob/main/wappa/core/expiry/ARCHITECTURE.md)
 - [Redis KEYSPACE Notifications](https://redis.io/docs/manual/keyspace-notifications/)
-- [Wappa Plugin System](../../core/plugins/README.md)
-- [Cache Factory Pattern](../../persistence/cache_factory.py)
+- [ExpiryPlugin reference](https://github.com/sashanclrp/wappa/blob/main/wappa/core/plugins/README/ExpiryPlugin.md)
+- [Cache factory pattern](https://github.com/sashanclrp/wappa/blob/main/wappa/persistence/cache_factory.py)
 
 ## 🙏 Credits
 

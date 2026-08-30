@@ -93,7 +93,7 @@ Hooks and middleware use a numeric priority to control execution order:
 
 | Priority | Middleware | Plugin |
 |---|---|---|
-| 90 | OwnerMiddleware, CORSMiddleware | WappaCorePlugin, CORSPlugin |
+| 90 | InboxMiddleware, CORSMiddleware | WappaCorePlugin, CORSPlugin |
 | 85 | SecurityHeaders | CustomMiddlewarePlugin |
 | 80 | ErrorHandlerMiddleware | WappaCorePlugin |
 | 70 | RequestLoggingMiddleware, RateLimiter | WappaCorePlugin, RateLimitPlugin |
@@ -101,7 +101,7 @@ Hooks and middleware use a numeric priority to control execution order:
 | 50 | Custom middleware (default) | CustomMiddlewarePlugin |
 
 ```
-Request --> Owner(90) --> ErrorHandler(80) --> RequestLogging(70) --> Auth(60) --> Route
+Request --> Inbox(90) --> ErrorHandler(80) --> RequestLogging(70) --> Auth(60) --> Route
 ```
 
 ### Messenger Middleware Priority (higher = outer/earlier)

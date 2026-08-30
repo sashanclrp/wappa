@@ -61,7 +61,8 @@ class _FakeStateCache:
 class _RecordingCacheFactory:
     """Minimal ICacheFactory that records the user_id used per create_*_cache call."""
 
-    def __init__(self):
+    def __init__(self, inbox_id: str = "inbox-1"):
+        self.inbox_id = inbox_id
         self.store: dict[tuple[str, str], dict[str, Any]] = {}
         self.observed_user_ids: list[str] = []
 
@@ -74,8 +75,15 @@ class _RecordingCacheFactory:
 class _PrefixResolver(IIdentityResolver):
     """Test resolver that maps any recipient to ``CO.<recipient>``."""
 
-    async def resolve(self, recipient: str) -> str:
+    async def resolve(self, recipient: str, *, inbox_id: str) -> str:
         return f"CO.{recipient}"
+
+
+class _InboxAwareResolver(IIdentityResolver):
+    """Resolve one recipient independently inside each Inbox."""
+
+    async def resolve(self, recipient: str, *, inbox_id: str) -> str:
+        return f"{inbox_id}:{recipient}"
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +116,33 @@ async def test_handler_state_custom_resolver_keys_under_canonical_id():
     # Cache must be keyed under the resolver's canonical id, not the phone.
     assert factory.observed_user_ids == ["CO.573168227670"]
     assert ("CO.573168227670", "api-handler-flow_a") in factory.store
+
+
+@pytest.mark.asyncio
+async def test_same_recipient_resolves_independently_across_inboxes():
+    inbox_a_factory = _RecordingCacheFactory(inbox_id="inbox-a")
+    inbox_b_factory = _RecordingCacheFactory(inbox_id="inbox-b")
+    resolver = _InboxAwareResolver()
+
+    await HandlerStateService(
+        inbox_a_factory,
+        identity_resolver=resolver,
+    ).set_handler_state(
+        recipient="573168227670",
+        handler_value="flow_a",
+        ttl_seconds=60,
+    )
+    await HandlerStateService(
+        inbox_b_factory,
+        identity_resolver=resolver,
+    ).set_handler_state(
+        recipient="573168227670",
+        handler_value="flow_a",
+        ttl_seconds=60,
+    )
+
+    assert inbox_a_factory.observed_user_ids == ["inbox-a:573168227670"]
+    assert inbox_b_factory.observed_user_ids == ["inbox-b:573168227670"]
 
 
 @pytest.mark.asyncio
@@ -209,6 +244,7 @@ async def test_resolve_event_user_id_explicit_wins():
         recipient="573168227670",
         explicit_user_id="CO.EXPLICIT",
         fastapi_request=None,
+        inbox_id="inbox-1",
     )
     assert user_id == "CO.EXPLICIT"
 
@@ -227,6 +263,7 @@ async def test_resolve_event_user_id_uses_app_state_resolver():
         recipient="573168227670",
         explicit_user_id=None,
         fastapi_request=fake_request,
+        inbox_id="inbox-1",
     )
     assert user_id == "CO.573168227670"
 
@@ -243,8 +280,22 @@ async def test_resolve_event_user_id_default_is_recipient():
         recipient="573168227670",
         explicit_user_id=None,
         fastapi_request=fake_request,
+        inbox_id="inbox-1",
     )
     assert user_id == "573168227670"
+
+
+@pytest.mark.asyncio
+async def test_resolve_event_user_id_rejects_empty_inbox():
+    from wappa.api.utils.event_decorators import resolve_event_user_id
+
+    with pytest.raises(ValueError, match="non-empty inbox_id"):
+        await resolve_event_user_id(
+            recipient="573168227670",
+            explicit_user_id=None,
+            fastapi_request=None,
+            inbox_id="",
+        )
 
 
 # ---------------------------------------------------------------------------

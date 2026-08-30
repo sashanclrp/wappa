@@ -398,6 +398,7 @@ async def test_route_layer_labels_events_from_the_payload_it_received(
 ) -> None:
     """The decorator no longer restates a family the payload already carries."""
     from wappa.api.utils.event_decorators import dispatch_message_event
+    from wappa.core.logging.context import clear_request_context, set_request_context
     from wappa.messaging.whatsapp.models.basic_models import MessageResult
 
     labels: list[str] = []
@@ -429,9 +430,13 @@ async def test_route_layer_labels_events_from_the_payload_it_received(
             success=True, message_id="wamid.1", platform="whatsapp", recipient=RECIPIENT
         )
 
-    await send(request=payload, fastapi_request=Req(), api_dispatcher=Dispatcher())
-    for coro in pending:
-        await coro  # type: ignore[misc]
+    set_request_context(inbox_id="inbox-test")
+    try:
+        await send(request=payload, fastapi_request=Req(), api_dispatcher=Dispatcher())
+        for coro in pending:
+            await coro  # type: ignore[misc]
+    finally:
+        clear_request_context()
 
     assert labels == [expected_label]
 

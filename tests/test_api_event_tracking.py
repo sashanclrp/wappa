@@ -6,7 +6,15 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from wappa.core.lifecycle import BackgroundWorkTracker
+from wappa.core.logging.context import clear_request_context, set_request_context
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
+
+
+@pytest.fixture(autouse=True)
+def _inbox_context():
+    set_request_context(inbox_id="inbox-test")
+    yield
+    clear_request_context()
 
 
 def _fake_app_state(tracker: BackgroundWorkTracker) -> SimpleNamespace:

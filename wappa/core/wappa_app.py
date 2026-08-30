@@ -27,8 +27,10 @@ from .plugins.wappa_core_plugin import WappaCorePlugin
 from .types import CacheType, CacheTypeOptions, validate_cache_type
 
 if TYPE_CHECKING:
+    from wappa.core.config.meta_application import MetaApplicationConfig
+    from wappa.domain.inbox.ports import IInboxDirectorySource
+    from wappa.domain.inbox.routing import InboxRoutingMode
     from wappa.domain.interfaces.identity_resolver import IIdentityResolver
-    from wappa.domain.interfaces.inbox_credential_store import IInboxCredentialStore
     from wappa.webhooks.core.webhook_interfaces import CustomWebhook
 
     from .events import WappaEventHandler
@@ -64,7 +66,9 @@ class Wappa:
         self,
         cache: CacheTypeOptions = "memory",
         config: dict | None = None,
-        inbox_credential_store: "IInboxCredentialStore | None" = None,
+        inbox_directory_source: "IInboxDirectorySource | None" = None,
+        inbox_routing: "InboxRoutingMode | str | None" = None,
+        meta_application_config: "MetaApplicationConfig | None" = None,
         route_profile: str | None = None,
         include_template_transport_api: bool | None = None,
         include_outbound_transport_api: bool | None = None,
@@ -81,8 +85,17 @@ class Wappa:
         Args:
             cache: Cache type ('memory', 'redis', 'json')
             config: Optional configuration overrides for FastAPI app
-            inbox_credential_store: Optional custom credential store for resolving
-                inbox credentials. Defaults to SettingsInboxCredentialStore.
+            inbox_directory_source: The Host's read-only ``IInboxDirectorySource``
+                for explicit multi-Inbox routing. Wappa builds and runs the
+                Inbox Directory over it; the Host never replaces the directory.
+            inbox_routing: ``legacy`` (default) uses the single settings-backed
+                Inbox from ``WP_ACCESS_TOKEN``/``WP_PHONE_ID``/``WP_BID``.
+                ``explicit`` uses the Inbox Directory and rejects those
+                variables. The modes never fall back to one another.
+            meta_application_config: Explicit Meta Application Configuration.
+                Omit it to let Wappa read ``META_APP_SECRET`` and
+                ``WP_WEBHOOK_VERIFY_TOKEN`` from the environment; configuring
+                both is a startup error.
             route_profile: Which HTTP capability groups to mount.
                 "standalone" (default) is the surface a standalone Wappa app
                 has always had. "embedded" omits every route that sends,
@@ -118,8 +131,13 @@ class Wappa:
 
         # Initialize WappaBuilder with core plugin
         self._builder = WappaBuilder()
-        if inbox_credential_store is not None:
-            self._builder.with_inbox_credential_store(inbox_credential_store)
+        self._builder.with_persistence_backend(self.cache_type.value)
+        if inbox_directory_source is not None:
+            self._builder.with_inbox_directory_source(inbox_directory_source)
+        if inbox_routing is not None:
+            self._builder.with_inbox_routing(inbox_routing)
+        if meta_application_config is not None:
+            self._builder.with_meta_application_config(meta_application_config)
         self._core_plugin = WappaCorePlugin(
             cache_type=self.cache_type,
             route_profile=route_profile,
@@ -273,6 +291,7 @@ class Wappa:
         api_dispatcher = APIEventDispatcher(self._event_handler)
         webhook_router = create_webhook_router(webhook_dispatcher)
         self._builder.add_router(webhook_router, public=True)
+        self._builder.mount_whatsapp_callback()
 
         app = self._builder.build()
 
@@ -504,8 +523,8 @@ class Wappa:
         Example::
 
             class CanonicalIdResolver(IIdentityResolver):
-                async def resolve(self, recipient: str) -> str:
-                    return await db.lookup_canonical_id(recipient)
+                async def resolve(self, recipient: str, *, inbox_id: str) -> str:
+                    return await db.lookup_canonical_id(inbox_id, recipient)
 
             app = Wappa()
             app.set_identity_resolver(CanonicalIdResolver())
@@ -517,19 +536,23 @@ class Wappa:
 
         return self
 
-    def set_inbox_credential_store(self, store: "IInboxCredentialStore") -> "Wappa":
-        """
-        Register the credential store used to resolve inbox credentials.
-
-        Convenience wrapper around
-        :meth:`WappaBuilder.with_inbox_credential_store` for apps using the
-        simple ``Wappa(...)`` constructor.
-        """
-        self._builder.with_inbox_credential_store(store)
+    def set_inbox_directory_source(self, source: "IInboxDirectorySource") -> "Wappa":
+        """Register the Host's read-only Inbox Directory source (explicit mode)."""
+        self._builder.with_inbox_directory_source(source)
 
         logger = get_app_logger()
-        logger.debug(f"Inbox credential store set: {store.__class__.__name__}")
+        logger.debug(f"Inbox Directory source set: {source.__class__.__name__}")
 
+        return self
+
+    def set_inbox_routing(self, mode: "InboxRoutingMode | str") -> "Wappa":
+        """Select ``legacy`` or ``explicit`` Inbox routing."""
+        self._builder.with_inbox_routing(mode)
+        return self
+
+    def set_meta_application_config(self, config: "MetaApplicationConfig") -> "Wappa":
+        """Supply the one Meta Application Configuration explicitly."""
+        self._builder.with_meta_application_config(config)
         return self
 
     def configure(self, **overrides: Any) -> "Wappa":

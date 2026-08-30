@@ -120,10 +120,19 @@ class WappaEventDispatcher:
             return result
 
         except Exception as e:
-            self.logger.error(f"Error processing webhook: {e}", exc_info=True)
+            # Name the failure category. A handler that raises an Inbox
+            # Directory error is a different incident from a business-logic
+            # bug, and this frame is the last place that can say which.
+            self.logger.error(
+                "Error processing webhook: %s: %s",
+                type(e).__name__,
+                e,
+                exc_info=True,
+            )
             return {
                 "success": False,
                 "error": str(e),
+                "error_type": type(e).__name__,
                 "processed_at": datetime.now(UTC).isoformat(),
             }
 

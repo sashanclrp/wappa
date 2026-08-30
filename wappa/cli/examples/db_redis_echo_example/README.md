@@ -133,7 +133,7 @@ Individual messages in a conversation.
 - **Interactive messages**: Button/list selection data (selected_id, title, description)
 - **Reaction messages**: Emoji and target message ID
 
-See the [Message Persistence Guide](/.claude/documents/message-persistence-guide.md) for detailed examples and querying patterns.
+See [`app/models/database_models.py`](app/models/database_models.py) for the full schema and [`app/utils/database_utils.py`](app/utils/database_utils.py) for the querying patterns this example uses.
 
 ## Prerequisites
 
@@ -171,6 +171,11 @@ Create a `.env` file in your project root (not in this example directory):
 
 ```env
 # WhatsApp Business API
+# Meta application — required whenever the WhatsApp callback is mounted (no dev bypass)
+META_APP_SECRET=your_meta_app_secret_here
+WP_WEBHOOK_VERIFY_TOKEN=your_verify_token_here
+
+# Legacy single-Inbox credential bundle
 WP_ACCESS_TOKEN=your_token_here
 WP_PHONE_ID=your_phone_id_here
 WP_BID=your_business_id_here

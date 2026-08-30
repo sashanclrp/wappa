@@ -20,6 +20,8 @@ execution_note: >
 
 # Tech Request: Deep Inbound Runtime and Dispatch Context
 
+> Historical implementation record. Its URL-routing statements are superseded by [ADR-0010](../adr/0010-payload-routed-whatsapp-webhook.md). The Inbound Runtime and Dispatch Context work remains current.
+
 ## Why This Matters
 
 Wappa currently has a real inbound runtime, but the code language still hides it inside webhook controller, processor, and request-context terminology.
