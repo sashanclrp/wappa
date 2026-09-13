@@ -8,9 +8,9 @@ Build intelligent WhatsApp bots, workflows, and chat applications with clean arc
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.137+-green.svg)](https://fastapi.tiangolo.com)
 [![WhatsApp Business API](https://img.shields.io/badge/WhatsApp-Business%20API-25D366.svg)](https://developers.facebook.com/docs/whatsapp)
-[![Version](https://img.shields.io/badge/version-0.27.0-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.28.0-orange.svg)](CHANGELOG.md)
 
-> **v0.27.0 — Multi-Inbox hardening** — one authenticated Meta callback for every WhatsApp Inbox under a Meta App, qualified `InboxRef` identity, an encrypted Wappa-owned Inbox Directory for explicit multi-Inbox routing, `legacy`/`explicit` routing modes, and `X-Wappa-Inbox-ID` for Inbox-dependent HTTP operations. See [CHANGELOG.md](CHANGELOG.md) and [the migration guide](docs/migration/v0.27.0-multi-inbox.md).
+> **v0.28.0 — Inbox-independent external webhooks** — external webhooks are ID-less by default and host applications resolve runtime context from trusted request headers, payloads, or middleware state. An opaque optional `webhook_id` remains available for providers that need it. See [CHANGELOG.md](CHANGELOG.md) and [the migration guide](docs/migration/external-webhook-context-resolution.md).
 
 ---
 

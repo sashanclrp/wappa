@@ -15,5 +15,8 @@ Terms specific to the plugin system. Shared kernel terms (`inbox_id`, Host Appli
 | **expiry listener** | A long-running background `asyncio.Task` started by `ExpiryPlugin` that subscribes to Redis keyspace expiry notifications and dispatches expiry actions. |
 | **External Webhook Source** | A non-messaging system that sends webhooks into Wappa, such as MercadoPago, Stripe, Wompi, GitHub, or a CRM. |
 | **processor mode** | The operating mode of `WebhookPlugin` in which an `IWebhookProcessor` handles an External Webhook Source and produces an `ExternalEvent`. |
+| **identified webhook route** | An External Webhook Source callback whose URL ends in an opaque `{webhook_id}` chosen by the Host or sender. |
+| **ID-less webhook route** | The default External Webhook Source callback, mounted directly at the plugin prefix with no routing identifier. |
+| **context resolver strategy** | The optional Host strategy attached to one `WebhookPlugin` that maps an authenticated External Event to a concrete Inbox Reference and optional User. |
 | **PubSub channel** | The Redis channel pattern (`wappa:notify:{inbox_id}:{user_id}:{event_type}`) used by `RedisPubSubPlugin` to broadcast real-time event notifications. |
 | **AuthStrategy** | An abstract strategy object encapsulating a single authentication scheme (Bearer, Basic, JWT, or custom) that `AuthPlugin` passes to `AuthMiddleware`. |

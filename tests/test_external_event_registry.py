@@ -8,7 +8,7 @@ from wappa import ExternalEvent, ExternalEventRegistry
 
 
 def _event(event_type: str, source: str = "mercadopago") -> ExternalEvent:
-    return ExternalEvent(source=source, event_type=event_type, inbox_id="inbox-1")
+    return ExternalEvent(source=source, event_type=event_type)
 
 
 @pytest.mark.asyncio

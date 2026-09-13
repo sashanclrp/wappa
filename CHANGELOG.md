@@ -5,6 +5,18 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0] - 2026-09-13
+
+External webhooks are now Inbox-independent. Their canonical route is `POST /webhook/{app}/{provider}`; `POST /webhook/{app}/{provider}/{webhook_id}` is an explicit opt-in for opaque provider route identifiers, not Inbox identity. Hosts resolve runtime context after authentication and parsing from trusted payload evidence, request headers, or middleware state through `IExternalWebhookContextResolver`.
+
+### Upgrade watch-outs
+
+- **Remove Inbox IDs from external webhook URLs.** Replace `/webhook/{app}/{provider}/{inbox_id}` with the ID-less route. If a provider requires an identifier in its configured URL, use `WebhookPlugin(..., include_webhook_id=True)` and treat it as an opaque `webhook_id`.
+- **Move context resolution into the Host boundary.** Implement `IExternalWebhookContextResolver` when a webhook needs an Inbox or user-scoped capability. It runs only after processor authentication and parsing, and may derive context from verified headers, payload data, or `request.state` set by trusted middleware. It must not infer context from URL construction.
+- **External event payloads changed.** `ExternalWebhookEvent` no longer includes `inbox_id` or `user_id`; it includes only optional `webhook_id`. Handlers receive Inbox, Messenger, User, and Cache capabilities only when the resolver returns a corresponding trusted context.
+
+The decision and design constraints are recorded in [ADR-0012](docs/adr/0012-inbox-independent-external-webhooks.md); host migration steps are in [the migration guide](docs/migration/external-webhook-context-resolution.md).
+
 ## [0.27.0] - 2026-08-30
 
 One Host Application can now run many WhatsApp Inboxes under one Meta App without treating `WP_PHONE_ID`, `WP_BID`, or `WP_ACCESS_TOKEN` as application-wide runtime identity. The Host owns its durable Inbox schema; Wappa owns the canonical credential record, encryption, the system-scoped Inbox Directory, payload routing, WABA membership checks, HTTP Inbox selection, and per-Inbox runtime construction. Every decision below was settled in the [2026-08-29 grilling session](docs/grill-me-sessions/260829_wappa-v0.27.0-multi-inbox-hardening.md) and is recorded in [ADR-0010](docs/adr/0010-payload-routed-whatsapp-webhook.md) and [ADR-0011](docs/adr/0011-encrypted-inbox-directory.md). Host steps are in [docs/migration/v0.27.0-multi-inbox.md](docs/migration/v0.27.0-multi-inbox.md).

@@ -1,65 +1,74 @@
-# External Webhook Runtime — Architecture
+# External Webhook Runtime architecture
 
 ## Responsibilities
 
-- Turn an accepted External Webhook Source request into a context-bound
-  `WappaEventHandler.process_external_event()` dispatch.
-- Keep External Webhook Source processors focused on request validation,
-  signature checks, payload translation, and optional user identity resolution.
-- Validate that the `ExternalEvent.inbox_id` produced by a processor matches the
-  routed Inbox.
-- Build the Dispatch Context in two phases: DB-only for identity lookup, then
-  full Messenger and Cache Factory context when a `user_id` is resolved.
-- Return an internal process result for tests and observability without changing
-  the accepted HTTP delivery contract.
-- Provide the reusable pieces a processor would otherwise re-implement: HMAC
-  signature verification and event-type-to-handler routing.
+- Admit External Webhook Source requests before returning success.
+- Keep processors responsible for provider authentication, request validation,
+  and payload translation.
+- Let a Host strategy resolve optional Inbox context from the authenticated
+  event, headers, database state, or trusted FastAPI request state.
+- Bind a handler with database-only context when the event has no Inbox.
+- Dispatch admitted events through tracked background work.
+- Provide reusable HMAC verification and event-type routing tools.
 
-## Explicit Non-Responsibilities
+## Boundaries
 
-- HTTP route mounting and OpenAPI tags — owned by `WebhookPlugin`.
-- Messaging Platform webhook intake — owned by the Inbound Runtime.
-- External source persistence, retries, and delivery ledgers — owned by Host
-  Applications unless promoted through a separate decision.
-- Business behavior after dispatch — owned by the Host Application's
-  `WappaEventHandler`.
+`WebhookPlugin` owns HTTP routes and response mapping. The External Webhook
+Runtime owns admission and dispatch. Host Applications own business mappings,
+including any relation between an external resource and a Wappa Inbox.
 
-## Module Structure
+Messaging Platform webhook intake remains in the Inbound Runtime. External
+webhook persistence, retries, idempotency, and delivery ledgers remain Host
+responsibilities.
 
+## Admission and dispatch
+
+```text
+request body and optional webhook_id
+  -> processor authenticates and parses
+  -> Wappa writes the route webhook_id onto ExternalEvent
+  -> Host context resolver runs, when configured
+  -> handler gets database-only or Inbox-scoped capabilities
+  -> HTTP 200 {"status": "accepted"}
+  -> tracked background handler dispatch
 ```
-wappa/core/external_webhooks/
-├── __init__.py
-├── runtime.py      # ExternalWebhookRuntime — accepted request → dispatch
-├── signature.py    # HMACSignatureVerifier — generic signed-webhook verification
-└── registry.py     # ExternalEventRegistry — event type → handler routing
-```
 
-`HMACSignatureVerifier` covers the shape shared by most signed webhook
-providers: an HMAC of the raw body under a shared secret, carried in a header,
-optionally algorithm-prefixed, hex or base64 encoded. It is a value object used
-*inside* a processor's `parse_event()`; the runtime never calls it, because only
-the processor knows which secret and header a given source uses. It returns
-booleans rather than raising, so the processor keeps ownership of how a bad
-signature is reported.
+Admission finishes before Wappa acknowledges the sender. A processor or
+resolver may raise `HTTPException` to control an expected HTTP failure. Wappa
+maps validation and contradictory Inbox resolution to 400, unavailable Inbox
+infrastructure to 503, and unexpected admission failures to 500. No background
+work starts after failed admission.
 
-`ExternalEventRegistry` is the routing table a Host Application uses inside
-`process_external_event()` when one source emits many event types. It is
-transport-free by design — no HTTP, no signature checks, no Dispatch Context —
-so it can be unit tested without a request and reused outside the webhook path.
-Dispatch is best-effort per handler: one raising subscriber cannot silence the
-others, and the returned `DispatchReport` carries the failures.
+Handler failures happen after acknowledgment. The background result reports
+`accepted_dispatch` or `dispatch_failure`; it does not change the HTTP response.
 
-`ExternalWebhookRuntime` is the deep module behind `WebhookPlugin`. It owns the
-orchestration that would otherwise leak into every external webhook route:
-processor parse, Inbox mismatch guard, Dispatch Context creation, handler clone,
-and external event dispatch.
+## Identity rules
 
-`ExternalWebhookRuntime.process()` returns `ExternalWebhookProcessResult` with
-one of: `accepted_dispatch`, `inbox_mismatch`, `parse_failure`,
-`unresolved_user`, or `dispatch_failure`. These statuses are internal
-observability signals. `WebhookPlugin` still returns `{"status": "accepted"}`
-once background work is submitted.
+`webhook_id` is an optional opaque route value. Wappa passes it to
+`IWebhookProcessor.parse_event()` and then assigns the route value to
+`ExternalEvent.webhook_id`. A processor cannot replace that value. Webhook ID
+never selects an Inbox and grants no authority.
 
-`clone_request_with_body()` creates a request snapshot for tracked background
-work. The plugin reads the body before accepting the webhook, then passes the
-snapshot to the runtime so processors can still use the normal `Request` API.
+`ExternalEvent` carries no `inbox_id` or `user_id`. Those values belong to the
+Dispatch Context. An `IExternalWebhookContextResolver` returns either:
+
+- `ResolvedExternalWebhookContext(inbox_ref, user_id=None)` for Inbox-scoped
+  dispatch; or
+- `None` for deliberate Inbox-independent dispatch.
+
+The resolution type requires an `InboxRef`, so a resolver cannot return a User
+without an Inbox. Wappa builds a Messenger whenever it receives an Inbox
+resolution and adds a user-scoped Cache Factory when `user_id` is present.
+
+Resolvers run after processor authentication. FastAPI middleware or dependencies
+may put candidate routing evidence on `request.state`, but Wappa does not trust
+that evidence before authentication. Middleware that performs privileged context
+resolution must authenticate the request itself.
+
+## Supporting modules
+
+- `runtime.py` owns admission, context binding, and background dispatch.
+- `signature.py` contains `HMACSignatureVerifier`. Processors decide which
+  secret, canonical input, header, and failure response apply.
+- `registry.py` contains the Host-driven `(source, event_type)` handler registry.
+  Registry dispatch remains transport-free and best-effort per subscriber.

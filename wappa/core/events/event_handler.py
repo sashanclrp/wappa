@@ -133,8 +133,8 @@ class WappaEventHandler(ABC):
 
     def with_context(
         self,
-        inbox_id: str,
-        user_id: str,
+        inbox_id: str | None,
+        user_id: str | None,
         messenger: "IMessenger | None",
         cache_factory: "ICacheFactory | None",
         db: Callable[[], AbstractAsyncContextManager["AsyncSession"]] | None = None,
@@ -149,8 +149,8 @@ class WappaEventHandler(ABC):
         preventing race conditions when concurrent requests are processed.
 
         Args:
-            inbox_id: Inbox identifier for this request
-            user_id: User identifier for this request (sender for webhooks, recipient for API)
+            inbox_id: Inbox identifier for this request, or ``None`` when unscoped
+            user_id: User identifier for this request, or ``None`` when unscoped
             messenger: IMessenger instance for this request's inbox
             cache_factory: Cache factory for this request's context
             db: Optional database write session factory
@@ -480,8 +480,9 @@ class WappaEventHandler(ABC):
         Optional method - override to handle payment notifications, CRM updates,
         subscription events, or any External Webhook Source event.
 
-        When this method is called, self.messenger, self.cache_factory, and self.db
-        are available (when the processor resolved a user_id and plugins are configured).
+        ``self.db`` and ``self.db_read`` are available when configured. An
+        external webhook context resolver may also bind ``self.inbox_id``,
+        ``self.user_id``, ``self.messenger``, and ``self.cache_factory``.
 
         Default: no-op (does nothing unless overridden).
 
@@ -497,7 +498,7 @@ class WappaEventHandler(ABC):
                     if self.messenger:
                         await self.messenger.send_text(
                             text="Payment confirmed!",
-                            recipient=event.user_id,
+                            recipient=self.user_id,
                         )
         """
         _ = event
@@ -507,7 +508,8 @@ class WappaEventHandler(ABC):
         """Pre-processing hook for external events. Override to customize."""
         self.logger.debug(
             f"External event received: {event.source}/{event.event_type} "
-            f"(inbox={event.inbox_id}, user={event.user_id})"
+            f"(webhook_id={event.webhook_id}, inbox={self.inbox_id}, "
+            f"user={self.user_id})"
         )
 
     async def _post_process_external_event(self, event: "ExternalEvent") -> None:

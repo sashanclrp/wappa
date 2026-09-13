@@ -6,6 +6,10 @@ Defines the contracts that infrastructure layer must implement.
 
 from .cache_factory import ICacheFactory
 from .cache_interfaces import IExpiryCache, IStateCache, ITableCache, IUserCache
+from .external_webhook_context import (
+    IExternalWebhookContextResolver,
+    ResolvedExternalWebhookContext,
+)
 from .identity_resolver import IIdentityResolver, PassthroughIdentityResolver
 from .media_interface import IMediaHandler
 from .messaging_interface import IMessenger
@@ -23,6 +27,8 @@ __all__ = [
     # Identity resolution
     "IIdentityResolver",
     "PassthroughIdentityResolver",
+    "IExternalWebhookContextResolver",
+    "ResolvedExternalWebhookContext",
     # Cache interfaces (type-specific - preferred)
     "IExpiryCache",
     "IUserCache",

@@ -34,6 +34,10 @@ from .domain.inbox import (
     InboxRoutingMode,
     PlatformAccountRef,
 )
+from .domain.interfaces.external_webhook_context import (
+    IExternalWebhookContextResolver,
+    ResolvedExternalWebhookContext,
+)
 from .domain.interfaces.identity_resolver import (
     IIdentityResolver,
     PassthroughIdentityResolver,
@@ -65,7 +69,9 @@ __all__ = [
     "ExpiryPlugin",
     # Identity Resolution
     "IIdentityResolver",
+    "IExternalWebhookContextResolver",
     "PassthroughIdentityResolver",
+    "ResolvedExternalWebhookContext",
     # Inbox identity, routing, and directory
     "InboxRef",
     "PlatformAccountRef",

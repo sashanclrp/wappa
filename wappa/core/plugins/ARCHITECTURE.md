@@ -85,7 +85,7 @@ wappa/core/plugins/
 | `SSEEventsPlugin` | Self-contained real-time streaming plugin. Constructs `SSEEventHub` at configure time so the messenger middleware can be registered before the app is built. |
 | `AuthPlugin` | Stateless configure-only plugin. Delegates all auth logic to `AuthStrategy` + `AuthMiddleware`. |
 | `RateLimitPlugin` | Local per-process route limiter. Stores named `RateLimitProfile` policies on `app.state`; route modules opt in with `rate_limit(profile_name)`. |
-| `WebhookPlugin` | Mounts a third-party webhook route, snapshots the request body, and submits accepted work to `BackgroundWorkTracker`. |
+| `WebhookPlugin` | Mounts an ID-less or `{webhook_id}` external callback, admits it synchronously, and submits handler dispatch to `BackgroundWorkTracker`. |
 | `CronPlugin` | Wraps `fastapi-crons` scheduler. Bridges each fired cron into the `WappaEventHandler.process_cron_event()` pipeline. |
 
 ## Plugin Lifecycle
@@ -120,9 +120,11 @@ shutdown hooks reverse priority    ← async; connections closed, state cleaned 
 
 ## External Webhook Source Dispatch
 
-`WebhookPlugin` intentionally stays shallow at the HTTP edge: it mounts the
-route, validates that processor mode has an `inbox_id`, snapshots the request
-body, and submits tracked background work. The deeper dispatch behavior lives in
+`WebhookPlugin` stays at the HTTP edge. It mounts an ID-less route by default or
+an optional dynamic `{webhook_id}` route, snapshots the request, maps admission
+errors to HTTP responses, and submits only admitted handler work. Each plugin may
+provide an `IExternalWebhookContextResolver`; there is no application-wide route
+mode and Webhook ID never selects an Inbox. The deeper behavior lives in
 [`wappa/core/external_webhooks/ARCHITECTURE.md`](../external_webhooks/ARCHITECTURE.md).
 
 ## Route-Level Rate Limiting

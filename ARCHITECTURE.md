@@ -2,7 +2,7 @@
 
 ## What Wappa Is
 
-Wappa is a messaging runtime framework. It receives platform webhooks, parses them into universal models, dispatches events to user-defined handlers, and provides outbound messaging — all scoped by Inbox identity.
+Wappa is a messaging runtime framework. It receives Platform webhooks, parses them into Universal Models, dispatches events to user-defined handlers, and provides outbound messaging. Messaging work is scoped by Inbox identity. External Webhook Source events are Inbox-independent unless a Host resolver associates one with an Inbox.
 
 Today Wappa is **WhatsApp-opinionated**: the WhatsApp adapter is the only fully implemented platform. But the abstractions and design patterns are built for multi-platform: adding Telegram, Instagram, or Teams requires implementing platform-specific adapters without changing core dispatch, persistence, or event handler contracts.
 
@@ -16,7 +16,7 @@ Today Wappa is **WhatsApp-opinionated**: the WhatsApp adapter is the only fully 
 | **Builder** | `WappaBuilder` | Assemble complex application configurations step-by-step with plugin composition |
 | **Plugin** | `WappaPlugin`, `WappaBuilder.with_*()` | Open/Closed principle — extend framework behavior without modifying core |
 | **Pipeline (Middleware)** | `MessengerPipeline` | Composable outbound message middleware (SSE lifecycle, PubSub notification) wrapping the messenger |
-| **Strategy** | `IInboxCredentialResolver` (internal), `IIdentityResolver`, `ICacheFactory` backends | Swap the credential authority (legacy settings vs. Inbox Directory), Inbox-aware identity, and persistence implementations without changing callers |
+| **Strategy** | `IInboxCredentialResolver` (internal), `IIdentityResolver`, `IExternalWebhookContextResolver`, `ICacheFactory` backends | Swap credential authority, identity resolution, external webhook context resolution, and persistence implementations without changing runtime orchestration |
 | **Adapter** | `wappa/messaging/whatsapp/`, `wappa/webhooks/whatsapp/` | Translate between platform-specific APIs and Wappa's universal interfaces |
 | **Observer** | SSE/PubSub, Expiry keyspace notifications | Decouple event producers from consumers; fan-out without tight coupling |
 
@@ -129,6 +129,20 @@ Host durable schema
   -> DispatchContextBuilder / InboxExecutionContext
   -> WhatsApp client and Messenger construction
 ```
+
+## External Webhook Source flow
+
+External callbacks do not use messaging Inbox identity as URL routing data.
+`WebhookPlugin` mounts an ID-less callback by default and may instead add an
+opaque `{webhook_id}`. The processor authenticates and parses the request before
+the optional Host `IExternalWebhookContextResolver` runs. That strategy may
+associate the event with an `InboxRef` and User using authenticated payload,
+headers, database state, or trusted FastAPI request state.
+
+Wappa completes admission before returning HTTP success. An event without a
+resolved Inbox receives database factories only. An event with a resolved Inbox
+receives Messenger, and a resolved User also receives the Inbox-scoped Cache
+Factory. Only Host handler execution moves to tracked background work.
 
 The API layer receives an Inbox Execution Context and knows nothing about Table Cache names, source queries, encryption keys, or token values. The persistence class never imports Host repositories or WhatsApp clients.
 
@@ -300,7 +314,7 @@ Each bounded context has its own `ARCHITECTURE.md` for internal details:
 | SSE/PubSub | [`wappa/core/sse/ARCHITECTURE.md`](./wappa/core/sse/ARCHITECTURE.md) | Subscription model, fan-out, envelope structure |
 | Expiry | [`wappa/core/expiry/ARCHITECTURE.md`](./wappa/core/expiry/ARCHITECTURE.md) | Key format, keyspace notification flow, handler registration |
 | Plugins | [`wappa/core/plugins/ARCHITECTURE.md`](./wappa/core/plugins/ARCHITECTURE.md) | Plugin lifecycle, hook points, built-in plugins |
-| External Webhooks | [`wappa/core/external_webhooks/ARCHITECTURE.md`](./wappa/core/external_webhooks/ARCHITECTURE.md) | External source runtime, signature verification, event registry |
+| External Webhooks | [`wappa/core/external_webhooks/ARCHITECTURE.md`](./wappa/core/external_webhooks/ARCHITECTURE.md) | Admission, Host context strategy, signature verification, event registry |
 | CLI | [`wappa/cli/ARCHITECTURE.md`](./wappa/cli/ARCHITECTURE.md) | Commands, templates, example generation |
 
 ## Key Architectural Decisions
@@ -314,3 +328,4 @@ See [`docs/adr/`](./docs/adr/) for recorded decisions. Notable:
 - [ADR-0009: Route capability groups](./docs/adr/0009-route-capability-groups.md) — "mutation" means every route that sends, deletes, or rewrites state, not only sends
 - [ADR-0010: Authenticated, payload-routed WhatsApp webhook](./docs/adr/0010-payload-routed-whatsapp-webhook.md) — one callback, raw-body HMAC, qualified routing, WABA membership, all-or-nothing admission
 - [ADR-0011: Encrypted Inbox Directory](./docs/adr/0011-encrypted-inbox-directory.md) — Wappa-owned directory on Table Cache under the System Scope, Host-owned schema through one source, encrypted records, TTL and version rules
+- [ADR-0012: Inbox-independent external webhooks](./docs/adr/0012-inbox-independent-external-webhooks.md) — optional Webhook ID, Host context strategy, and admission before acknowledgment

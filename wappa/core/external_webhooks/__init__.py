@@ -7,6 +7,7 @@ from .registry import (
     ExternalEventRegistry,
 )
 from .runtime import (
+    AdmittedExternalWebhook,
     ExternalWebhookProcessResult,
     ExternalWebhookProcessStatus,
     ExternalWebhookRuntime,
@@ -15,6 +16,7 @@ from .runtime import (
 from .signature import HMACSignatureVerifier, SignatureEncoding
 
 __all__ = [
+    "AdmittedExternalWebhook",
     "WILDCARD",
     "DispatchReport",
     "ExternalEventHandler",

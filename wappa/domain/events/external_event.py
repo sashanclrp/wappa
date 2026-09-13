@@ -16,7 +16,7 @@ class ExternalEvent(BaseModel):
         event = ExternalEvent(
             source="mercadopago",
             event_type="payment.approved",
-            inbox_id="phone_number_id_123",
+            webhook_id="merchant_123",
             payload={"payment_id": "12345", "amount": 99.99},
         )
     """
@@ -25,14 +25,10 @@ class ExternalEvent(BaseModel):
     source: str  # e.g. "mercadopago", "stripe", "hubspot"
     event_type: str  # dot-notation, e.g. "payment.approved"
 
-    # Inbox and user context
-    inbox_id: str = Field(
-        ...,
-        description="Inbox identifier extracted from URL path",
-    )
-    user_id: str | None = Field(
+    # Optional transport routing identity. This is never an Inbox identifier.
+    webhook_id: str | None = Field(
         default=None,
-        description="User identifier resolved by processor (e.g., phone number)",
+        description="Opaque webhook route identifier supplied by Wappa",
     )
 
     # Payload

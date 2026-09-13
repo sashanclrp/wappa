@@ -14,6 +14,12 @@ from fastapi import APIRouter, HTTPException, Request
 
 from ...core.external_webhooks import ExternalWebhookRuntime, clone_request_with_body
 from ...core.logging.logger import get_app_logger
+from ...domain.inbox.errors import (
+    InboxCredentialIntegrityError,
+    InboxDirectoryUnavailableError,
+    InboxMembershipError,
+    InboxNotFoundError,
+)
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -22,6 +28,9 @@ if TYPE_CHECKING:
     from ...core.events.event_handler import WappaEventHandler
     from ...core.events.external_event_dispatcher import ExternalEventDispatcher
     from ...core.factory.wappa_builder import WappaBuilder
+    from ...domain.interfaces.external_webhook_context import (
+        IExternalWebhookContextResolver,
+    )
     from ...domain.interfaces.webhook_processor import IWebhookProcessor
 
 
@@ -45,18 +54,25 @@ class WebhookPlugin:
         event_handler: WappaEventHandler,
         prefix: str | None = None,
         methods: list[str] | None = None,
-        include_inbox_id: bool = True,
+        include_webhook_id: bool = False,
+        context_resolver: IExternalWebhookContextResolver | None = None,
         **route_kwargs: Any,
     ) -> None:
+        if "include_inbox_id" in route_kwargs:
+            raise TypeError(
+                "include_inbox_id was removed; use include_webhook_id only when "
+                "the external protocol needs an opaque route identifier"
+            )
         self.external_source = external_source
         self.processor = processor
         self.event_handler = event_handler
         self.prefix = prefix or f"/webhook/{external_source}"
         self.methods = methods or ["POST"]
-        self.include_inbox_id = include_inbox_id
+        self.include_webhook_id = include_webhook_id
+        self.context_resolver = context_resolver
         self.route_kwargs = route_kwargs
 
-        self.router = APIRouter()
+        self.router = APIRouter(prefix=self.prefix)
 
         self._context_factory: WappaContextFactory | None = None
         self._external_dispatcher: ExternalEventDispatcher | None = None
@@ -65,24 +81,36 @@ class WebhookPlugin:
     def configure(self, builder: WappaBuilder) -> None:
         logger = get_app_logger()
         tags: list[str | Enum] = [f"{self.external_source.title()} Webhooks"]
+        callback_suffix = "/{webhook_id}" if self.include_webhook_id else ""
 
-        if self.include_inbox_id:
+        @self.router.get("/status", tags=tags)
+        async def webhook_status(request: Request) -> dict[str, Any]:
+            base_url = str(request.base_url).rstrip("/")
+            return {
+                "status": "active",
+                "external_source": self.external_source,
+                "uses_webhook_id": self.include_webhook_id,
+                "webhook_url": f"{base_url}{self.prefix}{callback_suffix}",
+                "methods": self.methods,
+            }
+
+        if self.include_webhook_id:
 
             @self.router.api_route(
-                "/{inbox_id}",
+                "/{webhook_id}",
                 methods=self.methods,
                 tags=tags,
                 **self.route_kwargs,
             )
-            async def inbox_webhook_endpoint(
-                request: Request, inbox_id: str
+            async def identified_webhook_endpoint(
+                request: Request, webhook_id: str
             ) -> dict[str, str]:
-                return await self._handle_webhook(request, inbox_id)
+                return await self._handle_webhook(request, webhook_id)
 
         else:
 
             @self.router.api_route(
-                "/",
+                "",
                 methods=self.methods,
                 tags=tags,
                 **self.route_kwargs,
@@ -90,25 +118,7 @@ class WebhookPlugin:
             async def source_webhook_endpoint(request: Request) -> dict[str, str]:
                 return await self._handle_webhook(request, None)
 
-        status_path = "/{inbox_id}/status" if self.include_inbox_id else "/status"
-
-        @self.router.get(status_path, tags=tags)
-        async def webhook_status(
-            request: Request, inbox_id: str | None = None
-        ) -> dict[str, Any]:
-            base_url = str(request.base_url).rstrip("/")
-            webhook_url = f"{base_url}{self.prefix}"
-            if inbox_id:
-                webhook_url = f"{webhook_url}/{inbox_id}"
-            return {
-                "status": "active",
-                "external_source": self.external_source,
-                "inbox_id": inbox_id,
-                "webhook_url": webhook_url,
-                "methods": self.methods,
-            }
-
-        builder.add_router(self.router, prefix=self.prefix, public=True)
+        builder.add_router(self.router, public=True)
         builder.add_startup_hook(self._init_dependencies, priority=30)
 
         logger.debug(
@@ -139,6 +149,7 @@ class WebhookPlugin:
             event_handler=self.event_handler,
             context_factory=self._context_factory,
             dispatcher=self._external_dispatcher,
+            context_resolver=self.context_resolver,
         )
 
         get_app_logger().info(
@@ -148,13 +159,8 @@ class WebhookPlugin:
     async def _handle_webhook(
         self,
         request: Request,
-        inbox_id: str | None,
+        webhook_id: str | None,
     ) -> dict[str, str]:
-        if not inbox_id:
-            raise HTTPException(
-                status_code=400,
-                detail="inbox_id is required for External Webhook Source processing",
-            )
         if self._runtime is None:
             raise RuntimeError(
                 "WebhookPlugin runtime not initialized — ensure the application "
@@ -164,6 +170,42 @@ class WebhookPlugin:
         body = await request.body()
         request_snapshot = clone_request_with_body(request, body)
 
+        try:
+            admitted = await self._runtime.admit(request_snapshot, webhook_id)
+        except HTTPException:
+            raise
+        except (InboxNotFoundError, InboxMembershipError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid external webhook context",
+            ) from exc
+        except (InboxDirectoryUnavailableError, InboxCredentialIntegrityError) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="External webhook context unavailable",
+            ) from exc
+        except ValueError as exc:
+            get_app_logger().warning(
+                "External webhook admission rejected for %s: %s",
+                self.external_source,
+                exc,
+            )
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid external webhook",
+            ) from exc
+        except Exception as exc:
+            get_app_logger().error(
+                "External webhook admission failed for %s: %s",
+                self.external_source,
+                exc,
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="External webhook admission failed",
+            ) from exc
+
         tracker = getattr(request.app.state, "background_work_tracker", None)
         if not tracker:
             raise RuntimeError(
@@ -172,7 +214,7 @@ class WebhookPlugin:
                 "processing external webhooks"
             )
         tracker.track(
-            self._runtime.process(request_snapshot, inbox_id),
-            name=f"webhook:{self.external_source}:{inbox_id}",
+            self._runtime.dispatch(admitted),
+            name=f"webhook:{self.external_source}:{webhook_id or 'unscoped'}",
         )
         return {"status": "accepted"}

@@ -29,12 +29,11 @@ class WappaContext:
     """
     Unified request context for Wappa infrastructure access.
 
-    Bundles inbox identity, user identity, and all framework dependencies
-    into a single object. Supports two-phase creation where user_id is
-    initially None and set later via with_user().
+    Bundles optional Inbox and User identity with available framework
+    dependencies. Inbox-independent work carries database factories only.
     """
 
-    inbox_id: str
+    inbox_id: str | None
     user_id: str | None = None
 
     # Infrastructure dependencies
@@ -68,7 +67,7 @@ class WappaContextFactory:
 
     async def create_context(
         self,
-        inbox_id: str,
+        inbox_id: str | None,
         user_id: str | None = None,
         *,
         include_messenger: bool = False,
@@ -78,17 +77,18 @@ class WappaContextFactory:
         Create a WappaContext with infrastructure dependencies from app.state.
 
         Args:
-            inbox_id: Inbox identifier. A db-only context (no user, no
-                messenger) does not validate it, so system-level work may
-                pass a placeholder.
+            inbox_id: Optional Inbox identifier. ``None`` creates a database-only
+                context and cannot construct Inbox-scoped capabilities.
+            user_id: Optional User identifier.
+            include_messenger: Whether to create a Messenger instance.
+            platform: Messaging Platform used for Inbox capability construction.
 
         Raises:
             InboxDirectoryError: the Inbox Directory could not answer for this
                 Inbox. Cron and External Webhook Source callers see the typed
                 category instead of a silently context-less handler.
-            user_id: Optional user identifier (can be set later via ctx.with_user())
-            include_messenger: Whether to create a messenger instance
-            platform: Messaging platform for messenger creation
+            ValueError: User or Messenger capabilities were requested without an
+                Inbox identifier.
 
         Returns:
             WappaContext with available infrastructure bound
@@ -116,7 +116,16 @@ class WappaContextFactory:
 
         cache_factory: ICacheFactory | None = None
         messenger: IMessenger | None = None
-        if builder is not None and (user_id or include_messenger):
+        if inbox_id is None and (user_id or include_messenger):
+            raise ValueError(
+                "Inbox-scoped context requires inbox_id when user_id or "
+                "include_messenger is set"
+            )
+        if (
+            builder is not None
+            and inbox_id is not None
+            and (user_id or include_messenger)
+        ):
             inbox_ref = InboxRef(platform=platform, inbox_id=inbox_id)
             if user_id:
                 try:

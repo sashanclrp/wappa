@@ -1,198 +1,172 @@
 # WebhookPlugin
 
-> Part of the Wappa Plugin Architecture. See [Architecture](./Architecture.md) for the plugin system overview, lifecycle, and patterns.
+`WebhookPlugin` adds callbacks for payment systems, CRMs, operational tools,
+and other External Webhook Sources. Messaging Platform callbacks use the
+Inbound Runtime instead.
 
-## What it does
+## Basic ID-less callback
 
-`WebhookPlugin` adds endpoints for External Webhook Sources such as payment systems, CRMs, or operational tools. It is not for messaging platforms; messaging platform webhooks belong to the Inbound Runtime.
-
-Each plugin instance handles one External Webhook Source and uses an `IWebhookProcessor` to translate the raw HTTP request into an `ExternalEvent`.
-
-## How to activate
+ID-less callbacks are the default. This is the right choice when URL identity
+has no role in the source protocol.
 
 ```python
-from wappa import ExternalEvent, Wappa, WappaEventHandler
+from fastapi import HTTPException
+
+from wappa import ExternalEvent, HMACSignatureVerifier
 from wappa.core.plugins import WebhookPlugin
 
 
 class MercadoPagoProcessor:
+    def __init__(self, verifier: HMACSignatureVerifier) -> None:
+        self.verifier = verifier
+
     def get_source_name(self) -> str:
         return "mercadopago"
 
-    async def parse_event(self, request, inbox_id):
-        body = await request.json()
+    async def parse_event(self, request, webhook_id):
+        body = await request.body()
+        if not self.verifier.verify(body, request.headers):
+            raise HTTPException(401, "Invalid webhook signature")
+        data = await request.json()
         return ExternalEvent(
             source="mercadopago",
-            event_type=body.get("type", "unknown"),
-            inbox_id=inbox_id,
-            payload=body.get("data", {}),
-            raw_data=body,
+            event_type=data.get("type", "unknown"),
+            payload=data.get("data", {}),
+            raw_data=data,
         )
 
-    async def resolve_user_id(self, event, db):
-        if not db:
-            return None
-        async with db() as session:
-            sub = await get_subscription(session, event.payload["id"])
-            return sub.user_id if sub else None
-
-
-class MyHandler(WappaEventHandler):
-    async def process_external_event(self, event: ExternalEvent):
-        if event.source == "mercadopago" and event.event_type == "payment.approved":
-            cache = self.cache_factory.create_user_cache()
-            await cache.update({"subscription": "active"})
-            await self.messenger.send_text(
-                text="Payment confirmed!",
-                recipient=event.user_id,
-            )
-
-
-handler = MyHandler()
-app = Wappa(cache="redis", ...)
-app.register_handler(handler)
 
 app.add_plugin(
     WebhookPlugin(
         "mercadopago",
-        processor=MercadoPagoProcessor(),
+        processor=MercadoPagoProcessor(verifier),
         event_handler=handler,
-        prefix="/webhook/payment",
+        prefix="/webhook/miia/mercado_pago",
     )
 )
 ```
 
-## Configuration options
+The callback is `POST /webhook/miia/mercado_pago`. No WhatsApp Inbox appears in
+the URL or event.
 
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `external_source` | `str` | (required) | External source name used in URL path, status output, and OpenAPI tags |
-| `processor` | `IWebhookProcessor` | (required) | Processor that validates the request and creates an `ExternalEvent` |
-| `event_handler` | `WappaEventHandler` | (required) | Handler prototype cloned for dispatch |
-| `prefix` | `str \| None` | `"/webhook/{external_source}"` | URL prefix for the router |
-| `methods` | `list[str] \| None` | `["POST"]` | HTTP methods the endpoint accepts |
-| `include_inbox_id` | `bool` | `True` | Whether to include `{inbox_id}` as a path parameter |
-| `**route_kwargs` | `Any` | -- | Additional keyword arguments forwarded to FastAPI `api_route` |
+## Optional Webhook ID
 
-## Processing pipeline
-
-When a webhook arrives:
-
-```
-POST /webhook/payment/{inbox_id}
-    │
-    ├── Reads and snapshots the request body
-    ├── Returns {"status": "accepted"} immediately (200)
-    │
-    └── Background task:
-        ├── ExternalWebhookRuntime.process(snapshot, inbox_id)
-        ├── processor.parse_event(request, inbox_id) → ExternalEvent
-        │   (your Pydantic schema validates the raw payload here)
-        ├── validate event.inbox_id matches the routed Inbox
-        ├── WappaContextFactory.create_context(inbox_id) → DB-only context
-        ├── processor.resolve_user_id(event, db) → user_id
-        ├── WappaContextFactory.create_context(inbox_id, user_id, include_messenger=True)
-        │   → full context (messenger + cache + db)
-        ├── handler.with_context(...) → cloned handler
-        └── handler.process_external_event(event)
-```
-
-External webhooks identify an external resource such as a payment, subscription, or ticket. The processor resolves the Wappa `user_id` in two phases:
-
-1. DB-only context to look up the user from the external payload.
-2. Full context with Messenger and Cache Factory once the user is known.
-
-If `include_inbox_id=False`, processor mode rejects incoming webhooks with
-HTTP 400. External Webhook Source processing needs an Inbox because Wappa scopes
-Messenger, Cache Factory, SSE, and dispatch identity by `inbox_id`.
-
-## IWebhookProcessor interface
-
-```python
-class IWebhookProcessor(Protocol):
-    def get_source_name(self) -> str: ...
-    async def parse_event(self, request: Request, inbox_id: str) -> ExternalEvent: ...
-    async def resolve_user_id(self, event: ExternalEvent, db: Callable | None) -> str | None: ...
-```
-
-| Method | Purpose |
-|--------|---------|
-| `get_source_name()` | External source identifier for logging |
-| `parse_event()` | Validate raw request and return a typed `ExternalEvent` |
-| `resolve_user_id()` | Optional lookup from external payload to Wappa `user_id` |
-
-## ExternalEvent model
-
-```python
-class ExternalEvent(BaseModel):
-    source: str              # "stripe", "mercadopago"
-    event_type: str          # "payment.approved"
-    inbox_id: str            # From URL path
-    user_id: str | None      # Resolved by processor
-    payload: dict[str, Any]  # Validated webhook data
-    metadata: dict[str, Any] # Additional context
-    timestamp: datetime      # When received
-    raw_data: dict | None    # Original body (excluded from serialization)
-```
-
-## URL patterns
-
-**With Inbox ID** (`include_inbox_id=True`, the default):
-
-```
-POST {prefix}/{inbox_id}
-GET  {prefix}/{inbox_id}/status
-```
-
-**Without Inbox ID** (`include_inbox_id=False`):
-
-```
-POST {prefix}/
-GET  {prefix}/status
-```
-
-## Status endpoint
-
-```json
-{
-  "status": "active",
-  "external_source": "mercadopago",
-  "inbox_id": "508386009032748",
-  "webhook_url": "https://example.com/webhook/payment/508386009032748",
-  "methods": ["POST"]
-}
-```
-
-## Multiple External Webhook Sources
+Set `include_webhook_id=True` when the external protocol needs a dynamic route
+value:
 
 ```python
 app.add_plugin(
-    WebhookPlugin("stripe", processor=StripeProcessor(),
-                  event_handler=handler, prefix="/webhook/payment")
-)
-app.add_plugin(
-    WebhookPlugin("mercadopago", processor=MPProcessor(),
-                  event_handler=handler, prefix="/webhook/payment")
-)
-app.add_plugin(
-    WebhookPlugin("hubspot", processor=HubspotProcessor(),
-                  event_handler=handler, prefix="/webhook/crm")
+    WebhookPlugin(
+        "github",
+        processor=GitHubProcessor(),
+        event_handler=handler,
+        prefix="/webhook/github",
+        include_webhook_id=True,
+    )
 )
 ```
 
-Dispatch by `event.source` in your handler:
+This mounts `POST /webhook/github/{webhook_id}`. Wappa passes the value to the
+processor and writes it to `ExternalEvent.webhook_id`. It is opaque routing
+data, not an Inbox ID or authorization credential.
+
+Each plugin chooses its own route form. One application may combine ID-less and
+identified callbacks.
+
+## Context resolver strategy
+
+External events do not carry Inbox or User identity. A Host that needs Wappa
+Messenger or cache capabilities supplies an `IExternalWebhookContextResolver`
+to that plugin:
 
 ```python
-async def process_external_event(self, event: ExternalEvent):
-    match event.source:
-        case "stripe": ...
-        case "mercadopago": ...
-        case "hubspot": ...
+from wappa import ResolvedExternalWebhookContext
+from wappa.domain.inbox import InboxRef
+
+
+class PaymentContextResolver:
+    async def resolve(self, request, event, db, db_read):
+        if event.event_type != "payment.approved":
+            return None
+        if db_read is None:
+            raise RuntimeError("Payment context resolution requires a database")
+
+        async with db_read() as session:
+            payment = await find_payment(session, event.payload["id"])
+
+        return ResolvedExternalWebhookContext(
+            inbox_ref=InboxRef.whatsapp(payment.external_inbox_id),
+            user_id=payment.user_id,
+        )
+
+
+app.add_plugin(
+    WebhookPlugin(
+        "mercadopago",
+        processor=processor,
+        event_handler=handler,
+        context_resolver=PaymentContextResolver(),
+    )
+)
 ```
 
-## Imports
+The resolver runs only after the processor authenticates and parses the request.
+It may inspect the parsed event, headers, database state, and trusted
+`request.state`. FastAPI dependencies or middleware can prepare request state,
+but routing evidence prepared before authentication is not trusted merely
+because it sits there.
+
+Returning `None` means deliberate Inbox-independent dispatch. The handler then
+gets `db` and `db_read`, when configured, but `self.inbox_id`, `self.user_id`,
+`self.messenger`, and `self.cache_factory` remain `None`.
+
+Returning `ResolvedExternalWebhookContext` binds an Inbox and optional User. An
+Inbox resolution provides Messenger. A User resolution also provides the
+user-scoped Cache Factory.
+
+## Admission behavior
+
+Wappa performs these steps before returning success:
+
+1. Snapshot the exact body.
+2. Call `processor.parse_event(request, webhook_id)`.
+3. Check that the event source matches the plugin source.
+4. Run the optional context resolver.
+5. Build the handler context.
+6. Submit handler dispatch to tracked background work.
+
+An explicit `HTTPException` from a processor or resolver reaches the sender.
+Wappa maps validation or contradictory Inbox context to 400, unavailable Inbox
+infrastructure to 503, and unexpected admission failures to 500. Failed
+admission schedules nothing. Successful admission returns
+`{"status": "accepted"}`; later handler failures are logged and do not change
+that response.
+
+## Configuration
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `external_source` | required | Source name used for validation, logs, and tags |
+| `processor` | required | Authenticates and translates the request |
+| `event_handler` | required | Handler prototype cloned for dispatch |
+| `prefix` | `/webhook/{external_source}` | Router prefix |
+| `methods` | `["POST"]` | Accepted callback methods |
+| `include_webhook_id` | `False` | Mount dynamic `/{webhook_id}` when true |
+| `context_resolver` | `None` | Optional Host-owned context strategy |
+| `**route_kwargs` | none | Extra FastAPI `api_route` arguments |
+
+Every plugin exposes `GET {prefix}/status`. The response reports the callback
+URL template and whether it contains `{webhook_id}`.
+
+## Public imports
 
 ```python
-from wappa import ExternalEvent, IWebhookProcessor, WappaContext
+from wappa import (
+    ExternalEvent,
+    HMACSignatureVerifier,
+    IExternalWebhookContextResolver,
+    IWebhookProcessor,
+    ResolvedExternalWebhookContext,
+)
 from wappa.core.plugins import WebhookPlugin
 ```

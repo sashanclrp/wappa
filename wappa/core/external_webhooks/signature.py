@@ -44,10 +44,10 @@ class HMACSignatureVerifier:
         )
 
         class StripeProcessor:
-            async def parse_event(self, request, inbox_id):
+            async def parse_event(self, request, webhook_id):
                 body = await request.body()
                 if not verifier.verify(body, request.headers):
-                    raise ValueError("invalid Stripe webhook signature")
+                    raise HTTPException(401, "Invalid webhook signature")
                 ...
     """
 

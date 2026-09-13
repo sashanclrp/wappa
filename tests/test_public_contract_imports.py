@@ -14,6 +14,9 @@ PUBLIC_IMPORTS: dict[str, tuple[str, ...]] = {
         "InboxRoutingMode",
         "MetaApplicationConfig",
         "IInboxDirectorySource",
+        "IExternalWebhookContextResolver",
+        "ResolvedExternalWebhookContext",
+        "ExternalEvent",
     ),
     "wappa.domain.inbox": (
         "InboxRef",

@@ -49,7 +49,8 @@ class ExternalEventDispatcher:
         try:
             self.logger.info(
                 f"Dispatching external event: {event.source}/{event.event_type} "
-                f"(inbox={event.inbox_id}, user={event.user_id})"
+                f"(webhook_id={event.webhook_id}, inbox={request_handler.inbox_id}, "
+                f"user={request_handler.user_id})"
             )
 
             await request_handler.handle_external_event(event)
@@ -62,8 +63,9 @@ class ExternalEventDispatcher:
                 "action": "external_event_processed",
                 "source": event.source,
                 "event_type": event.event_type,
-                "inbox_id": event.inbox_id,
-                "user_id": event.user_id,
+                "webhook_id": event.webhook_id,
+                "inbox_id": request_handler.inbox_id,
+                "user_id": request_handler.user_id,
                 "dispatch_time": dispatch_time,
             }
 

@@ -158,7 +158,7 @@ The former demonstration routes `/interactive/send-complex-buttons` and `/intera
 
 ## Dispatch Context, `db`, and `db_read`
 
-Webhook, API-message, cron, and External Webhook Source paths bind handler clones through one `DispatchContextBuilder` (`from wappa.core.dispatch import ...`). Each background task binds its own Inbox and User context before handler work and resets it afterwards.
+Webhook, API-message, cron, and External Webhook Source paths bind isolated handler clones. Messaging paths bind Inbox and User context through `DispatchContextBuilder` (`from wappa.core.dispatch import ...`). Inbox-independent external events bind database factories without inventing an Inbox.
 
 - `db` is the Primary Session Factory: writes and primary-consistent reads.
 - `db_read` is the Read-Intent Session Factory: eventual consistency; may use a replica or the current fallback behaviour.
@@ -282,6 +282,8 @@ Public imports include:
 
 - `from wappa import ExternalEvent`
 - `from wappa import IWebhookProcessor`
+- `from wappa import IExternalWebhookContextResolver`
+- `from wappa import ResolvedExternalWebhookContext`
 - `from wappa import HMACSignatureVerifier`
 - `from wappa import ExternalEventRegistry`, `from wappa import DispatchReport`
 - `from wappa.core.plugins import WebhookPlugin`
@@ -289,58 +291,57 @@ Public imports include:
 An `IWebhookProcessor` must provide:
 
 - `get_source_name() -> str`
-- `parse_event(request, inbox_id) -> ExternalEvent`
-- `resolve_user_id(event, db) -> str | None`
+- `parse_event(request, webhook_id: str | None) -> ExternalEvent`
 
-`WebhookPlugin` processor mode requires an `inbox_id`. With the default route
-shape, external webhooks are accepted at:
+The default callback is ID-less:
 
-- `POST {prefix}/{inbox_id}`
-- `GET {prefix}/{inbox_id}/status`
+- `POST {prefix}`
+- `GET {prefix}/status`
 
-`include_inbox_id=False` is not valid for processor mode and incoming webhooks
-are rejected with HTTP 400. Wappa needs the Inbox to scope Dispatch Context,
-Messenger, Cache Factory, SSE identity, and event handling.
+`include_webhook_id=True` changes only the callback to
+`POST {prefix}/{webhook_id}`. Each plugin chooses its route form independently.
+Webhook ID is opaque transport routing data. It never identifies, selects, or
+authorizes an Inbox.
 
-Accepted external webhooks return `{"status": "accepted"}` after Wappa snapshots
-the request body and submits tracked background work. This means the event was
-accepted for local processing, not that the Host Application handler completed
-successfully.
+`ExternalEvent` contains `source`, `event_type`, optional `webhook_id`, payload,
+metadata, timestamp, and excluded raw data. It contains no Inbox or User fields.
+Wappa assigns the route Webhook ID after parsing, so a processor cannot replace
+route identity through its returned event.
 
-The External Webhook Runtime then:
+Admission runs before the HTTP acknowledgment:
 
-- calls `processor.parse_event(request, inbox_id)`
-- rejects dispatch when `event.inbox_id` does not match the routed Inbox
-- creates a DB-capable Dispatch Context for identity lookup
-- calls `processor.resolve_user_id(event, db)`
-- creates a user-bound Dispatch Context with Messenger and Cache Factory when a
-  `user_id` is resolved
-- dispatches to `WappaEventHandler.process_external_event(event)`
+- snapshot the exact body;
+- call the processor, which authenticates and parses the request;
+- verify that the event source matches the plugin source;
+- run the optional Host context resolver;
+- bind a handler with database-only or Inbox-scoped capabilities;
+- schedule handler dispatch through `BackgroundWorkTracker`.
 
-If no `user_id` is resolved, Wappa still dispatches the event as an inbox-level
-external event. In that path, `self.messenger` and `self.cache_factory` may be
-`None`; Host Applications must check them before sending messages or writing
-user-scoped cache data.
+An `IExternalWebhookContextResolver` receives `(request, event, db, db_read)`
+after processor authentication. It returns
+`ResolvedExternalWebhookContext(inbox_ref, user_id=None)` or `None`. `None` means
+deliberate Inbox-independent dispatch. The handler receives database factories,
+when configured, while Inbox, User, Messenger, and Cache Factory remain `None`.
+An Inbox resolution provides Messenger; adding a User also provides the
+user-scoped Cache Factory.
 
-External webhook delivery is best-effort by default. Processor and handler
-failures are logged after the accepted response. Wappa does not currently
-provide a retry policy, dead-letter store, event delivery ledger, or duplicate
-suppression contract for External Webhook Sources. Host Applications that need
-payment-grade reliability should enforce idempotency and persistence in their
-own processor or handler until those behaviors are promoted through a separate
-public contract.
+Resolvers may use authenticated event payload, headers, database state, or
+trusted `request.state` prepared by FastAPI dependencies or middleware. Request
+state prepared before authentication is only candidate evidence unless that
+middleware authenticates the request itself.
 
-`ExternalWebhookRuntime.process()` returns an internal
-`ExternalWebhookProcessResult` for tests and observability. Status values are:
+Processors and resolvers may raise `HTTPException` for an expected response.
+Wappa maps validation failures to 400 and unexpected admission failures to 500.
+An unknown or contradictory resolved Inbox is 400; an unavailable directory or
+unusable credential is 503.
+Failed admission schedules no work. Successful admission returns
+`{"status": "accepted"}` and schedules the Host handler. Background handler
+failures are logged and reported internally as `dispatch_failure`; they cannot
+change an acknowledgment already sent.
 
-- `accepted_dispatch`
-- `inbox_mismatch`
-- `parse_failure`
-- `unresolved_user`
-- `dispatch_failure`
-
-The result does not change HTTP delivery semantics: an accepted route response
-still means "queued locally", not "handled successfully".
+Wappa does not provide an external webhook retry policy, dead-letter store,
+delivery ledger, or duplicate suppression. Hosts that need payment-grade
+reliability own idempotency and durable processing.
 
 ### Webhook Signature Verification
 
@@ -702,6 +703,7 @@ Internal module paths (`wappa.core.*`, `wappa.persistence.redis.redis_handler.*`
 - `Wappa`, `WappaBuilder`, `WappaPlugin`, `WappaEventHandler`
 - `ExternalEvent`, `CronEvent`, `ExpiryPlugin`, `expiry_registry`
 - `IIdentityResolver`, `PassthroughIdentityResolver`, `IWebhookProcessor`
+- `IExternalWebhookContextResolver`, `ResolvedExternalWebhookContext`
 - `HMACSignatureVerifier`, `ExternalEventRegistry`, `DispatchReport`
 - `CustomWebhook`, `WappaContext`
 - `InboxRef`, `PlatformAccountRef`, `InboxRoutingMode`, `IInboxDirectorySource`, `InboxCredentialService`, `MetaApplicationConfig`
