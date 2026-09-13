@@ -10,6 +10,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from wappa.domain.inbox.identity import InboxRef
+
 
 class CronEvent(BaseModel):
     """
@@ -43,6 +45,10 @@ class CronEvent(BaseModel):
     inbox_id: str | None = Field(
         default=None,
         description="Inbox identifier — if set, full context (messenger, cache, db) available",
+    )
+    inbox_ref: InboxRef | None = Field(
+        default=None,
+        description="Qualified Inbox identity for scoped crons; absent for system crons.",
     )
     user_id: str | None = Field(
         default=None,

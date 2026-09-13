@@ -215,6 +215,7 @@ async def test_resolver_uses_authenticated_request_evidence_for_context() -> Non
     assert admitted.event.webhook_id == "merchant-7"
     assert admitted.inbox_ref == InboxRef.whatsapp("inbox-1")
     assert admitted.request_handler.inbox_id == "inbox-1"
+    assert admitted.request_handler.inbox_ref == InboxRef.whatsapp("inbox-1")
     assert admitted.request_handler.user_id == "user-1"
     assert admitted.request_handler.messenger is context_factory.messenger
     assert admitted.request_handler.cache_factory is context_factory.cache_factory

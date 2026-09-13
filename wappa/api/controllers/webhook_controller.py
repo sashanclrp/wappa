@@ -108,7 +108,7 @@ class WebhookController:
         if platform_type is not PlatformType.WHATSAPP:
             raise HTTPException(
                 status_code=400,
-                detail="Payload-derived Inbox routing is implemented only for WhatsApp",
+                detail="Payload-derived Inbox routing requires a registered platform adapter",
             )
 
         # 1. Authenticate the exact bytes before anything else touches them.

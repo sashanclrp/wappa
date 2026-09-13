@@ -1,0 +1,13 @@
+from wappa import InboxRoutingMode, Wappa
+
+from .inbox_directory_source import HostInboxDirectorySource
+from .master_event import MasterEventHandler
+
+app = Wappa(
+    inbox_routing=InboxRoutingMode.EXPLICIT,
+    inbox_directory_source=HostInboxDirectorySource(),
+)
+app.set_event_handler(MasterEventHandler())
+
+if __name__ == "__main__":
+    app.run()

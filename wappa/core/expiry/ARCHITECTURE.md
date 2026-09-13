@@ -36,7 +36,7 @@ wappa/core/expiry/
 ├── reconnection.py      # ReconnectionStrategy, ReconnectionConfig (exponential backoff)
 ├── app_context.py       # AppContext singleton, set_fastapi_app() / get_fastapi_app()
 └── context_helpers.py   # create_expiry_messenger(), create_expiry_cache_factory(),
-                         # parse_inbox_from_expired_key()
+                         # parse_inbox_ref_from_expired_key()
 ```
 
 ## Key Classes and Their Roles

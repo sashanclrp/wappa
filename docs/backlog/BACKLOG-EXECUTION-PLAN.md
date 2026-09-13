@@ -4,12 +4,14 @@ This file orders active Wappa backlog work. Individual PRDs remain the implement
 
 ## In progress
 
-1. [`260829-wappa-v0.27.0/`](./in_progress/260829-wappa-v0.27.0/plan.md): Wappa v0.27.0 multi-Inbox hardening — one authenticated payload-routed callback, qualified `InboxRef` identity, the Wappa-owned encrypted Inbox Directory, `legacy`/`explicit` routing modes, and the closed public contract, before Symphonai adopts the release. Wappa PRDs 1-6 are implemented and verified (see [`reports/`](./in_progress/260829-wappa-v0.27.0/reports/)); the series stays open on PRD 7 (Symphonai adoption) plus the operator-gated release actions — Git tag, PyPI publication, and the Meta callback cutover.
+1. [`260829-wappa-v0.27.0/`](./in_progress/260829-wappa-v0.27.0/plan.md): Wappa v0.27.0 multi-Inbox hardening — one authenticated payload-routed callback, qualified `InboxRef` identity, the Wappa-owned encrypted Inbox Directory, `legacy`/`explicit` routing modes, and the closed public contract. The local `v0.27.0` tag exists; the series remains open only for Symphonai adoption, PyPI verification, and the Meta callback cutover.
 
 ## Pending
 
 No ordered items.
 
 ## Drafts
+
+- [`provider-delivery-identity.md`](./drafts/provider-delivery-identity.md): provider-aware delivery identity and idempotency, deferred until an adapter provides stable provider evidence.
 
 - [`ideas.md`](./drafts/ideas.md): Unordered ideas that are not ready for implementation.

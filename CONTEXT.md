@@ -139,7 +139,8 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | Term | Definition |
 |------|-----------|
 | **Expiry Action** | A time-triggered handler that fires when a Redis key expires. Registered via decorator. |
-| **Expiry Key** | Redis key with TTL. Format: `{inbox_id}:EXPTRIGGER:{action}:{identifier}`. Parsed on expiration to route to the correct handler. It carries no User dimension — a trigger belongs to an action and an identifier, which may or may not be a `user_id`. |
+| **Expiry Key** | Redis key with TTL. Format: `{inbox_namespace}:EXPTRIGGER:{action}:{identifier}`, where the namespace is Wappa-derived from `InboxRef`. Parsed on expiration to recover the qualified Inbox Reference; invalid keys have no fabricated fallback scope. It carries no User dimension — a trigger belongs to an action and an identifier, which may or may not be a `user_id`. |
+| **Cron Scope** | An optional `InboxRef` attached to a scheduled Cron Event. It grants Inbox capabilities only for that concrete Platform-qualified Inbox. A cron without it is database-only; System Scope is not an Inbox. |
 
 ## HTTP Client Lifecycle
 

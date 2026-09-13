@@ -1,11 +1,11 @@
 ---
 version: 1.0.0
-last_reviewed: 2026-08-30
-status: implemented_awaiting_release_approval
+last_reviewed: 2026-09-13
+status: released_pending_adoption_and_operator_validation
 author: sasha
 candidate_version: 0.27.0
 decision_record: docs/grill-me-sessions/260829_wappa-v0.27.0-multi-inbox-hardening.md
-release_blocked_by: all Wappa PRDs, PyPI publication, and Symphonai adoption
+release_blocked_by: PyPI release verification, Meta callback cutover, and Symphonai adoption
 ---
 
 # Wappa v0.27.0 multi-Inbox release plan
@@ -101,13 +101,12 @@ implementation:
 | 3 | [Authenticated WhatsApp intake and WABA membership](./wappa/260829-high-authenticated-whatsapp-intake.md) | Wappa WhatsApp and inbound runtime | done | yes |
 | 4 | [Inbox-scoped HTTP execution and routing modes](./wappa/260829-high-inbox-http-and-routing-modes.md) | Wappa API and application builder | done | yes |
 | 5 | [Failure semantics and release verification](./wappa/260829-high-failure-semantics-and-release-verification.md) | Wappa runtime and tests | done | yes |
-| 6 | [DDD, public contract, migration, and release](./wappa/260829-high-docs-migration-and-release.md) | Wappa documentation and release | implemented; tag + PyPI publication await operator approval | yes |
+| 6 | [DDD, public contract, migration, and release](./wappa/260829-high-docs-migration-and-release.md) | Wappa documentation and release | released locally as `v0.27.0`; PyPI verification remains operator-owned | no |
 | 7 | [Symphonai adoption](./symphonai/260829-high-symphonai-wappa-v0.27-adoption.md) | Symphonai | pending | yes, for series deletion |
 
 `done` means the PRD's exit criteria are met in the worktree and verified by
-the release report under [`reports/`](./reports/). PRD 6 is implemented up to
-the operator-gated external actions (Git tag, PyPI publication, Meta callback
-cutover), which are recorded there as pending approval.
+the release report under [`reports/`](./reports/). The local `v0.27.0` tag
+exists; PyPI verification and the Meta callback cutover remain operator-owned.
 
 ## Dependency graph
 

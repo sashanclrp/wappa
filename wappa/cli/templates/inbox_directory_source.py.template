@@ -1,0 +1,20 @@
+"""Host-owned durable Inbox lookup for Wappa explicit routing."""
+
+from wappa import IInboxDirectorySource, InboxRef, PlatformAccountRef
+from wappa.domain.inbox import InboxCredentialRecord
+
+
+class HostInboxDirectorySource(IInboxDirectorySource):
+    """Replace these placeholders with reads from the Host's durable store.
+
+    Wappa owns directory caching, encryption, and mutations. This source only
+    maps committed Host rows into canonical Wappa credential records.
+    """
+
+    async def get_inbox(self, inbox_ref: InboxRef) -> InboxCredentialRecord | None:
+        raise NotImplementedError("Read the Host Inbox record here")
+
+    async def list_inboxes_for_platform_account(
+        self, account_ref: PlatformAccountRef
+    ) -> tuple[InboxCredentialRecord, ...]:
+        raise NotImplementedError("List the Host's active Inbox records here")

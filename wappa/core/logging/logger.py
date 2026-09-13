@@ -23,9 +23,10 @@ from wappa.core.config.settings import settings
 
 from .context import get_current_request_id
 
-# Regex to parse [T:...][U:...] context prefixes injected by ContextLogger
+# Parse the current Inbox prefix and the historical T prefix during log-parser
+# migration. New Wappa records always emit I, never tenant terminology.
 _CTX_PREFIX_RE = re.compile(
-    r"^(?:\[T:(?P<inbox>[^\]]*)\])?(?:\[U:(?P<user>[^\]]*)\])?\s*(?P<rest>.*)",
+    r"^(?:\[(?:I|T):(?P<inbox>[^\]]*)\])?(?:\[U:(?P<user>[^\]]*)\])?\s*(?P<rest>.*)",
     re.DOTALL,
 )
 
@@ -154,14 +155,14 @@ class ContextLogger:
         # Get fresh context variables on each log call for dynamic context
         from .context import get_current_inbox_context, get_current_user_context
 
-        current_tenant = get_current_inbox_context() or self.inbox_id
+        current_inbox = get_current_inbox_context() or self.inbox_id
         current_user = get_current_user_context() or self.user_id
 
-        if current_tenant and current_tenant != "---":
+        if current_inbox and current_inbox != "---":
             if current_user and current_user != "---":
-                return f"[T:{current_tenant}][U:{current_user}] {message}"
+                return f"[I:{current_inbox}][U:{current_user}] {message}"
             else:
-                return f"[T:{current_tenant}] {message}"
+                return f"[I:{current_inbox}] {message}"
         elif current_user and current_user != "---":
             return f"[U:{current_user}] {message}"
         return message

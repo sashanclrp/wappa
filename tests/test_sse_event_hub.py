@@ -49,8 +49,8 @@ async def test_events_fan_out_to_every_matching_subscriber() -> None:
 @pytest.mark.asyncio
 async def test_inbox_filter_excludes_other_inboxes() -> None:
     hub = SSEEventHub()
-    mine = await hub.subscribe(inbox_id="inbox-1")
-    theirs = await hub.subscribe(inbox_id="inbox-2")
+    mine = await hub.subscribe(platform="whatsapp", inbox_id="inbox-1")
+    theirs = await hub.subscribe(platform="whatsapp", inbox_id="inbox-2")
 
     async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
         assert await _publish(hub, "incoming_message") == 1
@@ -126,7 +126,7 @@ async def test_a_full_subscriber_does_not_starve_the_others() -> None:
 @pytest.mark.asyncio
 async def test_unsubscribe_stops_delivery_and_updates_stats() -> None:
     hub = SSEEventHub()
-    subscriber = await hub.subscribe(inbox_id="inbox-1")
+    subscriber = await hub.subscribe(platform="whatsapp", inbox_id="inbox-1")
     assert hub.get_stats()["active_subscribers"] == 1
 
     await hub.unsubscribe(subscriber.subscriber_id)
@@ -162,15 +162,34 @@ async def test_shutdown_notifies_and_clears_subscribers() -> None:
 async def test_stats_report_filter_usage() -> None:
     hub = SSEEventHub()
     await hub.subscribe()
-    await hub.subscribe(inbox_id="inbox-1")
+    await hub.subscribe(platform="whatsapp", inbox_id="inbox-1")
     await hub.subscribe(user_id="user-1", event_types={"status_change"})
 
     assert hub.get_stats() == {
         "active_subscribers": 3,
         "inbox_filtered_subscribers": 1,
+        "platform_filtered_subscribers": 1,
         "user_filtered_subscribers": 1,
         "event_filtered_subscribers": 1,
     }
+
+
+@pytest.mark.asyncio
+async def test_inbox_filter_requires_platform_and_never_cross_delivers() -> None:
+    hub = SSEEventHub()
+    with pytest.raises(ValueError, match="platform"):
+        await hub.subscribe(inbox_id="same-native-id")
+
+    whatsapp = await hub.subscribe(platform="whatsapp", inbox_id="same-native-id")
+    telegram = await hub.subscribe(platform="telegram", inbox_id="same-native-id")
+
+    async with sse_event_scope(
+        inbox_id="same-native-id", user_id="user-1", platform="telegram"
+    ):
+        assert await _publish(hub, "incoming_message") == 1
+
+    assert whatsapp.queue.empty()
+    assert telegram.queue.qsize() == 1
 
 
 @pytest.mark.asyncio

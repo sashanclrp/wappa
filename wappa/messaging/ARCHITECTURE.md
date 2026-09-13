@@ -82,6 +82,11 @@ messaging/
 | `InboxTemplateTransport` | Small capability bound to one Inbox; accepts platform-facing typed requests and returns normalized transport evidence. |
 | `TemplateTransportResult` | Accepted/rejected/unavailable/indeterminate evidence. Acceptance requires a platform Message ID and does not imply delivery or local commit. |
 
+`MessengerFactory` may retain at most 128 recently used Messenger graphs per
+factory. The shared HTTP session owns connection reuse; the bounded cache is
+only a construction optimization and is evicted on credential refresh or
+deactivation. It never becomes a second credential-lifetime authority.
+
 ## Design Patterns
 
 - **Composition over inheritance**: `WhatsAppMessenger` holds handler instances injected at construction; it does not extend them.
@@ -164,7 +169,8 @@ constructing its internal pipeline.
 
 **Why the seam stays whole:**
 
-- No second real platform adapter (Telegram, Instagram) exists yet to create pressure.
+- The existing platform adapter set has not yet demonstrated a need to split
+  the cohesive Messenger interface further.
 - Tests do not repeatedly need smaller Messenger fakes.
 - Other message families have not yet demonstrated the same smaller-capability
   requirement.

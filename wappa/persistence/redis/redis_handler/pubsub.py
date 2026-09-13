@@ -9,7 +9,9 @@ from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
+from ....domain.inbox.identity import InboxRef
 from ....domain.interfaces.pubsub_interface import IPubSubPublisher, PubSubEventType
+from ....schemas.core.types import PlatformType
 from ..redis_client import RedisClient
 from .utils.key_factory import KeyFactory
 
@@ -35,7 +37,8 @@ class RedisPubSubPublisher(BaseModel, IPubSubPublisher):
 
     def get_channel(self, event_type: PubSubEventType) -> str:
         """Get channel name for event type."""
-        return self.keys.channel(self.inbox, self.user_id, event_type)
+        inbox_ref = InboxRef(platform=PlatformType(self.platform), inbox_id=self.inbox)
+        return self.keys.channel(inbox_ref.cache_namespace, self.user_id, event_type)
 
     async def publish(
         self,

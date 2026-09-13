@@ -29,15 +29,21 @@ async def _run_with_sse_scope(
     ``identifier`` by shape into bsuid/phone; apps can refine via
     ``update_identity`` / ``update_metadata`` once they load cache state.
     """
-    from wappa.core.expiry.context_helpers import parse_inbox_from_expired_key
+    from wappa.core.expiry.context_helpers import parse_inbox_ref_from_expired_key
 
-    inbox_id = parse_inbox_from_expired_key(event.expired_key) or "unknown"
+    inbox_ref = parse_inbox_ref_from_expired_key(event.expired_key)
+    if inbox_ref is None:
+        logger.warning(
+            "Dropping expiry event with invalid Inbox namespace: %s", event.expired_key
+        )
+        return
     bsuid, phone = classify_meta_identifier(event.identifier)
     async with sse_event_scope(
-        inbox_id=inbox_id,
+        inbox_id=inbox_ref.inbox_id,
         user_id=event.identifier,
         bsuid=bsuid,
         phone_number=phone,
+        platform=inbox_ref.platform.value,
         tracker=tracker,
     ):
         await event.handler(event.identifier, event.expired_key)

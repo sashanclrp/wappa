@@ -45,6 +45,14 @@ def test_other_platforms_use_a_qualified_namespace() -> None:
     assert ref.cache_namespace == f"telegram{QUALIFIED_NAMESPACE_SEPARATOR}123"
 
 
+def test_cache_namespace_round_trip_preserves_platform_identity() -> None:
+    whatsapp = InboxRef.whatsapp("123")
+    telegram = InboxRef(platform=PlatformType.TELEGRAM, inbox_id="123")
+
+    assert InboxRef.from_cache_namespace(whatsapp.cache_namespace) == whatsapp
+    assert InboxRef.from_cache_namespace(telegram.cache_namespace) == telegram
+
+
 def test_no_inbox_can_encode_to_the_system_scope() -> None:
     with pytest.raises(ValidationError):
         InboxRef.whatsapp(SYSTEM_SCOPE)

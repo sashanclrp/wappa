@@ -60,7 +60,12 @@ class CacheFactoryCreationError(ExpiryContextError):
     pass
 
 
-async def create_expiry_messenger(inbox_id: str) -> IMessenger:
+def _as_inbox_ref(inbox: InboxRef | str) -> InboxRef:
+    """Accept the legacy raw WhatsApp argument while preserving qualified scope."""
+    return inbox if isinstance(inbox, InboxRef) else InboxRef.whatsapp(inbox)
+
+
+async def create_expiry_messenger(inbox: InboxRef | str) -> IMessenger:
     """
     Return a WhatsApp messenger for use inside an expiry handler.
 
@@ -71,7 +76,8 @@ async def create_expiry_messenger(inbox_id: str) -> IMessenger:
     providing production-ready error handling with specific error types.
 
     Args:
-        inbox_id: Inbox identifier (WhatsApp phone_number_id)
+        inbox: Qualified Inbox identity. A raw string remains a legacy WhatsApp
+            convenience input.
 
     Returns:
         Configured IMessenger instance ready for sending messages
@@ -82,6 +88,7 @@ async def create_expiry_messenger(inbox_id: str) -> IMessenger:
         MessengerCreationError: If the messenger factory fails.
     """
     # AppContext provides access to the core plugin's lifecycle owner.
+    inbox_ref = _as_inbox_ref(inbox)
     app = get_app_context().get_app()
 
     if not app:
@@ -101,22 +108,20 @@ async def create_expiry_messenger(inbox_id: str) -> IMessenger:
 
     try:
         builder = DispatchContextBuilder.from_app(app)
-        messenger = await builder.messenger_factory.create_messenger(
-            InboxRef.whatsapp(inbox_id)
-        )
-        logger.debug("Created expiry messenger for inbox: %s", inbox_id)
+        messenger = await builder.messenger_factory.create_messenger(inbox_ref)
+        logger.debug("Created expiry messenger for inbox: %s", inbox_ref)
         return messenger
 
     except InboxDirectoryError:
         raise
     except Exception as e:
-        logger.error("Failed to create messenger for inbox %s: %s", inbox_id, e)
+        logger.error("Failed to create messenger for inbox %s: %s", inbox_ref, e)
         raise MessengerCreationError(
-            f"Messenger creation failed for inbox {inbox_id}: {e}"
+            f"Messenger creation failed for inbox {inbox_ref}: {e}"
         ) from e
 
 
-def create_expiry_cache_factory(inbox_id: str, user_id: str) -> ICacheFactory:
+def create_expiry_cache_factory(inbox: InboxRef | str, user_id: str) -> ICacheFactory:
     """
     Bootstrap cache factory for expiry handler context.
 
@@ -139,16 +144,17 @@ def create_expiry_cache_factory(inbox_id: str, user_id: str) -> ICacheFactory:
         user_cache = cache_factory.create_user_cache()
         data = await user_cache.get()
     """
-    if not inbox_id:
-        raise ValueError("inbox_id is required for cache factory creation")
+    inbox_ref = _as_inbox_ref(inbox)
     if not user_id:
         raise ValueError("user_id is required for cache factory creation")
 
     try:
         cache_factory_class = create_cache_factory("redis")
-        cache_factory = cache_factory_class(inbox_id=inbox_id, user_id=user_id)
+        cache_factory = cache_factory_class(
+            inbox_id=inbox_ref.cache_namespace, user_id=user_id
+        )
         logger.debug(
-            "Created expiry cache factory for inbox: %s, user: %s", inbox_id, user_id
+            "Created expiry cache factory for inbox: %s, user: %s", inbox_ref, user_id
         )
         return cache_factory
 
@@ -161,11 +167,11 @@ def create_expiry_cache_factory(inbox_id: str, user_id: str) -> ICacheFactory:
     except Exception as e:
         logger.error("Failed to create cache factory: %s", e)
         raise CacheFactoryCreationError(
-            f"Cache factory creation failed for inbox {inbox_id}, user {user_id}: {e}"
+            f"Cache factory creation failed for inbox {inbox_ref}, user {user_id}: {e}"
         ) from e
 
 
-def parse_inbox_from_expired_key(full_key: str) -> str:
+def parse_inbox_from_expired_key(full_key: str) -> str | None:
     """
     Parse inbox ID from a Redis expiry trigger key.
 
@@ -177,14 +183,30 @@ def parse_inbox_from_expired_key(full_key: str) -> str:
                  (e.g., "wappa:EXPTRIGGER:user_inactivity:+1234567890")
 
     Returns:
-        Inbox ID extracted from the key, or "wappa" as default fallback
+        Inbox namespace extracted from a valid key, otherwise ``None``.
 
     Example:
         >>> parse_inbox_from_expired_key("acme:EXPTRIGGER:reminder:USER123")
         "acme"
-        >>> parse_inbox_from_expired_key("simple_key")
-        "wappa"
+        >>> parse_inbox_from_expired_key("simple_key") is None
+        True
     """
-    if ":" in full_key:
-        return full_key.split(":")[0]
-    return "wappa"
+    inbox_ref = parse_inbox_ref_from_expired_key(full_key)
+    return inbox_ref.cache_namespace if inbox_ref is not None else None
+
+
+def parse_inbox_ref_from_expired_key(full_key: str) -> InboxRef | None:
+    """Return the qualified Inbox identity encoded in a valid expiry key.
+
+    Invalid keys are rejected rather than assigned a fabricated default scope.
+    """
+    from wappa.persistence.redis.redis_handler.utils.key_factory import KeyFactory
+
+    parsed = KeyFactory().parse_trigger(full_key)
+    if parsed is None:
+        return None
+    namespace, _, _ = parsed
+    try:
+        return InboxRef.from_cache_namespace(namespace)
+    except ValueError:
+        return None

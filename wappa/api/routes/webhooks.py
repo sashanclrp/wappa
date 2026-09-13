@@ -17,6 +17,7 @@ from wappa.core.events import (
 )
 from wappa.core.inbound import SIGNATURE_HEADER
 from wappa.core.logging.logger import get_logger
+from wappa.processors.factory import processor_factory
 from wappa.schemas.core.types import PlatformType
 
 
@@ -124,18 +125,21 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
             raise HTTPException(
                 status_code=400, detail=f"Unsupported platform: {platform}"
             ) from exc
-
         webhook_url = webhook_url_factory.generate_webhook_url(platform_type)
+        installed = platform_type in processor_factory.get_supported_platforms()
 
         controller_status = webhook_controller.get_health_status()
 
         return {
-            "status": "active",
+            "status": "active" if installed else "adapter_not_installed",
             "platform": platform,
             "webhook_url": webhook_url,
             "verify_url": webhook_url,
             "controller_status": controller_status,
-            "supported_platforms": [p.value.lower() for p in PlatformType],
+            "registered_platforms": [p.value.lower() for p in PlatformType],
+            "installed_platforms": sorted(
+                item.value for item in processor_factory.get_supported_platforms()
+            ),
         }
 
     @router.get("/platforms")
@@ -147,10 +151,18 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
             Dict with all supported platforms and URL patterns
         """
         patterns = webhook_url_factory.get_supported_platforms()
+        installed_platforms = processor_factory.get_supported_platforms()
 
         return {
-            "supported_platforms": list(patterns.keys()),
-            "platform_details": patterns,
+            "registered_platforms": list(patterns.keys()),
+            "installed_platforms": sorted(item.value for item in installed_platforms),
+            "platform_details": {
+                platform: {
+                    "webhook_url": url,
+                    "adapter_installed": PlatformType(platform) in installed_platforms,
+                }
+                for platform, url in patterns.items()
+            },
             "webhook_pattern": "/webhook/inboxes/{platform}",
             "verify_pattern": "/webhook/inboxes/{platform}",
             "features": [

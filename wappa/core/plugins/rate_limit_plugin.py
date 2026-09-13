@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Literal
 from fastapi import HTTPException, Request
 
 from ...core.logging.logger import get_app_logger
+from ...domain.inbox.identity import InboxRef
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -81,10 +82,33 @@ class LocalRateLimiter:
 
     @staticmethod
     def _require_inbox_id(profile: RateLimitProfile, request: Request) -> str:
+        """Read the established request scope without making URL shape authority.
+
+        Wappa's canonical WhatsApp routes select an Inbox through the
+        ``X-Wappa-Inbox-ID`` header. Older Host routes may still carry a path
+        parameter, and trusted middleware may pre-resolve an Inbox context.
+        The limiter accepts all three, in that order, but never invents a scope
+        from an unrelated callback URL.
+        """
+        execution_context = getattr(request.state, "inbox_execution_context", None)
+        inbox_ref = getattr(execution_context, "inbox_ref", None)
+        if isinstance(inbox_ref, InboxRef):
+            return inbox_ref.cache_namespace
+
+        header_value = request.headers.get("X-Wappa-Inbox-ID")
+        if isinstance(header_value, str) and header_value.strip():
+            # Native WhatsApp namespaces deliberately remain raw for backward
+            # compatible cache keys; a future Platform route must install an
+            # already-qualified Inbox Execution Context instead.
+            return header_value.strip()
+
         inbox_id = request.path_params.get("inbox_id")
         if not isinstance(inbox_id, str) or not inbox_id:
             raise RuntimeError(
-                f"Rate limit profile {profile.name!r} requires route inbox_id"
+                f"Rate limit profile {profile.name!r} requires an established Inbox "
+                "scope (X-Wappa-Inbox-ID, Inbox Execution Context, or legacy path "
+                "parameter). Payload-routed webhooks must use client_ip or a Host "
+                "rate-limit key resolved after authentication."
             )
         return inbox_id
 

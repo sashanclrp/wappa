@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from ...core.logging.logger import get_app_logger
+from ...domain.inbox.identity import InboxRef
 
 if TYPE_CHECKING:
     import fastapi_crons
@@ -28,7 +29,7 @@ class _CronRegistration:
 
     cron_id: str
     expr: str
-    inbox_id: str | None = None
+    inbox_ref: InboxRef | None = None
     user_id: str | None = None
     tags: list[str] = field(default_factory=list)
     payload: dict[str, Any] = field(default_factory=dict)
@@ -50,7 +51,7 @@ class CronPlugin:
         cron_plugin.add_cron(
             cron_id="daily_report",
             expr="0 9 * * *",
-            inbox_id="acme",
+            inbox_ref=InboxRef.whatsapp("acme"),
             user_id="5551234567",
         )
         app.add_plugin(cron_plugin)
@@ -88,6 +89,7 @@ class CronPlugin:
         cron_id: str,
         expr: str,
         *,
+        inbox_ref: InboxRef | None = None,
         inbox_id: str | None = None,
         user_id: str | None = None,
         tags: list[str] | None = None,
@@ -102,7 +104,8 @@ class CronPlugin:
         Args:
             cron_id: Unique job name — used as dispatch key in process_cron_event()
             expr: Cron expression (e.g., "0 9 * * *" for daily at 9 AM)
-            inbox_id: Optional inbox scope — if set, full context available
+            inbox_ref: Optional qualified Inbox scope — if set, full context available.
+            inbox_id: Legacy WhatsApp-only shorthand for ``inbox_ref``.
             user_id: Optional user scope — for messenger/cache targeting
             tags: Optional tags for secondary filtering
             payload: Optional static data available in the CronEvent
@@ -113,11 +116,19 @@ class CronPlugin:
         Returns:
             Self for fluent API chaining
         """
+        if inbox_ref is not None and inbox_id is not None:
+            raise ValueError("Specify either inbox_ref or inbox_id, not both")
+        resolved_inbox_ref = inbox_ref or (
+            InboxRef.whatsapp(inbox_id) if inbox_id is not None else None
+        )
+        if user_id is not None and resolved_inbox_ref is None:
+            raise ValueError("A user-scoped cron requires inbox_ref")
+
         self._cron_registrations.append(
             _CronRegistration(
                 cron_id=cron_id,
                 expr=expr,
-                inbox_id=inbox_id,
+                inbox_ref=resolved_inbox_ref,
                 user_id=user_id,
                 tags=tags or [],
                 payload=payload or {},
@@ -221,7 +232,8 @@ class CronPlugin:
             cron_id=reg.cron_id,
             cron_expr=reg.expr,
             tags=reg.tags,
-            inbox_id=reg.inbox_id,
+            inbox_id=reg.inbox_ref.inbox_id if reg.inbox_ref is not None else None,
+            inbox_ref=reg.inbox_ref,
             user_id=reg.user_id,
             payload=reg.payload,
             metadata={"actual_time": now.isoformat()},
@@ -252,30 +264,33 @@ class CronPlugin:
         Create a context-bound handler clone for a cron execution.
 
         Inbox-scoped crons get full context (messenger, cache, db).
-        System crons (no inbox_id) get db-only context.
+        System crons (no Inbox Reference) get db-only context.
         """
-        if reg.inbox_id and self._context_factory:
+        if reg.inbox_ref is not None and self._context_factory:
             ctx = await self._context_factory.create_context(
-                inbox_id=reg.inbox_id,
+                inbox_id=reg.inbox_ref.inbox_id,
                 user_id=reg.user_id,
                 include_messenger=reg.user_id is not None,
+                platform=reg.inbox_ref.platform,
             )
             return self.event_handler.with_context(
-                inbox_id=reg.inbox_id,
-                user_id=reg.user_id or "",
+                inbox_id=reg.inbox_ref.inbox_id,
+                inbox_ref=reg.inbox_ref,
+                user_id=reg.user_id,
                 messenger=ctx.messenger,
                 cache_factory=ctx.cache_factory,
                 db=ctx.db,
                 db_read=ctx.db_read,
             )
 
-        # System cron: db-only context
-        inbox_id = reg.inbox_id or "__system__"
+        # System cron: database-only context. System Scope is a Table Cache
+        # namespace, never an Inbox identity.
         if self._context_factory:
-            ctx = await self._context_factory.create_context(inbox_id=inbox_id)
+            ctx = await self._context_factory.create_context(inbox_id=None)
             return self.event_handler.with_context(
-                inbox_id=inbox_id,
-                user_id="",
+                inbox_id=None,
+                inbox_ref=None,
+                user_id=None,
                 messenger=None,
                 cache_factory=None,
                 db=ctx.db,
@@ -283,8 +298,9 @@ class CronPlugin:
             )
 
         return self.event_handler.with_context(
-            inbox_id=inbox_id,
-            user_id="",
+            inbox_id=None,
+            inbox_ref=None,
+            user_id=None,
             messenger=None,
             cache_factory=None,
         )

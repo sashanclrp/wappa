@@ -63,6 +63,8 @@ class InboxExecutionContext:
     routing_mode: InboxRoutingMode
     session: httpx.AsyncClient
     media_download_client_provider: Any
+    graph_api_version: str | None
+    graph_base_url: str | None
     _credentials: ResolvedInboxCredentials = field(repr=False)
 
     @property
@@ -91,11 +93,17 @@ class InboxExecutionContext:
 
     def whatsapp_client(self) -> WhatsAppClient:
         """Build the WhatsApp client for this Inbox's credentials."""
+        client_kwargs: dict[str, str] = {}
+        if self.graph_api_version is not None:
+            client_kwargs["api_version"] = self.graph_api_version
+        if self.graph_base_url is not None:
+            client_kwargs["base_url"] = self.graph_base_url
         return WhatsAppClient(
             session=self.session,
             access_token=self._credentials.access_token.get_secret_value(),
             phone_number_id=self.inbox_id,
             logger=get_logger("wappa.api.whatsapp"),
+            **client_kwargs,
         )
 
 
@@ -206,13 +214,22 @@ async def get_inbox_execution_context(
         )
 
     set_request_context(inbox_id=inbox_ref.inbox_id)
-    return InboxExecutionContext(
+    meta_config = getattr(request.app.state, "meta_application_config", None)
+    context = InboxExecutionContext(
         inbox_ref=inbox_ref,
         routing_mode=runtime.mode,
         session=session_lifecycle.get_session(),
         media_download_client_provider=session_lifecycle.get_media_download_client,
+        graph_api_version=(
+            meta_config.graph_api_version if meta_config is not None else None
+        ),
+        graph_base_url=(
+            str(meta_config.graph_base_url) if meta_config is not None else None
+        ),
         _credentials=credentials,
     )
+    request.state.inbox_execution_context = context
+    return context
 
 
 __all__ = [

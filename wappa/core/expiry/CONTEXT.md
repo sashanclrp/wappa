@@ -5,7 +5,7 @@ Terms specific to the `wappa.core.expiry` bounded context. Shared Wappa kernel t
 | Term | Definition |
 |---|---|
 | **Expiry Action** | A named, time-triggered side-effect registered by a host application. Fired when a Redis Expiry Key expires. Registered via the `@expiry_registry.on_expire_action("<name>")` decorator. |
-| **Expiry Key** | A Redis key with a TTL whose sole purpose is to schedule an Expiry Action. Format: `{inbox_id}:EXPTRIGGER:{action}:{identifier}`. The key carries no payload; all routing information lives in its name. |
+| **Expiry Key** | A Redis key with a TTL whose sole purpose is to schedule an Expiry Action. Format: `{inbox_namespace}:EXPTRIGGER:{action}:{identifier}`. The namespace is decoded by Wappa into `InboxRef`; invalid namespaces are rejected. The key carries no payload; all routing information lives in its name. |
 | **Trigger Prefix** | The literal segment `EXPTRIGGER` that marks a Redis key as an Expiry Key and distinguishes it from operational cache keys. |
 | **Action Name** | The third colon-segment of an Expiry Key (e.g., `payment_reminder`). Used as the lookup key when resolving a handler from the registry. |
 | **Identifier** | The fourth colon-segment of an Expiry Key. Carries a user- or entity-specific value (e.g., a phone number or transaction ID) passed verbatim to the handler. |

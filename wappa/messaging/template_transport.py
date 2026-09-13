@@ -409,6 +409,8 @@ class OutboundRuntime:
         media_download_client_provider: Callable[[], httpx.AsyncClient],
         credential_resolver: IInboxCredentialResolver,
         messenger_middleware: Sequence[MiddlewareEntry] = (),
+        graph_api_version: str | None = None,
+        graph_base_url: str | None = None,
     ) -> None:
         # Local import prevents the public ``wappa.messaging`` package from
         # cycling while MessengerFactory imports its WhatsApp adapter modules.
@@ -418,6 +420,8 @@ class OutboundRuntime:
             session_provider=session_provider,
             credential_resolver=credential_resolver,
             media_download_client_provider=media_download_client_provider,
+            graph_api_version=graph_api_version,
+            graph_base_url=graph_base_url,
         )
         self._messenger_middleware = tuple(messenger_middleware)
 
@@ -444,6 +448,16 @@ class OutboundRuntime:
             ),
             messenger_middleware=getattr(app.state, "messenger_middleware", ()),
             media_download_client_provider=lifecycle.get_media_download_client,
+            graph_api_version=(
+                app.state.meta_application_config.graph_api_version
+                if getattr(app.state, "meta_application_config", None) is not None
+                else None
+            ),
+            graph_base_url=(
+                str(app.state.meta_application_config.graph_base_url)
+                if getattr(app.state, "meta_application_config", None) is not None
+                else None
+            ),
         )
         app.state.outbound_runtime = runtime
         return runtime

@@ -84,6 +84,27 @@ async def test_rate_limit_can_key_by_inbox_id() -> None:
 
 
 @pytest.mark.asyncio
+async def test_rate_limit_uses_canonical_inbox_header_not_url_shape() -> None:
+    app = FastAPI()
+    app.state.wappa_rate_limiter = LocalRateLimiter(
+        [RateLimitProfile("api", limit=1, window_seconds=60, key_by="inbox_id")]
+    )
+
+    @app.get("/native", dependencies=[Depends(rate_limit("api"))])
+    async def endpoint() -> dict[str, str]:
+        return {"ok": "true"}
+
+    async with _client(app) as client:
+        first = await client.get("/native", headers={"X-Wappa-Inbox-ID": "one"})
+        other = await client.get("/native", headers={"X-Wappa-Inbox-ID": "two"})
+        rejected = await client.get("/native", headers={"X-Wappa-Inbox-ID": "one"})
+
+    assert first.status_code == 200
+    assert other.status_code == 200
+    assert rejected.status_code == 429
+
+
+@pytest.mark.asyncio
 async def test_rate_limit_profiles_have_independent_windows() -> None:
     app = FastAPI()
     app.state.wappa_rate_limiter = LocalRateLimiter(

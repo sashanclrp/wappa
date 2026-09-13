@@ -64,6 +64,11 @@ async def handle_user_inactivity(identifier: str, full_key: str) -> None:
     """
     user_id = identifier
     inbox_id = parse_inbox_from_expired_key(full_key)
+    if inbox_id is None:
+        logger.warning(
+            "Ignoring expiry event with invalid Inbox namespace: %s", full_key
+        )
+        return
 
     logger.info(
         f"User inactivity detected for {user_id} - processing accumulated messages"

@@ -25,7 +25,7 @@ Reference: [root CONTEXT.md](../../CONTEXT.md)
 | **Inbox Namespace** | `InboxRef.cache_namespace`: the collision-free string Wappa derives from an Inbox Reference for persistence. WhatsApp keeps its raw `phone_number_id` so deployed keys stay readable; every other Platform uses `<platform>__<inbox_id>`. Host Applications never construct it. |
 | **Key Pattern** | The Redis naming template used to namespace data. Inbox Namespace is the first segment for Inbox runtime caches. Table Cache alone may use another explicit `context_id` as its first segment. All patterns are built by `KeyFactory`. |
 | **Expiry Key** | A Redis entry with a TTL whose expiration fires an Expiry Action. Format: `{inbox_namespace}:EXPTRIGGER:{action}:{identifier}`. |
-| **PubSub Channel** | Redis Pub/Sub channel for real-time notifications. Format: `wappa:notify:{inbox_id}:{user_id}:{event_type}`. Note the `wappa:notify:` prefix before `inbox_id`. |
+| **PubSub Channel** | Redis Pub/Sub channel for real-time notifications. Format: `wappa:notify:{inbox_namespace}:{user_id}:{event_type}`. The namespace comes from `InboxRef.cache_namespace`; callers never concatenate a Platform and Inbox ID themselves. |
 | **KeyFactory** | Pure stateless Pydantic model that constructs all Redis key strings. Single source of truth for key format. |
 | **Cache Space** | Optional host-owned namespace folded into a table name as `{cache_space}:{table_name}`. Separates unrelated read models that share a table name inside one Table Cache context. Wappa never assigns one; the Host Application passes it explicitly. |
 | **Table Generation** | The version suffix (`{table}@v{n}`) identifying which generation of a versioned table cache is live. Starts at `v1`. |
@@ -45,5 +45,4 @@ Reference: [root CONTEXT.md](../../CONTEXT.md)
 |----------------|-------------|
 | `tenant`, `tenant_id` (as cache scope) | `inbox_id` for Inbox runtime caches; `context_id` only for Table Cache |
 | `inbox_id=` / `inbox=` on a Table Cache constructor | `context_id=` (positional calls unchanged; stored keys unchanged) |
-| `TenantCache` | `InboxCache` — the rename is in progress; new code must use the canonical name |
 | `KEYS` (Redis command) | `SCAN` — `KEYS` blocks the server; all pattern-based enumeration uses cursor-based SCAN |

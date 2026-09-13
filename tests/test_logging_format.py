@@ -4,7 +4,7 @@ Tests for environment-aware logging (WappaJSONFormatter + setup_logging).
 Verifies external observable behaviour only:
 - JSON formatter emits valid single-line JSON per record
 - exc_info is captured as an escaped string with no bare newlines
-- Context prefixes [T:...][U:...] become structured fields
+- Context prefixes [I:...][U:...] become structured fields
 - setup_logging registers the right handler type per rich_format flag
 - setup_app_logging respects SYSTEM_LOGS_RICH_FORMAT (via settings.logs_rich_format) and is_development fallback
 """
@@ -104,7 +104,7 @@ def test_json_formatter_no_exc_field_without_exception() -> None:
 
 def test_json_formatter_parses_tenant_context_prefix() -> None:
     fmt = WappaJSONFormatter()
-    record = _make_record("[T:15551234567] webhook failed")
+    record = _make_record("[I:15551234567] webhook failed")
     obj = json.loads(fmt.format(record))
     assert obj["inbox"] == "15551234567"
     assert obj["msg"] == "webhook failed"
@@ -113,7 +113,7 @@ def test_json_formatter_parses_tenant_context_prefix() -> None:
 
 def test_json_formatter_parses_tenant_and_user_prefix() -> None:
     fmt = WappaJSONFormatter()
-    record = _make_record("[T:111][U:999] done")
+    record = _make_record("[I:111][U:999] done")
     obj = json.loads(fmt.format(record))
     assert obj["inbox"] == "111"
     assert obj["user"] == "999"

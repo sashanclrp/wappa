@@ -137,6 +137,8 @@ class APIEventDispatcher:
         """
         # The same helper every dispatch path uses supplies ``db`` / ``db_read``.
         from wappa.core.dispatch.context_builder import resolve_database_factories
+        from wappa.domain.inbox.identity import InboxRef
+        from wappa.schemas.core.types import PlatformType
 
         db, db_read = resolve_database_factories(
             getattr(request.app.state, "postgres_session_manager", None)
@@ -155,6 +157,9 @@ class APIEventDispatcher:
         # recipient when the caller did not provide a distinct user_id.
         return self._event_handler.with_context(
             inbox_id=event.inbox_id,
+            inbox_ref=InboxRef(
+                platform=PlatformType(event.platform), inbox_id=event.inbox_id
+            ),
             user_id=event.user_id or event.recipient,
             messenger=None,  # API routes use their own messenger dependency
             cache_factory=None,  # API routes can inject cache if needed

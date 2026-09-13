@@ -14,16 +14,16 @@ plugin = RateLimitPlugin(
             name="webhook",
             limit=60,
             window_seconds=60,
-            key_by="inbox_id_and_client_ip",
+            key_by="client_ip",
         )
     ]
 )
 
 @router.post(
-    "/webhooks/{inbox_id}",
+    "/webhook/inboxes/whatsapp",
     dependencies=[Depends(rate_limit("webhook"))],
 )
-async def webhook(inbox_id: str):
+async def webhook():
     ...
 ```
 
@@ -40,6 +40,12 @@ Supported key modes:
 - `client_ip`
 - `inbox_id`
 - `inbox_id_and_client_ip`
+
+For Inbox-aware HTTP routes, Wappa reads the established Inbox Execution
+Context or `X-Wappa-Inbox-ID`; it never treats a path segment as the routing
+authority. Payload-routed callbacks have no Inbox before authentication and
+parsing, so use `client_ip` at the HTTP boundary or apply a Host policy after
+authenticated payload routing.
 
 When a request exceeds the profile limit, Wappa raises HTTP 429 and includes a
 `Retry-After` header. Unknown profiles and missing plugin state are

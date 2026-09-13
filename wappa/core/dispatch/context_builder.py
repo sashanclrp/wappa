@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     import httpx
     from fastapi import FastAPI
 
+    from wappa.core.config.meta_application import MetaApplicationConfig
     from wappa.core.events.event_handler import WappaEventHandler
     from wappa.domain.interfaces.cache_factory import ICacheFactory
     from wappa.domain.interfaces.messaging_interface import IMessenger
@@ -57,6 +58,7 @@ class RuntimeCapabilities:
     messenger_middleware: Sequence[Any]
     cache_type: str
     background_work_tracker: Any
+    meta_application_config: MetaApplicationConfig | None = None
     redis_manager: Any | None = None
     postgres_session_manager: Any | None = None
 
@@ -82,6 +84,7 @@ class RuntimeCapabilities:
             messenger_middleware=getattr(state, "messenger_middleware", ()),
             cache_type=getattr(state, "wappa_cache_type", "memory"),
             background_work_tracker=getattr(state, "background_work_tracker", None),
+            meta_application_config=getattr(state, "meta_application_config", None),
             redis_manager=getattr(state, "redis_manager", None),
             postgres_session_manager=getattr(state, "postgres_session_manager", None),
         )
@@ -96,6 +99,16 @@ class DispatchContextBuilder:
             session_provider=capabilities.session_provider,
             media_download_client_provider=capabilities.media_download_client_provider,
             credential_resolver=capabilities.credential_resolver,
+            graph_api_version=(
+                capabilities.meta_application_config.graph_api_version
+                if capabilities.meta_application_config is not None
+                else None
+            ),
+            graph_base_url=(
+                str(capabilities.meta_application_config.graph_base_url)
+                if capabilities.meta_application_config is not None
+                else None
+            ),
         )
 
     @classmethod
@@ -154,13 +167,14 @@ class DispatchContextBuilder:
         base_handler: WappaEventHandler,
         *,
         inbox_ref: InboxRef | None,
-        user_id: str,
+        user_id: str | None,
         messenger: IMessenger | None,
         cache_factory: ICacheFactory | None,
     ) -> WappaEventHandler:
         db, db_read = self.database_factories()
         return base_handler.with_context(
-            inbox_id=inbox_ref.inbox_id if inbox_ref is not None else "",
+            inbox_id=inbox_ref.inbox_id if inbox_ref is not None else None,
+            inbox_ref=inbox_ref,
             user_id=user_id,
             messenger=messenger,
             cache_factory=cache_factory,

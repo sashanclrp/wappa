@@ -432,6 +432,10 @@ SSE Event Envelopes preserve the active SSE identity scope:
 - `platform`
 - `metadata`
 
+An SSE Inbox filter must also supply `platform`; Wappa rejects an unqualified
+native Inbox filter. PubSub channel namespaces are derived from `InboxRef` for
+the same reason.
+
 ## Rate Limiting
 
 Wappa provides local per-process route-level rate limiting through:
@@ -455,12 +459,17 @@ from fastapi import Depends
 from wappa.core.plugins import rate_limit
 
 @router.post(
-    "/webhook/{inbox_id}",
+    "/webhook/inboxes/whatsapp",
     dependencies=[Depends(rate_limit("webhook"))],
 )
-async def webhook(inbox_id: str):
+async def webhook():
     ...
 ```
+
+Inbox-aware limits read `X-Wappa-Inbox-ID` or an established Inbox Execution
+Context; a URL segment is never an Inbox routing authority. Payload-routed
+callbacks should use `client_ip` at HTTP admission or a Host policy after
+authentication and parsing.
 
 When the limit is exceeded, Wappa raises HTTP 429 with a `Retry-After` header.
 An unknown profile or missing `RateLimitPlugin` is a configuration error, not
@@ -929,7 +938,7 @@ Platform Account (WABA), not a User. Consumers handle them in `process_system_we
 
 - `expiry_registry`, `run_expiry_listener`
 - `get_app_context`, `AppContext`
-- `create_expiry_messenger`, `create_expiry_cache_factory`, `parse_inbox_from_expired_key`
+- `create_expiry_messenger`, `create_expiry_cache_factory`, `parse_inbox_from_expired_key`, `parse_inbox_ref_from_expired_key`
 
 ### Migration Notes (v0.27.0)
 

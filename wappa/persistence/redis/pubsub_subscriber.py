@@ -30,6 +30,8 @@ from typing import Any
 from redis.asyncio import Redis
 from redis.asyncio.client import PubSub
 
+from ...domain.inbox.identity import InboxRef
+from ...schemas.core.types import PlatformType
 from .redis_handler.utils.key_factory import KeyFactory
 
 logger = logging.getLogger("PubSubSubscriber")
@@ -118,7 +120,13 @@ async def subscribe(
         await pubsub.close()
 
 
-def build_channel(inbox: str, user_id: str, event_type: str) -> str:
+def build_channel(
+    inbox: str,
+    user_id: str,
+    event_type: str,
+    *,
+    platform: PlatformType = PlatformType.WHATSAPP,
+) -> str:
     """
     Build exact channel name for SUBSCRIBE.
 
@@ -130,13 +138,16 @@ def build_channel(inbox: str, user_id: str, event_type: str) -> str:
     Returns:
         Channel name like "wappa:notify:inbox:user:event"
     """
-    return _key_factory.channel(inbox, user_id, event_type)
+    inbox_ref = InboxRef(platform=platform, inbox_id=inbox)
+    return _key_factory.channel(inbox_ref.cache_namespace, user_id, event_type)
 
 
 def build_pattern(
     inbox: str,
     user_id: str = "*",
     event_type: str = "*",
+    *,
+    platform: PlatformType = PlatformType.WHATSAPP,
 ) -> str:
     """
     Build channel pattern for PSUBSCRIBE with wildcards.
@@ -159,7 +170,8 @@ def build_pattern(
         # Only incoming messages for all users
         build_pattern("my_inbox", event_type="incoming_message")
     """
-    return _key_factory.channel_pattern(inbox, user_id, event_type)
+    inbox_ref = InboxRef(platform=platform, inbox_id=inbox)
+    return _key_factory.channel_pattern(inbox_ref.cache_namespace, user_id, event_type)
 
 
 async def listen_once(

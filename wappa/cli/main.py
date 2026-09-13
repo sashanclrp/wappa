@@ -124,7 +124,7 @@ def _list_existing_user_files(directory: Path) -> list[Path]:
     ]
 
 
-def _initialize_project(directory: str) -> None:
+def _initialize_project(directory: str, *, inbox_routing: str = "legacy") -> None:
     project_path = Path(directory).resolve()
 
     # Check if directory exists, create if it doesn't
@@ -154,14 +154,21 @@ def _initialize_project(directory: str) -> None:
 
         typer.echo("📁 Created directory structure")
 
+        explicit = inbox_routing == "explicit"
         templates_to_create = {
             "app/__init__.py": "__init__.py.template",
-            "app/main.py": "main.py.template",
+            "app/main.py": "main.explicit.py.template"
+            if explicit
+            else "main.py.template",
             "app/master_event.py": "master_event.py.template",
             "app/scores/__init__.py": "__init__.py.template",
             ".gitignore": "gitignore.template",
-            ".env": "env.template",
+            ".env": "env.explicit.template" if explicit else "env.template",
         }
+        if explicit:
+            templates_to_create["app/inbox_directory_source.py"] = (
+                "inbox_directory_source.py.template"
+            )
 
         for file_path, template_name in templates_to_create.items():
             full_path = project_path / file_path
@@ -172,16 +179,21 @@ def _initialize_project(directory: str) -> None:
         typer.echo("✅ Wappa project initialized successfully!")
         typer.echo()
         typer.echo("📋 Next steps:")
-        typer.echo("1. Add your WhatsApp credentials to .env file")
+        typer.echo("1. Configure .env and the generated Host integration files")
         typer.echo("2. Install dependencies: uv sync")
         typer.echo("3. Start development: uv run wappa dev app/main.py")
         typer.echo()
         typer.echo("🔧 Required environment variables (.env file):")
         typer.echo("   META_APP_SECRET=your_meta_app_secret")
         typer.echo("   WP_WEBHOOK_VERIFY_TOKEN=your_webhook_verify_token")
-        typer.echo("   WP_ACCESS_TOKEN=your_access_token")
-        typer.echo("   WP_PHONE_ID=your_phone_id")
-        typer.echo("   WP_BID=your_business_id")
+        if explicit:
+            typer.echo("   SYSTEM_INBOX_ROUTING_MODE=explicit")
+            typer.echo("   SYSTEM_TOKEN_ENC_KEY=<generated Fernet key>")
+            typer.echo("   Implement app/inbox_directory_source.py for Host records")
+        else:
+            typer.echo("   WP_ACCESS_TOKEN=your_access_token")
+            typer.echo("   WP_PHONE_ID=your_phone_id")
+            typer.echo("   WP_BID=your_business_id")
         typer.echo()
         typer.echo("📡 Configure this one callback URL in the Meta App:")
         typer.echo("   https://your-domain.com/webhook/inboxes/whatsapp")
@@ -366,8 +378,15 @@ def init(
     directory: str = typer.Argument(
         ".", help="Directory to initialize (default: current directory)"
     ),
+    inbox_routing: str = typer.Option(
+        "legacy",
+        "--inbox-routing",
+        help="Credential authority for the generated project: legacy or explicit.",
+    ),
 ) -> None:
-    _initialize_project(directory)
+    if inbox_routing not in {"legacy", "explicit"}:
+        raise typer.BadParameter("must be 'legacy' or 'explicit'")
+    _initialize_project(directory, inbox_routing=inbox_routing)
 
 
 @app.command()

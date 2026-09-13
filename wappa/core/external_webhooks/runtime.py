@@ -166,6 +166,7 @@ class ExternalWebhookRuntime:
 
         request_handler = self.event_handler.with_context(
             inbox_id=inbox_ref.inbox_id if inbox_ref else None,
+            inbox_ref=inbox_ref,
             user_id=user_id,
             messenger=context.messenger,
             cache_factory=context.cache_factory,

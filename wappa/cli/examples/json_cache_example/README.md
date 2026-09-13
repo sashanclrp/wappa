@@ -67,7 +67,6 @@ WP_WEBHOOK_VERIFY_TOKEN=your_verify_token_here
 WP_ACCESS_TOKEN=your_access_token
 WP_PHONE_ID=your_phone_number_id
 WP_BID=your_business_account_id
-WP_WEBHOOK_VERIFY_TOKEN=your_webhook_verify_token
 
 # Application Settings
 PORT=8000

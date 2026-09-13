@@ -87,6 +87,19 @@ class InboxRef(BaseModel):
             return self.inbox_id
         return f"{self.platform.value}{QUALIFIED_NAMESPACE_SEPARATOR}{self.inbox_id}"
 
+    @classmethod
+    def from_cache_namespace(cls, namespace: str) -> InboxRef:
+        """Decode Wappa's cache namespace back into its qualified identity.
+
+        Raw namespaces are the deliberate backwards-compatible WhatsApp form;
+        all other Platforms use ``<platform>__<inbox_id>``.  Parsers use this
+        method rather than guessing an adapter from a raw key segment.
+        """
+        if QUALIFIED_NAMESPACE_SEPARATOR not in namespace:
+            return cls.whatsapp(namespace)
+        platform_value, inbox_id = namespace.split(QUALIFIED_NAMESPACE_SEPARATOR, 1)
+        return cls(platform=PlatformType(platform_value), inbox_id=inbox_id)
+
     @property
     def sort_key(self) -> tuple[str, str]:
         """Deterministic ordering: Platform first, then native identifier."""

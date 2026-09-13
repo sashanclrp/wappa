@@ -8,9 +8,9 @@ Build intelligent WhatsApp bots, workflows, and chat applications with clean arc
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.137+-green.svg)](https://fastapi.tiangolo.com)
 [![WhatsApp Business API](https://img.shields.io/badge/WhatsApp-Business%20API-25D366.svg)](https://developers.facebook.com/docs/whatsapp)
-[![Version](https://img.shields.io/badge/version-0.28.0-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.29.0-orange.svg)](CHANGELOG.md)
 
-> **v0.28.0 — Inbox-independent external webhooks** — external webhooks are ID-less by default and host applications resolve runtime context from trusted request headers, payloads, or middleware state. An opaque optional `webhook_id` remains available for providers that need it. See [CHANGELOG.md](CHANGELOG.md) and [the migration guide](docs/migration/external-webhook-context-resolution.md).
+> **v0.29.0 — Qualified runtime scope across Platforms** — runtime context consistently carries `InboxRef(platform, inbox_id)` outside Platform boundaries, preventing native-ID collisions while preserving existing WhatsApp compatibility seams. See [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -217,9 +217,8 @@ wappa init .
 wappa init my-bot
 cd my-bot
 
-# Configure environment
-cp .env.example .env
-# Edit .env with your WhatsApp credentials
+# The generated project already contains .env
+# Edit .env with your credentials
 ```
 
 ### 3. Run Development Server
@@ -239,6 +238,16 @@ Send a message to your WhatsApp Business number and watch it echo back!
 ### Many Inboxes under one Meta App (explicit mode)
 
 Wappa has exactly two Inbox Routing Modes and they never mix. `legacy` (the default) runs the single Inbox from the `WP_*` bundle. `explicit` runs any number of Inboxes through Wappa's encrypted Inbox Directory: you implement a read-only `IInboxDirectorySource` over your own database, Wappa owns encryption (`SYSTEM_TOKEN_ENC_KEY`), caching, the WABA reverse index, and Messenger eviction.
+
+Start a Host-adapter scaffold with `wappa init my-bot --inbox-routing explicit`.
+It includes the required environment configuration and an
+`IInboxDirectorySource` stub to connect to the Host's durable Inbox records.
+
+```bash
+# Explicit mode never mixes with the legacy WP_* Inbox bundle.
+SYSTEM_INBOX_ROUTING_MODE=explicit
+SYSTEM_TOKEN_ENC_KEY=<Fernet key from CredentialCodec.generate_key()>
+```
 
 ```python
 from wappa import Wappa, InboxRoutingMode

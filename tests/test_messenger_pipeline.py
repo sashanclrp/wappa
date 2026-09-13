@@ -238,6 +238,7 @@ async def test_sse_lifecycle_middleware_publishes_after_raw_send():
         platform="whatsapp",
     ):
         subscription = await hub.subscribe(
+            platform="whatsapp",
             inbox_id="test-inbox",
             event_types={"outgoing_bot_message"},
         )

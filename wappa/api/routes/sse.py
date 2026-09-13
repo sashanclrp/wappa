@@ -72,12 +72,16 @@ def _format_sse_event(
     "/events",
     summary="Stream Wappa events via SSE",
     description=(
-        "Subscribe to real-time Wappa events. Optionally filter by inbox, user, "
-        "and event types."
+        "Subscribe to real-time Wappa events. An Inbox filter is qualified by "
+        "Platform; optionally filter by user and event types."
     ),
 )
 async def stream_events(
     request: Request,
+    platform: str | None = Query(
+        default=None,
+        description="Platform for an Inbox filter; required when inbox_id is set.",
+    ),
     inbox_id: str | None = Query(
         default=None,
         description="Optional inbox filter (only events for this inbox).",
@@ -96,8 +100,14 @@ async def stream_events(
 ) -> EventSourceResponse:
     """Create SSE stream for clients and emit full event envelopes."""
     event_hub = _get_event_hub(request)
+    if inbox_id is not None and platform is None:
+        raise HTTPException(
+            status_code=400,
+            detail="platform is required when filtering SSE by inbox_id",
+        )
     selected_events = _parse_event_filters(event_types)
     subscription = await event_hub.subscribe(
+        platform=platform,
         inbox_id=inbox_id,
         user_id=user_id,
         event_types=selected_events,

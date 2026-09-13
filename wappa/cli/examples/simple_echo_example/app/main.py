@@ -21,7 +21,7 @@ SETUP REQUIRED:
 USAGE:
 - Direct Python: python -m app.main (from project root)
 - FastAPI-style: uvicorn app.main:app --reload (from project root)
-- Wappa CLI: wappa run app/main.py (from project root)
+- Wappa CLI: wappa dev app/main.py (from project root)
 """
 
 # Import core Wappa components

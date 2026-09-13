@@ -63,7 +63,7 @@ wappa/core/messaging/middleware/
 | `update_identity` / `update_metadata` | Enrich the active context and trigger a Pending Incoming flush as a side-effect. Called from pipeline middleware after a cache lookup resolves `user_id`. |
 | `SSEEventHub` | Singleton async fan-out bus. `subscribe` / `unsubscribe` manage Subscriptions; `publish` fans out to matching ones using a drop-oldest queue policy. |
 | `publish_sse_event` | Public best-effort publisher. Rejects unknown event types, logs hub failures, and returns `0` instead of affecting the caller's main flow. |
-| `SSESubscription` | Immutable dataclass: `subscriber_id`, bounded `asyncio.Queue`, and optional filters (`inbox_id`, `user_id`, `event_types`). |
+| `SSESubscription` | Immutable dataclass: `subscriber_id`, bounded `asyncio.Queue`, and optional filters (`platform`, `inbox_id`, `user_id`, `event_types`). An Inbox filter always carries a Platform, so native identifiers cannot cross-deliver. |
 | `SSEMessageHandler` | Decorator over `DefaultMessageHandler`. Stages the `incoming_message` envelope as a Pending Incoming on the context rather than publishing immediately. |
 | `SSEStatusHandler` / `SSEErrorHandler` | Decorators over their Default counterparts. Publish `status_change` / `webhook_error` envelopes directly (no staging needed). |
 | `SSELifecycleMiddleware` | Messenger Pipeline middleware (priority 70). Flush → send → publish `outgoing_bot_message`. App-scoped singleton; identity comes from `SSEEventContext`. |

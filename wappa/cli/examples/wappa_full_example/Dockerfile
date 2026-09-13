@@ -57,8 +57,8 @@ RUN mkdir -p /app/logs /app/media/buttons /app/media/list \
 # Set environment variables for production
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV ENVIRONMENT=PROD
-ENV LOG_LEVEL=INFO
+ENV SYSTEM_ENVIRONMENT=PROD
+ENV SYSTEM_LOG_LEVEL=INFO
 ENV PORT=8000
 
 # Health check configuration

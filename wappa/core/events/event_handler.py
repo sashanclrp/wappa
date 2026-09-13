@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from wappa.domain.events.api_message_event import APIMessageEvent
     from wappa.domain.events.cron_event import CronEvent
     from wappa.domain.events.external_event import ExternalEvent
+    from wappa.domain.inbox.identity import InboxRef
     from wappa.domain.interfaces.cache_factory import ICacheFactory
     from wappa.domain.interfaces.messaging_interface import IMessenger
     from wappa.webhooks import (
@@ -103,6 +104,7 @@ class WappaEventHandler(ABC):
         """Initialize event handler as a prototype (dependencies injected via with_context)."""
         # Per-request context (set via with_context() - NOT mutable on prototype)
         self.inbox_id: str | None = None
+        self.inbox_ref: InboxRef | None = None
         self.user_id: str | None = None
 
         # Per-request dependencies (set via with_context() - NOT mutable on prototype)
@@ -140,6 +142,7 @@ class WappaEventHandler(ABC):
         db: Callable[[], AbstractAsyncContextManager["AsyncSession"]] | None = None,
         db_read: Callable[[], AbstractAsyncContextManager["AsyncSession"]]
         | None = None,
+        inbox_ref: "InboxRef | None" = None,
     ) -> Self:
         """
         Create a context-bound copy of this handler for a specific request.
@@ -174,6 +177,7 @@ class WappaEventHandler(ABC):
 
         # Bind per-request context
         handler.inbox_id = inbox_id
+        handler.inbox_ref = inbox_ref
         handler.user_id = user_id
 
         # Bind per-request dependencies

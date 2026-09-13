@@ -5,13 +5,38 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0] - 2026-09-13
+
+Runtime scope is now consistently qualified by Platform and Inbox wherever it leaves a known Platform boundary. This closes same-native-ID collisions in SSE, Redis Pub/Sub, expiry, and scheduled work while retaining legacy raw WhatsApp identifiers at their existing compatibility boundaries. Explicit Inbox credentials now propagate the configured Meta Graph endpoint throughout outbound construction, and generated explicit-routing projects include the configuration and host-directory seams they need from the start.
+
+### Added
+
+- `InboxRef.from_cache_namespace()` and `parse_inbox_ref_from_expired_key()` for recovering qualified runtime identity from Wappa-owned cache keys.
+- Platform-qualified Inbox filtering for SSE subscriptions and Redis Pub/Sub channels.
+- `CronPlugin.add_cron(..., inbox_ref=...)` and `CronEvent.inbox_ref`, with the existing `inbox_id` argument retained as a WhatsApp compatibility convenience.
+- `wappa init --inbox-routing explicit` scaffolding, including an explicit environment template, Inbox Directory source stub, and explicit application template.
+- A bounded LRU Messenger construction cache, preventing unbounded growth for Hosts with a large number of active Inboxes.
+
+### Changed
+
+- Expiry, cron, API-event, and external-webhook dispatch contexts carry an `InboxRef` when Inbox scope is known; System work remains Inbox-free instead of using a fabricated Inbox ID.
+- Explicit Inbox runtime construction and detailed health reporting now use the configured Meta Graph API version and base URL rather than legacy process-level settings.
+- Webhook status reports registered Platform routes separately from installed adapter capabilities, keeping route registration independent of a single Platform implementation.
+- Rate-limit scope resolution first uses the trusted Inbox Execution Context; payload-routed callbacks can instead use client-IP or Host-defined post-authentication policy.
+- Public docs, examples, templates, and architectural language describe Platform capability seams without baking application context into webhook URL shape.
+
+### Fixed
+
+- Logging context uses `I` for Inbox and accepts historical `T` records when parsing, removing stale tenancy vocabulary without breaking existing log consumers.
+- Corrected the v0.28 external-webhook URL in the changelog and removed stale configuration and route examples from generated documentation.
+
 ## [0.28.0] - 2026-09-13
 
-External webhooks are now Inbox-independent. Their canonical route is `POST /webhook/{app}/{provider}`; `POST /webhook/{app}/{provider}/{webhook_id}` is an explicit opt-in for opaque provider route identifiers, not Inbox identity. Hosts resolve runtime context after authentication and parsing from trusted payload evidence, request headers, or middleware state through `IExternalWebhookContextResolver`.
+External webhooks are now Inbox-independent. Their canonical route is `POST /webhook/{provider}`; `POST /webhook/{provider}/{webhook_id}` is an explicit opt-in for opaque provider route identifiers, not Inbox identity. Hosts resolve runtime context after authentication and parsing from trusted payload evidence, request headers, or middleware state through `IExternalWebhookContextResolver`.
 
 ### Upgrade watch-outs
 
-- **Remove Inbox IDs from external webhook URLs.** Replace `/webhook/{app}/{provider}/{inbox_id}` with the ID-less route. If a provider requires an identifier in its configured URL, use `WebhookPlugin(..., include_webhook_id=True)` and treat it as an opaque `webhook_id`.
+- **Remove Inbox IDs from external webhook URLs.** Replace `/webhook/{provider}/{inbox_id}` with the ID-less route. If a provider requires an identifier in its configured URL, use `WebhookPlugin(..., include_webhook_id=True)` and treat it as an opaque `webhook_id`.
 - **Move context resolution into the Host boundary.** Implement `IExternalWebhookContextResolver` when a webhook needs an Inbox or user-scoped capability. It runs only after processor authentication and parsing, and may derive context from verified headers, payload data, or `request.state` set by trusted middleware. It must not infer context from URL construction.
 - **External event payloads changed.** `ExternalWebhookEvent` no longer includes `inbox_id` or `user_id`; it includes only optional `webhook_id`. Handlers receive Inbox, Messenger, User, and Cache capabilities only when the resolver returns a corresponding trusted context.
 

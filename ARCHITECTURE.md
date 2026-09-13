@@ -287,12 +287,15 @@ Wappa manages two separate HTTP client pools, both owned by `SessionLifecycle`:
 
 ## Multi-Platform Strategy
 
-Wappa today is WhatsApp-only in implementation but multi-platform in design:
+Wappa is multi-platform by design. Platform types remain stable while adapter
+capabilities are registered independently:
 
 1. **Universal Webhook Models** (`wappa/webhooks/core/`): `InboxBase`, `UserBase`, `MessageBase`, `StatusBase`, `ErrorBase`, `SystemBase` — platform-agnostic.
 2. **Platform Adapters** (`wappa/webhooks/whatsapp/`, `wappa/messaging/whatsapp/`): Parse WhatsApp-specific payloads into universal models; construct WhatsApp-specific API requests from universal send calls.
 3. **Shared Schema Primitives** (`wappa/schemas/core/types.py`, `wappa/schemas/core/recipient.py`): Cross-cutting enums and outbound recipient normalization shared by inbound, outbound, API, and runtime modules. Inbound webhook schemas do not live here.
-4. **PlatformType enum**: New platforms add a value here. The router, dispatcher, and factory resolve the correct adapter.
+4. **PlatformType enum**: The supported vocabulary is stable. The router,
+   dispatcher, and factory resolve registered adapter capabilities rather than
+   treating a route name as proof that an adapter is installed.
 5. **Inbox Directory** (`wappa/domain/inbox/`): Wappa's canonical, Platform-discriminated credential records and the read-through directory that resolves them. Hosts supply only an `IInboxDirectorySource`; Wappa owns encryption, caching, versions, indexes, and Messenger eviction. The `InboxCredentialRecord` union grows one member per Platform.
 6. **Adding a new platform** requires:
    - A webhook processor implementing the platform's payload → universal model mapping

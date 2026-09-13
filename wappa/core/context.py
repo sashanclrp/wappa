@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from wappa.core.logging.logger import ContextLogger, get_logger
+from wappa.domain.inbox.identity import InboxRef
 from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
@@ -35,6 +36,7 @@ class WappaContext:
 
     inbox_id: str | None
     user_id: str | None = None
+    inbox_ref: InboxRef | None = None
 
     # Infrastructure dependencies
     db: Callable[[], AbstractAsyncContextManager[AsyncSession]] | None = None
@@ -67,21 +69,23 @@ class WappaContextFactory:
 
     async def create_context(
         self,
-        inbox_id: str | None,
+        inbox_id: str | None = None,
         user_id: str | None = None,
         *,
         include_messenger: bool = False,
-        platform: PlatformType = PlatformType.WHATSAPP,
+        inbox_ref: InboxRef | None = None,
+        platform: PlatformType | None = None,
     ) -> WappaContext:
         """
         Create a WappaContext with infrastructure dependencies from app.state.
 
         Args:
-            inbox_id: Optional Inbox identifier. ``None`` creates a database-only
-                context and cannot construct Inbox-scoped capabilities.
+            inbox_id: Legacy native Inbox identifier. Prefer ``inbox_ref`` at
+                cross-Platform boundaries. ``None`` creates a database-only context.
             user_id: Optional User identifier.
             include_messenger: Whether to create a Messenger instance.
-            platform: Messaging Platform used for Inbox capability construction.
+            inbox_ref: Qualified Inbox identity for capability construction.
+            platform: Platform for the legacy raw ``inbox_id`` input.
 
         Raises:
             InboxDirectoryError: the Inbox Directory could not answer for this
@@ -98,7 +102,6 @@ class WappaContextFactory:
             resolve_database_factories,
         )
         from wappa.domain.inbox.errors import InboxDirectoryError
-        from wappa.domain.inbox.identity import InboxRef
 
         builder: DispatchContextBuilder | None
         try:
@@ -116,20 +119,33 @@ class WappaContextFactory:
 
         cache_factory: ICacheFactory | None = None
         messenger: IMessenger | None = None
-        if inbox_id is None and (user_id or include_messenger):
+        if (
+            inbox_ref is not None
+            and inbox_id is not None
+            and inbox_ref.inbox_id != inbox_id
+        ):
+            raise ValueError("inbox_id and inbox_ref must identify the same Inbox")
+        resolved_inbox_ref = inbox_ref
+        if resolved_inbox_ref is None and inbox_id is not None:
+            resolved_inbox_ref = InboxRef(
+                platform=platform or PlatformType.WHATSAPP, inbox_id=inbox_id
+            )
+        resolved_inbox_id = (
+            resolved_inbox_ref.inbox_id if resolved_inbox_ref is not None else None
+        )
+        if resolved_inbox_ref is None and (user_id or include_messenger):
             raise ValueError(
                 "Inbox-scoped context requires inbox_id when user_id or "
                 "include_messenger is set"
             )
         if (
             builder is not None
-            and inbox_id is not None
+            and resolved_inbox_ref is not None
             and (user_id or include_messenger)
         ):
-            inbox_ref = InboxRef(platform=platform, inbox_id=inbox_id)
             if user_id:
                 try:
-                    cache_factory = builder.cache_factory(inbox_ref, user_id)
+                    cache_factory = builder.cache_factory(resolved_inbox_ref, user_id)
                 except InboxDirectoryError:
                     # A directory failure is a typed category the caller must
                     # see. Degrading to cache_factory=None would surface later
@@ -139,19 +155,20 @@ class WappaContextFactory:
                     self.logger.error("Cache factory creation failed: %s", e)
             if include_messenger:
                 try:
-                    messenger = await builder.messenger(inbox_ref)
+                    messenger = await builder.messenger(resolved_inbox_ref)
                 except InboxDirectoryError:
                     raise
                 except Exception as e:
                     self.logger.error(
                         "Messenger creation failed for %s: %s: %s",
-                        inbox_ref,
+                        resolved_inbox_ref,
                         type(e).__name__,
                         e,
                     )
 
         ctx = WappaContext(
-            inbox_id=inbox_id,
+            inbox_id=resolved_inbox_id,
+            inbox_ref=resolved_inbox_ref,
             user_id=user_id,
             db=db,
             db_read=db_read,
@@ -161,7 +178,7 @@ class WappaContextFactory:
 
         self.logger.debug(
             "Created WappaContext: inbox=%s, user=%s, db=%s, cache=%s, messenger=%s",
-            inbox_id,
+            resolved_inbox_id,
             user_id,
             "yes" if db else "no",
             "yes" if cache_factory else "no",

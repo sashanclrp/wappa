@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from pydantic import SecretStr
 
+from wappa.core.config.meta_application import MetaApplicationConfig
 from wappa.core.context import WappaContextFactory
 from wappa.core.dispatch import DispatchContextBuilder, RuntimeCapabilities
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
@@ -143,6 +145,21 @@ def test_db_and_db_read_stay_optional_without_a_fake_session() -> None:
         handler.require_database()
 
 
+def test_unscoped_binding_preserves_none_identity() -> None:
+    builder = DispatchContextBuilder(_capabilities(_Resolver()))
+
+    handler = builder.bind_handler(
+        _Handler(),
+        inbox_ref=None,
+        user_id=None,
+        messenger=None,
+        cache_factory=None,
+    )
+
+    assert handler.inbox_id is None
+    assert handler.user_id is None
+
+
 async def test_messenger_construction_propagates_directory_outages_typed() -> None:
     resolver = _Resolver()
     resolver.unavailable = True
@@ -165,6 +182,23 @@ async def test_messenger_factory_subscribes_to_evictions_and_recreates() -> None
     assert await builder.messenger_factory.create_messenger(ref) is not first
 
 
+async def test_explicit_meta_transport_configuration_reaches_messenger_client() -> None:
+    config = MetaApplicationConfig(
+        app_secret=SecretStr("app-secret"),
+        whatsapp_webhook_verify_token=SecretStr("verify-token"),
+        graph_api_version="v99.1",
+        graph_base_url="https://graph.example.test/",
+    )
+    capabilities = _capabilities(_Resolver())
+    capabilities = replace(capabilities, meta_application_config=config)
+    messenger = await DispatchContextBuilder(
+        capabilities
+    ).messenger_factory.create_messenger(InboxRef.whatsapp("111"))
+
+    assert messenger.client.url_builder.api_version == "v99.1"
+    assert messenger.client.url_builder.base_url == "https://graph.example.test"
+
+
 async def test_context_factory_uses_the_shared_builder_for_cron_and_external_paths() -> (
     None
 ):
@@ -172,7 +206,7 @@ async def test_context_factory_uses_the_shared_builder_for_cron_and_external_pat
     app = _app(resolver, db=True)
     factory = WappaContextFactory(app)
 
-    system = await factory.create_context(inbox_id="__system__")
+    system = await factory.create_context(inbox_id=None)
     scoped = await factory.create_context(
         inbox_id="111", user_id="user-1", include_messenger=True
     )
@@ -244,7 +278,7 @@ async def test_context_factory_still_returns_a_db_only_context_when_unavailable(
     resolver.unavailable = True
     factory = WappaContextFactory(_app(resolver, db=True))
 
-    context = await factory.create_context(inbox_id="__system__")
+    context = await factory.create_context(inbox_id=None)
 
     assert context.db is not None
     assert context.messenger is None and context.cache_factory is None

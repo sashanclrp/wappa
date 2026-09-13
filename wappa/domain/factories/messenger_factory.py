@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import weakref
+from collections import OrderedDict
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -46,12 +47,20 @@ class MessengerFactory:
         session_provider: Callable[[], httpx.AsyncClient],
         media_download_client_provider: Callable[[], httpx.AsyncClient],
         credential_resolver: IInboxCredentialResolver | None = None,
+        graph_api_version: str | None = None,
+        graph_base_url: str | None = None,
+        max_cached_messengers: int = 128,
     ) -> None:
         self._session_provider = session_provider
         self._credential_resolver = credential_resolver
         self._media_download_client_provider = media_download_client_provider
+        self._graph_api_version = graph_api_version
+        self._graph_base_url = graph_base_url
+        if max_cached_messengers < 0:
+            raise ValueError("max_cached_messengers must be >= 0")
+        self._max_cached_messengers = max_cached_messengers
         self.logger = get_logger(__name__)
-        self._messenger_cache: dict[str, IMessenger] = {}
+        self._messenger_cache: OrderedDict[str, IMessenger] = OrderedDict()
         if credential_resolver is not None:
             self_ref = weakref.ref(self)
 
@@ -85,6 +94,7 @@ class MessengerFactory:
         if not force_recreate and cache_key in self._messenger_cache:
             try:
                 self._get_session()
+                self._messenger_cache.move_to_end(cache_key)
                 self.logger.debug("Using cached messenger for %s", cache_key)
                 return self._messenger_cache[cache_key]
             except HTTPSessionClosedError:
@@ -121,7 +131,14 @@ class MessengerFactory:
             self.logger.error("Failed to create messenger for %s: %s", cache_key, e)
             raise RuntimeError(f"Messenger creation failed: {e}") from e
 
-        self._messenger_cache[cache_key] = messenger
+        if self._max_cached_messengers:
+            self._messenger_cache[cache_key] = messenger
+            self._messenger_cache.move_to_end(cache_key)
+            while len(self._messenger_cache) > self._max_cached_messengers:
+                evicted_key, _ = self._messenger_cache.popitem(last=False)
+                self.logger.debug(
+                    "Evicted least-recently-used messenger for %s", evicted_key
+                )
         return messenger
 
     def _create_whatsapp_messenger(
@@ -129,11 +146,17 @@ class MessengerFactory:
     ) -> WhatsAppMessenger:
         inbox_id = credentials.inbox_id
         session = self._get_session()
+        client_kwargs: dict[str, str] = {}
+        if self._graph_api_version is not None:
+            client_kwargs["api_version"] = self._graph_api_version
+        if self._graph_base_url is not None:
+            client_kwargs["base_url"] = self._graph_base_url
         client = WhatsAppClient(
             session=session,
             access_token=credentials.access_token.get_secret_value(),
             phone_number_id=inbox_id,
             logger=self.logger,
+            **client_kwargs,
         )
         messenger = WhatsAppMessenger(
             client=client,

@@ -88,6 +88,7 @@ async def detailed_health_check(request: Request) -> dict[str, Any]:
     """Detailed health check with configuration and dependency readiness."""
     start_time = time.time()
     runtime_status = _inbox_runtime_status(request)
+    meta_config = getattr(request.app.state, "meta_application_config", None)
     directory_reachability = await _directory_reachability(request)
     response_time = time.time() - start_time
 
@@ -104,7 +105,16 @@ async def detailed_health_check(request: Request) -> dict[str, Any]:
         "configuration": {
             "log_level": settings.log_level,
             "log_dir": settings.log_dir,
-            "api_version": settings.api_version,
+            "api_version": (
+                meta_config.graph_api_version
+                if meta_config is not None
+                else settings.api_version
+            ),
+            "api_base_url": (
+                str(meta_config.graph_base_url)
+                if meta_config is not None
+                else settings.base_url
+            ),
             "time_zone": settings.time_zone,
             "port": settings.port,
             **runtime_status,

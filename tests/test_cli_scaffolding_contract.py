@@ -116,3 +116,19 @@ def test_init_banner_teaches_the_callback_secret_and_url(tmp_path: Path) -> None
     assert "META_APP_SECRET" in result.output
     assert "/webhook/inboxes/whatsapp" in result.output
     assert "WP_WEBHOOK_VERIFY_TOKEN" in result.output
+
+
+def test_explicit_init_scaffolds_host_directory_boundary(tmp_path: Path) -> None:
+    result = CliRunner().invoke(
+        cli_app, ["init", str(tmp_path), "--inbox-routing", "explicit"]
+    )
+
+    assert result.exit_code == 0, result.output
+    env = (tmp_path / ".env").read_text()
+    main = (tmp_path / "app/main.py").read_text()
+    source = (tmp_path / "app/inbox_directory_source.py").read_text()
+    assert "SYSTEM_INBOX_ROUTING_MODE=explicit" in env
+    assert "SYSTEM_TOKEN_ENC_KEY=" in env
+    assert "WP_ACCESS_TOKEN=" not in env
+    assert "InboxRoutingMode.EXPLICIT" in main
+    assert "IInboxDirectorySource" in source

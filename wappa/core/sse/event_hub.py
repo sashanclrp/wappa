@@ -17,6 +17,7 @@ class SSESubscription:
 
     subscriber_id: str
     queue: asyncio.Queue[dict[str, Any]]
+    platform: str | None
     inbox_id: str | None
     user_id: str | None
     event_types: set[str] | None
@@ -36,11 +37,19 @@ class SSEEventHub:
     async def subscribe(
         self,
         *,
+        platform: str | None = None,
         inbox_id: str | None = None,
         user_id: str | None = None,
         event_types: set[str] | None = None,
     ) -> SSESubscription:
-        """Register a new subscriber with optional filters."""
+        """Register a new subscriber with optional filters.
+
+        An Inbox filter always needs its Platform. Native Inbox identifiers are
+        only unique inside a Platform, so accepting an unqualified filter would
+        cross-deliver events once another adapter is enabled.
+        """
+        if inbox_id is not None and platform is None:
+            raise ValueError("platform is required when filtering SSE by inbox_id")
         normalized_events: set[str] | None = None
         if event_types:
             normalized_events = {
@@ -50,6 +59,7 @@ class SSEEventHub:
         subscriber = SSESubscription(
             subscriber_id=str(uuid4()),
             queue=asyncio.Queue(maxsize=self._queue_size),
+            platform=platform,
             inbox_id=inbox_id,
             user_id=user_id,
             event_types=normalized_events,
@@ -94,6 +104,7 @@ class SSEEventHub:
             if not self._matches(
                 subscriber=subscriber,
                 event_type=event_type,
+                platform=ctx.platform,
                 inbox_id=ctx.inbox_id,
                 user_id=ctx.user_id,
             ):
@@ -126,12 +137,14 @@ class SSEEventHub:
         """Expose basic connection stats for health checks."""
         subscribers = tuple(self._subscribers.values())
         inbox_filtered = sum(1 for item in subscribers if item.inbox_id is not None)
+        platform_filtered = sum(1 for item in subscribers if item.platform is not None)
         user_filtered = sum(1 for item in subscribers if item.user_id is not None)
         event_filtered = sum(1 for item in subscribers if item.event_types is not None)
 
         return {
             "active_subscribers": len(subscribers),
             "inbox_filtered_subscribers": inbox_filtered,
+            "platform_filtered_subscribers": platform_filtered,
             "user_filtered_subscribers": user_filtered,
             "event_filtered_subscribers": event_filtered,
         }
@@ -164,10 +177,14 @@ class SSEEventHub:
         *,
         subscriber: SSESubscription,
         event_type: str,
+        platform: str,
         inbox_id: str,
         user_id: str,
     ) -> bool:
         """Check whether an event should be delivered to a subscriber."""
+        if subscriber.platform is not None and subscriber.platform != platform:
+            return False
+
         if subscriber.inbox_id is not None and subscriber.inbox_id != inbox_id:
             return False
 
