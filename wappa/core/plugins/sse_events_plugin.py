@@ -14,6 +14,7 @@ from ...core.sse import (
     SUPPORTED_SSE_EVENT_TYPES,
     SSEErrorHandler,
     SSEEventHub,
+    SSEHub,
     SSEMessageHandler,
     SSEStatusHandler,
     publish_api_sse_event,
@@ -27,6 +28,8 @@ if TYPE_CHECKING:
     from ...domain.events.api_message_event import APIMessageEvent
 
 logger = logging.getLogger(__name__)
+
+SSEHubFactory = Callable[[int], SSEHub]
 
 
 class SSEEventsPlugin:
@@ -42,7 +45,15 @@ class SSEEventsPlugin:
         publish_webhook_errors: bool = True,
         queue_size: int = 200,
         custom_event_types: set[str] | None = None,
+        event_hub: SSEHub | None = None,
+        event_hub_factory: SSEHubFactory | None = None,
     ):
+        if event_hub is not None and event_hub_factory is not None:
+            raise ValueError("provide event_hub or event_hub_factory, not both")
+        if event_hub is not None and not isinstance(event_hub, SSEHub):
+            raise TypeError("event_hub must satisfy the SSEHub protocol")
+        if event_hub_factory is not None and not callable(event_hub_factory):
+            raise TypeError("event_hub_factory must be callable")
         self.publish_incoming = publish_incoming
         self.publish_outgoing_api = publish_outgoing_api
         self.publish_bot_replies = publish_bot_replies
@@ -50,6 +61,8 @@ class SSEEventsPlugin:
         self.publish_webhook_errors = publish_webhook_errors
         self.queue_size = queue_size
         self.custom_event_types = custom_event_types or set()
+        self._injected_event_hub = event_hub
+        self._event_hub_factory = event_hub_factory or SSEEventHub
 
         self._original_message_handler = None
         self._original_status_handler = None
@@ -57,13 +70,14 @@ class SSEEventsPlugin:
         self._api_post_process_hook: (
             Callable[[APIMessageEvent], Awaitable[None]] | None
         ) = None
-        self._event_hub: SSEEventHub | None = None
+        self._event_hub: SSEHub | None = None
+        self._hub_shutdown = False
 
     def configure(self, builder: WappaBuilder) -> None:
         """Register SSE routes, lifecycle hooks, and the outbound middleware.
 
-        The ``SSEEventHub`` is constructed here (synchronously — it owns
-        only asyncio primitives) so the outbound messenger middleware can
+        The selected ``SSEHub`` is constructed here (synchronously) so the
+        outbound messenger middleware can
         be registered through the public ``add_messenger_middleware`` API
         at configure time, rather than via private ``app.state`` flags
         that the controller would have to know about.
@@ -72,7 +86,11 @@ class SSEEventsPlugin:
         builder.add_startup_hook(self._startup_hook, priority=24)
         builder.add_shutdown_hook(self._shutdown_hook, priority=24)
 
-        self._event_hub = SSEEventHub(queue_size=self.queue_size)
+        self._event_hub = self._injected_event_hub or self._event_hub_factory(
+            self.queue_size
+        )
+        if not isinstance(self._event_hub, SSEHub):
+            raise TypeError("event_hub_factory must return an SSEHub")
         if self.publish_bot_replies:
             builder.add_messenger_middleware(
                 SSELifecycleMiddleware(self._event_hub),
@@ -90,7 +108,11 @@ class SSEEventsPlugin:
         # SSE router (which subscribes clients) can reach it at runtime.
         event_hub = self._event_hub
         if event_hub is None:  # pragma: no cover — configure() is mandatory
-            event_hub = SSEEventHub(queue_size=self.queue_size)
+            event_hub = self._injected_event_hub or self._event_hub_factory(
+                self.queue_size
+            )
+            if not isinstance(event_hub, SSEHub):
+                raise TypeError("event_hub_factory must return an SSEHub")
             self._event_hub = event_hub
         app.state.sse_event_hub = event_hub
 
@@ -181,8 +203,9 @@ class SSEEventsPlugin:
                 self._api_post_process_hook = None
 
         event_hub = getattr(app.state, "sse_event_hub", None)
-        if isinstance(event_hub, SSEEventHub):
+        if isinstance(event_hub, SSEHub) and not self._hub_shutdown:
             await event_hub.shutdown()
+            self._hub_shutdown = True
 
         if hasattr(app.state, "sse_events_plugin"):
             del app.state.sse_events_plugin
@@ -195,13 +218,13 @@ class SSEEventsPlugin:
     async def get_health_status(self, app: FastAPI) -> dict[str, Any]:
         """Get plugin health status for monitoring."""
         event_hub = getattr(app.state, "sse_event_hub", None)
-        hub_stats: dict[str, int] = {}
-        if isinstance(event_hub, SSEEventHub):
-            hub_stats = event_hub.get_stats()
+        hub_metrics: dict[str, Any] = {}
+        if isinstance(event_hub, SSEHub):
+            hub_metrics = event_hub.snapshot_metrics().to_dict()
 
         return {
             "plugin": "SSEEventsPlugin",
-            "healthy": isinstance(event_hub, SSEEventHub),
+            "healthy": isinstance(event_hub, SSEHub),
             "config": {
                 "publish_incoming": self.publish_incoming,
                 "publish_outgoing_api": self.publish_outgoing_api,
@@ -218,5 +241,5 @@ class SSEEventsPlugin:
                 "messenger_wrapper": self.publish_bot_replies
                 and self._event_hub is not None,
             },
-            "hub": hub_stats,
+            "hub": hub_metrics,
         }

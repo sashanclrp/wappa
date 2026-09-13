@@ -419,9 +419,36 @@ Unknown event types are rejected by `publish_sse_event()`: the function returns
 `0`, logs a warning, and does not deliver an envelope. Hub publish failures are
 also best-effort: the function logs and returns `0`.
 
-`SSEEventHub.publish()` remains a low-level fan-out primitive. It does not own
-event-type validation; callers should use `publish_sse_event()` unless they are
-inside Wappa internals.
+`SSEHub` is Wappa's public structural hub contract. `SSEEventsPlugin()` creates
+the in-memory `SSEEventHub` by default. A Host may inject one compatible hub or
+one factory (supplying both is a configuration error); routes, handlers,
+Messenger lifecycle middleware, shutdown, and health use that same instance.
+
+```python
+from wappa.core.plugins import SSEEventsPlugin
+
+plugin = SSEEventsPlugin(
+    event_hub_factory=lambda queue_size: BrokeredSSEHub(queue_size=queue_size)
+)
+```
+
+`await hub.publish(...)` creates an `SSEEventEnvelope` and returns
+`SSEPublishResult(envelope, delivery)`. A broker adapter receives remote work
+through `hub.deliver_envelope(envelope)`: that operation does local fan-out,
+preserves `event_id`, and never publishes externally. `publish_sse_event()`
+remains the public best-effort wrapper for validated Wappa event types and
+returns the local delivery count.
+
+`SSEHub.snapshot_metrics()` returns typed `SSEHubMetrics`; `/api/sse/status`
+and plugin health serialize the same snapshot. Counters include active and
+filtered subscriptions, published and locally delivered events, dropped events,
+overflow closures, and shutdown closures. They are process-local and not a
+durable ledger.
+
+SSE is non-durable. The default hub closes a Subscription on its first full
+queue with a private `backpressure_gap` control rather than silently dropping
+an event and keeping the stream open. The browser reconnects and the Host
+reconciles durable state; Wappa provides neither replay nor reconciliation.
 
 SSE Event Envelopes preserve the active SSE identity scope:
 
@@ -722,7 +749,9 @@ Internal module paths (`wappa.core.*`, `wappa.persistence.redis.redis_handler.*`
 - `publish_sse_event`, `publish_api_sse_event`
 - `sse_event_scope`, `get_sse_context`, `classify_meta_identifier`
 - `update_identity`, `update_metadata`, `flush_incoming_sse`, `derive_identifiers`
-- `SSEEventHub`, `SSESubscription`, `SSEEventType`, `register_sse_event_type`
+- `SSEHub`, `SSEEventHub`, `SSESubscription`, `SSEEventEnvelope`,
+  `SSEDeliveryResult`, `SSEPublishResult`, `SSEHubMetrics`, `SSEEventType`,
+  `register_sse_event_type`
 
 ### Messaging (`from wappa.messaging import ...`)
 

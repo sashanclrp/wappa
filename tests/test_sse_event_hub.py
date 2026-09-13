@@ -94,18 +94,26 @@ async def test_publish_without_subscribers_delivers_nothing() -> None:
 
 
 @pytest.mark.asyncio
-async def test_full_queue_drops_the_oldest_event_and_keeps_the_newest() -> None:
-    # A slow client must not stall the publisher or the other subscribers:
-    # overflow is resolved by dropping the oldest event, not by blocking.
-    hub = SSEEventHub(queue_size=2)
+async def test_full_queue_closes_the_slow_subscription_with_a_delivery_gap() -> None:
+    """A slow client reconnects rather than silently missing queued state."""
+    hub = SSEEventHub(queue_size=1)
     subscriber = await hub.subscribe()
 
     async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
-        for index in range(4):
-            assert await _publish(hub, "incoming_message", index=index) == 1
+        assert await _publish(hub, "incoming_message", index=0) == 1
+        result = await _publish(hub, "incoming_message", index=1)
 
-    events = _drain(subscriber)
-    assert [event["payload"]["index"] for event in events] == [2, 3]
+    assert result.delivery.delivered == 0
+    assert result.delivery.dropped == 2
+    assert result.delivery.overflow_closed == 1
+    assert subscriber.delivery_gap is True
+    assert subscriber.disconnect_reason == "backpressure_gap"
+    closing = subscriber.queue.get_nowait()
+    assert SSEEventHub.is_close_signal(closing)
+    assert SSEEventHub.close_reason(closing) == "backpressure_gap"
+    metrics = hub.snapshot_metrics()
+    assert metrics.dropped_events == 2
+    assert metrics.overflow_closures == 1
 
 
 @pytest.mark.asyncio
@@ -119,7 +127,8 @@ async def test_a_full_subscriber_does_not_starve_the_others() -> None:
         fast.queue.get_nowait()
         await _publish(hub, "incoming_message", index=1)
 
-    assert slow.queue.get_nowait()["payload"]["index"] == 1
+    slow_closing = slow.queue.get_nowait()
+    assert SSEEventHub.close_reason(slow_closing) == "backpressure_gap"
     assert fast.queue.get_nowait()["payload"]["index"] == 1
 
 
@@ -153,9 +162,10 @@ async def test_shutdown_notifies_and_clears_subscribers() -> None:
     await hub.shutdown()
 
     closing = subscriber.queue.get_nowait()
-    assert closing["event_type"] == "stream_closed"
-    assert closing["payload"] == {"reason": "shutdown"}
+    assert SSEEventHub.is_close_signal(closing)
+    assert SSEEventHub.close_reason(closing) == "shutdown"
     assert hub.get_stats()["active_subscribers"] == 0
+    assert hub.snapshot_metrics().shutdown_closures == 1
 
 
 @pytest.mark.asyncio
@@ -213,6 +223,23 @@ async def test_envelope_carries_scope_identity_and_metadata() -> None:
     assert event["platform"] == "whatsapp"
     assert event["metadata"] == {"campaign": "welcome"}
     assert event["source"] == "test"
+
+
+@pytest.mark.asyncio
+async def test_deliver_envelope_preserves_its_identifier_without_republishing() -> None:
+    hub = SSEEventHub()
+    subscriber = await hub.subscribe()
+
+    created = await _publish(hub, "incoming_message", text="local")
+    original_id = created.envelope.event_id
+    subscriber.queue.get_nowait()
+
+    delivery = hub.deliver_envelope(created.envelope)
+
+    event = subscriber.queue.get_nowait()
+    assert delivery.delivered == 1
+    assert event["event_id"] == original_id
+    assert hub.snapshot_metrics().published_events == 1
 
 
 @pytest.mark.asyncio

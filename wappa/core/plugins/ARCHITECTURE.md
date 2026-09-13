@@ -46,7 +46,7 @@ wappa/core/plugins/
 ├── redis_pubsub_plugin.py       # RedisPubSubPlugin: wraps inbound handlers and outbound
 │                                #   messenger calls to publish to Redis PubSub channels.
 │                                #   Requires RedisPlugin. Priority 25.
-├── sse_events_plugin.py         # SSEEventsPlugin: constructs SSEEventHub, registers SSE router,
+├── sse_events_plugin.py         # SSEEventsPlugin: composes an injected SSEHub (default: in-memory), registers SSE router,
 │                                #   wraps message/status/error handlers and adds
 │                                #   SSELifecycleMiddleware to the messenger pipeline. Priority 24.
 │
@@ -82,7 +82,7 @@ wappa/core/plugins/
 | `PostgresDatabasePlugin` | Infra plugin that creates the async SQLAlchemy engine and injects `db`/`db_read` into handlers. |
 | `ExpiryPlugin` | Depends on `RedisPlugin`. Owns the long-running expiry listener task lifecycle. |
 | `RedisPubSubPlugin` | Depends on `RedisPlugin`. Decorates handlers and messenger at startup to fan out Redis notifications. |
-| `SSEEventsPlugin` | Self-contained real-time streaming plugin. Constructs `SSEEventHub` at configure time so the messenger middleware can be registered before the app is built. |
+| `SSEEventsPlugin` | Self-contained real-time streaming composition plugin. It creates its injected `SSEHub` at configure time (default: `SSEEventHub`) so routes, wrappers, middleware, lifecycle, and health share one object. |
 | `AuthPlugin` | Stateless configure-only plugin. Delegates all auth logic to `AuthStrategy` + `AuthMiddleware`. |
 | `RateLimitPlugin` | Local per-process route limiter. Stores named `RateLimitProfile` policies on `app.state`; route modules opt in with `rate_limit(profile_name)`. |
 | `WebhookPlugin` | Mounts an ID-less or `{webhook_id}` external callback, admits it synchronously, and submits handler dispatch to `BackgroundWorkTracker`. |

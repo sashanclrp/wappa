@@ -6,8 +6,13 @@ Canonical import surface for host applications:
 """
 
 from wappa.core.sse import (
+    SSEDeliveryResult,
+    SSEEventEnvelope,
     SSEEventHub,
     SSEEventType,
+    SSEHub,
+    SSEHubMetrics,
+    SSEPublishResult,
     SSESubscription,
     classify_meta_identifier,
     derive_identifiers,
@@ -31,6 +36,11 @@ __all__ = [
     "register_sse_event_type",
     "sse_event_scope",
     "SSEEventHub",
+    "SSEHub",
+    "SSEEventEnvelope",
+    "SSEDeliveryResult",
+    "SSEPublishResult",
+    "SSEHubMetrics",
     "SSEEventType",
     "SSESubscription",
     "update_identity",

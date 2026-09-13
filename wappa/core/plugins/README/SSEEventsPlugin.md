@@ -35,7 +35,6 @@ app.add_plugin(
         publish_status=True,
         publish_webhook_errors=True,
         queue_size=200,
-        metadata={"app_name": "my-bot"},  # optional, enriches all SSE events
     )
 )
 ```
@@ -65,6 +64,7 @@ Optional query-string filters on `/api/sse/events`:
 
 | Parameter | Example | Description |
 |---|---|---|
+| `platform` | `whatsapp` | Required when filtering by `inbox_id` |
 | `inbox_id` | `508386009032748` | Receive events for a specific Inbox only |
 | `user_id` | `573001112233` | Receive events for a specific user only |
 | `event_types` | `incoming_message,status_change` | Comma-separated list of event types to subscribe to |
@@ -81,7 +81,7 @@ Supported `event_types` values:
 
 **During `configure()`** (synchronous, before the app starts) the plugin:
 
-1. Creates the in-memory `SSEEventHub` (the router and the middleware both need a reference to it, and it owns only asyncio primitives, so it's safe to build eagerly)
+1. Creates one `SSEHub` (the default is the in-memory `SSEEventHub`; an injected instance or factory may supply a Host adapter)
 2. Registers the SSE HTTP routes
 3. Registers `SSELifecycleMiddleware(event_hub)` via `builder.add_messenger_middleware(...)` at priority `70` (lifecycle band) — this is what publishes `outgoing_bot_message` when `publish_bot_replies=True`
 4. Registers startup/shutdown hooks at priority `24`
@@ -98,6 +98,36 @@ Supported `event_types` values:
 2. Removes the API post-process hook (via `remove_api_post_process_hook`)
 3. Closes SSE subscriptions cleanly
 4. Clears plugin state from `app.state`
+
+## Injecting a broker adapter
+
+Wappa does not prescribe a broker. Implement the public structural `SSEHub`
+contract and inject it at plugin construction; do not replace private plugin,
+middleware, or hub attributes.
+
+```python
+from wappa.core.plugins import SSEEventsPlugin
+
+plugin = SSEEventsPlugin(
+    event_hub_factory=lambda queue_size: BrokeredSSEHub(queue_size=queue_size)
+)
+```
+
+The factory runs once per application runtime. The resulting hub is shared by
+the route, inbound wrappers, outbound API hook, Messenger lifecycle middleware,
+health, and shutdown. `publish()` creates an `SSEEventEnvelope`; a broker
+consumer calls `deliver_envelope(envelope)` to fan out a received envelope
+locally without assigning a new ID or broadcasting it again. See
+[the migration guide](../../../../docs/migration/pluggable-sse-hub.md).
+
+## Slow clients and metrics
+
+SSE is non-durable. A full Subscription queue is a delivery gap: Wappa closes
+only that stream with `backpressure_gap` so EventSource reconnects and the Host
+can reconcile durable state. It never silently drops an event and continues the
+connection. `snapshot_metrics()` supplies typed process-local counts for active
+and filtered subscriptions, published/local deliveries, drops, overflow
+closures, and shutdown closures.
 
 ### Why messenger wrapping is now middleware
 

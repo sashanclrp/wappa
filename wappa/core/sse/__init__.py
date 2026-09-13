@@ -10,7 +10,15 @@ from .context import (
     update_identity,
     update_metadata,
 )
-from .event_hub import SSEEventHub, SSESubscription
+from .event_hub import (
+    SSEDeliveryResult,
+    SSEEventEnvelope,
+    SSEEventHub,
+    SSEHub,
+    SSEHubMetrics,
+    SSEPublishResult,
+    SSESubscription,
+)
 from .handlers import (
     _BUILTIN_SSE_EVENT_TYPES,
     SUPPORTED_SSE_EVENT_TYPES,
@@ -26,6 +34,11 @@ from .handlers import (
 __all__ = [
     "SSEEventContext",
     "SSEEventHub",
+    "SSEHub",
+    "SSEEventEnvelope",
+    "SSEDeliveryResult",
+    "SSEPublishResult",
+    "SSEHubMetrics",
     "SSESubscription",
     "SSEEventType",
     "SUPPORTED_SSE_EVENT_TYPES",

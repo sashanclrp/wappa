@@ -22,7 +22,7 @@ from .context import (
     get_sse_context,
     update_identity,
 )
-from .event_hub import SSEEventHub
+from .event_hub import SSEHub
 
 if TYPE_CHECKING:
     from ...domain.events.api_message_event import APIMessageEvent
@@ -76,7 +76,7 @@ def _normalized_webhook_payload(
 
 
 async def publish_sse_event(
-    event_hub: SSEEventHub | None,
+    event_hub: SSEHub | None,
     *,
     event_type: str,
     source: str,
@@ -94,23 +94,23 @@ async def publish_sse_event(
         return 0
 
     try:
-        subscribers = await event_hub.publish(
+        result = await event_hub.publish(
             event_type=event_type,
             source=source,
             payload=payload,
         )
-        if subscribers > 0:
+        if result.delivered > 0:
             logger.debug(
-                "SSE: %s delivered to %s subscriber(s)", event_type, subscribers
+                "SSE: %s delivered to %s subscriber(s)", event_type, result.delivered
             )
-        return subscribers
+        return result.delivered
     except Exception as exc:
         logger.warning("Failed to publish SSE event %s: %s", event_type, exc)
         return 0
 
 
 async def publish_api_sse_event(
-    event_hub: SSEEventHub | None,
+    event_hub: SSEHub | None,
     event: APIMessageEvent,
 ) -> int:
     """Publish full API outgoing message context through SSE.
@@ -147,7 +147,7 @@ class SSEMessageHandler(DefaultMessageHandler):
 
     def __init__(
         self,
-        event_hub: SSEEventHub,
+        event_hub: SSEHub,
         inner_handler: DefaultMessageHandler | None = None,
         log_strategy: MessageLogStrategy = MessageLogStrategy.SUMMARIZED,
         log_level: LogLevel = LogLevel.INFO,
@@ -207,7 +207,7 @@ class SSEStatusHandler(DefaultStatusHandler):
 
     def __init__(
         self,
-        event_hub: SSEEventHub,
+        event_hub: SSEHub,
         inner_handler: DefaultStatusHandler | None = None,
         log_strategy: StatusLogStrategy = StatusLogStrategy.IMPORTANT_ONLY,
         log_level: LogLevel = LogLevel.INFO,
@@ -245,7 +245,7 @@ class SSEErrorHandler(DefaultErrorHandler):
 
     def __init__(
         self,
-        event_hub: SSEEventHub,
+        event_hub: SSEHub,
         inner_handler: DefaultErrorHandler | None = None,
         log_strategy: ErrorLogStrategy = ErrorLogStrategy.ALL,
         escalation_threshold: int = 5,

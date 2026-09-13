@@ -11,7 +11,7 @@ Terms specific to the plugin system. Shared kernel terms (`inbox_id`, Host Appli
 | **shutdown hook** | An async callable registered with a priority integer that runs during shutdown. Higher numbers run first on the way down (reverse of startup). |
 | **priority** | An integer that controls hook or middleware execution order. Convention: 10 = core, 20 = infrastructure (Redis, DB), 25 = listeners/expiry, 30 = application services, 50 = user-defined default. |
 | **messenger middleware** | A cross-cutting async callable that wraps every outbound `IMessenger` call. Registered via `add_messenger_middleware` with a priority band. |
-| **SSEEventHub** | The in-process fanout broker owned by `SSEEventsPlugin` that holds per-client async queues and distributes real-time events to SSE subscribers. |
+| **SSE Hub** | The public structural transport contract owned by `SSEEventsPlugin` for one application runtime. The default is in-memory; a Host may inject a broker-neutral adapter or decorator without subclassing Wappa internals. |
 | **expiry listener** | A long-running background `asyncio.Task` started by `ExpiryPlugin` that subscribes to Redis keyspace expiry notifications and dispatches expiry actions. |
 | **External Webhook Source** | A non-messaging system that sends webhooks into Wappa, such as MercadoPago, Stripe, Wompi, GitHub, or a CRM. |
 | **processor mode** | The operating mode of `WebhookPlugin` in which an `IWebhookProcessor` handles an External Webhook Source and produces an `ExternalEvent`. |

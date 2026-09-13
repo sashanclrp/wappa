@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ...sse.context import flush_incoming_sse
-from ...sse.event_hub import SSEEventHub
+from ...sse.event_hub import SSEHub
 from ...sse.handlers import publish_sse_event
 from ..pipeline import MessengerMiddleware, SendInvocation, SendNext, _to_serializable
 
@@ -32,7 +32,7 @@ class SSELifecycleMiddleware(MessengerMiddleware):
 
     name = "sse_lifecycle"
 
-    def __init__(self, event_hub: SSEEventHub) -> None:
+    def __init__(self, event_hub: SSEHub) -> None:
         self._event_hub = event_hub
 
     async def handle(

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Mapping
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.sse import EventSourceResponse
 
-from wappa.core.sse import SUPPORTED_SSE_EVENT_TYPES, SSEEventHub
+from wappa.core.sse import SUPPORTED_SSE_EVENT_TYPES, SSEHub
 
 router = APIRouter(
     prefix="/api/sse",
@@ -39,10 +39,10 @@ def _parse_event_filters(event_types: str | None) -> set[str] | None:
     return selected
 
 
-def _get_event_hub(request: Request) -> SSEEventHub:
+def _get_event_hub(request: Request) -> SSEHub:
     """Read SSE hub from app state or return 503 when plugin is disabled."""
     event_hub = getattr(request.app.state, "sse_event_hub", None)
-    if not isinstance(event_hub, SSEEventHub):
+    if not isinstance(event_hub, SSEHub):
         raise HTTPException(
             status_code=503,
             detail="SSE plugin is not active. Add SSEEventsPlugin to your Wappa app.",
@@ -128,7 +128,10 @@ async def stream_events(
                     yield _format_sse_event(event_name="ping", data="{}")
                     continue
 
-                if event.get("event_type") == "stream_closed":
+                # Close controls are intentionally not normal SSE envelopes.
+                # A queue item without the envelope mapping shape requests a
+                # reconnect so clients never continue after a delivery gap.
+                if not isinstance(event, Mapping):
                     break
 
                 event_id = event.get("event_id")
@@ -156,7 +159,7 @@ async def sse_status(request: Request) -> dict[str, object]:
     return {
         "status": "active",
         "supported_event_types": sorted(SUPPORTED_SSE_EVENT_TYPES),
-        "hub": event_hub.get_stats(),
+        "hub": event_hub.snapshot_metrics().to_dict(),
     }
 
 
@@ -183,9 +186,9 @@ async def debug_publish_event(request: Request) -> dict[str, str]:
         platform="whatsapp",
     ):
         event_hub = _get_event_hub(request)
-        delivered = await event_hub.publish(
+        result = await event_hub.publish(
             event_type=event_type,
             source="debug",
             payload=payload,
         )
-    return {"delivered": str(delivered), "event_type": event_type}
+    return {"delivered": str(result.delivered), "event_type": event_type}

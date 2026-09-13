@@ -16,6 +16,9 @@ Runtime scope is now consistently qualified by Platform and Inbox wherever it le
 - `CronPlugin.add_cron(..., inbox_ref=...)` and `CronEvent.inbox_ref`, with the existing `inbox_id` argument retained as a WhatsApp compatibility convenience.
 - `wappa init --inbox-routing explicit` scaffolding, including an explicit environment template, Inbox Directory source stub, and explicit application template.
 - A bounded LRU Messenger construction cache, preventing unbounded growth for Hosts with a large number of active Inboxes.
+- Pluggable `SSEHub` transport contracts: `SSEEventEnvelope`, delivery and
+  publish results, typed metrics, local envelope delivery, and injectable hub
+  factories or instances on `SSEEventsPlugin`.
 
 ### Changed
 
@@ -24,6 +27,9 @@ Runtime scope is now consistently qualified by Platform and Inbox wherever it le
 - Webhook status reports registered Platform routes separately from installed adapter capabilities, keeping route registration independent of a single Platform implementation.
 - Rate-limit scope resolution first uses the trusted Inbox Execution Context; payload-routed callbacks can instead use client-IP or Host-defined post-authentication policy.
 - Public docs, examples, templates, and architectural language describe Platform capability seams without baking application context into webhook URL shape.
+- SSE queue overflow now closes only the affected stream with a visible
+  delivery gap, allowing EventSource reconnection instead of silently
+  continuing after data loss.
 
 ### Fixed
 

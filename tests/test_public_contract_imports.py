@@ -68,6 +68,15 @@ PUBLIC_IMPORTS: dict[str, tuple[str, ...]] = {
         "RoutedWebhookDelivery",
     ),
     "wappa.messaging": ("OutboundRuntime", "InboxTemplateTransport"),
+    "wappa.sse": (
+        "SSEHub",
+        "SSEEventHub",
+        "SSESubscription",
+        "SSEEventEnvelope",
+        "SSEDeliveryResult",
+        "SSEPublishResult",
+        "SSEHubMetrics",
+    ),
 }
 
 

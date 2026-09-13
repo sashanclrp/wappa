@@ -118,7 +118,10 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | Term | Definition |
 |------|-----------|
 | **SSE Event** | A server-sent event pushed to subscribers. Scoped by Inbox Reference and optionally by `user_id` and `event_type`. |
-| **Event Envelope** | The JSON structure wrapping an SSE event: `{ event_id, event_type, timestamp, inbox_id, user_id, bsuid, phone_number, platform, source, payload, metadata }`. |
+| **SSE Event Envelope** | The immutable transport representation of one SSE Event: identifier, type, timestamp, source, routing context, payload, and metadata. Its JSON form remains `{ event_id, event_type, timestamp, inbox_id, user_id, bsuid, phone_number, platform, source, payload, metadata }`. |
+| **SSE Hub** | The public structural transport contract that subscribes clients, creates envelopes, performs local delivery, closes streams, and reports process-local metrics. A Host may provide a broker adapter without inheriting from Wappa's in-memory hub. |
+| **Local Delivery** | Fan-out of an existing SSE Event Envelope to matching subscribers connected to this process. It never creates another event identifier or broadcasts externally. |
+| **Delivery Gap** | The condition where a Subscription cannot receive every SSE Event. Wappa closes the stream on the first queue overflow so the client reconnects and reconciles durable state; SSE itself has no replay or durability guarantee. |
 | **Subscription** | A client connection filtering events by `platform`, `inbox_id`, `user_id`, and/or `event_type`. An Inbox-specific subscription identifies both Platform and `inbox_id`. |
 
 ## Request Correlation
