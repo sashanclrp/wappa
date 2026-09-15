@@ -626,8 +626,47 @@ persistence, and arbitrary Host metadata do not cross this boundary.
 Every request contains exactly one discriminated Delivery Address. Phone
 numbers are normalized and sent in Meta's `to` field. Regular and parent
 BSUIDs are normalized and sent in Meta's `recipient` field. Usernames are not
-accepted as outbound addresses. Authentication Templates require their method
-and reject BSUID addresses.
+accepted as outbound addresses.
+
+Authentication Templates require `authentication_method` — `copy_code`,
+`one_tap`, or `zero_tap` — and that method changes the outgoing request. Wappa
+emits the OTP button component Meta requires beside the body:
+
+```json
+"components": [
+  {"type": "body", "parameters": [{"type": "text", "text": "ABC234"}]},
+  {"type": "button", "sub_type": "url", "index": "0",
+   "parameters": [{"type": "text", "text": "ABC234"}]}
+]
+```
+
+The button's URL ends in `&code=otp{{1}}`, so its parameter is a real
+placeholder, not a duplicate to optimise away: the body is what the person
+reads and the button is what "Copy code" writes to their clipboard. Wappa fills
+both from the request's single body parameter, so the two values cannot drift.
+`index` is serialised as a string, and `authentication_button_index` expresses a
+button that is not first.
+
+Meta rewrites an `OTP` button to a `URL` button at template creation, so all
+three methods send the same component; they differ only in how the recipient's
+device consumes the code. The one-tap handshake and `supported_apps` metadata
+belong to template creation and to the Host Application's mobile app, not to
+this send.
+
+An Authentication Template request is rejected locally when it names a BSUID
+address, carries a media or location header, carries anything other than
+exactly one body parameter, or binds that parameter by name — each is a shape
+Meta will not deliver. `request_digest` covers the code, so a resend with a
+fresh PIN is never collapsed into a replay of the previous one.
+
+The approved template is the only authority on which method it uses, so
+`TemplateInfo.authentication_method` and `TemplateButton.authentication_method`
+resolve it from a template read back through Wappa. Meta rewrites the `OTP`
+button to `type: "URL"` and commonly returns `otp_type: null` beside it, leaving
+the method readable only in the generated button URL
+(`.../otp/code/?otp_type=COPY_CODE&...`); both properties read the flat field
+first and fall back to that URL. An unmarked button resolves to `None` rather
+than to a guess.
 
 Category-default routing sends marketing Templates to `/marketing_messages`
 and utility/authentication Templates to `/messages`. The only fallback is the

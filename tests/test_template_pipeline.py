@@ -20,6 +20,8 @@ class _StrictTemplateMessenger:
         *,
         template_type: str,
         routing_policy: str = "category_default",
+        authentication_method: str | None = None,
+        authentication_button_index: int = 0,
     ) -> MessageResult:
         return MessageResult(success=True, message_id="text-tmpl-ok")
 
@@ -125,3 +127,7 @@ class TestTemplatePipelineKeywordArgs:
         assert inv.arguments["routing_policy"] == "cloud_messages_fallback"
         assert inv.kwargs["template_type"] == "marketing"
         assert inv.kwargs["routing_policy"] == "cloud_messages_fallback"
+        # Middleware sees the authentication binding as a keyword-only value,
+        # so a middleware may reason about OTP sends without re-parsing them.
+        assert inv.kwargs["authentication_method"] is None
+        assert inv.kwargs["authentication_button_index"] == 0

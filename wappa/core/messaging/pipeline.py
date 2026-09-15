@@ -472,8 +472,15 @@ class MessengerPipeline(IMessenger):
         *,
         template_type: str,
         routing_policy: str = "category_default",
+        authentication_method: str | None = None,
+        authentication_button_index: int = 0,
     ) -> MessageResult:
-        kw = {"template_type": template_type, "routing_policy": routing_policy}
+        kw = {
+            "template_type": template_type,
+            "routing_policy": routing_policy,
+            "authentication_method": authentication_method,
+            "authentication_button_index": authentication_button_index,
+        }
         return await self._invoke(
             "send_text_template",
             "text_template",

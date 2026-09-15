@@ -4,6 +4,7 @@ from typing import Any
 
 from wappa.core.logging.logger import get_logger
 from wappa.messaging.template_transport import (
+    TemplateAuthenticationMethod,
     TemplateCategory,
     TemplateEndpoint,
     TemplateRoutingPolicy,
@@ -46,6 +47,77 @@ class WhatsAppTemplateHandler:
             if param.type == TemplateParameterType.TEXT
         ]
         return {"type": "body", "parameters": api_parameters}
+
+    def _resolve_authentication_code(
+        self, body_parameters: list[TemplateParameter] | None
+    ) -> str:
+        """Return the single OTP code an Authentication Template body carries.
+
+        Meta's authentication body is the fixed preset ``{{1}} is your
+        verification code``, so exactly one positional text parameter is
+        legal. Failing here costs one local raise instead of a provider
+        round trip that returns a parameter-count error.
+        """
+        parameters = [
+            parameter
+            for parameter in (body_parameters or [])
+            if parameter.type == TemplateParameterType.TEXT
+        ]
+        if len(parameters) != 1:
+            raise ValueError(
+                "An authentication Template requires exactly one body text "
+                f"parameter carrying the code, got {len(parameters)}"
+            )
+        code = parameters[0].text
+        if not code:
+            raise ValueError("The authentication Template code cannot be empty")
+        if parameters[0].parameter_name:
+            raise ValueError(
+                "Authentication Templates use the positional {{1}} code "
+                "placeholder and cannot bind a named parameter"
+            )
+        return code
+
+    def _build_authentication_button_component(
+        self, code: str, button_index: int
+    ) -> dict[str, Any]:
+        """Build the OTP button component Meta requires beside the body.
+
+        The button's URL ends in ``...&code=otp{{1}}``, so its single
+        parameter is a real placeholder. Meta rejects the whole send when it
+        is missing. ``index`` is serialised as a string because that is the
+        type Meta's Cloud API reference declares for it.
+        """
+        return {
+            "type": "button",
+            "sub_type": "url",
+            "index": str(button_index),
+            "parameters": [{"type": "text", "text": code}],
+        }
+
+    def _build_authentication_components(
+        self,
+        body_parameters: list[TemplateParameter] | None,
+        authentication_method: str,
+        button_index: int,
+    ) -> list[dict[str, Any]]:
+        """Build ``[body, button]`` for one Authentication Template send.
+
+        Both components carry the same code, filled once here rather than by
+        two callers agreeing: the body is what the person reads, the button
+        is what "Copy code" writes to their clipboard.
+        """
+        # Raises on an unknown method rather than silently degrading to a
+        # body-only payload Meta would reject anyway.
+        TemplateAuthenticationMethod(authentication_method)
+        code = self._resolve_authentication_code(body_parameters)
+        body_component = self._build_body_component(body_parameters)
+        if body_component is None:  # pragma: no cover - guarded above
+            raise ValueError("An authentication Template requires a body parameter")
+        return [
+            body_component,
+            self._build_authentication_button_component(code, button_index),
+        ]
 
     def _build_template_payload(
         self,
@@ -116,6 +188,33 @@ class WhatsAppTemplateHandler:
             data["components"] = components
         return data
 
+    def _resolve_text_components(
+        self,
+        body_parameters: list[TemplateParameter] | None,
+        *,
+        template_type: WhatsAppTemplateType,
+        authentication_method: str | None,
+        authentication_button_index: int,
+    ) -> list[dict[str, Any]] | None:
+        """Decide the components one text Template send puts on the wire."""
+        is_authentication = template_type is WhatsAppTemplateType.AUTHENTICATION
+        if authentication_method is not None and not is_authentication:
+            raise ValueError(
+                "authentication_method is only valid for authentication Templates"
+            )
+        if is_authentication:
+            if authentication_method is None:
+                raise ValueError(
+                    "authentication_method is required for authentication Templates"
+                )
+            return self._build_authentication_components(
+                body_parameters,
+                authentication_method,
+                authentication_button_index,
+            )
+        body_component = self._build_body_component(body_parameters)
+        return [body_component] if body_component else None
+
     async def send_text_template(
         self,
         recipient: str,
@@ -125,13 +224,20 @@ class WhatsAppTemplateHandler:
         *,
         template_type: WhatsAppTemplateType,
         routing_policy: str = "category_default",
+        authentication_method: str | None = None,
+        authentication_button_index: int = 0,
     ) -> MessageResult:
         try:
-            body_component = self._build_body_component(body_parameters)
+            components = self._resolve_text_components(
+                body_parameters,
+                template_type=template_type,
+                authentication_method=authentication_method,
+                authentication_button_index=authentication_button_index,
+            )
             template_data = self._build_template_data(
                 template_name,
                 language_code,
-                components=[body_component] if body_component else None,
+                components=components,
             )
             # Text-only templates omit recipient_type for WhatsApp API compatibility.
             payload = self._build_template_payload(

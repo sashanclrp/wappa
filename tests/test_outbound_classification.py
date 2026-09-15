@@ -254,6 +254,7 @@ TEMPLATE_PAYLOADS = [
             template_name="otp",
             category=TemplateCategory.AUTHENTICATION,
             authentication_method="one_tap",
+            body_parameters=[{"type": "text", "text": "ABC234"}],
         ),
         OutboundTransportSubkind.TEXT_HEADER,
         id="authentication-template",

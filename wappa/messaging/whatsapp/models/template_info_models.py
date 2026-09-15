@@ -1,8 +1,11 @@
 """Pydantic models for WhatsApp template management read operations."""
 
 from typing import Literal
+from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from wappa.messaging.template_transport import TemplateAuthenticationMethod
 
 
 class TemplateByIdRequest(BaseModel):
@@ -60,10 +63,33 @@ class TemplateButton(BaseModel):
     type: str = Field(..., description="Button type")
     text: str | None = Field(default=None, description="Button label")
     url: str | None = Field(default=None, description="Optional CTA URL")
+    otp_type: str | None = Field(
+        default=None,
+        description=(
+            "OTP method Meta reports for an authentication button. Often null "
+            "even on a real OTP button, in which case the method is readable "
+            "from the button URL instead."
+        ),
+    )
     phone_number: str | None = Field(
         default=None,
         description="Optional phone number for phone buttons",
     )
+
+    @property
+    def authentication_method(self) -> TemplateAuthenticationMethod | None:
+        """The OTP method this button carries, or ``None`` if it is not one.
+
+        Meta rewrites an ``OTP`` button to ``type: "URL"`` at template creation
+        and frequently returns ``otp_type: null`` alongside it, so the method
+        survives only in the generated button URL — for example
+        ``https://www.whatsapp.com/otp/code/?otp_type=COPY_CODE&...``. Reading
+        the URL recovers what the flat field dropped. An unrecognised or absent
+        marker returns ``None`` rather than a guess.
+        """
+        return _resolve_otp_method(self.otp_type) or _resolve_otp_method(
+            _otp_type_from_url(self.url)
+        )
 
 
 class TemplateExample(BaseModel):
@@ -105,6 +131,27 @@ class TemplateComponent(BaseModel):
     )
 
 
+def _resolve_otp_method(value: str | None) -> TemplateAuthenticationMethod | None:
+    """Map Meta's ``COPY_CODE`` / ``ONE_TAP`` / ``ZERO_TAP`` spelling to Wappa's."""
+    if not value:
+        return None
+    try:
+        return TemplateAuthenticationMethod(value.strip().lower())
+    except ValueError:
+        return None
+
+
+def _otp_type_from_url(url: str | None) -> str | None:
+    """Read the ``otp_type`` query value out of a generated OTP button URL."""
+    if not url or "otp_type" not in url:
+        return None
+    try:
+        values = parse_qs(urlparse(url).query).get("otp_type")
+    except ValueError:
+        return None
+    return values[0] if values else None
+
+
 class TemplateInfo(BaseModel):
     """Single WhatsApp template definition."""
 
@@ -123,6 +170,23 @@ class TemplateInfo(BaseModel):
         default_factory=list,
         description="Template component definitions returned by Meta",
     )
+
+    @property
+    def authentication_method(self) -> TemplateAuthenticationMethod | None:
+        """The OTP method this approved template sends with, if it is one.
+
+        Sending an Authentication Template requires naming its method, and the
+        only authority on which one an approved template uses is the template
+        itself. Reading it here saves every caller from re-deriving it from
+        Meta's button shape.
+        """
+        if (self.category or "").strip().lower() != "authentication":
+            return None
+        for component in self.components:
+            for button in component.buttons or ():
+                if (method := button.authentication_method) is not None:
+                    return method
+        return None
 
 
 class TemplatePagingCursors(BaseModel):

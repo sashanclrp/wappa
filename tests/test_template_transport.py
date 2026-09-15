@@ -156,6 +156,8 @@ async def test_text_transport_returns_normalized_acceptance_and_exact_mapping() 
                 "language_code": "es",
                 "template_type": "utility",
                 "routing_policy": "category_default",
+                "authentication_method": None,
+                "authentication_button_index": 0,
             },
         )
     ]

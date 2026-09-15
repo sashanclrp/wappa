@@ -5,6 +5,27 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.0] - 2026-09-15
+
+Wappa can now send WhatsApp Authentication Templates. `authentication_method` was required of every caller and then discarded, so the send was assembled without the OTP button component Meta requires and the provider rejected it — no Authentication Template with a button could be delivered by any path. The method now reaches the WhatsApp handler, which emits `body` and `button` together with `sub_type: "url"`, a string `index`, and the code repeated from the body, because the generated button URL ends in `&code=otp{{1}}` and Meta refuses a send that leaves that placeholder unsupplied. All three methods ship: Meta rewrites an `OTP` button to a `URL` button at template creation, so `copy_code`, `one_tap`, and `zero_tap` send the identical payload and differ only in how the recipient's device consumes the code.
+
+### Added
+
+- `authentication_method` and `authentication_button_index` on `IMessenger.send_text_template`, `MessengerPipeline`, `WhatsAppMessenger`, and `WhatsAppTemplateHandler`, so the OTP button is expressible rather than hard-coded in one handler.
+- `TemplateInfo.authentication_method` and `TemplateButton.authentication_method`, resolving the OTP method from a template read back through Wappa. Meta commonly returns `otp_type: null` beside the rewritten `URL` button, so both read the flat field first and fall back to parsing `otp_type=` out of the generated button URL; an unmarked button resolves to `None` rather than a guess.
+- `TemplateButton.otp_type`, and `_TemplateTransportRequest.authentication_code` for the code a request puts in both components.
+- A golden Meta wire fixture for the copy-code send (`tests/fixtures/meta/v25.0/authentication_copy_code_request.json`) and `tests/test_authentication_template_otp.py`, which assert the emitted `components` array rather than that the call succeeded.
+
+### Fixed
+
+- Authentication Templates emit the `button` component Meta requires beside `body`, with both parameters filled from one value at a single call site so the code the person reads and the code "Copy code" writes to the clipboard cannot drift.
+- `authentication_method` now provably changes the outgoing request instead of being validated and dropped.
+
+### Changed
+
+- An Authentication Template transport request is refused locally, instead of at Meta, when it carries anything other than exactly one body parameter, binds that parameter by name, or attaches a media or location header. A BSUID address was already refused and still is.
+- `WhatsAppTemplateHandler.send_text_template` refuses an `authentication` send with no method, an unknown method, or a method on a non-authentication Template, rather than sending a payload Meta would reject.
+
 ## [0.29.0] - 2026-09-13
 
 Runtime scope is now consistently qualified by Platform and Inbox wherever it leaves a known Platform boundary. This closes same-native-ID collisions in SSE, Redis Pub/Sub, expiry, and scheduled work while retaining legacy raw WhatsApp identifiers at their existing compatibility boundaries. Explicit Inbox credentials now propagate the configured Meta Graph endpoint throughout outbound construction, and generated explicit-routing projects include the configuration and host-directory seams they need from the start.

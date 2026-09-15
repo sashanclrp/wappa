@@ -19,7 +19,11 @@ import pytest
 from wappa.messaging.whatsapp.handlers.whatsapp_template_handler import (
     WhatsAppTemplateHandler,
 )
-from wappa.messaging.whatsapp.models.template_models import WhatsAppTemplateType
+from wappa.messaging.whatsapp.models.template_models import (
+    TemplateParameter,
+    TemplateParameterType,
+    WhatsAppTemplateType,
+)
 from wappa.messaging.whatsapp.utils.error_helpers import handle_whatsapp_error
 from wappa.webhooks.whatsapp import WhatsAppMessageStatus, WhatsAppWebhook
 
@@ -90,6 +94,35 @@ async def test_golden_template_requests(
     assert result.recipient_bsuid == "CO.2186878922080769"
     assert result.recipient_parent_bsuid == "CO.ENT.2186878922080769"
     assert result.recipient_username == "known_customer"
+
+
+@pytest.mark.asyncio
+async def test_golden_authentication_copy_code_request() -> None:
+    """The exact two-component payload Meta documents for an OTP template.
+
+    Meta rewrites the ``OTP`` button to a ``URL`` button at creation, so the
+    send repeats the body's code in a ``sub_type: "url"`` button parameter that
+    fills the ``code=otp{{1}}`` placeholder in the button's URL.
+    """
+    client = _GoldenClient(_fixture("template_accepted_response.json"))
+    handler = WhatsAppTemplateHandler(client=client, inbox_id="inbox-test")
+    expected = _fixture("authentication_copy_code_request.json")
+
+    result = await handler.send_text_template(
+        recipient="573001112233",
+        template_name=expected["template"]["name"],
+        body_parameters=[
+            TemplateParameter(type=TemplateParameterType.TEXT, text="ABC234")
+        ],
+        language_code=expected["template"]["language"]["code"],
+        template_type=WhatsAppTemplateType.AUTHENTICATION,
+        authentication_method="copy_code",
+    )
+
+    payload, custom_url = client.calls[0]
+    assert payload == expected
+    assert custom_url is None
+    assert result.message_id == "wamid.golden"
 
 
 def test_golden_bsuid_error_keeps_stable_provider_code() -> None:

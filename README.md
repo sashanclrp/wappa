@@ -8,9 +8,9 @@ Build intelligent WhatsApp bots, workflows, and chat applications with clean arc
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.137+-green.svg)](https://fastapi.tiangolo.com)
 [![WhatsApp Business API](https://img.shields.io/badge/WhatsApp-Business%20API-25D366.svg)](https://developers.facebook.com/docs/whatsapp)
-[![Version](https://img.shields.io/badge/version-0.29.0-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.30.0-orange.svg)](CHANGELOG.md)
 
-> **v0.29.0 — Qualified runtime scope across Platforms** — runtime context consistently carries `InboxRef(platform, inbox_id)` outside Platform boundaries, preventing native-ID collisions while preserving existing WhatsApp compatibility seams. See [CHANGELOG.md](CHANGELOG.md).
+> **v0.30.0 — Authentication Templates send their OTP button** — `copy_code`, `one_tap`, and `zero_tap` sends now emit the `button` component Meta requires beside the body, and Wappa can resolve a template's OTP method from the approved template itself. See [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

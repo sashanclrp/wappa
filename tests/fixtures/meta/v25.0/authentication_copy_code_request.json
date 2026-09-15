@@ -1,0 +1,21 @@
+{
+  "messaging_product": "whatsapp",
+  "to": "573001112233",
+  "type": "template",
+  "template": {
+    "name": "otp_test_code",
+    "language": {"code": "es_CO"},
+    "components": [
+      {
+        "type": "body",
+        "parameters": [{"type": "text", "text": "ABC234"}]
+      },
+      {
+        "type": "button",
+        "sub_type": "url",
+        "index": "0",
+        "parameters": [{"type": "text", "text": "ABC234"}]
+      }
+    ]
+  }
+}

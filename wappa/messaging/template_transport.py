@@ -71,7 +71,16 @@ class TemplateMediaType(StrEnum):
 
 
 class TemplateAuthenticationMethod(StrEnum):
-    """Authentication button method represented by the Template."""
+    """OTP button method an approved Authentication Template was created with.
+
+    Meta rewrites an ``OTP`` button to a ``URL`` button at template creation,
+    so all three methods send the same button component and differ only in how
+    the recipient's device consumes the code: ``copy_code`` writes it to the
+    clipboard, ``one_tap`` hands it to a registered app on tap, and
+    ``zero_tap`` broadcasts it without any tap. The device-side handshake and
+    ``supported_apps`` metadata belong to template creation and to the Host
+    Application's mobile app, never to this send.
+    """
 
     ONE_TAP = "one_tap"
     ZERO_TAP = "zero_tap"
@@ -204,6 +213,7 @@ class _TemplateTransportRequest(BaseModel):
     template_name: str = Field(min_length=1, max_length=512)
     category: TemplateCategory
     authentication_method: TemplateAuthenticationMethod | None = None
+    authentication_button_index: int = Field(default=0, ge=0, le=9)
     language_code: str = Field(default="es", min_length=2, max_length=32)
     body_parameters: tuple[TemplateTransportParameter, ...] = Field(
         default=(), max_length=10
@@ -228,11 +238,37 @@ class _TemplateTransportRequest(BaseModel):
                 raise ValueError(
                     "Authentication Templates cannot use a BSUID recipient"
                 )
-        elif self.authentication_method is not None:
-            raise ValueError(
-                "authentication_method is only valid for authentication Templates"
-            )
+            # Meta's authentication body is the fixed preset
+            # "{{1}} is your verification code", so exactly one positional
+            # text parameter is legal. The same value fills the OTP button.
+            if len(self.body_parameters) != 1:
+                raise ValueError(
+                    "Authentication Templates require exactly one body parameter "
+                    f"carrying the code, got {len(self.body_parameters)}"
+                )
+            if self.body_parameters[0].parameter_name is not None:
+                raise ValueError(
+                    "Authentication Templates use the positional code placeholder "
+                    "and cannot bind a named parameter"
+                )
+        else:
+            if self.authentication_method is not None:
+                raise ValueError(
+                    "authentication_method is only valid for authentication Templates"
+                )
+            if self.authentication_button_index != 0:
+                raise ValueError(
+                    "authentication_button_index is only valid for authentication "
+                    "Templates"
+                )
         return self
+
+    @property
+    def authentication_code(self) -> str | None:
+        """The OTP code this request puts in both the body and the button."""
+        if self.category is not TemplateCategory.AUTHENTICATION:
+            return None
+        return self.body_parameters[0].text
 
 
 class TextTemplateTransportRequest(_TemplateTransportRequest):
@@ -243,10 +279,22 @@ class MediaTemplateTransportRequest(_TemplateTransportRequest):
     kind: Literal["media"] = "media"
     media_header: TemplateTransportMediaHeader
 
+    @model_validator(mode="after")
+    def reject_authentication_header(self) -> MediaTemplateTransportRequest:
+        if self.category is TemplateCategory.AUTHENTICATION:
+            raise ValueError("Authentication Templates cannot carry a media header")
+        return self
+
 
 class LocationTemplateTransportRequest(_TemplateTransportRequest):
     kind: Literal["location"] = "location"
     location_header: TemplateTransportLocationHeader
+
+    @model_validator(mode="after")
+    def reject_authentication_header(self) -> LocationTemplateTransportRequest:
+        if self.category is TemplateCategory.AUTHENTICATION:
+            raise ValueError("Authentication Templates cannot carry a location header")
+        return self
 
 
 TemplateTransportRequest = Annotated[
@@ -514,6 +562,12 @@ async def _send_request(
             language_code=request.language_code,
             template_type=request.category.value,
             routing_policy=request.routing.policy.value,
+            authentication_method=(
+                request.authentication_method.value
+                if request.authentication_method is not None
+                else None
+            ),
+            authentication_button_index=request.authentication_button_index,
         )
     if isinstance(request, MediaTemplateTransportRequest):
         media_header = request.media_header

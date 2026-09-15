@@ -529,6 +529,8 @@ class WhatsAppMessenger(IMessenger):
         *,
         template_type: str,
         routing_policy: str = "category_default",
+        authentication_method: str | None = None,
+        authentication_button_index: int = 0,
     ) -> MessageResult:
         template_type_enum = self._parse_template_type(template_type)
         if template_type_enum is None:
@@ -542,6 +544,8 @@ class WhatsAppMessenger(IMessenger):
             language_code=language_code,
             template_type=template_type_enum,
             routing_policy=routing_policy,
+            authentication_method=authentication_method,
+            authentication_button_index=authentication_button_index,
         )
 
     async def send_media_template(

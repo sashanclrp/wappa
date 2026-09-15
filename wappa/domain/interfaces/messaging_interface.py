@@ -18,6 +18,10 @@ if TYPE_CHECKING:
 
 TemplateBodyParameters = list[dict] | None
 TemplateRoutingPolicyValue = str
+# ``one_tap`` | ``zero_tap`` | ``copy_code`` when the Template is an
+# Authentication Template, ``None`` for every other category. Kept a primitive
+# so the platform-agnostic contract stays free of WhatsApp enums.
+TemplateAuthenticationMethodValue = str | None
 
 
 class IMessenger(ABC):
@@ -148,7 +152,16 @@ class IMessenger(ABC):
         *,
         template_type: str,
         routing_policy: TemplateRoutingPolicyValue = "category_default",
-    ) -> MessageResult: ...
+        authentication_method: TemplateAuthenticationMethodValue = None,
+        authentication_button_index: int = 0,
+    ) -> MessageResult:
+        """Send a text-body Template.
+
+        Authentication Templates must pass ``authentication_method``; the
+        implementation then emits the OTP button component Meta requires
+        beside the body, repeating the code the body already carries.
+        """
+        ...
 
     @abstractmethod
     async def send_media_template(
