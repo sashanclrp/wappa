@@ -790,6 +790,11 @@ async def test_blank_contact_name_normalizes_to_none_and_keeps_identity() -> Non
     assert webhook.user.bsuid == "CO.2186878922080769"
     assert webhook.user.phone_number == "573168227670"
     assert webhook.user.username == "@sashanicolai"
+    # The username fallback is display-only: get_display_name() resolves it
+    # (and currently renders "@@sashanicolai" — a pre-existing double-prefix
+    # quirk in UserBase.get_display_name, outside this remedy's scope), while
+    # profile_name stays None so hosts adopting a *name* see no offer.
+    assert webhook.user.get_display_name() == "@@sashanicolai"
 
 
 @pytest.mark.asyncio
