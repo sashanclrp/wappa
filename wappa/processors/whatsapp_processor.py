@@ -958,6 +958,8 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                     event_detail = SystemEventDetail(
                         wa_id=message.from_ or None,
                         user_id=message.new_user_id,
+                        previous_user_id=message.previous_user_id,
+                        current_user_id=message.new_user_id,
                         parent_user_id=message.system.parent_user_id,
                         body=message.system_message,
                     )

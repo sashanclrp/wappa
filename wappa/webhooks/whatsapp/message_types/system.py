@@ -33,6 +33,10 @@ class SystemContent(BaseModel):
         None,
         description="Business Scoped User ID (BSUID) - for user_changed_user_id events",
     )
+    previous_user_id: str | None = Field(
+        None,
+        description="Previous BSUID before the change (observed on user_changed_user_id events)",
+    )
     parent_user_id: str | None = Field(
         None,
         description="Parent BSUID for a user_changed_user_id event when enabled",
@@ -62,7 +66,7 @@ class SystemContent(BaseModel):
                 raise ValueError("WhatsApp ID must be at least 8 characters")
         return v
 
-    @field_validator("user_id", "parent_user_id")
+    @field_validator("user_id", "previous_user_id", "parent_user_id")
     @classmethod
     def validate_user_id(cls, v: str | None) -> str | None:
         """Validate BSUID if present."""
@@ -190,6 +194,11 @@ class WhatsAppSystemMessage(WhatsAppMessageIdentity, BaseMessage):
     def new_user_id(self) -> str | None:
         """Get the new BSUID (for user_changed_user_id events)."""
         return self.system.user_id
+
+    @property
+    def previous_user_id(self) -> str | None:
+        """Get the previous BSUID (for user_changed_user_id events)."""
+        return self.system.previous_user_id
 
     @property
     def unix_timestamp(self) -> int:
