@@ -236,6 +236,8 @@ Public inbound imports include:
 
 WhatsApp built-in payload schemas are strict (`extra="forbid"`).
 Click-to-WhatsApp referrals accept an omitted `ctwa_clid`, as Meta does not send that field for WhatsApp Status ad placements. The universal `AdReferralBase` retains those referrals with `click_id=None`.
+`system` messages (`user_changed_user_id`) accept Meta's observed `system.previous_user_id` — the BSUID before the change — and surface it on `SystemEventDetail.previous_user_id`/`current_user_id`, the same fields the `user_id_update` field path populates.
+A `contacts[].profile.name` delivered blank or whitespace-only normalizes to `None` (the already-supported absent-name shape) instead of failing the delivery; real names pass through untouched.
 `MessageContext.from_bsuid` maps Meta's `context.from_user_id` reply identifier.
 Incoming WhatsApp models also retain optional portfolio-parent identifiers,
 group identifiers, username-only contacts, and call-permission replies. Status
