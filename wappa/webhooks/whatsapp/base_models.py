@@ -72,12 +72,16 @@ class ContactProfile(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str | None) -> str | None:
-        """Validate user name is not empty."""
+        """Normalize a blank/whitespace name to None instead of rejecting it.
+
+        Meta sends ``""`` for users whose display name it cannot resolve;
+        rejecting it at the boundary fails the whole delivery, while ``None``
+        is already supported everywhere downstream.
+        """
         if v is None:
             return None
-        if not v.strip():
-            raise ValueError("Contact name cannot be empty")
-        return v.strip()
+        v = v.strip()
+        return v if v else None
 
     @field_validator("username")
     @classmethod

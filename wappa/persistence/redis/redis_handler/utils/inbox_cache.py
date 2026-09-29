@@ -21,6 +21,17 @@ from .serde import dumps, dumps_hash, loads, loads_hash
 
 logger = logging.getLogger("InboxCache")
 
+# Host Applications serialize User-cache mutations with a short-lived
+# distributed lock at "{inbox}:user:{user_id}:symphonai:mutation" — a Redis
+# *string* that shares the "{inbox}:user:*" scan namespace. It is never a
+# hash: an HGET against it answers WRONGTYPE, once per lock per scan.
+USER_MUTATION_LOCK_SUFFIX = ":symphonai:mutation"
+
+
+def is_user_mutation_lock_key(key: str) -> bool:
+    """Whether ``key`` is a host mutation lock inside the User namespace."""
+    return key.endswith(USER_MUTATION_LOCK_SUFFIX)
+
 
 class InboxCache(BaseModel):
     """
@@ -125,6 +136,10 @@ class InboxCache(BaseModel):
                 )
 
                 for full_key in keys_batch:
+                    # Mutation locks live in this namespace but hold strings,
+                    # not hashes — skip them before issuing HGET.
+                    if is_user_mutation_lock_key(full_key):
+                        continue
                     current_value_str = await hget(full_key, field, alias=_alias)
                     if current_value_str == compare_value_str:
                         logger.info(

@@ -5,6 +5,16 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.1] - 2026-09-28
+
+Production incident remedies for the WhatsApp webhook boundary and the Redis user-namespace scan.
+
+### Fixed
+
+- **`system.previous_user_id` events no longer reject the whole delivery.** Meta emits `system.previous_user_id` on `user_changed_user_id` system messages; `SystemContent`'s strict schema (`extra="forbid"`) had no field for it, so every such update failed parsing with `WHATSAPP_WEBHOOK_CONTRACT_DRIFT` and surfaced HTTP 400 to Meta. The field is now declared, optional, and BSUID-validated like `user_id`/`parent_user_id`, and `WhatsAppSystemMessage.previous_user_id` maps it into `SystemEventDetail.previous_user_id` alongside `current_user_id`. Genuinely unknown system fields still reject.
+- **Blank contact profile names are accepted as absent.** A whitespace-only `contacts[].profile.name` no longer fails the delivery; it normalizes to `None` — the already-supported absent-name shape — while BSUID, phone number, and username are unchanged. Nonblank names are preserved verbatim. The `@username` display fallback in `UserBase.get_display_name()` stays display-only: hosts that adopt a real stored name see `profile_name=None`, i.e. no offer.
+- **User-namespace scans skip host mutation locks.** Hosts serialize User-cache mutations with a short-lived Redis string at `{inbox}:user:{user_id}:symphonai:mutation`, inside the `{inbox}:user:*` namespace `InboxCache._find_by_field` SCANs. The reader HGETed it, logging a `WRONGTYPE` error per live lock per scan. `is_user_mutation_lock_key` names the shape and the scan skips it before `HGET`; per-key command errors keep degrading to a miss per the ops contract, and unexpected/connection errors still propagate.
+
 ## [0.30.0] - 2026-09-15
 
 Wappa can now send WhatsApp Authentication Templates. `authentication_method` was required of every caller and then discarded, so the send was assembled without the OTP button component Meta requires and the provider rejected it — no Authentication Template with a button could be delivered by any path. The method now reaches the WhatsApp handler, which emits `body` and `button` together with `sub_type: "url"`, a string `index`, and the code repeated from the body, because the generated button URL ends in `&code=otp{{1}}` and Meta refuses a send that leaves that placeholder unsupplied. All three methods ship: Meta rewrites an `OTP` button to a `URL` button at template creation, so `copy_code`, `one_tap`, and `zero_tap` send the identical payload and differ only in how the recipient's device consumes the code.

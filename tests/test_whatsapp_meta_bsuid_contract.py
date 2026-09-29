@@ -681,3 +681,150 @@ async def test_user_id_update_accepts_missing_phone_and_parent_transition() -> N
     assert webhook.event_detail.previous_user_id == "CO.1186878922080769"
     assert webhook.event_detail.current_user_id == "CO.2186878922080769"
     assert webhook.event_detail.current_parent_user_id == "CO.ENT.2186878922080769"
+
+
+@pytest.mark.asyncio
+async def test_system_user_id_change_maps_observed_previous_user_id() -> None:
+    """Meta sends ``system.previous_user_id`` on user_changed_user_id messages.
+
+    The field is now a declared optional key, so the delivery parses under
+    ``extra="forbid"`` and the previous BSUID reaches the identity event the
+    same way the ``user_id_update`` field path already exposes it.
+    """
+    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+        _payload(
+            {
+                "messaging_product": "whatsapp",
+                "metadata": _metadata(),
+                "messages": [
+                    {
+                        "from_user_id": "CO.2186878922080769",
+                        "id": "wamid.user-id-change-002",
+                        "timestamp": "1776696189",
+                        "type": "system",
+                        "system": {
+                            "body": "User changed to a new business-scoped ID",
+                            "user_id": "CO.2186878922080769",
+                            "previous_user_id": "CO.1186878922080769",
+                            "type": "user_changed_user_id",
+                        },
+                    }
+                ],
+            }
+        )
+    )
+
+    assert isinstance(webhook, SystemWebhook)
+    assert webhook.system_event_type == SystemEventType.USER_ID_CHANGE
+    assert webhook.event_detail.previous_user_id == "CO.1186878922080769"
+    assert webhook.event_detail.current_user_id == "CO.2186878922080769"
+    assert webhook.event_detail.user_id == "CO.2186878922080769"
+
+
+@pytest.mark.asyncio
+async def test_system_schema_still_rejects_unobserved_fields() -> None:
+    """``extra="forbid"`` still applies: a never-observed ``system`` key fails."""
+    from wappa.processors.base_processor import ProcessorError
+
+    with pytest.raises(ProcessorError):
+        await WhatsAppWebhookProcessor().create_universal_webhook(
+            _payload(
+                {
+                    "messaging_product": "whatsapp",
+                    "metadata": _metadata(),
+                    "messages": [
+                        {
+                            "from_user_id": "CO.2186878922080769",
+                            "id": "wamid.user-id-change-003",
+                            "timestamp": "1776696189",
+                            "type": "system",
+                            "system": {
+                                "body": "User changed to a new business-scoped ID",
+                                "user_id": "CO.2186878922080769",
+                                "surprise_field": "CO.3186878922080769",
+                                "type": "user_changed_user_id",
+                            },
+                        }
+                    ],
+                }
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_blank_contact_name_normalizes_to_none_and_keeps_identity() -> None:
+    """A whitespace-only profile.name no longer fails the delivery.
+
+    It normalizes to ``None`` — the already-supported absent-name shape —
+    while BSUID, phone number and username are unchanged.
+    """
+    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+        _payload(
+            {
+                "messaging_product": "whatsapp",
+                "metadata": _metadata(),
+                "contacts": [
+                    {
+                        "profile": {"name": "   ", "username": "sashanicolai"},
+                        "wa_id": "573168227670",
+                        "user_id": "CO.2186878922080769",
+                    }
+                ],
+                "messages": [
+                    {
+                        "from": "573168227670",
+                        "from_user_id": "CO.2186878922080769",
+                        "id": "wamid.blank-name-001",
+                        "timestamp": "1776696189",
+                        "text": {"body": "Hola"},
+                        "type": "text",
+                    }
+                ],
+            }
+        )
+    )
+
+    assert isinstance(webhook, InboundMessageWebhook)
+    assert webhook.user is not None
+    assert webhook.user.profile_name is None
+    assert webhook.user.bsuid == "CO.2186878922080769"
+    assert webhook.user.phone_number == "573168227670"
+    assert webhook.user.username == "@sashanicolai"
+    # The username fallback is display-only: get_display_name() resolves it
+    # (and currently renders "@@sashanicolai" — a pre-existing double-prefix
+    # quirk in UserBase.get_display_name, outside this remedy's scope), while
+    # profile_name stays None so hosts adopting a *name* see no offer.
+    assert webhook.user.get_display_name() == "@@sashanicolai"
+
+
+@pytest.mark.asyncio
+async def test_real_contact_name_is_still_preserved() -> None:
+    """A non-blank profile.name still lands on the user as before."""
+    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+        _payload(
+            {
+                "messaging_product": "whatsapp",
+                "metadata": _metadata(),
+                "contacts": [
+                    {
+                        "profile": {"name": "Sasha Nicolai Canal"},
+                        "wa_id": "573168227670",
+                        "user_id": "CO.2186878922080769",
+                    }
+                ],
+                "messages": [
+                    {
+                        "from": "573168227670",
+                        "from_user_id": "CO.2186878922080769",
+                        "id": "wamid.named-001",
+                        "timestamp": "1776696189",
+                        "text": {"body": "Hola"},
+                        "type": "text",
+                    }
+                ],
+            }
+        )
+    )
+
+    assert webhook.user is not None
+    assert webhook.user.profile_name == "Sasha Nicolai Canal"

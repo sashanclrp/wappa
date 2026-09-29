@@ -92,6 +92,12 @@ Trigger keys carry an action and an identifier but no user, which is why
 "which triggers did this user cause". Callers keyed by user say
 `delete_all_by_identifier(user_id)`.
 
+The User namespace is not exclusively hashes. Host Applications may park a
+short-lived distributed lock at `{inbox_id}:user:{user_id}:symphonai:mutation`
+(a Redis string, TTL ~15s). SCAN-based readers skip that shape
+(`is_user_mutation_lock_key`) before issuing HGET; HGET on it would answer
+WRONGTYPE once per lock per scan.
+
 ## Component Relationships
 
 ```
