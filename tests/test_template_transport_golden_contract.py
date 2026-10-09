@@ -157,3 +157,78 @@ def test_golden_status_webhook_preserves_identity_evidence() -> None:
 
 def test_golden_contract_names_active_graph_version() -> None:
     assert FIXTURE_DIR.name == CONTRACT_GRAPH_API_VERSION
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phone", ["988391070925723", "573001112233"])
+async def test_adapter_phone_evidence_reaches_template_transport(phone: str) -> None:
+    from wappa.messaging import (
+        InboxTemplateTransport,
+        PhoneNumberTemplateRecipient,
+        TemplateAddressKind,
+        TemplateCategory,
+        TemplateEndpoint,
+        TemplateRoutingReason,
+        TemplateTransportOutcome,
+        TextTemplateTransportRequest,
+    )
+    from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+        WhatsAppMessenger,
+    )
+
+    # Synthetic contradiction, not a recovered production response.
+    response = {
+        "messaging_product": "whatsapp",
+        "contacts": [
+            {
+                "input": "988391070925723",
+                "wa_id": phone,
+                "user_id": "CO.988391070925723",
+                "parent_user_id": "CO.ENT.988391070925723",
+                "username": "known_customer",
+            }
+        ],
+        "messages": [{"id": "wamid.synthetic.identity-echo"}],
+    }
+    client = _GoldenClient(response)
+    handler = WhatsAppTemplateHandler(client=client, inbox_id="inbox-test")
+
+    messenger = WhatsAppMessenger(
+        client=client,
+        media_handler=None,
+        interactive_handler=None,
+        template_handler=handler,
+        specialized_handler=None,
+        inbox_id="inbox-test",
+    )
+
+    class Runtime:
+        async def _messenger(self, inbox_id: str, *, credentials=None):
+            assert inbox_id == "inbox-test"
+            return messenger
+
+    request = TextTemplateTransportRequest(
+        recipient=PhoneNumberTemplateRecipient(value="988391070925723"),
+        template_name="welcome",
+        category=TemplateCategory.MARKETING,
+    )
+    transport = InboxTemplateTransport(runtime=Runtime(), inbox_id="inbox-test")
+    result = await transport.send(request)
+
+    expected_phone = None if phone == "988391070925723" else phone
+    assert result.returned_phone_number == expected_phone
+    assert result.model_dump()["returned_phone_number"] == expected_phone
+    assert result.outcome is TemplateTransportOutcome.ACCEPTED
+    assert result.requested_address_kind is TemplateAddressKind.PHONE_NUMBER
+    assert result.requested_address == request.recipient.value
+    assert result.selected_endpoint is TemplateEndpoint.MARKETING_MESSAGES
+    assert result.routing_reason is TemplateRoutingReason.CATEGORY_DEFAULT
+    assert result.platform_message_id == "wamid.synthetic.identity-echo"
+    assert result.returned_bsuid == "CO.988391070925723"
+    assert result.returned_parent_bsuid == "CO.ENT.988391070925723"
+    assert result.returned_username == "known_customer"
+    assert len(client.calls) == 1
+    payload, custom_url = client.calls[0]
+    assert payload["to"] == request.recipient.value
+    assert custom_url == client.url_builder.get_marketing_messages_url()
+    assert client.response == response

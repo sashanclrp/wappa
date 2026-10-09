@@ -5,6 +5,15 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.0] - 2026-10-09
+
+Outbound phone evidence excludes proven BSUID digit echoes while preserving canonical identity and provider acceptance.
+
+### Fixed
+
+- `MessageResult.recipient_phone` becomes `None` when it matches the complete numeric suffix of a valid regular BSUID, Parent BSUID, or BSUID-valued resolved recipient on the same result. Both factories and direct construction enforce the rule; comparison tolerates outer whitespace and a leading `+` on the phone. Distinct phones retain their original value, and alphanumeric or invalid identifiers do not manufacture an echo.
+- `TemplateTransportResult.returned_phone_number` receives the sanitized phone through the existing result projection. The requested Delivery Address, endpoint, routing reason, Message ID, and accepted outcome remain intact. The typed provider response retains its original `wa_id`; no discovery, address rewrite, or retry is added.
+
 ## [0.30.1] - 2026-09-28
 
 Production incident remedies for the WhatsApp webhook boundary and the Redis user-namespace scan.

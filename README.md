@@ -8,9 +8,9 @@ Build intelligent WhatsApp bots, workflows, and chat applications with clean arc
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.137+-green.svg)](https://fastapi.tiangolo.com)
 [![WhatsApp Business API](https://img.shields.io/badge/WhatsApp-Business%20API-25D366.svg)](https://developers.facebook.com/docs/whatsapp)
-[![Version](https://img.shields.io/badge/version-0.30.1-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.31.0-orange.svg)](CHANGELOG.md)
 
-> **v0.30.1 — WhatsApp webhook and Redis scan fixes** — Wappa accepts `system.previous_user_id` and blank contact names in Meta webhooks, and user-namespace scans skip host mutation locks. See [CHANGELOG.md](CHANGELOG.md).
+> **v0.31.0 — Safe outbound phone evidence** — Wappa returns a null phone for proven BSUID digit echoes while preserving canonical identity, raw provider evidence, Message IDs, and send outcomes. See [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

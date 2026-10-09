@@ -1,10 +1,11 @@
 """Basic message models for WhatsApp messaging."""
 
 from datetime import UTC, datetime
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from wappa.schemas.core.recipient import RecipientRequest
+from wappa.schemas.core.recipient import RecipientRequest, looks_like_bsuid
 from wappa.schemas.core.types import PlatformType
 
 
@@ -110,7 +111,7 @@ class MessageResult(BaseModel):
     )
     recipient_phone: str | None = Field(
         None,
-        description="Recipient phone number (may be empty if sent to BSUID)",
+        description="Recipient phone evidence, excluding proven BSUID digit echoes",
     )
     recipient_parent_bsuid: str | None = None
     recipient_username: str | None = None
@@ -123,6 +124,24 @@ class MessageResult(BaseModel):
         description="Full API response (for advanced use cases)",
         exclude=True,
     )
+
+    @model_validator(mode="after")
+    def _exclude_bsuid_digit_echo(self) -> Self:
+        if not self.recipient_phone:
+            return self
+
+        phone = self.recipient_phone.strip().removeprefix("+")
+        for identifier in (
+            self.recipient_bsuid,
+            self.recipient_parent_bsuid,
+            self.recipient,
+        ):
+            if identifier and looks_like_bsuid(identifier):
+                suffix = identifier.strip().rsplit(".", 1)[-1]
+                if suffix.isascii() and suffix.isdigit() and phone == suffix:
+                    self.recipient_phone = None
+                    break
+        return self
 
     @classmethod
     def from_api_response(

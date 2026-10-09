@@ -593,6 +593,21 @@ does not provide a distributed retry or circuit-breaker contract.
 - All `send_*` methods and `mark_as_read` on the interface
 - `MessageResult` as the uniform return type
 
+`MessageResult.recipient_phone` is nullable normalized phone evidence. Factories
+and direct model construction return `None` for a phone that exactly matches the
+complete numeric suffix of a valid BSUID, Parent BSUID, or BSUID-valued resolved
+`recipient` on the same result. Comparison tolerates outer whitespace and an
+optional leading `+` on the phone. Alphanumeric suffixes, invalid identifiers,
+and phones without corroborating BSUID evidence do not establish an echo;
+distinct phone values are preserved verbatim.
+
+The canonical recipient, BSUID fields, username, Inbox, Message ID, and send
+outcome are preserved. `ResponseContact.wa_id` and the typed `api_response` remain
+raw provider evidence. `TemplateTransportResult.returned_phone_number` projects
+the sanitized phone and remains nullable; an accepted Template with a Message ID
+remains `accepted` when its phone becomes unknown. This adds no discovery call,
+address rewrite, or retry. Host Applications still own durable identity policy.
+
 `IMessenger.send_contact_request(body, recipient, reply_to_message_id=None)` is
 the capability-aware contact-information request. WhatsApp implements it with
 Meta's `request_contact_info` interactive payload; platforms that don't support

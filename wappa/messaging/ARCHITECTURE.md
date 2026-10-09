@@ -125,6 +125,19 @@ Host Application use case
 Transport execution and Host Application commit are intentionally separate.
 An `indeterminate` result must not be treated as safe to retry automatically.
 
+`MessageResult` normalizes outbound phone evidence at model validation, for
+both factories and direct construction. `recipient_phone` becomes `None` when
+its value matches the complete numeric suffix of a valid regular BSUID, Parent
+BSUID, or BSUID-valued resolved `recipient` on that result. Comparison tolerates
+outer whitespace and a leading `+` on the phone; alphanumeric suffixes are never
+stripped into digits. Distinct phones retain their original value, and a phone
+without corroborating BSUID evidence keeps its existing behavior.
+
+`ResponseContact.wa_id` and the typed `MessageResult.api_response` retain raw
+provider evidence. Canonical identity, Message ID, and acceptance/error semantics
+are preserved. Template transport projects this same sanitized phone into its
+nullable `returned_phone_number`, with no second interpretation or retry.
+
 ## Data Flow — Media Upload (file path)
 
 ```
