@@ -5,6 +5,19 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.0] - 2026-11-02
+
+FastAPI 0.162 compatibility and corrected public router authentication.
+
+### Changed
+
+- Upgrade FastAPI from 0.137.0 to 0.162.0 and bound compatibility to `>=0.162.0,<0.163.0`. Host Applications must refresh their own lockfiles.
+- Use `include_router()` for cron monitoring routes added at startup. Remove the callback contract test's recursive traversal of FastAPI's private router nodes in favor of `iter_route_contexts()`.
+
+### Fixed
+
+- Public router exemptions now combine include and router prefixes, matching FastAPI's mounted paths. Exemptions stop at path-segment boundaries, so `/public/hooks` does not exempt `/public/admin` or `/public/hooks-admin`. Other mounts of the same router stay protected.
+
 ## [0.31.0] - 2026-10-09
 
 Outbound phone evidence excludes proven BSUID digit echoes while preserving canonical identity and provider acceptance.

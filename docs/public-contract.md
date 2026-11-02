@@ -2,6 +2,20 @@
 
 This file tracks Wappa surfaces that host applications may import, call, configure, subscribe to, or depend on.
 
+## FastAPI compatibility
+
+Wappa requires `fastapi>=0.162.0,<0.163.0`. The lockfile selects 0.162.0.
+New FastAPI minor releases need compatibility checks before widening this range.
+Host Applications must refresh their own lockfiles when upgrading Wappa.
+
+`WappaBuilder.add_router(router, public=True, prefix=...)` exempts the combined
+include prefix and router prefix from `AuthMiddleware` in exclude mode. For
+example, including `APIRouter(prefix="/hooks")` with `prefix="/public"` exempts
+`/public/hooks` and its descendants. `/public/admin` and `/public/hooks-admin`
+still require authentication. Including that router again under `/private`
+keeps that mount protected. A router with no combined prefix adds no exemption.
+Protect mode continues to use its explicit `protect` list.
+
 ## Inbox identity
 
 Wappa's globally unique runtime identity is qualified by Platform. A raw `inbox_id` is unique only inside one Platform.

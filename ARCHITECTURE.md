@@ -8,6 +8,16 @@ Today Wappa is **WhatsApp-opinionated**: the WhatsApp adapter is the only fully 
 
 ## Design Patterns
 
+HTTP composition uses FastAPI 0.162.x. Inspect included routes through
+`fastapi.routing.iter_route_contexts(app.routes)` so prefixes and inherited
+metadata describe each inclusion. `app.routes` contains router relationships;
+its length does not count endpoints. Plugins populate registered router shells
+with `include_router()` during startup rather than copying route lists.
+
+Public router registration combines the include prefix with the router's own
+prefix. Auth exclusions for those registrations match complete path segments.
+The same router can have a public mount and a protected mount.
+
 | Pattern | Where Used | Why |
 |---------|-----------|-----|
 | **Template Method** | `WappaEventHandler.handle_*()` → `process_*()` | Framework guarantees pre/post-processing (logging, metrics) while host app owns business logic in `process_*()` |

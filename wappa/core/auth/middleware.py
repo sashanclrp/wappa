@@ -71,7 +71,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         if request is not None:
             public = getattr(request.app.state, "public_route_prefixes", ())
-            if any(path.startswith(prefix) for prefix in public):
+            if any(
+                path == prefix or path.startswith(f"{prefix}/") for prefix in public
+            ):
                 return False
 
         return True

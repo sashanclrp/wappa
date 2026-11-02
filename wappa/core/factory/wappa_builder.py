@@ -117,7 +117,8 @@ class WappaBuilder:
 
         Args:
             router: FastAPI router to include
-            public: Mark this router's prefix as public (excluded from auth).
+            public: Mark this router's combined include/router prefix as public
+                (excluded from auth, at path-segment boundaries).
                 Plugins that serve unauthenticated routes (health checks,
                 webhook ingress) should set this to ``True`` so the auth
                 middleware automatically skips them.
@@ -128,7 +129,7 @@ class WappaBuilder:
         """
         self.routers.append((router, kwargs))
         if public:
-            prefix = kwargs.get("prefix", "") or getattr(router, "prefix", "") or ""
+            prefix = kwargs.get("prefix", "") + getattr(router, "prefix", "")
             if prefix:
                 self._public_prefixes.append(prefix)
         return self

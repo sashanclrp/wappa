@@ -88,6 +88,11 @@ wappa/core/plugins/
 | `WebhookPlugin` | Mounts an ID-less or `{webhook_id}` external callback, admits it synchronously, and submits handler dispatch to `BackgroundWorkTracker`. |
 | `CronPlugin` | Wraps `fastapi-crons` scheduler. Bridges each fired cron into the `WappaEventHandler.process_cron_event()` pipeline. |
 
+`CronPlugin` registers its monitoring router shell at configure time, then calls
+`include_router(get_cron_router())` on that shell after the scheduler starts.
+FastAPI's router tree makes the added routes available under `/crons`, with
+their dependencies and OpenAPI metadata intact.
+
 ## Plugin Lifecycle
 
 ```

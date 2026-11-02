@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
 from typing import Any
 
 import httpx
 import pytest
 from fastapi import FastAPI
+from fastapi.routing import iter_route_contexts
 from pydantic import SecretStr
 from starlette.requests import Request
 
@@ -238,7 +238,13 @@ async def test_platforms_contract_advertises_canonical_receiving_route(
 
 
 def test_router_exposes_canonical_processing_and_verify_only_routes() -> None:
-    assert _methods_for_path(_build_app().routes, "/webhook/inboxes/{platform}") == {
+    methods = {
+        method
+        for context in iter_route_contexts(_build_app().routes)
+        if context.path == "/webhook/inboxes/{platform}"
+        for method in context.methods or ()
+    }
+    assert methods == {
         "GET",
         "POST",
     }
@@ -366,16 +372,3 @@ async def test_authenticated_unknown_inbox_is_400(app: FastAPI) -> None:
     finally:
         await app.state.session_lifecycle.close()
     assert response.status_code == 400
-
-
-def _methods_for_path(routes: Iterable[Any], path: str) -> set[str]:
-    methods: set[str] = set()
-    for route in routes:
-        if getattr(route, "path", None) == path:
-            methods.update(getattr(route, "methods", set()))
-        router = getattr(route, "original_router", None)
-        if router is not None:
-            methods.update(_methods_for_path(router.routes, path))
-    methods.discard("HEAD")
-    methods.discard("OPTIONS")
-    return methods

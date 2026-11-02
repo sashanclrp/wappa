@@ -6,11 +6,11 @@ Build intelligent WhatsApp bots, workflows, and chat applications with clean arc
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.137+-green.svg)](https://fastapi.tiangolo.com)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.162.x-green.svg)](https://fastapi.tiangolo.com)
 [![WhatsApp Business API](https://img.shields.io/badge/WhatsApp-Business%20API-25D366.svg)](https://developers.facebook.com/docs/whatsapp)
-[![Version](https://img.shields.io/badge/version-0.31.0-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.32.0-orange.svg)](CHANGELOG.md)
 
-> **v0.31.0 — Safe outbound phone evidence** — Wappa returns a null phone for proven BSUID digit echoes while preserving canonical identity, raw provider evidence, Message IDs, and send outcomes. See [CHANGELOG.md](CHANGELOG.md).
+> **v0.32.0 — FastAPI compatibility and router authentication** — Wappa uses FastAPI 0.162.x, keeps public router exemptions within their mounted prefixes, and simplifies cron route registration. See [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

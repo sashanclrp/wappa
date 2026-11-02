@@ -183,9 +183,7 @@ class CronPlugin:
         # FastAPI 0.137+ the tree preserves the original router reference, so
         # routes added here become routable without a second include_router call.
         if self._cron_router is not None:
-            source_router = get_cron_router()
-            for route in source_router.routes:
-                self._cron_router.routes.append(route)
+            self._cron_router.include_router(get_cron_router())
 
         app.state.cron_plugin = self
 
