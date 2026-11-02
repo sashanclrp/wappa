@@ -461,6 +461,8 @@ filtered subscriptions, published and locally delivered events, dropped events,
 overflow closures, and shutdown closures. They are process-local and not a
 durable ledger.
 
+`SSEHub.close_reason(item)` is a required member of the contract (since 0.33.0). The SSE route calls it on every queued item; a non-`None` reason (`backpressure_gap`, `shutdown`, or a custom hub's own reason) ends the stream. A custom hub owns its close-signal representation and must recognize it here; a decorator delegates to its local hub. A hub without `close_reason` no longer satisfies `SSEHub`, and `SSEEventsPlugin` rejects it with `TypeError`.
+
 SSE is non-durable. The default hub closes a Subscription on its first full
 queue with a private `backpressure_gap` control rather than silently dropping
 an event and keeping the stream open. The browser reconnects and the Host

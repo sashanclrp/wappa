@@ -65,7 +65,7 @@ wappa/core/messaging/middleware/
 | `SSEEventContext` | Per-request state bag. Holds `inbox_id`, `user_id`, `bsuid`, `phone_number`, `platform`, `metadata`, and the staged Pending Incoming payload. |
 | `sse_event_scope` | Async context manager that installs and clears `SSEEventContext` via `ContextVar`. Used by every framework entry point. |
 | `update_identity` / `update_metadata` | Enrich the active context and trigger a Pending Incoming flush as a side-effect. Called from pipeline middleware after a cache lookup resolves `user_id`. |
-| `SSEHub` | Public structural contract. `publish` creates an `SSEEventEnvelope`; `deliver_envelope` performs local fan-out of an existing envelope without rebroadcasting it. |
+| `SSEHub` | Public structural contract. `publish` creates an `SSEEventEnvelope`; `deliver_envelope` performs local fan-out of an existing envelope without rebroadcasting it; `close_reason(item)` recognizes the hub's own queue close signals so the SSE route ends the stream on overflow or shutdown. |
 | `SSEEventHub` | Default in-memory `SSEHub`. It closes a slow Subscription on its first queue overflow with `backpressure_gap`; it never silently drops data and leaves the stream open. |
 | `SSEHubMetrics` | Typed process-local snapshot of active/filter counts plus published, locally delivered, dropped, overflow-close, and shutdown-close counters. |
 | `publish_sse_event` | Public best-effort publisher. Rejects unknown event types, logs hub failures, and returns `0` instead of affecting the caller's main flow. |
@@ -163,7 +163,8 @@ The plugin creates the hub before it registers Messenger middleware, then gives
 the same object to routes, inbound wrappers, outbound API hooks, lifecycle, and
 health. A broker adapter uses `publish()` to obtain Wappa's envelope and uses
 `deliver_envelope(envelope)` for broker-received events. It must not inspect or
-mutate Wappa private attributes.
+mutate Wappa private attributes. It must implement `close_reason(item)`; a
+decorator delegates it to the local hub that produced the close signal.
 
 The default hub is process-local and non-durable. On a queue overflow it marks
 the Subscription with `backpressure_gap`, clears queued payloads only to enqueue

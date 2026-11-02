@@ -128,10 +128,12 @@ async def stream_events(
                     yield _format_sse_event(event_name="ping", data="{}")
                     continue
 
-                # Close controls are intentionally not normal SSE envelopes.
-                # A queue item without the envelope mapping shape requests a
-                # reconnect so clients never continue after a delivery gap.
-                if not isinstance(event, Mapping):
+                # The hub owns its close-signal representation. Any other
+                # non-envelope item also ends the stream so clients never
+                # continue after a delivery gap.
+                if event_hub.close_reason(event) is not None or not isinstance(
+                    event, Mapping
+                ):
                     break
 
                 event_id = event.get("event_id")

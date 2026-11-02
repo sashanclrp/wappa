@@ -74,6 +74,9 @@ class BrokeredHubDecorator:
     def snapshot_metrics(self) -> SSEHubMetrics:
         return self.local_hub.snapshot_metrics()
 
+    def close_reason(self, item: object) -> str | None:
+        return self.local_hub.close_reason(item)
+
 
 def test_plugin_uses_one_structural_hub_from_its_factory() -> None:
     created: list[BrokeredHubDecorator] = []
@@ -144,3 +147,43 @@ async def test_brokered_decorator_delivers_remote_envelopes_without_republishing
     assert received["event_id"] == created.envelope.event_id
     assert hub.published_envelopes == [created.envelope]
     assert hub.locally_delivered_envelopes == [created.envelope]
+
+
+def test_hub_without_close_reason_does_not_satisfy_the_contract() -> None:
+    class Legacy:
+        pass
+
+    legacy = BrokeredHubDecorator(queue_size=1)
+    assert isinstance(legacy, SSEHub)
+    stripped = Legacy()
+    for name in (
+        "subscribe",
+        "unsubscribe",
+        "publish",
+        "deliver_envelope",
+        "shutdown",
+        "snapshot_metrics",
+    ):
+        setattr(stripped, name, getattr(legacy, name))
+    assert not isinstance(stripped, SSEHub)
+    with pytest.raises(TypeError):
+        SSEEventsPlugin(event_hub=stripped)  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_custom_hub_recognizes_overflow_and_shutdown_close_signals() -> None:
+    hub = BrokeredHubDecorator(queue_size=1)
+    slow = await hub.subscribe()
+    from wappa.sse import sse_event_scope
+
+    async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
+        for index in range(2):
+            await hub.publish(
+                event_type="incoming_message", source="test", payload={"i": index}
+            )
+    assert hub.close_reason(slow.queue.get_nowait()) == "backpressure_gap"
+
+    other = await hub.subscribe()
+    await hub.shutdown()
+    assert hub.close_reason(other.queue.get_nowait()) == "shutdown"
+    assert hub.close_reason({"event_type": "incoming_message"}) is None

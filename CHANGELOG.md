@@ -5,6 +5,15 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.0] - 2026-11-02
+
+Recognizing a close signal is now part of the pluggable `SSEHub` contract.
+
+### Changed
+
+- **Breaking for custom SSE hubs:** `SSEHub` requires `close_reason(item) -> str | None`. It returns the reason (`backpressure_gap`, `shutdown`, or a custom hub's own reason) when a queued item is that hub's stream-close signal, and `None` otherwise. A hub without it no longer satisfies `SSEHub`, and `SSEEventsPlugin` rejects it with `TypeError`. Decorators should delegate to their local hub. The built-in `SSEEventHub` already had the method, so it satisfies the contract unchanged.
+- The `/api/sse/events` stream asks the hub through `close_reason()` whether to end, instead of inferring closure from the queue item's shape. Any queued item that is not an event envelope still ends the stream.
+
 ## [0.32.0] - 2026-11-02
 
 FastAPI 0.162 compatibility and corrected public router authentication.

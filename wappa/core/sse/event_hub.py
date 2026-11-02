@@ -152,6 +152,14 @@ class SSEHub(Protocol):
     def deliver_envelope(self, envelope: SSEEventEnvelope) -> SSEDeliveryResult: ...
     async def shutdown(self) -> None: ...
     def snapshot_metrics(self) -> SSEHubMetrics: ...
+    def close_reason(self, item: object) -> str | None:
+        """Return the close reason when a queue item is this hub's close signal.
+
+        Stream consumers call this on every queued item: a non-``None`` result
+        means the hub closed the Subscription (for example ``backpressure_gap``
+        or ``shutdown``) and the stream must end so the client reconnects.
+        """
+        ...
 
 
 class SSEEventHub:
