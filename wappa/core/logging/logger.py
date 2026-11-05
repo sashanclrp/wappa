@@ -243,6 +243,35 @@ class ContextFilter(logging.Filter):
         return True
 
 
+_SECRET_QUERY = re.compile(
+    r"(?<![A-Za-z0-9_])(?P<key>(?:access_token|input_token|client_secret|appsecret_proof"
+    r"|fb_exchange_token|code)=)[^&\s\"']+"
+)
+# Full tokens only: Wappa's own "Bearer 12345678...wxyz" hint stays readable.
+_BEARER = re.compile(r"(?P<key>Bearer\s+)(?!\S*\.\.\.)[A-Za-z0-9._\-]{20,}")
+
+
+def redact_secrets(text: str) -> str:
+    """Mask OAuth secrets that third-party loggers print inside URLs."""
+    text = _SECRET_QUERY.sub(r"\g<key>[REDACTED]", text)
+    return _BEARER.sub(r"\g<key>[REDACTED]", text)
+
+
+class SecretRedactingFilter(logging.Filter):
+    """Redact tokens from every record before any handler writes it.
+
+    httpx logs each request URL at INFO, and Meta's OAuth endpoints
+    (``oauth/access_token``, ``debug_token``) take secrets in the query.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        redacted = redact_secrets(message)
+        if redacted != message:
+            record.msg, record.args = redacted, None
+        return True
+
+
 def setup_logging(
     *,
     level: str = "INFO",
@@ -308,6 +337,8 @@ def setup_logging(
         json_handler.setFormatter(WappaJSONFormatter())
         handlers.append(json_handler)
 
+    for handler in handlers:
+        handler.addFilter(SecretRedactingFilter())
     logging.basicConfig(level=lvl, handlers=handlers, force=True)
 
     setup_logger = logging.getLogger("WappaLoggerSetup")

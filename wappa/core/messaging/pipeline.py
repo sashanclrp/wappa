@@ -361,7 +361,7 @@ class MessengerPipeline(IMessenger):
 
     async def send_audio(
         self,
-        audio_source: str | Path,
+        audio_source: MediaRenditions,
         target: DirectMessage,
         reply_to_message_id: str | None = None,
         transcript: str | None = None,

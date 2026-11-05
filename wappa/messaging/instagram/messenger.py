@@ -438,17 +438,24 @@ class InstagramMessenger(IMessenger):
 
     async def send_audio(
         self,
-        audio_source: str | Path,
+        audio_source: MediaRenditions,
         target: DirectMessage,
         reply_to_message_id: str | None = None,
         transcript: str | None = None,
         is_voice: bool = False,
     ) -> MessageResult:
+        """Instagram shows every audio attachment as a voice message.
+
+        ``is_voice`` therefore changes nothing here; the rendition is picked
+        from Instagram's audio formats (no OGG), so ``[note.ogg, note.m4a]``
+        serves a WhatsApp voice note and Instagram from one call.
+        """
         _ = transcript  # Host metadata, never shown to the User (as on WhatsApp)
-        _ = is_voice  # Instagram renders every audio attachment the same way
-        return await self._send_media(
-            "audio", audio_source, target, reply_to_message_id
+        _ = is_voice
+        source = pick_rendition(
+            audio_source, MEDIA_RULES["audio"].extensions, what="Instagram audio"
         )
+        return await self._send_media("audio", source, target, reply_to_message_id)
 
     async def send_document(
         self,

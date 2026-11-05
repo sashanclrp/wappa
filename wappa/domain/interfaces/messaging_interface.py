@@ -130,7 +130,7 @@ class IMessenger(ABC):
 
     async def send_audio(
         self,
-        audio_source: str | Path,
+        audio_source: MediaRenditions,
         target: DirectMessage,
         reply_to_message_id: str | None = None,
         transcript: str | None = None,
@@ -138,9 +138,20 @@ class IMessenger(ABC):
     ) -> MessageResult:
         """Send audio. ``is_voice=True`` asks for a voice note (waveform).
 
-        WhatsApp: the file must be OGG/Opus (mono) for Meta to render a voice
-        note; other formats arrive as a plain audio file. Instagram renders
-        every audio attachment the same way, so the flag has no effect there.
+        ``audio_source`` is one source or a list of renditions of the same
+        audio; each adapter sends the first one its Platform accepts
+        (Wappa never converts):
+
+        - WhatsApp voice note (``is_voice=True``): ``.ogg`` (Opus, mono) only.
+        - WhatsApp audio: ``.aac``, ``.amr``, ``.mp3``, ``.m4a`` or ``.ogg`` (16 MB).
+        - Instagram: ``.aac``, ``.m4a``, ``.wav`` or ``.mp4`` (25 MB). Instagram
+          shows every audio attachment as a voice message, so ``is_voice`` has
+          no effect there.
+
+        A single source without an extension (a Platform media ID) is passed
+        through. ``ValueError`` before any Platform call when no rendition fits.
+        Pass ``["note.ogg", "note.m4a"]`` with ``is_voice=True`` to send a voice
+        note on both Platforms from the same call.
         """
         raise UnsupportedOperationError(
             f"{self.platform.value} does not support send_audio"

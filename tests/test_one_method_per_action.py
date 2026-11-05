@@ -273,3 +273,49 @@ async def test_voice_note_flag_reaches_whatsapp_through_the_pipeline():
 
     assert client.posted[0]["audio"] == {"link": voice, "voice": True}
     assert "voice" not in client.posted[1]["audio"]
+
+
+async def test_voice_note_renditions_serve_both_platforms_from_one_call():
+    """Live: an OGG voice note sent to Instagram failed with 100/2534080.
+
+    One call with ``[.ogg, .m4a]`` and ``is_voice=True``: WhatsApp sends the
+    OGG/Opus voice note, Instagram (no OGG) the M4A. No Platform branch.
+    """
+    both = ["https://example.com/v.ogg", "https://example.com/v.m4a"]
+
+    wa, client = _wa()
+    assert (await wa.send_audio(both, WA_DM, is_voice=True)).success
+    assert client.posted[0]["audio"] == {"link": both[0], "voice": True}
+    with pytest.raises(ValueError, match="voice note"):  # m4a never renders a waveform
+        await wa.send_audio("https://example.com/v.m4a", WA_DM, is_voice=True)
+    with pytest.raises(ValueError, match="WhatsApp audio"):
+        await wa.send_audio("https://example.com/v.wav", WA_DM)
+    assert len(client.posted) == 1
+
+    sent: list[httpx.Request] = []
+
+    def graph(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        return httpx.Response(200, json={"recipient_id": "u1", "message_id": "mid"})
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(graph))
+    ig = InstagramMessenger(
+        inbox_ref=IG_REF,
+        access_token=SecretStr("tkn"),
+        session_provider=lambda: http,
+        graph_api_version="v26.0",
+        graph_base_url="https://graph.facebook.com",
+    )
+    ig_dm = DirectMessage(inbox_ref=IG_REF, addresses=DeliveryAddresses.of("u1"))
+    async with http:
+        assert (await ig.send_audio(both, ig_dm, is_voice=True)).success
+        with pytest.raises(ValueError, match="Instagram audio"):
+            await ig.send_audio("https://example.com/v.ogg", ig_dm)
+    import json as _json
+
+    body = _json.loads(sent[-1].content)
+    assert body["message"]["attachment"] == {
+        "type": "audio",
+        "payload": {"url": both[1]},
+    }
+    assert len(sent) == 1

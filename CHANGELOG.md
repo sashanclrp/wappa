@@ -27,6 +27,7 @@ This release is a clean cut: no aliases or compatibility shims are kept. Step-by
   - A route the Inbox's Platform cannot serve answers **501** (`"<platform> does not provide <capability>"`): Templates, Template info, media info/download/delete and limits on Instagram; comments and post reads on WhatsApp. A local rule violation answers 400.
   - The legacy default Inbox only answers for its own Platform.
 - **`send_sticker` formats per Platform.** WhatsApp stickers are `.webp` only (512x512; 100 KB static, 500 KB animated). Instagram has no stickers and sends an image: `.png`, `.jpg`, `.jpeg` or `.gif` (8 MB). `sticker_source` now also takes a list of renditions, and each adapter sends the first one its Platform accepts: `await messenger.send_sticker(["sticker.webp", "sticker.png"], target)`. When no rendition fits, `ValueError` is raised before any call (`POST .../send-sticker` answers 400). Before, WhatsApp accepted a PNG link with 200 and the message failed later as status `131053`. Wappa never converts media.
+- **`send_audio` formats per Platform, and voice notes on both Platforms from one call.** `audio_source` now also takes a list of renditions; each adapter sends the first one its Platform accepts. WhatsApp voice note (`is_voice=True`): `.ogg` (Opus, mono) only. WhatsApp audio: `.aac`, `.amr`, `.mp3`, `.m4a` or `.ogg` (16 MB). Instagram: `.aac`, `.m4a`, `.wav` or `.mp4` (25 MB). Instagram shows every audio attachment as a voice message, so `is_voice` changes nothing there. `await messenger.send_audio(["note.ogg", "note.m4a"], target, is_voice=True)` sends a voice note on both. When no rendition fits, `ValueError` is raised before any Platform call (`POST .../send-audio` answers 400). This covers a WhatsApp `is_voice=True` with a non-OGG file, which before was sent and arrived as a plain audio file, and an OGG to Instagram, which before reached Meta and failed with `100/2534080`. A single source without an extension (a media ID, an Instagram CDN URL) is passed through unchanged.
 - **`send_contact` takes a typed `ContactCard`** (now Platform-neutral in `wappa.domain.contacts`, exported from `wappa.messaging` and `wappa.models`; `wappa.messaging.whatsapp.models` no longer exports it). Passing a dict no longer works: wrap it with `ContactCard.model_validate(d)`.
 - **`supported_operations` no longer lists Template methods.** Check `messenger.capability(ITemplateMessaging)` instead.
 - **`bot_reply` Pub/Sub notifications are keyed by the destination.** A send from a webhook to a different User was announced under the webhook User; it is now keyed by the destination address.
@@ -122,6 +123,7 @@ await templates.send_text_template("order_ready", target, params, "es", template
 
 ### Fixed
 
+- Access tokens no longer reach log files. httpx logs every request URL at INFO, and Meta's OAuth calls carry secrets in the query (`oauth/access_token?client_secret=…&code=…`, `debug_token?input_token=…`, `?access_token=…`), so the connect flow wrote full tokens to the DEV log file and the console. Every handler `setup_logging` installs now runs `SecretRedactingFilter`, which masks `access_token`, `input_token`, `client_secret`, `appsecret_proof`, `fb_exchange_token`, `code` query values and full `Bearer` tokens as `[REDACTED]`. Rotate any token that a log file from 0.34 development builds may contain.
 - WhatsApp status webhooks with `status: played` (the User played a voice note) were rejected with 400, so Meta retried and dropped them. `played` is now a `StatusWebhook` with `MessageStatus.PLAYED`; any status value Wappa does not model yet arrives as `SystemWebhook(UNSUPPORTED_EVENT)` with `META_SCHEMA_DRIFT field=WhatsAppMessageStatus.status=<value>` instead of a 400.
 - An inbound WhatsApp document whose filename contains `..`, `/` or `\\` (e.g. `informe..final.pdf`) was rejected with 400. `WhatsAppDocumentMessage.filename` is now the untrusted name as delivered (`str | None`); hosts sanitize it before using it as a path.
 - A tap on a WhatsApp carousel card's quick reply (and a Template quick-reply button) arrives as `type: button` with `button.payload`; `get_interactive_selection()` ignored it, so handlers saw plain text. It now returns the payload, and the button message reports `interactive_type = quick_reply`.
@@ -164,7 +166,7 @@ await templates.send_text_template("order_ready", target, params, "es", template
 
 ### Verification
 
-`uv run pytest -q` → 1228 passed, 1 skipped; `uv run mypy wappa` clean (384 files); `uv run ruff check .` clean; shipped skill lint 0 errors / 0 warnings.
+`uv run pytest -q` → 1233 passed, 1 skipped; `uv run mypy wappa` clean (384 files); `uv run ruff check .` clean; shipped skill lint 0 errors / 0 warnings.
 
 ## [0.33.0] - 2026-11-02
 

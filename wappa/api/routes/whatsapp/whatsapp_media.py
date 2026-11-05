@@ -241,7 +241,11 @@ async def send_video_message(
     "/send-audio",
     response_model=MessageResult,
     summary="Send Audio Message",
-    description="Send an audio message with optional reply context",
+    description=(
+        "Send an audio message. Formats per Platform: WhatsApp .aac/.amr/.mp3/"
+        ".m4a/.ogg (16 MB), voice note (is_voice) .ogg Opus mono only; "
+        "Instagram .aac/.m4a/.wav/.mp4 (25 MB). A wrong format answers 400."
+    ),
 )
 @dispatch_message_event(platform="whatsapp")
 async def send_audio_message(
@@ -250,11 +254,7 @@ async def send_audio_message(
     messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    """Send audio message via WhatsApp.
-
-    Supports AAC, AMR, MP3, M4A, and OGG audio up to 16MB.
-    Note: Audio messages do not support captions.
-    """
+    """Send audio on the path Platform; audio has no caption."""
     try:
         result = await messenger.send_audio(
             audio_source=request.media_source,

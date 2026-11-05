@@ -376,13 +376,18 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
 
     async def send_audio(
         self,
-        audio_source: str | Path,
+        audio_source: MediaRenditions,
         target: DirectMessage,
         reply_to_message_id: str | None = None,
         transcript: str | None = None,
         is_voice: bool = False,
     ) -> MessageResult:
-        # Voice messages require OGG/OPUS mono; regular audio has no caption support.
+        # A voice note (waveform) needs OGG/Opus mono; audio has no caption.
+        audio_source = pick_rendition(
+            audio_source,
+            WHATSAPP_VOICE_SUFFIXES if is_voice else WHATSAPP_AUDIO_SUFFIXES,
+            what="WhatsApp voice note" if is_voice else "WhatsApp audio",
+        )
         media_cache: dict[str, Any] = {}  # upload once across fallback attempts
         return await self._deliver(
             target,
@@ -901,6 +906,8 @@ def _wa_check(value: str, limit: int, what: str) -> str:
 
 
 WHATSAPP_STICKER_SUFFIXES = frozenset({".webp"})
+WHATSAPP_AUDIO_SUFFIXES = frozenset({".aac", ".amr", ".mp3", ".m4a", ".ogg"})
+WHATSAPP_VOICE_SUFFIXES = frozenset({".ogg"})
 
 
 def _wa_cards(cards: Sequence[MessageCard]) -> list[dict[str, Any]]:

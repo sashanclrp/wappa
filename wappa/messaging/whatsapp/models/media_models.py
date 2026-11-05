@@ -159,8 +159,9 @@ class AudioMessage(DeliveryRequest):
     is_voice: bool = Field(
         False,
         description=(
-            "Deliver as a voice note (waveform). WhatsApp needs an OGG/Opus file; "
-            "Instagram ignores it"
+            "Deliver as a voice note (waveform). WhatsApp: .ogg (Opus, mono) only, "
+            "otherwise 400. Instagram shows all audio as a voice message and "
+            "ignores the flag"
         ),
     )
     reply_to_message_id: str | None = Field(
