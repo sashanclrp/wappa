@@ -154,6 +154,50 @@ class WhatsAppInactiveInboxCredentialRecord(_InboxCredentialRecordBase):
         return False
 
 
+class InstagramActiveInboxCredentialRecord(_InboxCredentialRecordBase):
+    """Unified Login credential for one professional account (also its Inbox)."""
+
+    platform: Literal[PlatformType.INSTAGRAM] = PlatformType.INSTAGRAM
+    status: Literal[InboxCredentialStatus.ACTIVE] = InboxCredentialStatus.ACTIVE
+    access_token: EncryptedSecretEnvelope
+
+    @model_validator(mode="after")
+    def _professional_account(self) -> InstagramActiveInboxCredentialRecord:
+        if self.platform_account_id != self.inbox_id:
+            raise ValueError("Instagram Inbox and professional account IDs must match")
+        return self
+
+    @property
+    def is_active(self) -> Literal[True]:
+        return True
+
+
+class InstagramInactiveInboxCredentialRecord(_InboxCredentialRecordBase):
+    """Deactivated Instagram professional account; no credential material."""
+
+    platform: Literal[PlatformType.INSTAGRAM] = PlatformType.INSTAGRAM
+    status: Literal[InboxCredentialStatus.INACTIVE] = InboxCredentialStatus.INACTIVE
+
+    @model_validator(mode="after")
+    def _professional_account(self) -> InstagramInactiveInboxCredentialRecord:
+        if self.platform_account_id != self.inbox_id:
+            raise ValueError("Instagram Inbox and professional account IDs must match")
+        return self
+
+    @property
+    def is_active(self) -> Literal[False]:
+        return False
+
+
+ActiveInboxCredentialRecord = (
+    WhatsAppActiveInboxCredentialRecord | InstagramActiveInboxCredentialRecord
+)
+InactiveInboxCredentialRecord = (
+    WhatsAppInactiveInboxCredentialRecord | InstagramInactiveInboxCredentialRecord
+)
+CredentialRecord = ActiveInboxCredentialRecord | InactiveInboxCredentialRecord
+
+
 def _record_tag(value: Any) -> str | None:
     """Callable discriminator over ``platform`` and ``status`` together."""
     if isinstance(value, dict):
@@ -171,29 +215,29 @@ def _record_tag(value: Any) -> str | None:
 
 InboxCredentialRecord = Annotated[
     Annotated[WhatsAppActiveInboxCredentialRecord, Tag("whatsapp:active")]
-    | Annotated[WhatsAppInactiveInboxCredentialRecord, Tag("whatsapp:inactive")],
+    | Annotated[WhatsAppInactiveInboxCredentialRecord, Tag("whatsapp:inactive")]
+    | Annotated[InstagramActiveInboxCredentialRecord, Tag("instagram:active")]
+    | Annotated[InstagramInactiveInboxCredentialRecord, Tag("instagram:inactive")],
     Discriminator(_record_tag),
 ]
-"""Platform- and status-discriminated union. v0.27 ships only WhatsApp members."""
+"""Platform- and status-discriminated union for implemented adapters."""
 
 WhatsAppInboxCredentialRecord = (
     WhatsAppActiveInboxCredentialRecord | WhatsAppInactiveInboxCredentialRecord
 )
 
-_record_adapter: TypeAdapter[
-    WhatsAppActiveInboxCredentialRecord | WhatsAppInactiveInboxCredentialRecord
-] = TypeAdapter(InboxCredentialRecord)
+_record_adapter: TypeAdapter[CredentialRecord] = TypeAdapter(InboxCredentialRecord)
 
 
 def parse_inbox_credential_record(
     data: Any,
-) -> WhatsAppActiveInboxCredentialRecord | WhatsAppInactiveInboxCredentialRecord:
+) -> CredentialRecord:
     """Validate an arbitrary object into the canonical record union."""
     return _record_adapter.validate_python(data)
 
 
 def dump_record_for_storage(
-    record: WhatsAppActiveInboxCredentialRecord | WhatsAppInactiveInboxCredentialRecord,
+    record: CredentialRecord,
 ) -> dict[str, Any]:
     """Serialize a record for persistence. This is the only ciphertext-bearing dump."""
     return record.for_storage()
@@ -265,6 +309,11 @@ def utc_now() -> datetime:
 
 
 __all__ = [
+    "ActiveInboxCredentialRecord",
+    "InactiveInboxCredentialRecord",
+    "CredentialRecord",
+    "InstagramActiveInboxCredentialRecord",
+    "InstagramInactiveInboxCredentialRecord",
     "SECRET_MASK",
     "SECRET_STORAGE_CONTEXT",
     "EncryptedSecretEnvelope",

@@ -5,6 +5,8 @@ from openai import AsyncOpenAI
 from wappa import WappaEventHandler
 from wappa.core.config import settings
 from wappa.core.logging import get_logger
+from wappa.domain.inbox import InboxRef
+from wappa.messaging import DeliveryAddresses, DirectMessage
 from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
 from wappa.webhooks import InboundMessageWebhook
 from wappa.webhooks.whatsapp.message_types.audio import WhatsAppAudioMessage
@@ -38,7 +40,13 @@ class TranscriptEventHandler(WappaEventHandler):
                         audio_download.file_path
                     )
                     await messenger.send_text(
-                        f"*Transcript:*\n\n{transcription}", webhook.user.user_id
+                        f"*Transcript:*\n\n{transcription}",
+                        DirectMessage(
+                            inbox_ref=InboxRef(
+                                platform=messenger.platform, inbox_id=messenger.inbox_id
+                            ),
+                            addresses=DeliveryAddresses.of(webhook.user.user_id),
+                        ),
                     )
                     logger.info(
                         f"Transcribed audio from temp file: {audio_download.file_path}"
@@ -47,7 +55,12 @@ class TranscriptEventHandler(WappaEventHandler):
                     logger.error(f"Failed to download audio: {audio_download.error}")
                     await messenger.send_text(
                         "Sorry, I couldn't download the audio file.",
-                        webhook.user.user_id,
+                        DirectMessage(
+                            inbox_ref=InboxRef(
+                                platform=messenger.platform, inbox_id=messenger.inbox_id
+                            ),
+                            addresses=DeliveryAddresses.of(webhook.user.user_id),
+                        ),
                     )
 
             # Option 2: Memory-only processing (no files created)
@@ -63,5 +76,10 @@ class TranscriptEventHandler(WappaEventHandler):
         else:
             await messenger.send_text(
                 "*Hey Wapp@!*\n\nThis app only receives Audio, send a Voice Note for Transcript",
-                webhook.user.user_id,
+                DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=messenger.platform, inbox_id=messenger.inbox_id
+                    ),
+                    addresses=DeliveryAddresses.of(webhook.user.user_id),
+                ),
             )

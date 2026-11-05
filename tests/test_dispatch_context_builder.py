@@ -121,7 +121,7 @@ async def test_builder_binds_messenger_cache_and_optional_db() -> None:
     assert handler.inbox_id == "111" and handler.user_id == "user-1"
     assert handler.messenger is messenger
     assert handler.cache_factory is cache_factory
-    assert cache_factory.inbox_id == "111"
+    assert cache_factory.inbox_id == "whatsapp__111"
     assert handler.db is not None and handler.db_read is not None
     async with handler.db() as session:
         assert session == "primary-session"
@@ -206,9 +206,11 @@ async def test_context_factory_uses_the_shared_builder_for_cron_and_external_pat
     app = _app(resolver, db=True)
     factory = WappaContextFactory(app)
 
-    system = await factory.create_context(inbox_id=None)
+    system = await factory.create_context(None)
     scoped = await factory.create_context(
-        inbox_id="111", user_id="user-1", include_messenger=True
+        InboxRef.whatsapp("111"),
+        "user-1",
+        include_messenger=True,
     )
 
     assert (
@@ -217,7 +219,10 @@ async def test_context_factory_uses_the_shared_builder_for_cron_and_external_pat
         and system.cache_factory is None
     )
     assert scoped.messenger is not None
-    assert scoped.cache_factory is not None and scoped.cache_factory.inbox_id == "111"
+    assert (
+        scoped.cache_factory is not None
+        and scoped.cache_factory.inbox_id == "whatsapp__111"
+    )
     assert app.state.dispatch_context_builder is DispatchContextBuilder.from_app(app)
 
 
@@ -266,7 +271,9 @@ async def test_context_factory_propagates_typed_directory_failures() -> None:
 
     with pytest.raises(InboxDirectoryUnavailableError):
         await factory.create_context(
-            inbox_id="111", user_id="user-1", include_messenger=True
+            InboxRef.whatsapp("111"),
+            "user-1",
+            include_messenger=True,
         )
 
 
@@ -278,7 +285,7 @@ async def test_context_factory_still_returns_a_db_only_context_when_unavailable(
     resolver.unavailable = True
     factory = WappaContextFactory(_app(resolver, db=True))
 
-    context = await factory.create_context(inbox_id=None)
+    context = await factory.create_context(None)
 
     assert context.db is not None
     assert context.messenger is None and context.cache_factory is None

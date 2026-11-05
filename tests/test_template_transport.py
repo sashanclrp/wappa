@@ -8,10 +8,13 @@ import pytest
 from fastapi import FastAPI
 from pydantic import ValidationError
 
-from wappa.api.routes.whatsapp_combined import create_whatsapp_router
+from wappa.api.routes.whatsapp_combined import create_messaging_router
+from wappa.domain.inbox import InboxRef
 from wappa.domain.interfaces.session_provider import RuntimeDrainingError
 from wappa.messaging import (
     BsuidTemplateRecipient,
+    DeliveryAddresses,
+    DirectMessage,
     InboxTemplateTransport,
     LocationTemplateTransportRequest,
     MediaTemplateTransportRequest,
@@ -32,6 +35,7 @@ from wappa.messaging import (
     TextTemplateTransportRequest,
 )
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
+from wappa.schemas.core.types import PlatformType
 
 
 def _text_request(**overrides: Any) -> TextTemplateTransportRequest:
@@ -62,6 +66,15 @@ class _Runtime:
 
 
 class _Messenger:
+    platform = PlatformType.WHATSAPP
+    inbox_id = "inbox-1"
+
+    def capability(self, kind):  # noqa: ANN001, ANN201 - test double
+        return self
+
+    def require_capability(self, kind):  # noqa: ANN001, ANN201 - test double
+        return self
+
     def __init__(self, result: MessageResult | Exception) -> None:
         self.result = result
         self.calls: list[tuple[str, dict[str, Any]]] = []
@@ -151,7 +164,10 @@ async def test_text_transport_returns_normalized_acceptance_and_exact_mapping() 
             "text",
             {
                 "template_name": "welcome",
-                "recipient": "573001112233",
+                "target": DirectMessage(
+                    inbox_ref=InboxRef.whatsapp("inbox-1"),
+                    addresses=DeliveryAddresses.of("573001112233"),
+                ),
                 "body_parameters": [{"type": "text", "text": "Sasha"}],
                 "language_code": "es",
                 "template_type": "utility",
@@ -355,15 +371,15 @@ async def test_marketing_fallback_is_explicit_and_recorded() -> None:
 
 def test_template_routes_require_explicit_capability_and_mount_once() -> None:
     default_app = FastAPI()
-    default_app.include_router(create_whatsapp_router())
+    default_app.include_router(create_messaging_router())
     enabled_app = FastAPI()
-    enabled_app.include_router(create_whatsapp_router(include_template_transport=True))
+    enabled_app.include_router(create_messaging_router(include_template_transport=True))
     default_paths = tuple(default_app.openapi()["paths"])
     enabled_paths = tuple(enabled_app.openapi()["paths"])
 
     assert not any("/templates/send-" in path for path in default_paths)
     for suffix in ("text", "media", "location"):
-        assert enabled_paths.count(f"/api/whatsapp/templates/send-{suffix}") == 1
+        assert enabled_paths.count(f"/api/{{platform}}/templates/send-{suffix}") == 1
 
 
 @pytest.mark.asyncio

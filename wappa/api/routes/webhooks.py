@@ -100,6 +100,48 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
             signature=request.headers.get(SIGNATURE_HEADER),
         )
 
+    @router.post("/inboxes/instagram/deauthorize")
+    async def instagram_deauthorize(request: Request) -> dict[str, str]:
+        """Meta's Instagram deauthorize callback → ``process_inbox_connection``.
+
+        Verifies the ``signed_request`` with the Meta App Secret and dispatches
+        ``InboxConnectionWebhook(DISCONNECTED)``, the same event a WhatsApp
+        ``account_offboarded`` produces (ADR-0016). No Messenger is bound: the
+        account's token is no longer valid.
+        """
+        from wappa.connections import ConnectionStateError, deauthorization_event
+        from wappa.core.dispatch.context_builder import DispatchContextBuilder
+        from wappa.domain.inbox.identity import InboxRef
+
+        form = await request.form()
+        signed_request = form.get("signed_request")
+        meta = getattr(request.app.state, "meta_application_config", None)
+        if not isinstance(signed_request, str) or meta is None:
+            raise HTTPException(status_code=400, detail="signed_request required")
+        try:
+            event = deauthorization_event(signed_request, meta.app_secret)
+        except ConnectionStateError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        base_handler = event_dispatcher.event_handler
+        if base_handler is not None:
+            builder = DispatchContextBuilder.from_app(request.app)
+            inbox_ref = InboxRef(
+                platform=PlatformType.INSTAGRAM, inbox_id=event.inbox.inbox_id
+            )
+            handler = builder.bind_handler(
+                base_handler,
+                inbox_ref=inbox_ref,
+                user_id="__system__",
+                messenger=None,
+                cache_factory=builder.cache_factory(inbox_ref, "__system__"),
+            )
+            await event_dispatcher.dispatch_universal_webhook(
+                universal_webhook=event,
+                inbox_id=inbox_ref.inbox_id,
+                request_handler=handler,
+            )
+        return {"status": "accepted"}
+
     @router.get("/inboxes/{platform}/status")
     async def webhook_status(
         request: Request,

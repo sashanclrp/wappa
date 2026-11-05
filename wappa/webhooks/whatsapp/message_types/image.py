@@ -26,7 +26,7 @@ from wappa.webhooks.whatsapp.base_models import (
 class ImageContent(BaseModel):
     """Image message content with media asset information."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     id: str = Field(
         ..., description="Media asset ID for retrieving the image from WhatsApp"
@@ -38,7 +38,6 @@ class ImageContent(BaseModel):
     caption: str | None = Field(
         None,
         description="Optional image caption text",
-        max_length=1024,  # WhatsApp caption limit
     )
     url: str | None = Field(
         None,
@@ -78,8 +77,6 @@ class ImageContent(BaseModel):
             v = v.strip()
             if not v:  # Empty after stripping
                 return None
-            if len(v) > 1024:
-                raise ValueError("Image caption cannot exceed 1024 characters")
         return v
 
 
@@ -94,7 +91,7 @@ class WhatsAppImageMessage(WhatsAppMessageIdentity, BaseImageMessage):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Standard message fields (BSUID support v24.0+)

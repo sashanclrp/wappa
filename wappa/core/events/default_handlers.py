@@ -108,7 +108,7 @@ class DefaultMessageHandler:
     """
     Default handler for incoming message webhooks.
 
-    Provides structured logging for all incoming WhatsApp messages with configurable
+    Provides structured logging for incoming Platform messages with configurable
     strategies for content filtering, PII protection, and statistics tracking.
 
     This handler is designed to be core framework infrastructure - it runs automatically
@@ -296,7 +296,7 @@ class DefaultMessageHandler:
 
 class DefaultStatusHandler:
     """
-    Default handler for WhatsApp status webhooks.
+    Default handler for Platform status webhooks.
 
     Provides configurable logging strategies for message delivery status updates.
     Users can customize the logging strategy or extend this class for custom behavior.
@@ -399,7 +399,9 @@ class DefaultStatusHandler:
 
         return (
             f"{status_icon} Status Update: {webhook.status.value} "
-            f"(recipient: {webhook.recipient_id})"
+            f"(platform: {webhook.platform.value}, message: {webhook.message_id}"
+            + (f", recipient: {webhook.recipient_id}" if webhook.recipient_id else "")
+            + ")"
         )
 
     def _get_status_icon(self, status: str) -> str:
@@ -436,7 +438,7 @@ class DefaultStatusHandler:
 
 class DefaultErrorHandler:
     """
-    Default handler for WhatsApp error webhooks.
+    Default handler for Platform error webhooks.
 
     Provides configurable logging strategies for platform errors with escalation support.
     Users can customize the logging strategy or extend this class for custom behavior.
@@ -655,10 +657,15 @@ class DefaultSystemHandler:
         self._stats.last_processed = datetime.now(UTC)
 
         log_method = self._get_log_method(self.log_level)
-        log_method(
-            f"⚙️ System event: {event_type} "
-            f"(wa_id: {webhook.event_detail.wa_id}, user_id: {webhook.event_detail.user_id})"
+        identity = (
+            (webhook.user.user_id if webhook.user is not None else None)
+            or webhook.event_detail.user_id
+            or webhook.event_detail.wa_id
         )
+        context = f"platform: {webhook.platform.value}, inbox: {webhook.inbox.inbox_id}"
+        if identity:
+            context += f", user: {identity}"
+        log_method(f"⚙️ System event: {event_type} ({context})")
 
         return {
             "success": True,
@@ -683,6 +690,30 @@ class DefaultSystemHandler:
     def reset_stats(self) -> None:
         """Reset system event processing statistics."""
         self._stats = _SystemStats()
+
+
+class DefaultConversationEventHandler:
+    """Default INFO record for update/comment/mention lanes.
+
+    Logs native references only; comment text and payloads stay out of logs.
+    """
+
+    def __init__(self, log_level: LogLevel = LogLevel.INFO) -> None:
+        self.log_level = log_level
+        self.logger = get_logger(__name__)
+
+    async def log_event(self, webhook: Any) -> None:
+        summary = webhook.get_summary()
+        kind = summary.pop("webhook_type", type(webhook).__name__)
+        summary.pop("payload", None)
+        details = ", ".join(f"{k}: {v}" for k, v in summary.items() if v is not None)
+        method = {
+            LogLevel.DEBUG: self.logger.debug,
+            LogLevel.INFO: self.logger.info,
+            LogLevel.WARNING: self.logger.warning,
+            LogLevel.ERROR: self.logger.error,
+        }.get(self.log_level, self.logger.info)
+        method(f"🗨️ {kind} ({details})")
 
 
 class DefaultHandlerFactory:

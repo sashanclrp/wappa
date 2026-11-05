@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wappa Conversational Handlers"
+  short_description: "Compose Scores and guided flows in Wappa handlers"
+  default_prompt: "Use $wappa-conversational-scores to structure handlers, Scores and a guided flow in my Wappa app."

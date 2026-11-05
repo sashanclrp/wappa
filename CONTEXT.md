@@ -7,11 +7,11 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | Term | Definition |
 |------|-----------|
 | **Inbox** | The platform-facing message ingress/egress identity. Wappa receives webhooks, sends messages, scopes caches, and streams events per Inbox. An Inbox is identified by its Inbox Reference. |
-| `inbox_id` | The stable Platform-native string identifier of an Inbox. It is unique within one Platform, not across every Platform. For WhatsApp this is Meta's `phone_number_id`; future Platforms retain their equivalent native identifier. |
+| `inbox_id` | The stable Platform-native string identifier of an Inbox. It is unique within one Platform, not across every Platform. For WhatsApp this is Meta's `phone_number_id`; for Instagram it is the receiving professional account ID. |
 | **Inbox Reference** | Wappa's globally unique runtime identity for one Inbox, composed of `(platform, inbox_id)`. Code represents it as `InboxRef`. Components that persist, cache, route, or compare Inboxes across Platforms use this value rather than an unqualified `inbox_id`. |
 | **Platform** | An external messaging platform such as WhatsApp, Telegram, Instagram, or Teams. |
 | `PlatformType` | The enum of supported platforms. Values: `whatsapp`, `telegram`, `instagram`, `teams`. |
-| **Platform Account** | Platform-side account metadata that groups one or more Inboxes. For WhatsApp this is the WABA (WhatsApp Business Account). |
+| **Platform Account** | Platform-side account metadata that groups one or more Inboxes. For WhatsApp this is the WABA (WhatsApp Business Account); for Instagram it is the professional account itself, with the same native ID as its Inbox. |
 | `platform_account_id` | The identifier of the Platform Account. For WhatsApp, this is the WABA ID (`entry[].id` in Meta's webhook payload). |
 | **Platform Account Reference** | Wappa's globally unique identity for one Platform Account, composed of `(platform, platform_account_id)`. Code represents it as `PlatformAccountRef`. Components that compare, cache, or resolve Platform Accounts across Platforms use this value rather than an unqualified `platform_account_id`. |
 | **Coexistence** | Meta capability (for verified Tech Providers) that connects a client's existing WhatsApp number to the Cloud API. It emits account-scoped webhooks — `account_offboarded` / `account_reconnected` — that target a Platform Account (WABA), carry no User context, and surface as `SystemWebhook`. |
@@ -21,18 +21,23 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | Term | Definition |
 |------|-----------|
 | **User** | The end-user/contact inside a platform conversation. A User talks to an Inbox. |
-| `user_id` | The canonical stable user identifier inside Wappa. Prefers BSUID when available; falls back to phone number. Used for cache scoping and state lookups. Identity resolution is always scoped by Inbox Reference because the same Delivery Address may identify different Users in different Inboxes. |
+| `user_id` | The canonical stable user identifier inside Wappa. Uses the native scoped sender ID on Instagram; on WhatsApp prefers BSUID when available and otherwise falls back to phone number. Used for cache scoping and state lookups. Identity resolution is always scoped by Inbox Reference because the same Delivery Address may identify different Users in different Inboxes. |
 | **BSUID** | Business Scoped User ID. Meta's user identifier scoped to one business portfolio (v24.0+). It survives username changes but Meta regenerates it when the user changes phone number; `user_id_update` carries the previous/current mapping. Format: `CC.<alphanumeric>`. |
 | **Parent BSUID** | Optional enterprise identity for businesses enrolled in a parent BSUID account. It uses `CC.ENT.<alphanumeric>` and can be addressed by Inboxes across the enrolled portfolios. Keep it distinct from the portfolio BSUID. |
 | `phone_number` | The raw E.164 phone number of the user. May change; not stable for identity. Retained for marketing and PII use cases. |
+| **Direct Message Target** | An immutable Inbox-qualified destination for ordinary private delivery, represented by `DirectMessage(inbox_ref, addresses)`. It carries every known Delivery Address of one User; the target is always explicit on a send, and the Messenger never holds a recipient. |
+| **Delivery Addresses** | Every known Delivery Address of one User (`DeliveryAddresses`): WhatsApp phone and/or BSUID, Instagram scoped ID. It states what is known, never a strategy: the Platform adapter orders the addresses and moves to the next one only when the Platform rejects the address itself. Webhooks build it with `user.delivery_addresses()`. |
+| **IGSID** | Instagram-scoped User identifier interpreted within the receiving professional account. |
 | **Delivery Address** | The one normalized platform address selected for an outbound call. A phone number and a BSUID are alternative Delivery Addresses; neither is Wappa's canonical User identity. A username is identity evidence, not a Delivery Address. |
+| **Messaging HTTP API** | Wappa's optional HTTP routes at `/api/{platform}` (ADR-0021). The path names the Platform and `X-Wappa-Inbox-ID` the Inbox; send routes call that Inbox's own Messenger. Routes gate on the Inbox's capabilities; any Platform gap answers 501. |
 
 ## Host Integration
 
 | Term | Definition |
 |------|-----------|
 | **Host Application** | The application embedding Wappa (e.g., Symphonai). Owns business concepts like Owner, Channel, customer, and workflow. Wappa does not define these. |
-| **Meta Application Configuration** | The application-wide trust and Graph API configuration for one Meta App connected to one Wappa application: `MetaApplicationConfig` (App Secret, GET verify token, Graph API version, base URL). It comes from exactly one source, explicit or environment, never both. It covers every WhatsApp Platform Account and Inbox handled by that application; Wappa does not combine several Meta Apps inside one application, and the App Secret never enters an Inbox Credential Record. |
+| **Platform Extension** | Host-owned or separately packaged Platform functionality that reuses Wappa's connection infrastructure while owning its additional provider operations and application behavior. |
+| **Meta Application Configuration** | The application-wide trust and Graph API configuration for one Meta App connected to one Wappa application: `MetaApplicationConfig` (App Secret, GET verify token, Graph API version, base URL). It comes from exactly one source, explicit or environment, never both. It covers the WhatsApp and Instagram Platform Accounts and Inboxes handled by that application; Wappa does not combine several Meta Apps inside one application, and the App Secret never enters an Inbox Credential Record. |
 | **Inbox Routing Mode** | The application-level choice of one Inbox credential authority, `InboxRoutingMode`. `legacy` (the default) uses the single WhatsApp Inbox supplied by the complete `WP_ACCESS_TOKEN` / `WP_PHONE_ID` / `WP_BID` bundle and rejects an Inbox Directory Source. `explicit` uses the Inbox Directory fed by the Host's source, requires `SYSTEM_TOKEN_ENC_KEY`, and rejects every legacy Inbox variable. There is no third mode and the two never fall back to one another. |
 | **WappaEventHandler** | The interface a Host Application implements to receive dispatched events and execute business logic. |
 | `owner_id` | Not a Wappa runtime concept. If a host application needs owner attribution for log correlation, it manages that in its own middleware outside Wappa. Wappa does not store, route, or scope by owner_id. |
@@ -51,6 +56,9 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | `process_api_message(event)` | Fires after a message is sent via Wappa's REST API. Used for tracking, DB writes, analytics. Input: `APIMessageEvent`. |
 | `process_cron_event(event)` | Fires when a scheduled cron triggers. Input: `CronEvent`. |
 
+| **Schema Drift** | Meta sends a field or webhook `field` that Wappa's models do not describe. Wappa processes the event, answers `200`, and logs `META_SCHEMA_DRIFT` once per field per process without the value. With `WAPPA_STRICT_META_SCHEMA=1` it raises `MetaSchemaDriftError` instead. |
+| **Unmodelled Field** | A property of a Meta payload, or a webhook `change.field`, that Wappa does not model. An unmodelled webhook field the Host did not register becomes `SystemWebhook(UNSUPPORTED_EVENT)`. Wrong types in modelled fields are not drift; they are errors. |
+
 ## Message Flow
 
 | Term | Definition |
@@ -66,8 +74,39 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **Processor** | A pure platform payload translator. A Processor parses a platform webhook payload into a Universal Model. It must not mutate ContextVars, build messengers, resolve cache factories, or clone handlers. |
 | **Universal Model** | The platform-agnostic Pydantic schema representation of a parsed webhook payload. All platform-specific parsing collapses into these models before dispatch. |
 | **InboundMessageWebhook** | Canonical name for the Universal Model representing a User-sent message entering Wappa. |
+| **Message Update** | A change to an existing message, such as an edit or deletion, distinct from a new message or delivery status. |
+| **Comment** | A public conversational contribution attached to Platform media, including a reply when parent evidence is available. |
+| **Comment Reference** | An Inbox-qualified native identifier for one public Comment, distinct from its content and author evidence. |
+| **Post Reference** | An Inbox-qualified native identifier for Platform media, without implying access to its metadata or bytes. |
+| **Public Mention** | Platform evidence that an account was mentioned in public media or a Comment. |
+| **Private Reply Target** | An Inbox-qualified Comment Reference used to address a comment-triggered private response rather than an ordinary Direct Message Target. |
+| **Comment Control** | A Platform operation that changes comment visibility, existence, or whether media accepts comments, distinct from the Host's moderation policy. |
 | **Event Dispatch** | The act of routing a parsed universal model to the appropriate WappaEventHandler processor method. |
-| **Messenger** | The outbound message interface. Sends text, media, interactive, template, and specialized messages to a User on a Platform via an Inbox. |
+| **Messenger** | The outbound conversation-message interface. Sends text, media, interactive and specialized messages to a User on a Platform via an Inbox. WhatsApp Templates and media storage are Focused Capabilities, not Messenger methods. |
+| **WhatsApp Template** | A WhatsApp Business Platform message definition submitted for approval and identified by its Platform identity and language; **Template** is shorthand only inside an explicitly WhatsApp-scoped context. |
+| **Interactive Message** | A message containing selectable actions or structured presentation, with concrete forms and constraints defined by its Platform. |
+| **Conversational Flow** | A Host Application-owned sequence of conversation steps, answers, and transitions composed from messages and Interactive Selections. |
+| **Application Scaffold** | Generated starter application code supplied by Wappa's CLI, distinct from a Platform message definition. |
+| **Interactive Selection** | The option a User chose from an Interactive Message, carried by an `InboundMessageWebhook` and read with `get_interactive_selection()` on every Platform (WhatsApp button/list reply, Instagram quick reply or Postback). |
+| **Quick Reply** | A tappable suggestion attached to an Instagram message; selecting it returns its payload once, as an Interactive Selection. Instagram's mapping for a list message. |
+| **Button Message** | An Interactive Message with up to three Reply Buttons, each returning an Interactive Selection. |
+| **Reply Button** | A tappable option (`id`, `title`) whose `id` returns as the Interactive Selection on every Platform. |
+| **Postback** | Instagram's native evidence for a Reply Button tap, delivered as an Interactive Selection. |
+| **Message Card** | One card of a Message Carousel: title, optional subtitle/image/default URL and buttons. |
+| **Message Carousel** | A horizontally scrollable sequence of Message Cards. |
+| **Sender Action** | Instagram's native non-message signal (seen, typing); Wappa exposes it only through `mark_as_read`. |
+| **Messenger Action** | Something a Host asks a Messenger to do; an action available on more than one Platform has exactly one Messenger method (ADR-0016). |
+| **Focused Capability** | An optional Inbox-bound mechanism reached through `IMessenger.capability(kind)` for a separate responsibility (Media Library, Template Messaging) or a Platform-only action (Comment Controls and public comment replies, content reads, attachment bytes) rather than a Messenger method. |
+| **Media Library** | The Focused Capability `IMediaLibrary` that stores a local file as reusable Platform media and reads inbound media bytes for one Inbox: `upload` returns a Media ID (a WhatsApp Media ID or an Instagram attachment_id) that the same Inbox's Messenger can send, and `download` takes an inbound message's `media_id` unchanged. |
+| **Outbound Echo** | A message the business sent to a User outside Wappa (a person answering from the Platform's own app, or another tool), delivered as `OutboundEchoWebhook` on every Platform. Echoes of Wappa's own sends are never delivered. |
+| **Sent-Message Registry** | Transient, Inbox-scoped correlation state (`ISentMessageRegistry`): the IDs of messages Wappa sent, kept for minutes so Instagram echoes of them can be dropped. Not conversation storage. |
+| **Entry Referral** | Entry-point attribution: what brought a User into a conversation (an ad, a post, a link), one `EntryReferral` model on every Platform. |
+| **History Backfill** | Past messages with a User as typed `HistoryThread`s, pushed by the Platform (`HistorySyncWebhook`) or read on request (`IConversationHistoryReader`). |
+| **Inbox Connection Change** | An Inbox stopping or resuming delivery on the Platform side (offboarding, app removal), delivered as `InboxConnectionWebhook`. |
+| **Inbox Connector** | The `IInboxConnector` contract (ADR-0017) that turns a Platform account into Inboxes: `begin` authorization, `complete` discovery with readiness, `activate` webhook subscription plus the Wappa-encrypted record, and `disconnect`. The same contract on every Platform; it runs before a Messenger exists and is not a Messenger capability. |
+| **Template Messaging** | The WhatsApp-only Focused Capability `ITemplateMessaging` that sends text, media-header and location-header WhatsApp Templates. Distinct from Template Transport, the smaller Host-facing request/result seam built on it. |
+| **Trusted Inbox Credential** | The current active credential and version of one Inbox, resolved per operation for a Host-authorized backend adapter; never a cacheable snapshot. |
+| **Connection Intent** | A one-use, expiring login attempt bound to the Host's authenticated operator, consumed before any provider code exchange. |
 | **Messenger Pipeline** | Composable middleware stack wrapping outbound message calls (SSE lifecycle, PubSub notification, etc.). |
 | **Outbound Runtime** | The public Wappa factory that resolves Inbox credentials and active HTTP clients, constructs the platform Messenger and Messenger Pipeline, and returns small Inbox-scoped outbound capabilities. Host Applications do not construct those internals. |
 | **Template Transport** | An Inbox-scoped outbound capability that accepts only platform-facing Template values and returns evidence about the platform call. It performs no Host Application governance, attribution, state, lifecycle, or persistence work. |

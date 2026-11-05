@@ -22,7 +22,7 @@ from wappa.webhooks.whatsapp.base_models import MessageContext, WhatsAppMessageI
 class OrderProductItem(BaseModel):
     """Individual product item in an order."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     product_retailer_id: str = Field(..., description="Product ID from the catalog")
     quantity: int = Field(..., description="Quantity of this product ordered", ge=1)
@@ -55,7 +55,7 @@ class OrderProductItem(BaseModel):
 class OrderContent(BaseModel):
     """Order message content."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     catalog_id: str = Field(..., description="Product catalog ID")
     text: str | None = Field(None, description="Text accompanying the order (optional)")
@@ -79,8 +79,6 @@ class OrderContent(BaseModel):
             v = v.strip()
             if not v:
                 return None
-            if len(v) > 1000:  # Reasonable order text limit
-                raise ValueError("Order text cannot exceed 1000 characters")
         return v
 
     @field_validator("product_items")
@@ -129,7 +127,7 @@ class WhatsAppOrderMessage(WhatsAppMessageIdentity, BaseMessage):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Standard message fields (BSUID support v24.0+)

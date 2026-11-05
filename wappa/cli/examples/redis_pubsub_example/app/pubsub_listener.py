@@ -19,6 +19,7 @@ from wappa.core.config.settings import settings
 from wappa.core.dispatch.context_builder import DispatchContextBuilder
 from wappa.core.logging import get_logger
 from wappa.domain.inbox import InboxRef
+from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.persistence.redis.pubsub_subscriber import subscribe
 from wappa.schemas.core.types import PlatformType
 
@@ -150,7 +151,12 @@ async def send_event_notification(
 
         # Send via messenger
         result = await messenger.send_text(
-            recipient=user_id,
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(user_id),
+            ),
             text=message,
         )
 

@@ -12,6 +12,7 @@ from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Any, Self
 
 from .default_handlers import (
+    DefaultConversationEventHandler,
     DefaultErrorHandler,
     DefaultMessageHandler,
     DefaultStatusHandler,
@@ -30,7 +31,13 @@ if TYPE_CHECKING:
     from wappa.webhooks import (
         CallWebhook,
         ErrorWebhook,
+        HistorySyncWebhook,
         InboundMessageWebhook,
+        InboxConnectionWebhook,
+        IncomingCommentWebhook,
+        MentionWebhook,
+        MessageUpdateWebhook,
+        OutboundEchoWebhook,
         StatusWebhook,
         SystemWebhook,
     )
@@ -129,6 +136,7 @@ class WappaEventHandler(ABC):
         self._default_status_handler = DefaultStatusHandler()
         self._default_error_handler = DefaultErrorHandler()
         self._default_system_handler = DefaultSystemHandler()
+        self._default_conversation_handler = DefaultConversationEventHandler()
 
         # Hook list for API post-process extensibility (replaces monkey-patching)
         self._api_post_process_hooks: list[Callable] = []
@@ -342,6 +350,85 @@ class WappaEventHandler(ABC):
                     case SystemEventType.MARKETING_PREFERENCE:
                         # Update marketing opt-in/out status
                         ...
+        """
+        _ = webhook
+        return None
+
+    # =========== CONVERSATION LANES (optional overrides) ===========
+
+    async def handle_message_update(self, webhook: "MessageUpdateWebhook") -> None:
+        """Template Method: default log, then ``process_message_update``."""
+        await self._default_conversation_handler.log_event(webhook)
+        await self.process_message_update(webhook)
+
+    async def process_message_update(self, webhook: "MessageUpdateWebhook") -> None:
+        """Override to react to edits/deletions of an earlier User message.
+
+        Updates never arrive as ``process_message`` or ``process_status``.
+        """
+        _ = webhook
+        return None
+
+    async def handle_comment(self, webhook: "IncomingCommentWebhook") -> None:
+        """Template Method: default log, then ``process_comment``."""
+        await self._default_conversation_handler.log_event(webhook)
+        await self.process_comment(webhook)
+
+    async def process_comment(self, webhook: "IncomingCommentWebhook") -> None:
+        """Override to handle public Comments (regular and Live).
+
+        Wappa does not filter by source/placement/author: decide here. Use
+        ``webhook.is_own_comment`` to avoid replying to your own replies.
+        """
+        _ = webhook
+        return None
+
+    async def handle_mention(self, webhook: "MentionWebhook") -> None:
+        """Template Method: default log, then ``process_mention``."""
+        await self._default_conversation_handler.log_event(webhook)
+        await self.process_mention(webhook)
+
+    async def process_mention(self, webhook: "MentionWebhook") -> None:
+        """Override to handle public account mentions (media or comment)."""
+        _ = webhook
+        return None
+
+    async def handle_history_sync(self, webhook: "HistorySyncWebhook") -> None:
+        """Template Method: default log, then ``process_history_sync``."""
+        await self._default_conversation_handler.log_event(webhook)
+        await self.process_history_sync(webhook)
+
+    async def process_history_sync(self, webhook: "HistorySyncWebhook") -> None:
+        """Override to store past conversations the Platform pushed.
+
+        Pull-only Platforms (Instagram) offer the same ``HistoryThread`` via
+        ``messenger.capability(IConversationHistoryReader)``.
+        """
+        _ = webhook
+        return None
+
+    async def handle_inbox_connection(self, webhook: "InboxConnectionWebhook") -> None:
+        """Template Method: default log, then ``process_inbox_connection``."""
+        await self._default_conversation_handler.log_event(webhook)
+        await self.process_inbox_connection(webhook)
+
+    async def process_inbox_connection(self, webhook: "InboxConnectionWebhook") -> None:
+        """Override to deactivate or restore an Inbox when its connection changes."""
+        _ = webhook
+        return None
+
+    async def handle_outbound_echo(self, webhook: "OutboundEchoWebhook") -> None:
+        """Template Method: default log, then ``process_outbound_echo``."""
+        await self._default_conversation_handler.log_event(webhook)
+        await self.process_outbound_echo(webhook)
+
+    async def process_outbound_echo(self, webhook: "OutboundEchoWebhook") -> None:
+        """Override to react to messages the business itself sent.
+
+        Same lane on every Platform (WhatsApp Coexistence, Instagram).
+        ``webhook.is_from_business_app`` means a person answered from the
+        Platform's own app, e.g. to pause automation for a human takeover.
+        Echoes never arrive as ``process_message``.
         """
         _ = webhook
         return None

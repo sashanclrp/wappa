@@ -6,7 +6,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_media_handler
+from wappa.api.dependencies.media_transfer import get_media_uploader
 from wappa.api.routes.whatsapp.whatsapp_media import upload_router
 from wappa.domain.models.media_result import MediaUploadResult
 
@@ -19,7 +19,7 @@ def upload_api() -> tuple[TestClient, AsyncMock]:
     )
     app = FastAPI()
     app.include_router(upload_router, prefix="/api/whatsapp")
-    app.dependency_overrides[get_whatsapp_media_handler] = lambda: handler
+    app.dependency_overrides[get_media_uploader] = lambda: handler
     return TestClient(app), handler
 
 

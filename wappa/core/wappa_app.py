@@ -75,6 +75,7 @@ class Wappa:
         include_media_management_api: bool | None = None,
         include_media_upload_api: bool | None = None,
         include_state_handler_api: bool | None = None,
+        include_comment_controls_api: bool | None = None,
     ):
         """
         Initialize Wappa application with plugin-based architecture.
@@ -115,6 +116,10 @@ class Wappa:
             include_state_handler_api: Mount /state-handlers/*, which reads,
                 overwrites, and deletes the cached conversational state of any
                 recipient named in the request.
+            include_comment_controls_api: Mount the comment reply, hide,
+                unhide, delete and comments-enabled routes (Platforms with
+                ICommentControls; today Instagram). On under standalone, off
+                under embedded.
 
             Every include_* option defaults to None, meaning "take it from the
             profile". Naming one explicitly always wins.
@@ -146,6 +151,7 @@ class Wappa:
             include_media_management_api=include_media_management_api,
             include_media_upload_api=include_media_upload_api,
             include_state_handler_api=include_state_handler_api,
+            include_comment_controls_api=include_comment_controls_api,
         )
         self._builder.add_plugin(self._core_plugin)
 
@@ -282,6 +288,10 @@ class Wappa:
         if not isinstance(whatsapp_processor, WhatsAppWebhookProcessor):
             raise TypeError("WhatsApp processor registration is invalid")
         whatsapp_processor.set_field_registry(self._builder.field_registry)
+        instagram_processor = processor_factory.get_processor(PlatformType.INSTAGRAM)
+        set_registry = getattr(instagram_processor, "set_field_registry", None)
+        if set_registry is not None:
+            set_registry(self._builder.field_registry)
 
         # Create dispatchers and register webhook router through the builder
         # so the builder owns the complete route tree.
@@ -488,6 +498,7 @@ class Wappa:
         *,
         parser: type[BaseModel] | Callable[[dict[str, Any]], BaseModel],
         handler: Callable[["CustomWebhook"], Awaitable[None]],
+        platform: PlatformType = PlatformType.WHATSAPP,
     ) -> "Wappa":
         """
         Register a typed handler for a non-built-in Meta webhook field.
@@ -496,7 +507,9 @@ class Wappa:
         for apps using the simple ``Wappa(...)`` constructor instead of the
         builder. See ``WappaBuilder.register_webhook_field`` for details.
         """
-        self._builder.register_webhook_field(field_name, parser=parser, handler=handler)
+        self._builder.register_webhook_field(
+            field_name, parser=parser, handler=handler, platform=platform
+        )
 
         logger = get_app_logger()
         logger.debug(f"Custom webhook field registered: {field_name}")

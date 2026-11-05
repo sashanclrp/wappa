@@ -29,9 +29,11 @@ from wappa.core.expiry import (
     SessionLifecycleNotAvailableError,
     create_expiry_cache_factory,
     create_expiry_messenger,
-    parse_inbox_from_expired_key,
+    parse_inbox_ref_from_expired_key,
 )
 from wappa.core.logging.logger import get_logger
+from wappa.domain.inbox.identity import InboxRef
+from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 
 from .utils import format_inactivity_message_history
 
@@ -63,8 +65,8 @@ async def handle_user_inactivity(identifier: str, full_key: str) -> None:
          [10:30:50] See you later!"
     """
     user_id = identifier
-    inbox_id = parse_inbox_from_expired_key(full_key)
-    if inbox_id is None:
+    inbox_ref = parse_inbox_ref_from_expired_key(full_key)
+    if inbox_ref is None:
         logger.warning(
             "Ignoring expiry event with invalid Inbox namespace: %s", full_key
         )
@@ -75,7 +77,7 @@ async def handle_user_inactivity(identifier: str, full_key: str) -> None:
     )
 
     # 1. Create cache factory and retrieve messages
-    messages = await _retrieve_user_messages(inbox_id, user_id)
+    messages = await _retrieve_user_messages(inbox_ref, user_id)
     if messages is None:
         return
 
@@ -90,29 +92,29 @@ async def handle_user_inactivity(identifier: str, full_key: str) -> None:
     echo_text = format_inactivity_message_history(messages, message_count)
 
     # 3. Send echo message via WhatsApp
-    send_success = await _send_echo_message(inbox_id, user_id, echo_text)
+    send_success = await _send_echo_message(inbox_ref, user_id, echo_text)
     if not send_success:
         return
 
     # 4. Clean up user cache
-    await _cleanup_user_cache(inbox_id, user_id)
+    await _cleanup_user_cache(inbox_ref, user_id)
 
 
 async def _retrieve_user_messages(
-    inbox_id: str, user_id: str
+    inbox_ref: InboxRef, user_id: str
 ) -> list[dict[str, Any]] | None:
     """
     Retrieve accumulated messages from user cache.
 
     Args:
-        inbox_id: Inbox identifier
+        inbox_ref: The Inbox parsed from the expiry key
         user_id: User identifier
 
     Returns:
         List of message dictionaries, or None if retrieval failed
     """
     try:
-        cache_factory = create_expiry_cache_factory(inbox_id, user_id)
+        cache_factory = create_expiry_cache_factory(inbox_ref, user_id)
         user_cache = cache_factory.create_user_cache()
         user_data = await user_cache.get()
 
@@ -133,12 +135,12 @@ async def _retrieve_user_messages(
     return cast(list[dict[str, Any]], user_data.get("messages", []))
 
 
-async def _send_echo_message(inbox_id: str, user_id: str, echo_text: str) -> bool:
+async def _send_echo_message(inbox_ref: InboxRef, user_id: str, echo_text: str) -> bool:
     """
     Send formatted echo message to user via WhatsApp.
 
     Args:
-        inbox_id: Inbox identifier for messenger creation
+        inbox_ref: The Inbox parsed from the expiry key
         user_id: Recipient user ID
         echo_text: Formatted message text to send
 
@@ -146,7 +148,7 @@ async def _send_echo_message(inbox_id: str, user_id: str, echo_text: str) -> boo
         True if message sent successfully, False otherwise
     """
     try:
-        messenger = await create_expiry_messenger(inbox_id)
+        messenger = await create_expiry_messenger(inbox_ref)
 
     except FastAPIAppNotAvailableError as e:
         logger.error(f"FastAPI app not available: {e}")
@@ -161,7 +163,15 @@ async def _send_echo_message(inbox_id: str, user_id: str, echo_text: str) -> boo
         return False
 
     try:
-        result = await messenger.send_text(recipient=user_id, text=echo_text)
+        result = await messenger.send_text(
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(user_id),
+            ),
+            text=echo_text,
+        )
 
         if result.success:
             logger.info(f"Successfully echoed messages to {user_id}")
@@ -175,16 +185,16 @@ async def _send_echo_message(inbox_id: str, user_id: str, echo_text: str) -> boo
         return False
 
 
-async def _cleanup_user_cache(inbox_id: str, user_id: str) -> None:
+async def _cleanup_user_cache(inbox_ref: InboxRef, user_id: str) -> None:
     """
     Clean up user cache after processing.
 
     Args:
-        inbox_id: Inbox identifier
+        inbox_ref: The Inbox parsed from the expiry key
         user_id: User identifier
     """
     try:
-        cache_factory = create_expiry_cache_factory(inbox_id, user_id)
+        cache_factory = create_expiry_cache_factory(inbox_ref, user_id)
         user_cache = cache_factory.create_user_cache()
         deleted = await user_cache.delete()
 

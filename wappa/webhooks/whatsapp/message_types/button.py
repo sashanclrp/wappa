@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from wappa.schemas.core.types import (
     ConversationType,
+    InteractiveType,
     MessageType,
     PlatformType,
     UniversalMessageData,
@@ -22,7 +23,7 @@ from wappa.webhooks.whatsapp.base_models import MessageContext, WhatsAppMessageI
 class ButtonContent(BaseModel):
     """Button reply content."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     payload: str = Field(..., description="Button payload data")
     text: str = Field(
@@ -47,7 +48,7 @@ class WhatsAppButtonMessage(WhatsAppMessageIdentity, BaseMessage):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Standard message fields (BSUID support v24.0+)
@@ -146,6 +147,11 @@ class WhatsAppButtonMessage(WhatsAppMessageIdentity, BaseMessage):
     def button_payload(self) -> str:
         """Get the button payload data."""
         return self.button.payload
+
+    @property
+    def interactive_type(self) -> InteractiveType:
+        """A carousel or Template quick-reply tap is a quick-reply selection."""
+        return InteractiveType.QUICK_REPLY
 
     @property
     def text_content(self) -> str:

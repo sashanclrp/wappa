@@ -31,6 +31,8 @@ from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel
 
+from wappa.schemas.core.types import PlatformType
+
 if TYPE_CHECKING:
     from wappa.webhooks.core.webhook_interfaces import CustomWebhook
 
@@ -80,13 +82,25 @@ class FieldHandler:
     field_name: str
     parser: ParserFn
     handler: HandlerFn
+    platform: PlatformType = PlatformType.WHATSAPP
+
+
+def _builtin_fields(platform: PlatformType) -> frozenset[str]:
+    if platform is PlatformType.INSTAGRAM:
+        from wappa.webhooks.instagram.models import INSTAGRAM_BUILTIN_FIELDS
+
+        return INSTAGRAM_BUILTIN_FIELDS
+    return BUILTIN_WEBHOOK_FIELDS
+
+
+_REGISTRABLE_PLATFORMS = frozenset({PlatformType.WHATSAPP, PlatformType.INSTAGRAM})
 
 
 class FieldHandlerRegistry:
     """In-memory registry of custom webhook field handlers."""
 
     def __init__(self) -> None:
-        self._entries: dict[str, FieldHandler] = {}
+        self._entries: dict[tuple[PlatformType, str], FieldHandler] = {}
 
     def register(
         self,
@@ -94,6 +108,7 @@ class FieldHandlerRegistry:
         *,
         parser: type[BaseModel] | ParserFn,
         handler: HandlerFn,
+        platform: PlatformType = PlatformType.WHATSAPP,
     ) -> None:
         """
         Register a typed handler for a custom webhook field.
@@ -117,12 +132,16 @@ class FieldHandlerRegistry:
             raise ValueError("field_name must be a non-empty string")
         field_name = field_name.strip()
 
-        if field_name in BUILTIN_WEBHOOK_FIELDS:
+        if platform not in _REGISTRABLE_PLATFORMS:
+            raise ValueError(
+                f"Webhook field registration is not available for {platform.value}"
+            )
+        if field_name in _builtin_fields(platform):
             raise ValueError(
                 f"Cannot register built-in webhook field '{field_name}' — "
                 "it is handled by the framework."
             )
-        if field_name in self._entries:
+        if (platform, field_name) in self._entries:
             raise ValueError(f"Webhook field '{field_name}' is already registered.")
 
         parser_fn = self._coerce_parser(field_name, parser)
@@ -133,19 +152,25 @@ class FieldHandlerRegistry:
                 f"(got {type(handler).__name__})."
             )
 
-        self._entries[field_name] = FieldHandler(
-            field_name=field_name, parser=parser_fn, handler=handler
+        self._entries[(platform, field_name)] = FieldHandler(
+            field_name=field_name, parser=parser_fn, handler=handler, platform=platform
         )
 
-    def get(self, field_name: str) -> FieldHandler | None:
-        return self._entries.get(field_name)
+    def get(
+        self, field_name: str, platform: PlatformType = PlatformType.WHATSAPP
+    ) -> FieldHandler | None:
+        return self._entries.get((platform, field_name))
 
-    def fields(self) -> frozenset[str]:
-        """Snapshot of currently registered field names."""
-        return frozenset(self._entries.keys())
+    def fields(self, platform: PlatformType = PlatformType.WHATSAPP) -> frozenset[str]:
+        """Snapshot of registered field names for one Platform."""
+        return frozenset(name for (p, name) in self._entries if p is platform)
 
     def __contains__(self, field_name: object) -> bool:
-        return isinstance(field_name, str) and field_name in self._entries
+        # Membership keeps its WhatsApp meaning; use get(..., platform=) else.
+        return (
+            isinstance(field_name, str)
+            and (PlatformType.WHATSAPP, field_name) in self._entries
+        )
 
     def __len__(self) -> int:
         return len(self._entries)

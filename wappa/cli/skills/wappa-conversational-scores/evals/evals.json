@@ -1,0 +1,34 @@
+{
+  "skill_name": "wappa-conversational-scores",
+  "evals": [
+    {
+      "id": "plain-wappa-score-di",
+      "prompt": "Structure my plain Wappa bot so business logic lives in Scores instead of one giant process_message.",
+      "expected_output": "Defines an app-local Score protocol/base and a context dataclass injected from the handler (messenger, cache_factory, DirectMessage target); handler routes typed events to scores; does not import a ScoreBase or registry from wappa core.",
+      "assertions": [
+        "does not import ScoreBase from wappa",
+        "scores receive dependencies by injection",
+        "sends use target="
+      ]
+    },
+    {
+      "id": "symphonai-routes-to-host-skill",
+      "prompt": "In my Symphonai app, add a guided form that asks three questions over WhatsApp and Instagram.",
+      "expected_output": "Detects a Symphonai host and hands off to symphonai-add-state-handler (or symphonai-add-score for single-turn), naming the skill; uses target=self.deps.user_target in examples; if the skill is missing, names it and its source instead of inventing a path.",
+      "assertions": [
+        "names symphonai-add-state-handler",
+        "does not reimplement Symphonai StateHandlers with plain Wappa scores"
+      ]
+    },
+    {
+      "id": "stale-and-cancel-policy",
+      "prompt": "Users sometimes tap an old button from a previous question in my Instagram form. How do I handle that and let them cancel?",
+      "expected_output": "Encodes the step in each action payload (form:<step>:<value>), compares with current state and re-prompts on mismatch; cancel keyword deletes the flow state; explains this is consumer policy, not Wappa behavior; quick replies and postbacks both arrive in process_message and are read with get_interactive_selection().",
+      "assertions": [
+        "payload includes the step",
+        "mismatch re-prompts instead of applying",
+        "cancel deletes state"
+      ]
+    }
+  ]
+}

@@ -6,16 +6,16 @@ Example:
     from wappa.core.expiry import (
         create_expiry_messenger,
         create_expiry_cache_factory,
-        parse_inbox_from_expired_key,
+        parse_inbox_ref_from_expired_key,
     )
 
     @expiry_registry.on_expire_action("user_inactivity")
     async def handle_user_inactivity(identifier: str, full_key: str) -> None:
-        inbox_id = parse_inbox_from_expired_key(full_key)
+        inbox_ref = parse_inbox_ref_from_expired_key(full_key)
         user_id = identifier
 
-        messenger = await create_expiry_messenger(inbox_id)
-        cache_factory = create_expiry_cache_factory(inbox_id, user_id)
+        messenger = await create_expiry_messenger(inbox_ref)
+        cache_factory = create_expiry_cache_factory(inbox_ref, user_id)
         user_cache = cache_factory.create_user_cache()
 """
 
@@ -60,24 +60,18 @@ class CacheFactoryCreationError(ExpiryContextError):
     pass
 
 
-def _as_inbox_ref(inbox: InboxRef | str) -> InboxRef:
-    """Accept the legacy raw WhatsApp argument while preserving qualified scope."""
-    return inbox if isinstance(inbox, InboxRef) else InboxRef.whatsapp(inbox)
-
-
-async def create_expiry_messenger(inbox: InboxRef | str) -> IMessenger:
+async def create_expiry_messenger(inbox_ref: InboxRef) -> IMessenger:
     """
-    Return a WhatsApp messenger for use inside an expiry handler.
+    Return the Inbox's Messenger (its own Platform) inside an expiry handler.
 
-    Creates a WhatsApp messenger through the lifecycle owner registered by the
+    Creates the Messenger through the lifecycle owner registered by the
     core plugin.
 
     This function hides the 18-line manual bootstrapping complexity,
     providing production-ready error handling with specific error types.
 
     Args:
-        inbox: Qualified Inbox identity. A raw string remains a legacy WhatsApp
-            convenience input.
+        inbox_ref: The Inbox, e.g. from ``parse_inbox_ref_from_expired_key``.
 
     Returns:
         Configured IMessenger instance ready for sending messages
@@ -88,7 +82,6 @@ async def create_expiry_messenger(inbox: InboxRef | str) -> IMessenger:
         MessengerCreationError: If the messenger factory fails.
     """
     # AppContext provides access to the core plugin's lifecycle owner.
-    inbox_ref = _as_inbox_ref(inbox)
     app = get_app_context().get_app()
 
     if not app:
@@ -121,7 +114,7 @@ async def create_expiry_messenger(inbox: InboxRef | str) -> IMessenger:
         ) from e
 
 
-def create_expiry_cache_factory(inbox: InboxRef | str, user_id: str) -> ICacheFactory:
+def create_expiry_cache_factory(inbox_ref: InboxRef, user_id: str) -> ICacheFactory:
     """
     Bootstrap cache factory for expiry handler context.
 
@@ -129,7 +122,7 @@ def create_expiry_cache_factory(inbox: InboxRef | str, user_id: str) -> ICacheFa
     following the framework's context-aware cache factory pattern.
 
     Args:
-        inbox_id: Inbox identifier for namespace isolation
+        inbox_ref: The Inbox (its qualified namespace isolates the caches)
         user_id: User identifier for user-specific caches
 
     Returns:
@@ -140,11 +133,10 @@ def create_expiry_cache_factory(inbox: InboxRef | str, user_id: str) -> ICacheFa
         ValueError: If inbox_id or user_id is empty
 
     Example:
-        cache_factory = create_expiry_cache_factory("wappa", "+1234567890")
+        cache_factory = create_expiry_cache_factory(inbox_ref, "+1234567890")
         user_cache = cache_factory.create_user_cache()
         data = await user_cache.get()
     """
-    inbox_ref = _as_inbox_ref(inbox)
     if not user_id:
         raise ValueError("user_id is required for cache factory creation")
 
@@ -169,30 +161,6 @@ def create_expiry_cache_factory(inbox: InboxRef | str, user_id: str) -> ICacheFa
         raise CacheFactoryCreationError(
             f"Cache factory creation failed for inbox {inbox_ref}, user {user_id}: {e}"
         ) from e
-
-
-def parse_inbox_from_expired_key(full_key: str) -> str | None:
-    """
-    Parse inbox ID from a Redis expiry trigger key.
-
-    Expiry trigger keys follow the pattern: {inbox}:EXPTRIGGER:{action}:{identifier}
-    This function extracts the inbox portion from the full key.
-
-    Args:
-        full_key: Complete Redis key that expired
-                 (e.g., "wappa:EXPTRIGGER:user_inactivity:+1234567890")
-
-    Returns:
-        Inbox namespace extracted from a valid key, otherwise ``None``.
-
-    Example:
-        >>> parse_inbox_from_expired_key("acme:EXPTRIGGER:reminder:USER123")
-        "acme"
-        >>> parse_inbox_from_expired_key("simple_key") is None
-        True
-    """
-    inbox_ref = parse_inbox_ref_from_expired_key(full_key)
-    return inbox_ref.cache_namespace if inbox_ref is not None else None
 
 
 def parse_inbox_ref_from_expired_key(full_key: str) -> InboxRef | None:

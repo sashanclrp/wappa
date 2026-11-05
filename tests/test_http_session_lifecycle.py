@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
+from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.session_provider import (
     HTTPSessionClosedError,
     validate_session,
@@ -39,7 +40,6 @@ def mock_credential_store():
 
     from wappa.domain.inbox import (
         IInboxCredentialResolver,
-        InboxRef,
         PlatformAccountRef,
         ResolvedInboxCredentials,
     )
@@ -168,7 +168,7 @@ class TestExpiryMessengerSessionGuard:
                 match="SessionLifecycle not available",
             ),
         ):
-            await create_expiry_messenger("12345")
+            await create_expiry_messenger(InboxRef.whatsapp("12345"))
 
     @pytest.mark.asyncio
     async def test_draining_lifecycle_raises_messenger_error(self):
@@ -195,7 +195,7 @@ class TestExpiryMessengerSessionGuard:
             ),
             pytest.raises(MessengerCreationError),
         ):
-            await create_expiry_messenger("12345")
+            await create_expiry_messenger(InboxRef.whatsapp("12345"))
 
         await client.aclose()
 
@@ -214,7 +214,7 @@ class TestContextFactorySessionGuard:
 
         factory = WappaContextFactory(app=mock_app)  # type: ignore[arg-type]
         context = await factory.create_context(
-            inbox_id="12345", user_id="user1", include_messenger=True
+            InboxRef.whatsapp("12345"), "user1", include_messenger=True
         )
         assert context.messenger is None
         assert context.cache_factory is None

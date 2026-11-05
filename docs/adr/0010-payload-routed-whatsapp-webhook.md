@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Amended 2026-08-30 for authenticated raw-body routing, qualified identity, WABA membership, and the final status matrix (grilling session sections 4, 5, and 9). The companion directory decision is [ADR-0011](0011-encrypted-inbox-directory.md).
+Accepted. Amended 2026-11-05 so Meta additions never produce `400` (see the section at the end of Decision). Amended 2026-08-30 for authenticated raw-body routing, qualified identity, WABA membership, and the final status matrix (grilling session sections 4, 5, and 9). The companion directory decision is [ADR-0011](0011-encrypted-inbox-directory.md).
 
 ## Context
 
@@ -39,12 +39,24 @@ Routing from payload content is only safe after Wappa has authenticated the exac
 | Inbox and WABA membership mismatch | 400 |
 | Confirmed WABA with no active Inboxes | 400 |
 | Other structurally unroutable authenticated payload | 400 |
+| Authenticated, routable payload with unmodelled fields or an unmodelled webhook field | 200 (processed, or `SystemWebhook(UNSUPPORTED_EVENT)`) plus a `META_SCHEMA_DRIFT` log |
 | Directory, cache, source, decrypt, or runtime dependency unavailable | 503 |
 | Unexpected Wappa defect | 500 |
 
 An authenticated unknown payload Inbox is `400`, not `401`: authentication already succeeded.
 
 The route keeps a `{platform}` path parameter; the controller accepts only WhatsApp and answers `400` for every other `PlatformType`. A test pins the live route set.
+
+### Amended 2026-11-05: Meta additions are tolerated and reported
+
+On 2026-11-05 a status webhook carried a new `pricing.subtype: "free_tier"`. The strict model (`extra="forbid"`) rejected it, Wappa answered `400`, and the delivery status was dropped 30 times. Meta also sent an `account_update` field Wappa did not model, and Wappa answered `400` "Unknown webhook field". Meta retries non-200 deliveries and can stop delivering to an endpoint that keeps failing, so strictness turned an additive Meta change into data loss. Instagram already mapped unknown change fields to `SystemWebhook(UNSUPPORTED_EVENT)`, so the `400` also broke the parity required by [ADR-0016](0016-one-messenger-method-per-action.md).
+
+1. Models that parse data from Meta (webhook payloads, and Graph API responses) use `extra="allow"`. After parsing, `wappa.webhooks.core.schema_drift.report_schema_drift` logs `META_SCHEMA_DRIFT platform=<p> field=<Model.field>` once per field per process and never logs the value, which may be personal data. The event is processed and Meta gets `200`.
+2. `WAPPA_STRICT_META_SCHEMA=1` turns drift into `MetaSchemaDriftError`. Wappa's own test suite sets it, so fixture drift fails CI. When the log shows drift in production, model the field and add a fixture.
+3. A WhatsApp `field` that Wappa does not model and the Host did not register with `register_webhook_field` becomes `SystemWebhook(UNSUPPORTED_EVENT)` with `event_detail.platform_event = {"field", "value"}` and a drift log, answered `200`, the same as Instagram. It was `400`.
+4. Unchanged: a wrong type or format in a modelled field is still an error; authentication failures are `401`; unroutable payloads (unknown or inactive Inbox, WABA mismatch, malformed JSON) keep the table above. Wappa's own output contracts (Universal Webhooks, `SystemEventDetail`, domain models) and Host inputs (REST bodies, `IMessenger` arguments) stay `extra="forbid"`. Hosts never see extras, so ADR-0016 rule 5 holds.
+
+`400` therefore never means "Meta added a field". It means the payload cannot be routed or is malformed, which a retry cannot fix and an additive Meta change cannot cause. The `WHATSAPP_WEBHOOK_CONTRACT_DRIFT` critical log on `extra_forbidden` is removed.
 
 ## Consequences
 

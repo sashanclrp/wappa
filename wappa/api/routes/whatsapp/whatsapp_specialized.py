@@ -4,15 +4,21 @@ from fastapi import Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, ValidationError
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
-from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_messenger
+from wappa.api.dependencies.inbox_context import get_inbox_messenger
 from wappa.api.routes.whatsapp.route_families import RouteFamily
 from wappa.api.utils import dispatch_message_event, map_whatsapp_api_error_to_status
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.logger import get_logger
+from wappa.domain.contacts import ContactCard
+from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.messaging_interface import IMessenger
+from wappa.domain.messaging_targets import (
+    DeliveryAddresses,
+    DirectMessage,
+    UnsupportedOperationError,
+)
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.specialized_models import (
-    ContactCard,
     ContactMessage,
     ContactValidationResult,
     LocationMessage,
@@ -92,15 +98,20 @@ class CoordinateValidationRequest(BaseModel):
 async def send_contact_card(
     request: ContactRequest,
     fastapi_request: Request,
-    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     try:
         logger.info(f"Sending contact card to {request.recipient}")
 
         result = await messenger.send_contact(
-            contact=request.contact.model_dump(),
-            recipient=request.recipient,
+            contact=request.contact,
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
+            ),
             reply_to_message_id=request.reply_to_message_id,
         )
 
@@ -119,6 +130,10 @@ async def send_contact_card(
         ) from e
     except HTTPException:
         raise
+    except UnsupportedOperationError as e:  # not on this Platform
+        raise HTTPException(status_code=501, detail=str(e)) from e
+    except ValueError as e:  # rejected locally, before any Platform call
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error sending contact card: {str(e)}")
         raise HTTPException(
@@ -132,7 +147,7 @@ async def send_contact_card(
 async def send_location_message(
     request: LocationRequest,
     fastapi_request: Request,
-    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     try:
@@ -143,7 +158,12 @@ async def send_location_message(
         result = await messenger.send_location(
             latitude=request.latitude,
             longitude=request.longitude,
-            recipient=request.recipient,
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
+            ),
             name=request.name,
             address=request.address,
             reply_to_message_id=request.reply_to_message_id,
@@ -164,6 +184,10 @@ async def send_location_message(
         ) from e
     except HTTPException:
         raise
+    except UnsupportedOperationError as e:  # not on this Platform
+        raise HTTPException(status_code=501, detail=str(e)) from e
+    except ValueError as e:  # rejected locally, before any Platform call
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error sending location: {str(e)}")
         raise HTTPException(
@@ -177,7 +201,7 @@ async def send_location_message(
 async def send_location_request_message(
     request: LocationRequestRequest,
     fastapi_request: Request,
-    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     try:
@@ -185,7 +209,12 @@ async def send_location_request_message(
 
         result = await messenger.send_location_request(
             body=request.body,
-            recipient=request.recipient,
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
+            ),
             reply_to_message_id=request.reply_to_message_id,
         )
 
@@ -204,6 +233,10 @@ async def send_location_request_message(
         ) from e
     except HTTPException:
         raise
+    except UnsupportedOperationError as e:  # not on this Platform
+        raise HTTPException(status_code=501, detail=str(e)) from e
+    except ValueError as e:  # rejected locally, before any Platform call
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error sending location request: {str(e)}")
         raise HTTPException(

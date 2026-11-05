@@ -96,9 +96,7 @@ class PlatformDetector:
         """
         headers_lower = {k.lower(): v.lower() for k, v in headers.items()}
 
-        # WhatsApp/Facebook webhook signature
-        if "x-hub-signature-256" in headers_lower:
-            return PlatformType.WHATSAPP
+        # Meta signatures establish trust, not Platform identity.
 
         # Telegram webhook
         if "x-telegram-bot-api-secret-token" in headers_lower:
@@ -230,6 +228,11 @@ class ProcessorFactory:
         Raises:
             ProcessorError: If processor class not found for platform
         """
+        if platform == PlatformType.INSTAGRAM:
+            from .instagram_processor import InstagramWebhookProcessor
+
+            return InstagramWebhookProcessor(**kwargs)
+
         if platform == PlatformType.WHATSAPP:
             from .whatsapp_processor import WhatsAppWebhookProcessor
 
@@ -251,16 +254,6 @@ class ProcessorFactory:
             # return TeamsWebhookProcessor(**kwargs)
             raise ProcessorError(
                 "Teams processor not yet implemented",
-                ErrorCode.PLATFORM_ERROR,
-                platform,
-            )
-
-        elif platform == PlatformType.INSTAGRAM:
-            # TODO: Implement Instagram processor
-            # from .instagram_processor import InstagramWebhookProcessor
-            # return InstagramWebhookProcessor(**kwargs)
-            raise ProcessorError(
-                "Instagram processor not yet implemented",
                 ErrorCode.PLATFORM_ERROR,
                 platform,
             )
@@ -322,7 +315,7 @@ class ProcessorFactory:
             PlatformType.WHATSAPP,
             # PlatformType.TELEGRAM,    # TODO: Implement
             # PlatformType.TEAMS,       # TODO: Implement
-            # PlatformType.INSTAGRAM,   # TODO: Implement
+            PlatformType.INSTAGRAM,
         }
 
     def is_platform_supported(self, platform: PlatformType) -> bool:

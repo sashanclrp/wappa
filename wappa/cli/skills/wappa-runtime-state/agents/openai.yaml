@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wappa State and Redis"
+  short_description: "Scope flow state and caches per Inbox and User"
+  default_prompt: "Use $wappa-runtime-state to design Inbox- and User-scoped state and Redis caching in my Wappa app."

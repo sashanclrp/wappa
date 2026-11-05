@@ -26,7 +26,7 @@ from wappa.webhooks.whatsapp.base_models import (
 class LocationContent(BaseModel):
     """Location message content."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     address: str | None = Field(
         None, description="Human-readable address of the location"
@@ -62,8 +62,6 @@ class LocationContent(BaseModel):
             v = v.strip()
             if not v:
                 return None
-            if len(v) > 1000:  # Reasonable address length limit
-                raise ValueError("Address cannot exceed 1000 characters")
         return v
 
     @field_validator("name")
@@ -74,8 +72,6 @@ class LocationContent(BaseModel):
             v = v.strip()
             if not v:
                 return None
-            if len(v) > 256:  # Reasonable name length limit
-                raise ValueError("Location name cannot exceed 256 characters")
         return v
 
     @field_validator("url")
@@ -103,7 +99,7 @@ class WhatsAppLocationMessage(WhatsAppMessageIdentity, BaseLocationMessage):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Standard message fields (BSUID support v24.0+)

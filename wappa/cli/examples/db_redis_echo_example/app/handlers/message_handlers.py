@@ -19,6 +19,8 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+from wappa.domain.inbox import InboxRef
+from wappa.messaging import DeliveryAddresses, DirectMessage
 from wappa.webhooks import InboundMessageWebhook
 
 from ..models.cache_models import CachedMessage
@@ -112,7 +114,16 @@ class MessageHandlers:
                 message_count=msg_count,
             )
 
-            await self.messenger.send_text(response, user_id)
+            await self.messenger.send_text(
+                response,
+                DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
+            )
 
             # Cache outgoing message
             outgoing_msg = CachedMessage(

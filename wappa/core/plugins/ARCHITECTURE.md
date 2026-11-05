@@ -143,3 +143,13 @@ The limiter is intentionally in-process and fixed-window. It can key by client
 IP, by `inbox_id`, or by the pair of `inbox_id` and client IP. Distributed
 storage, Redis-backed counters, and global quotas are outside this module's
 current responsibility.
+
+## Startup callback guidance
+
+WappaCorePlugin lists installed callback adapters when Meta configuration is
+mounted. Explicit mode lists WhatsApp and Instagram; legacy mode lists only
+WhatsApp because its settings resolver cannot authorize an Instagram Inbox.
+URLs use the startup display base URL and the canonical Platform route shape.
+The banner does not query the Directory, enumerate connected customers, or
+claim that a displayed callback has completed Meta verification. It identifies
+the shared GET verify-token setting and requires public HTTPS for dashboard use.

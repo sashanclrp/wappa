@@ -29,10 +29,9 @@ from pydantic import (
 )
 
 from wappa.domain.inbox.credentials import (
+    CredentialRecord,
     PlatformAccountActiveIndexRecord,
     PlatformAccountEmptyIndexRecord,
-    WhatsAppActiveInboxCredentialRecord,
-    WhatsAppInactiveInboxCredentialRecord,
     dump_record_for_storage,
     parse_inbox_credential_record,
     parse_platform_account_index_record,
@@ -54,9 +53,6 @@ PRIMARY_TABLE: Final[str] = "wappa_inbox_directory"
 ACCOUNT_INDEX_TABLE: Final[str] = "wappa_inbox_directory_account_index"
 MAX_MUTATION_ATTEMPTS: Final[int] = 8
 
-CredentialRecord = (
-    WhatsAppActiveInboxCredentialRecord | WhatsAppInactiveInboxCredentialRecord
-)
 IndexRecord = PlatformAccountActiveIndexRecord | PlatformAccountEmptyIndexRecord
 RowStatus = Literal["active", "inactive", "absent"]
 
@@ -150,6 +146,18 @@ class InboxDirectoryTable:
                 f"Scope {SYSTEM_SCOPE!r}; got {context_id!r}"
             )
         self._table = table
+
+    async def clear(self) -> int:
+        """Drop every cached directory row and account index; returns the count.
+
+        Rows are a cache of the Host's source, so clearing loses nothing: each
+        Inbox reloads from the source on its next read.
+        """
+        rows = await self._guard(self._table.delete_table(PRIMARY_TABLE), "clear")
+        index = await self._guard(
+            self._table.delete_table(ACCOUNT_INDEX_TABLE), "clear index"
+        )
+        return int(rows) + int(index)
 
     # ── primary rows ──────────────────────────────────────────────────
 

@@ -26,6 +26,7 @@ from wappa.core.inbound import (
     UnsupportedPlatformError,
     route_whatsapp_payload,
 )
+from wappa.core.inbound.instagram_routing import route_instagram_payload
 from wappa.core.logging.logger import get_logger
 from wappa.domain.inbox.errors import (
     InboxCredentialIntegrityError,
@@ -105,7 +106,7 @@ class WebhookController:
                 status_code=400, detail=f"Unsupported platform: {platform}"
             )
         platform_type = PlatformType(platform.lower())
-        if platform_type is not PlatformType.WHATSAPP:
+        if platform_type not in {PlatformType.WHATSAPP, PlatformType.INSTAGRAM}:
             raise HTTPException(
                 status_code=400,
                 detail="Payload-derived Inbox routing requires a registered platform adapter",
@@ -123,9 +124,12 @@ class WebhookController:
         # 3. Route, prove membership, build every Dispatch Context, then schedule.
         dependencies = RuntimeCapabilities.from_app(request.app)
         try:
-            deliveries = await route_whatsapp_payload(
-                payload, dependencies.credential_resolver
+            route_payload = (
+                route_instagram_payload
+                if platform_type is PlatformType.INSTAGRAM
+                else route_whatsapp_payload
             )
+            deliveries = await route_payload(payload, dependencies.credential_resolver)
             return await self.inbound_runtime.accept_webhook_batch(
                 deliveries=deliveries, dependencies=dependencies
             )
@@ -187,7 +191,7 @@ class WebhookController:
             raise HTTPException(
                 status_code=503,
                 detail=(
-                    "Meta Application Configuration is not available; the WhatsApp "
+                    "Meta Application Configuration is not available; the Meta "
                     "callback cannot authenticate requests"
                 ),
             )

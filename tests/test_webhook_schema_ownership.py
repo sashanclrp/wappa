@@ -18,7 +18,6 @@ from wappa.webhooks.core.webhook_interfaces import (
     InboundMessageWebhook,
     InboxBase,
     StatusWebhook,
-    SystemEventType,
     SystemWebhook,
     UserBase,
 )
@@ -165,12 +164,12 @@ async def test_whatsapp_status_ad_referral_accepts_missing_click_id() -> None:
     assert webhook.message.referral is not None
     assert webhook.message.referral.ctwa_clid is None
     assert webhook.message.get_ad_context() == ("status-ad-123", None)
-    assert webhook.ad_referral is not None
-    assert webhook.ad_referral.click_id is None
+    assert webhook.entry_referral is not None
+    assert webhook.entry_referral.click_id is None
 
 
 @pytest.mark.asyncio
-async def test_whatsapp_unknown_context_field_trips_loud_contract_guard(
+async def test_whatsapp_unknown_context_field_is_reported_as_meta_schema_drift(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     processor = WhatsAppWebhookProcessor()
@@ -204,12 +203,14 @@ async def test_whatsapp_unknown_context_field_trips_loud_contract_guard(
         },
     )
 
-    with caplog.at_level("CRITICAL"), pytest.raises(ProcessorError):
+    with caplog.at_level("WARNING"), pytest.raises(ProcessorError):
         await processor.create_universal_webhook(payload)
 
-    assert "WHATSAPP_WEBHOOK_CONTRACT_DRIFT" in caplog.text
-    assert "error_type=extra_forbidden" in caplog.text
-    assert "context.future_meta_identifier" in caplog.text
+    # Strict mode (set in conftest) turns Meta drift into an error; the drift
+    # line names the field path and never the value.
+    assert "META_SCHEMA_DRIFT" in caplog.text
+    assert "future_meta_identifier" in caplog.text
+    assert "future-value" not in caplog.text
 
 
 @pytest.mark.asyncio
@@ -473,7 +474,7 @@ def test_future_platform_payload_can_map_to_same_universal_model_shape() -> None
 
 
 @pytest.mark.asyncio
-async def test_whatsapp_account_offboarded_parses_to_system_webhook() -> None:
+async def test_whatsapp_account_offboarded_parses_to_inbox_connection_webhook() -> None:
     """Coexistence account_offboarded → SystemWebhook (WABA-scoped, no user)."""
     processor = WhatsAppWebhookProcessor()
     webhook = await processor.create_universal_webhook(
@@ -487,16 +488,19 @@ async def test_whatsapp_account_offboarded_parses_to_system_webhook() -> None:
         )
     )
 
-    assert isinstance(webhook, SystemWebhook)
-    assert webhook.system_event_type == SystemEventType.ACCOUNT_OFFBOARDED
-    assert webhook.event_detail.waba_id == "2068060904064070"
-    assert webhook.event_detail.reason == "USER_INITIATED"
+    from wappa.webhooks import InboxConnectionState, InboxConnectionWebhook
+
+    assert isinstance(webhook, InboxConnectionWebhook)
+    assert webhook.state is InboxConnectionState.DISCONNECTED
+    assert webhook.account_id == "2068060904064070"
+    assert webhook.reason == "USER_INITIATED"
     # Account event has no user context.
-    assert webhook.user is None
 
 
 @pytest.mark.asyncio
-async def test_whatsapp_account_reconnected_parses_to_system_webhook() -> None:
+async def test_whatsapp_account_reconnected_parses_to_inbox_connection_webhook() -> (
+    None
+):
     """Coexistence account_reconnected → SystemWebhook with phone_number_id."""
     processor = WhatsAppWebhookProcessor()
     webhook = await processor.create_universal_webhook(
@@ -510,11 +514,11 @@ async def test_whatsapp_account_reconnected_parses_to_system_webhook() -> None:
         )
     )
 
-    assert isinstance(webhook, SystemWebhook)
-    assert webhook.system_event_type == SystemEventType.ACCOUNT_RECONNECTED
-    assert webhook.event_detail.waba_id == "2068060904064070"
-    assert webhook.event_detail.phone_number_id == "123456789012345"
-    assert webhook.user is None
+    from wappa.webhooks import InboxConnectionState, InboxConnectionWebhook
+
+    assert isinstance(webhook, InboxConnectionWebhook)
+    assert webhook.state is InboxConnectionState.RECONNECTED
+    assert webhook.account_id == "2068060904064070"
 
 
 @pytest.mark.asyncio

@@ -398,6 +398,33 @@ def resolve_recipient(value: str) -> ResolvedRecipient:
     )
 
 
+def whatsapp_delivery_order(
+    addresses: tuple[str, ...], *, phone_only: bool = False
+) -> tuple[str, ...]:
+    """Order a User's WhatsApp Delivery Addresses: phones first, then BSUIDs.
+
+    Meta: "If the user's phone number is not present (the wa_id property is
+    missing), you can use their BSUID", and ``to`` (phone) wins when both are
+    sent. Authentication Templates need a phone (``phone_only``). Unrecognised
+    values keep their place after both so the Platform reports them.
+    """
+    phones: list[str] = []
+    seen: set[str] = set()
+    for a in addresses:
+        if looks_like_phone_number(a):
+            key = "".join(ch for ch in a if ch.isdigit())
+            if key not in seen:  # "573…" and "+57 3…" are one phone
+                seen.add(key)
+                phones.append(a)
+    bsuids = tuple(a for a in addresses if looks_like_bsuid(a))
+    if phone_only:
+        return tuple(phones)
+    others = tuple(
+        a for a in addresses if not looks_like_phone_number(a) and a not in bsuids
+    )
+    return tuple(phones) + bsuids + others
+
+
 def normalize_recipient_identifier(value: str) -> str:
     """Return the canonical recipient identifier representation used by Wappa."""
     resolved = resolve_recipient(value)
@@ -434,13 +461,28 @@ class RecipientRequest(BaseModel):
     )
 
 
+class DeliveryRequest(RecipientRequest):
+    """A send request: ``recipient`` plus the User's other known addresses."""
+
+    addresses: list[RecipientIdentifier] = Field(
+        default_factory=list,
+        description=(
+            "Other addresses of the same User, tried after `recipient` when the "
+            "Platform rejects the address itself (WhatsApp: pass the BSUID and "
+            "the phone; ADR-0019). Ignored where a User has one address"
+        ),
+    )
+
+
 __all__ = [
+    "whatsapp_delivery_order",
     "BSUID_PATTERN",
     "ISO_ALPHA2_CODES",
     "PHONE_PATTERN",
     "PHONE_SANITIZE_PATTERN",
     "RecipientIdentifier",
     "RecipientRequest",
+    "DeliveryRequest",
     "RecipientKind",
     "ResolvedRecipient",
     "apply_recipient_to_payload",

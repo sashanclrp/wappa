@@ -16,7 +16,7 @@ from wappa.api.dependencies.inbox_context import (
     get_inbox_execution_context,
 )
 from wappa.api.middleware import InboxMiddleware
-from wappa.api.routes.whatsapp_combined import create_whatsapp_router
+from wappa.api.routes.whatsapp_combined import create_messaging_router
 from wappa.core.auth.middleware import AuthMiddleware
 from wappa.core.auth.strategies.bearer_token import BearerTokenStrategy
 from wappa.core.factory.inbox_assembly import InboxRuntimeConfiguration
@@ -182,7 +182,7 @@ def _app(
 
     probe = APIRouter()
 
-    @probe.get("/api/probe/context")
+    @probe.get("/api/{platform}/probe/context")
     async def context_probe(
         context: InboxExecutionContext = Depends(get_inbox_execution_context),
     ) -> dict[str, Any]:
@@ -193,12 +193,12 @@ def _app(
             "ambient": get_current_inbox_context(),
         }
 
-    @probe.get("/api/probe/local")
+    @probe.get("/api/{platform}/probe/local")
     async def local_probe() -> dict[str, Any]:
         return {"ambient": get_current_inbox_context()}
 
     app.include_router(probe)
-    app.include_router(create_whatsapp_router(include_template_transport=True))
+    app.include_router(create_messaging_router(include_template_transport=True))
     return app, session
 
 
@@ -222,7 +222,7 @@ def legacy() -> tuple[FastAPI, _RecordingSession, _Resolver]:
 def test_header_selects_the_context_and_binds_logging_scope(explicit: Any) -> None:
     app, _, resolver = explicit
     response = TestClient(app).get(
-        "/api/probe/context", headers={INBOX_ID_HEADER: INBOX_B}
+        "/api/whatsapp/probe/context", headers={INBOX_ID_HEADER: INBOX_B}
     )
 
     assert response.status_code == 200
@@ -237,7 +237,7 @@ def test_header_selects_the_context_and_binds_logging_scope(explicit: Any) -> No
 
 def test_explicit_mode_requires_the_header(explicit: Any) -> None:
     app, _, resolver = explicit
-    response = TestClient(app).get("/api/probe/context")
+    response = TestClient(app).get("/api/whatsapp/probe/context")
 
     assert response.status_code == 400
     assert INBOX_ID_HEADER in response.json()["detail"]
@@ -250,7 +250,9 @@ def test_malformed_header_is_400_before_any_directory_call(
 ) -> None:
     app, _, resolver = explicit
     resolver.failure = InboxDirectoryUnavailableError("down")
-    response = TestClient(app).get("/api/probe/context", headers={INBOX_ID_HEADER: bad})
+    response = TestClient(app).get(
+        "/api/whatsapp/probe/context", headers={INBOX_ID_HEADER: bad}
+    )
 
     assert response.status_code == 400
     assert resolver.calls == []
@@ -259,7 +261,7 @@ def test_malformed_header_is_400_before_any_directory_call(
 def test_unknown_or_inactive_header_is_404(explicit: Any) -> None:
     app, _, _ = explicit
     response = TestClient(app).get(
-        "/api/probe/context", headers={INBOX_ID_HEADER: "333333333333333"}
+        "/api/whatsapp/probe/context", headers={INBOX_ID_HEADER: "333333333333333"}
     )
 
     assert response.status_code == 404
@@ -276,7 +278,7 @@ def test_directory_and_decrypt_failures_are_503_not_unknown(
     app, _, resolver = explicit
     resolver.failure = failure
     response = TestClient(app).get(
-        "/api/probe/context", headers={INBOX_ID_HEADER: INBOX_A}
+        "/api/whatsapp/probe/context", headers={INBOX_ID_HEADER: INBOX_A}
     )
 
     assert response.status_code == 503
@@ -286,11 +288,11 @@ def test_legacy_mode_uses_its_default_and_accepts_the_same_header(legacy: Any) -
     app, _, _ = legacy
     client = TestClient(app)
 
-    assert client.get("/api/probe/context").json()["inbox_id"] == INBOX_A
+    assert client.get("/api/whatsapp/probe/context").json()["inbox_id"] == INBOX_A
     assert (
-        client.get("/api/probe/context", headers={INBOX_ID_HEADER: INBOX_A}).json()[
-            "inbox_id"
-        ]
+        client.get(
+            "/api/whatsapp/probe/context", headers={INBOX_ID_HEADER: INBOX_A}
+        ).json()["inbox_id"]
         == INBOX_A
     )
 
@@ -299,7 +301,7 @@ def test_legacy_mode_cannot_introduce_a_second_inbox_by_header(legacy: Any) -> N
     app, _, resolver = legacy
     resolver.inboxes.pop(INBOX_B)
     response = TestClient(app).get(
-        "/api/probe/context", headers={INBOX_ID_HEADER: INBOX_B}
+        "/api/whatsapp/probe/context", headers={INBOX_ID_HEADER: INBOX_B}
     )
 
     assert response.status_code == 404
@@ -309,8 +311,10 @@ def test_context_does_not_leak_between_sequential_requests(explicit: Any) -> Non
     app, _, _ = explicit
     client = TestClient(app)
 
-    scoped = client.get("/api/probe/context", headers={INBOX_ID_HEADER: INBOX_A})
-    local = client.get("/api/probe/local")
+    scoped = client.get(
+        "/api/whatsapp/probe/context", headers={INBOX_ID_HEADER: INBOX_A}
+    )
+    local = client.get("/api/whatsapp/probe/local")
 
     assert scoped.json()["ambient"] == INBOX_A
     assert local.json() == {"ambient": None}
@@ -321,9 +325,11 @@ def test_host_authorization_runs_before_inbox_resolution() -> None:
     app, _ = _app(resolver, mode=InboxRoutingMode.EXPLICIT, auth=True)
     client = TestClient(app)
 
-    denied = client.get("/api/probe/context", headers={INBOX_ID_HEADER: INBOX_A})
+    denied = client.get(
+        "/api/whatsapp/probe/context", headers={INBOX_ID_HEADER: INBOX_A}
+    )
     allowed = client.get(
-        "/api/probe/context",
+        "/api/whatsapp/probe/context",
         headers={INBOX_ID_HEADER: INBOX_A, "Authorization": "Bearer host-token"},
     )
 
@@ -538,7 +544,7 @@ def test_openapi_documents_the_header_on_every_inbox_dependent_route() -> None:
     from wappa.api.dependencies.inbox_context import INBOX_HEADER_DESCRIPTION
 
     app = FastAPI()
-    app.include_router(create_whatsapp_router(include_template_transport=True))
+    app.include_router(create_messaging_router(include_template_transport=True))
     spec = app.openapi()
 
     documented: dict[str, Any] = {}
@@ -559,26 +565,26 @@ def test_openapi_documents_the_header_on_every_inbox_dependent_route() -> None:
                 documented[path] = header
 
     for path in (
-        "/api/whatsapp/messages/send-text",
-        "/api/whatsapp/media/upload",
-        "/api/whatsapp/media/info/{media_id}",
-        "/api/whatsapp/templates/info",
-        "/api/whatsapp/templates/send-text",
-        "/api/whatsapp/state-handlers/set",
-        "/api/whatsapp/health",
+        "/api/{platform}/messages/send-text",
+        "/api/{platform}/media/upload",
+        "/api/{platform}/media/info/{media_id}",
+        "/api/{platform}/templates/info",
+        "/api/{platform}/templates/send-text",
+        "/api/{platform}/state-handlers/set",
+        "/api/{platform}/health",
     ):
         assert path in documented, f"{path} does not document {INBOX_ID_HEADER}"
 
     assert undocumented == {
-        "/api/whatsapp/messages/limits",
-        "/api/whatsapp/media/limits",
-        "/api/whatsapp/interactive/limits",
-        "/api/whatsapp/templates/limits",
-        "/api/whatsapp/specialized/validate-contact",
-        "/api/whatsapp/specialized/validate-coordinates",
+        "/api/{platform}/messages/limits",
+        "/api/{platform}/media/limits",
+        "/api/{platform}/interactive/limits",
+        "/api/{platform}/templates/limits",
+        "/api/{platform}/specialized/validate-contact",
+        "/api/{platform}/specialized/validate-coordinates",
     }
 
-    header = documented["/api/whatsapp/messages/send-text"]
+    header = documented["/api/{platform}/messages/send-text"]
     assert header["in"] == "header"
     assert header["required"] is False, "legacy mode may omit it; explicit mode 400s"
     assert header["description"] == INBOX_HEADER_DESCRIPTION
@@ -593,10 +599,11 @@ async def test_execution_context_repr_hides_the_token(explicit: Any) -> None:
     scope = {
         "type": "http",
         "method": "GET",
-        "path": "/x",
+        "path": "/api/whatsapp/x",
         "headers": [(b"x-wappa-inbox-id", INBOX_A.encode())],
         "query_string": b"",
         "app": app,
+        "path_params": {"platform": "whatsapp"},
     }
     context = await get_inbox_execution_context(Request(scope))
 
@@ -647,7 +654,9 @@ async def test_context_does_not_leak_between_concurrent_requests(
         wanted = [INBOX_A, INBOX_B] * 12
         responses = await asyncio.gather(
             *(
-                client.get("/api/probe/context", headers={INBOX_ID_HEADER: inbox_id})
+                client.get(
+                    "/api/whatsapp/probe/context", headers={INBOX_ID_HEADER: inbox_id}
+                )
                 for inbox_id in wanted
             )
         )
@@ -671,9 +680,11 @@ async def test_concurrent_local_only_requests_never_bind_an_inbox(
     ) as client:
         results = await asyncio.gather(
             *(
-                client.get("/api/probe/context", headers={INBOX_ID_HEADER: INBOX_A})
+                client.get(
+                    "/api/whatsapp/probe/context", headers={INBOX_ID_HEADER: INBOX_A}
+                )
                 if index % 2
-                else client.get("/api/probe/local")
+                else client.get("/api/whatsapp/probe/local")
                 for index in range(24)
             )
         )

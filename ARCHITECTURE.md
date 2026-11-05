@@ -4,9 +4,33 @@
 
 Wappa is a messaging runtime framework. It receives Platform webhooks, parses them into Universal Models, dispatches events to user-defined handlers, and provides outbound messaging. Messaging work is scoped by Inbox identity. External Webhook Source events are Inbox-independent unless a Host resolver associates one with an Inbox.
 
-Today Wappa is **WhatsApp-opinionated**: the WhatsApp adapter is the only fully implemented platform. But the abstractions and design patterns are built for multi-platform: adding Telegram, Instagram, or Teams requires implementing platform-specific adapters without changing core dispatch, persistence, or event handler contracts.
+WhatsApp has the broad built-in adapter. Instagram has a Unified Login adapter for DMs (text, media, interactive messages, carousels), comments, mentions, message updates and echo/unsupported system events. Telegram, Teams, and Facebook Messenger have no implemented adapters. Platform callback routes remain separate; shared authentication, Directory, dispatch, and HTTP lifecycle infrastructure are reused.
+
+Instagram intake uses `core/inbound/instagram_routing.py` after exact-body Meta authentication. It validates the whole envelope, proves each event addresses its professional account, resolves explicit-mode Inbox credentials, and splits every entry/messaging event before all-or-nothing runtime admission. `processors/instagram_processor.py` is pure translation. It never registers accounts or fetches content. The professional account is both the Instagram Platform Account and Inbox; this is not a fabricated WABA or business-portfolio membership.
+
+Recipient-based Messenger methods take an immutable `DirectMessage` target, validated against the bound Inbox before outbound middleware and again by the adapter. An action available on more than one Platform has exactly one Messenger method, which each adapter maps onto its native API ([ADR-0016](docs/adr/0016-one-messenger-method-per-action.md)); unmappable calls reject before I/O, and methods a Platform lacks raise `UnsupportedOperationError`, with `supported_operations` describing implemented adapter operations. Separate responsibilities (media storage through `IMediaLibrary`, WhatsApp Templates through `ITemplateMessaging`) and Platform-only actions (comment replies and controls, content reads) are Focused Capabilities reached with `messenger.capability(kind)`, not Messenger methods. `send_location_request` / `send_contact_request` stay core methods that only WhatsApp implements today. Known gap: `send_reaction` is a missing core method ([backlog draft](docs/backlog/drafts/261105-mid-send-reaction-core-method.md)). The public facade remains whole; no per-family interface split is introduced. Host takeover and durable business idempotency remain host responsibilities.
 
 ## Design Patterns
+
+Instagram scope includes planned regular/Live comment intake, public mentions,
+public/private replies, comment controls and explicit conversation-content/media
+reads. Wappa provides the Platform operations; Hosts own response, moderation,
+AI, takeover and workflow policy. Publishing, content calendars, scheduled
+publication and content/account analytics belong to Hosts or Platform Extensions.
+
+The agreed extension design formalizes Symphonai's existing reuse of current
+credentials for its own provider clients. A planned narrow supported access
+capability will replace consumer dependence on the internal resolver; it does
+not require Wappa to own extension clients. Registered extension fields enter
+the same authenticated Instagram callback; extension schemas and handlers stay
+outside the conversation domain. Message edits/deletions use a planned distinct
+message-update lane rather than delivery statuses. These are target contracts,
+not implemented additions. See the [PRD](docs/backlog/in_progress/261103-instagram-conversations/references/scope.md),
+[completed session](docs/sasha/grilling-sessions/261103-instagram-scope-and-extensions.md)
+and [ADR-0015](docs/adr/0015-conversation-primitives-and-trusted-platform-extensions.md).
+The [implementation series](docs/backlog/in_progress/261103-instagram-conversations/plan.md)
+tracks the remaining capability slices, DDD reconciliation, setup and developer
+skill deliverables; planned contracts are not available merely through that plan.
 
 HTTP composition uses FastAPI 0.162.x. Inspect included routes through
 `fastapi.routing.iter_route_contexts(app.routes)` so prefixes and inherited
@@ -210,7 +234,7 @@ InboxTemplateTransport
     │ validates Delivery Address, category, authentication method,
     │ and selects one endpoint before I/O
     ▼
-MessengerFactory → MessengerPipeline → WhatsApp adapter → Meta
+MessengerFactory → MessengerPipeline.capability(ITemplateMessaging) → WhatsApp adapter → Meta
     │
     ▼
 TemplateTransportResult
@@ -313,7 +337,28 @@ capabilities are registered independently:
    - A Platform member of `InboxCredentialRecord` naming the credential its adapter consumes, plus the Platform's `InboxRef.cache_namespace` encoding
    - Registration in `PlatformType` and the messenger/webhook factories
 
-No changes to `WappaEventHandler`, `CacheFactory`, `SSE`, `Expiry`, or `Plugins` are needed.
+Event lanes beyond message/status/error/system (message updates, comments, mentions) have optional `WappaEventHandler` hooks; a Platform without those events simply never emits them. User choices are not a lane: WhatsApp button/list replies and Instagram quick replies and postbacks all arrive as `InboundMessageWebhook` with `get_interactive_selection()`.
+
+### Instagram adapter (implemented)
+
+| Module | Responsibility |
+| --- | --- |
+| `wappa/webhooks/instagram/models.py` | Pure envelope (`messaging[]` + `changes[]`) and typed message-family models. |
+| `wappa/processors/instagram_processor.py` | Pure lane translation (see the table in its docstring); extension fields via the Platform-qualified `FieldHandlerRegistry`. No I/O. |
+| `wappa/core/inbound/instagram_routing.py` | Signature-first, whole-batch admission: resolve every entry's Inbox before returning one delivery per event/change. Authors never select an Inbox. |
+| `wappa/messaging/instagram/graph.py` | Inbox-bound Graph HTTP, outcome classification (accepted/rejected/indeterminate), credential-free error text. |
+| `wappa/messaging/instagram/messenger.py` | `IMessenger` facade: maps the shared contract (`mark_as_read`, button/list/CTA messages, carousels, captions as follow-up text, location/contact as text, sticker as image) onto Instagram APIs, PrivateReply, local limit checks, capability lookup. |
+| `wappa/messaging/instagram/media_library.py` | `IMediaLibrary`: reusable `message_attachments` upload (attachment_id) and CDN download through the attachment reader. |
+| `wappa/messaging/instagram/content.py` | `ICommentControls` (including public `reply_comment`) and `IConversationContentReader` (Focused Capabilities). |
+| `wappa/messaging/instagram/media.py` | Media rules and the credential-free, host-restricted `IAttachmentMediaReader`. |
+| `wappa/connections/contract.py` | `IInboxConnector` (ADR-0017): begin / complete / activate / disconnect, grant, readiness and activation results. |
+| `wappa/connections/meta_login.py` | Meta Business Login core shared by both Meta connectors: state binding, code exchange, `debug_token`, `signed_request`. |
+| `wappa/connections/instagram.py` | `InstagramConnector` (Unified Login discovery, field subscriptions); the Host owns routes, intent storage and commit. |
+| `wappa/connections/whatsapp.py` | `WhatsAppConnector` (Embedded Signup: WABA + phone-number discovery, WABA `subscribed_apps`). |
+| `wappa/domain/inbox/access.py` | `InboxCredentialAccess`: the supported trusted-adapter credential seam (ADR-0015). |
+
+Host policy (which comments to answer/hide, flows, AI, takeover) stays in the
+Host's handler and Scores; see `wappa_examples/instagram_conversations_example`.
 
 ## Deeper Architecture Docs
 
@@ -342,3 +387,10 @@ See [`docs/adr/`](./docs/adr/) for recorded decisions. Notable:
 - [ADR-0010: Authenticated, payload-routed WhatsApp webhook](./docs/adr/0010-payload-routed-whatsapp-webhook.md) — one callback, raw-body HMAC, qualified routing, WABA membership, all-or-nothing admission
 - [ADR-0011: Encrypted Inbox Directory](./docs/adr/0011-encrypted-inbox-directory.md) — Wappa-owned directory on Table Cache under the System Scope, Host-owned schema through one source, encrypted records, TTL and version rules
 - [ADR-0012: Inbox-independent external webhooks](./docs/adr/0012-inbox-independent-external-webhooks.md) — optional Webhook ID, Host context strategy, and admission before acknowledgment
+- [ADR-0016: One Messenger method per action](./docs/adr/0016-one-messenger-method-per-action.md) — adapters map shared actions onto native APIs; Platform-only actions are capabilities
+
+Shared event logging reads Universal Model identity rather than assuming WA
+fields are present: system records include Platform/Inbox and an available User;
+status records include native message/recipient references. Consumer examples
+may add send-result correlation without calling acceptance delivery or dumping
+raw provider payloads. Missing optional identity is omitted from log text.

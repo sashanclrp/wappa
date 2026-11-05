@@ -9,6 +9,8 @@ This module handles all state-related commands including:
 
 from typing import cast
 
+from wappa.domain.inbox.identity import InboxRef
+from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.webhooks import InboundMessageWebhook
 
 from ..models.json_demo_models import StateHandler
@@ -129,7 +131,13 @@ class StateCommandsScore(ScoreBase):
             )
 
             result = await self.messenger.send_text(
-                recipient=user_id,
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
                 text=activation_message,
                 reply_to_message_id=webhook.message.message_id,
             )
@@ -185,7 +193,13 @@ class StateCommandsScore(ScoreBase):
                 )
 
                 result = await self.messenger.send_text(
-                    recipient=user_id,
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=self.messenger.platform,
+                            inbox_id=self.messenger.inbox_id,
+                        ),
+                        addresses=DeliveryAddresses.of(user_id),
+                    ),
                     text=exit_message,
                     reply_to_message_id=webhook.message.message_id,
                 )
@@ -201,7 +215,13 @@ class StateCommandsScore(ScoreBase):
             else:
                 # No active state found
                 await self.messenger.send_text(
-                    recipient=user_id,
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=self.messenger.platform,
+                            inbox_id=self.messenger.inbox_id,
+                        ),
+                        addresses=DeliveryAddresses.of(user_id),
+                    ),
                     text="❓ You are not currently in WAPPA state. Send /WAPPA to activate it.",
                     reply_to_message_id=webhook.message.message_id,
                 )
@@ -245,7 +265,13 @@ class StateCommandsScore(ScoreBase):
 
                 # Send WAPPA response
                 result = await self.messenger.send_text(
-                    recipient=user_id,
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=self.messenger.platform,
+                            inbox_id=self.messenger.inbox_id,
+                        ),
+                        addresses=DeliveryAddresses.of(user_id),
+                    ),
                     text="Hola Wapp@ ;)",
                     reply_to_message_id=webhook.message.message_id,
                 )

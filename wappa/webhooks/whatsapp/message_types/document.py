@@ -27,10 +27,16 @@ from wappa.webhooks.whatsapp.base_models import (
 class DocumentContent(BaseModel):
     """Document message content."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     caption: str | None = Field(None, description="Document caption text (optional)")
-    filename: str = Field(..., description="Original filename of the document")
+    filename: str | None = Field(
+        None,
+        description=(
+            "Original filename as the User's client sent it. Untrusted: sanitize "
+            "it before using it as a path"
+        ),
+    )
     mime_type: str = Field(
         ..., description="MIME type of the document (e.g., 'application/pdf')"
     )
@@ -49,27 +55,13 @@ class DocumentContent(BaseModel):
             v = v.strip()
             if not v:
                 return None
-            if len(v) > 1024:  # WhatsApp caption limit
-                raise ValueError("Document caption cannot exceed 1024 characters")
         return v
 
     @field_validator("filename")
     @classmethod
-    def validate_filename(cls, v: str) -> str:
-        """Validate document filename."""
-        if not v.strip():
-            raise ValueError("Document filename cannot be empty")
-
-        # Check for basic filename validation
-        filename = v.strip()
-        if len(filename) > 255:
-            raise ValueError("Document filename cannot exceed 255 characters")
-
-        # Basic security check - no path traversal
-        if ".." in filename or "/" in filename or "\\" in filename:
-            raise ValueError("Document filename contains invalid characters")
-
-        return filename
+    def validate_filename(cls, v: str | None) -> str | None:
+        """Keep the name Meta delivered (inbound is never rejected, ADR-0010)."""
+        return v.strip() or None if v is not None else None
 
     @field_validator("mime_type")
     @classmethod
@@ -110,7 +102,7 @@ class WhatsAppDocumentMessage(WhatsAppMessageIdentity, BaseDocumentMessage):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Standard message fields (BSUID support v24.0+)
@@ -232,15 +224,16 @@ class WhatsAppDocumentMessage(WhatsAppMessageIdentity, BaseDocumentMessage):
         return self.document.mime_type
 
     @property
-    def filename(self) -> str:
-        """Get the document filename."""
+    def filename(self) -> str | None:
+        """The original filename (untrusted; sanitize before using as a path)."""
         return self.document.filename
 
     @property
     def file_extension(self) -> str | None:
         """Get the file extension from the filename."""
-        if "." in self.document.filename:
-            return self.document.filename.split(".")[-1].lower()
+        name = self.document.filename
+        if name and "." in name:
+            return name.split(".")[-1].lower()
         return None
 
     @property
@@ -265,9 +258,7 @@ class WhatsAppDocumentMessage(WhatsAppMessageIdentity, BaseDocumentMessage):
         Returns:
             File extension (without dot) or None if no extension found.
         """
-        if "." in self.filename:
-            return self.filename.split(".")[-1].lower()
-        return None
+        return self.file_extension
 
     def get_ad_context(self) -> tuple[str | None, str | None]:
         """

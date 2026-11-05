@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING
 
 from wappa.core.logging.logger import ContextLogger, get_logger
 from wappa.domain.inbox.identity import InboxRef
-from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -69,23 +68,19 @@ class WappaContextFactory:
 
     async def create_context(
         self,
-        inbox_id: str | None = None,
+        inbox_ref: InboxRef | None = None,
         user_id: str | None = None,
         *,
         include_messenger: bool = False,
-        inbox_ref: InboxRef | None = None,
-        platform: PlatformType | None = None,
     ) -> WappaContext:
         """
         Create a WappaContext with infrastructure dependencies from app.state.
 
         Args:
-            inbox_id: Legacy native Inbox identifier. Prefer ``inbox_ref`` at
-                cross-Platform boundaries. ``None`` creates a database-only context.
+            inbox_ref: The Inbox (Platform + native ID). ``None`` creates a
+                database-only context.
             user_id: Optional User identifier.
             include_messenger: Whether to create a Messenger instance.
-            inbox_ref: Qualified Inbox identity for capability construction.
-            platform: Platform for the legacy raw ``inbox_id`` input.
 
         Raises:
             InboxDirectoryError: the Inbox Directory could not answer for this
@@ -119,23 +114,13 @@ class WappaContextFactory:
 
         cache_factory: ICacheFactory | None = None
         messenger: IMessenger | None = None
-        if (
-            inbox_ref is not None
-            and inbox_id is not None
-            and inbox_ref.inbox_id != inbox_id
-        ):
-            raise ValueError("inbox_id and inbox_ref must identify the same Inbox")
         resolved_inbox_ref = inbox_ref
-        if resolved_inbox_ref is None and inbox_id is not None:
-            resolved_inbox_ref = InboxRef(
-                platform=platform or PlatformType.WHATSAPP, inbox_id=inbox_id
-            )
         resolved_inbox_id = (
             resolved_inbox_ref.inbox_id if resolved_inbox_ref is not None else None
         )
         if resolved_inbox_ref is None and (user_id or include_messenger):
             raise ValueError(
-                "Inbox-scoped context requires inbox_id when user_id or "
+                "Inbox-scoped context requires inbox_ref when user_id or "
                 "include_messenger is set"
             )
         if (

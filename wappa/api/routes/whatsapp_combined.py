@@ -1,6 +1,12 @@
-"""Composition of Wappa's WhatsApp HTTP capabilities.
+"""Composition of Wappa's messaging HTTP capabilities.
 
-Wappa mounts several separable things under ``/api/whatsapp``. They are grouped
+Wappa mounts several separable things under ``/api/{platform}`` (``whatsapp``
+or ``instagram``). The Platform in the path plus ``X-Wappa-Inbox-ID`` select
+the Inbox; send routes call that Inbox's own Messenger (one method per action,
+ADR-0016), so ``/api/whatsapp/...`` URLs are unchanged and the same routes
+serve Instagram. Routes that only exist on WhatsApp (Templates, the Media API,
+limits and validators) answer 404 for other Platforms; an action a Platform
+cannot perform answers 501. They are grouped
 by what an unauthenticated caller could *do* with them, not by which module
 they live in:
 
@@ -16,8 +22,14 @@ Each group is chosen explicitly. See ADR-0007 for the outbound split and
 ADR-0009 for why "mutation" had to mean more than "send".
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from ..dependencies.inbox_context import route_platform
+from .conversations import (
+    comment_controls_router,
+    conversation_reads_router,
+    private_reply_router,
+)
 from .whatsapp import (
     whatsapp_health_router,
     whatsapp_interactive_info_router,
@@ -45,6 +57,7 @@ def resolve_capabilities(
     include_media_management: bool | None = None,
     include_media_upload: bool | None = None,
     include_state_handler_api: bool | None = None,
+    include_comment_controls: bool | None = None,
 ) -> WhatsAppRouteCapabilities:
     """Turn a profile plus explicit overrides into one capability set.
 
@@ -68,10 +81,11 @@ def resolve_capabilities(
         media_management=include_media_management,
         media_upload=include_media_upload,
         state_handler_api=include_state_handler_api,
+        comment_controls=include_comment_controls,
     )
 
 
-def create_whatsapp_router(
+def create_messaging_router(
     *,
     profile: WhatsAppRouteProfile | str | None = None,
     include_template_transport: bool | None = None,
@@ -79,8 +93,9 @@ def create_whatsapp_router(
     include_media_management: bool | None = None,
     include_media_upload: bool | None = None,
     include_state_handler_api: bool | None = None,
+    include_comment_controls: bool | None = None,
 ) -> APIRouter:
-    """Compose Wappa's WhatsApp HTTP capabilities explicitly.
+    """Compose Wappa's messaging HTTP capabilities under ``/api/{platform}``.
 
     Args:
         profile: ``"standalone"`` (default) mounts everything except Template
@@ -93,6 +108,9 @@ def create_whatsapp_router(
         include_media_management: Mount ``DELETE /media/{id}``.
         include_media_upload: Mount ``POST /media/upload``.
         include_state_handler_api: Mount ``/state-handlers/*``.
+        include_comment_controls: Mount comment reply/hide/unhide/delete and
+            ``comments-enabled`` (served where the Platform provides
+            ``ICommentControls``).
 
     Every option defaults to ``None``, meaning "take it from the profile".
     """
@@ -103,11 +121,13 @@ def create_whatsapp_router(
         include_media_management=include_media_management,
         include_media_upload=include_media_upload,
         include_state_handler_api=include_state_handler_api,
+        include_comment_controls=include_comment_controls,
     )
 
     router = APIRouter(
-        prefix="/api/whatsapp",
-        tags=["WhatsApp API"],
+        prefix="/api/{platform}",
+        tags=["Messaging API"],
+        dependencies=[Depends(route_platform)],
         responses={
             400: {"description": "Bad Request - Invalid message format"},
             401: {"description": "Unauthorized - Invalid inbox credentials"},
@@ -123,12 +143,14 @@ def create_whatsapp_router(
     router.include_router(whatsapp_interactive_info_router)
     router.include_router(whatsapp_specialized_validation_router)
     router.include_router(whatsapp_template_info_router)
+    router.include_router(conversation_reads_router)
 
     if capabilities.outbound_transport:
         router.include_router(whatsapp_messages_send_router)
         router.include_router(whatsapp_media_send_router)
         router.include_router(whatsapp_interactive_send_router)
         router.include_router(whatsapp_specialized_send_router)
+        router.include_router(private_reply_router)
 
     if capabilities.template_transport:
         router.include_router(whatsapp_templates_router)
@@ -141,5 +163,8 @@ def create_whatsapp_router(
 
     if capabilities.state_handler_api:
         router.include_router(whatsapp_state_handlers_router)
+
+    if capabilities.comment_controls:
+        router.include_router(comment_controls_router)
 
     return router

@@ -26,13 +26,12 @@ from wappa.webhooks.whatsapp.base_models import (
 class TextContent(BaseModel):
     """Text message content."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     body: str = Field(
         ...,
         description="The text content of the message",
         min_length=1,
-        max_length=4096,  # WhatsApp text message limit
     )
 
     @field_validator("body")
@@ -128,7 +127,7 @@ class WhatsAppTextMessage(WhatsAppMessageIdentity, BaseTextMessage):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Standard message fields

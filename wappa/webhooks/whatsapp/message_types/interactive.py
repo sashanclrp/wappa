@@ -18,11 +18,15 @@ from wappa.schemas.core.types import (
 from wappa.webhooks.core.base_message import BaseInteractiveMessage, BaseMessageContext
 from wappa.webhooks.whatsapp.base_models import MessageContext, WhatsAppMessageIdentity
 
+KNOWN_INTERACTIVE_REPLY_TYPES = frozenset(
+    {"button_reply", "list_reply", "call_permission_reply"}
+)
+
 
 class ButtonReply(BaseModel):
     """Reply data from an interactive button."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     id: str = Field(..., description="Button ID (set when creating the button)")
     title: str = Field(..., description="Button label text displayed to user")
@@ -35,25 +39,20 @@ class ButtonReply(BaseModel):
             raise ValueError("Button ID and title cannot be empty")
         return v.strip()
 
-    @field_validator("title")
-    @classmethod
-    def validate_title_length(cls, v: str) -> str:
-        """Validate button title length (WhatsApp limit is 20 characters)."""
-        if len(v) > 20:
-            raise ValueError("Button title cannot exceed 20 characters")
-        return v
-
 
 class ListReply(BaseModel):
     """Reply data from an interactive list selection."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     id: str = Field(..., description="Row ID (set when creating the list row)")
     title: str = Field(..., description="Row title displayed to user")
-    description: str = Field(..., description="Row description displayed to user")
+    description: str | None = Field(
+        None,
+        description="Row description; Meta omits it when the row was sent without one",
+    )
 
-    @field_validator("id", "title", "description")
+    @field_validator("id", "title")
     @classmethod
     def validate_not_empty(cls, v: str) -> str:
         """Validate list fields are not empty."""
@@ -61,27 +60,11 @@ class ListReply(BaseModel):
             raise ValueError("List row fields cannot be empty")
         return v.strip()
 
-    @field_validator("title")
-    @classmethod
-    def validate_title_length(cls, v: str) -> str:
-        """Validate list title length (WhatsApp limit is 24 characters)."""
-        if len(v) > 24:
-            raise ValueError("List row title cannot exceed 24 characters")
-        return v
-
-    @field_validator("description")
-    @classmethod
-    def validate_description_length(cls, v: str) -> str:
-        """Validate list description length (WhatsApp limit is 72 characters)."""
-        if len(v) > 72:
-            raise ValueError("List row description cannot exceed 72 characters")
-        return v
-
 
 class CallPermissionReply(BaseModel):
     """User response to a WhatsApp call permission request."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     response: str = Field(..., description="Permission response returned by Meta")
     expiration_timestamp: str = Field(
@@ -97,7 +80,7 @@ class InteractiveContent(BaseModel):
     Contains either button_reply or list_reply based on the interaction type.
     """
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     type: Literal["button_reply", "list_reply", "call_permission_reply"] = Field(
         ..., description="Type of interactive reply"
@@ -148,7 +131,7 @@ class WhatsAppInteractiveMessage(WhatsAppMessageIdentity, BaseInteractiveMessage
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Standard message fields (BSUID support v24.0+)

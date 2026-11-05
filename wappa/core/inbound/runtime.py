@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -26,20 +27,28 @@ from wappa.core.sse.context import (
 )
 from wappa.domain.inbox.errors import InboxDirectoryError
 from wappa.domain.inbox.identity import InboxRef
+from wappa.domain.interfaces.sent_message_registry import ISentMessageRegistry
 from wappa.persistence.cache_factory import create_cache_factory
 from wappa.processors.base_processor import ProcessorError
 from wappa.processors.factory import processor_factory
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.webhook_interfaces import (
     CallWebhook,
+    EchoOrigin,
     ErrorWebhook,
     InboundMessageWebhook,
+    IncomingCommentWebhook,
+    MessageUpdateWebhook,
+    OutboundEchoWebhook,
     StatusWebhook,
     SystemWebhook,
     UniversalWebhook,
 )
 
 from .webhook_routing import RoutedWebhookDelivery
+
+# Instagram can deliver an echo before the send call returns its message ID.
+ECHO_SETTLE_DELAYS_SECONDS: tuple[float, ...] = (1.0, 2.0)
 
 if TYPE_CHECKING:
     from wappa.core.events.event_handler import WappaEventHandler
@@ -82,6 +91,7 @@ class DispatchContext:
     sse_phone_number: str | None
     sse_platform: str
     background_work_tracker: Any = None
+    sent_message_registry: ISentMessageRegistry | None = None
 
     @property
     def inbox_id(self) -> str:
@@ -186,6 +196,7 @@ class InboundRuntime:
             sse_phone_number=sse_phone_number,
             sse_platform=sse_platform,
             background_work_tracker=builder.capabilities.background_work_tracker,
+            sent_message_registry=builder.sent_message_registry,
         )
 
     async def dispatch(self, dispatch_context: DispatchContext) -> None:
@@ -194,6 +205,16 @@ class InboundRuntime:
             inbox_id=dispatch_context.inbox_id,
             user_id=dispatch_context.user_id,
         )
+        echo = dispatch_context.universal_webhook
+        if isinstance(echo, OutboundEchoWebhook) and await self._is_wappa_send(
+            echo, dispatch_context
+        ):
+            self.logger.debug(
+                "Dropped echo of Wappa's own send %s (inbox %s)",
+                echo.message_id,
+                dispatch_context.inbox_id,
+            )
+            return
 
         try:
             async with sse_event_scope(
@@ -237,6 +258,45 @@ class InboundRuntime:
                 exc,
                 exc_info=True,
             )
+
+    async def _is_wappa_send(
+        self, echo: OutboundEchoWebhook, dispatch_context: DispatchContext
+    ) -> bool:
+        """Fixed echo filter (ADR-0018): drop echoes of Wappa's own sends.
+
+        Only an ``UNKNOWN`` origin needs proof (Instagram echoes every send and,
+        verified live 2026-11-05, carries no app_id or other sender evidence).
+        The sent-message registry decides; an echo can arrive before the send
+        call has recorded its ID, so a miss is re-checked after short delays. If the registry cannot
+        answer, the echo is delivered as ``UNKNOWN`` rather than lost.
+        """
+        if echo.origin is not EchoOrigin.UNKNOWN:
+            return False
+        registry = dispatch_context.sent_message_registry
+        if registry is None:
+            return False
+        try:
+            for delay in (0.0, *ECHO_SETTLE_DELAYS_SECONDS):
+                if delay:
+                    await asyncio.sleep(delay)
+                if await registry.claim(dispatch_context.inbox_ref, echo.message_id):
+                    self.logger.debug(
+                        "Echo %s is Wappa's: registry hit after %.1fs",
+                        echo.message_id,
+                        delay,
+                    )
+                    return True
+        except Exception as exc:
+            self.logger.warning(
+                "Sent-message registry unavailable; delivering echo %s as "
+                "unknown: %s: %s",
+                echo.message_id,
+                type(exc).__name__,
+                exc,
+            )
+            return False
+        echo.origin = EchoOrigin.BUSINESS_APP
+        return False
 
     async def _create_universal_webhook(
         self,
@@ -305,8 +365,17 @@ class InboundRuntime:
         )
 
     def _resolve_handler_user_id(self, universal_webhook: UniversalWebhook) -> str:
-        if isinstance(universal_webhook, InboundMessageWebhook):
+        if isinstance(
+            universal_webhook,
+            InboundMessageWebhook | MessageUpdateWebhook | OutboundEchoWebhook,
+        ):
             return universal_webhook.user.user_id
+        if isinstance(universal_webhook, IncomingCommentWebhook):
+            # Cache scope only — never a claim that the author is DM-addressable.
+            author = universal_webhook.author
+            scoped = author and (author.self_scoped_id or author.author_id)
+            if scoped:
+                return scoped
         if isinstance(universal_webhook, CallWebhook) and universal_webhook.user_id:
             return universal_webhook.user_id
         if isinstance(universal_webhook, SystemWebhook) and universal_webhook.user:
@@ -321,6 +390,9 @@ class InboundRuntime:
     def _derive_sse_identity(
         self, webhook: UniversalWebhook, fallback_user_id: str
     ) -> tuple[str, str | None, str | None]:
+        if webhook.platform is not PlatformType.WHATSAPP:
+            return fallback_user_id, None, None
+
         if isinstance(webhook, InboundMessageWebhook) and webhook.user:
             bsuid, phone = derive_identifiers(webhook.user)
             return webhook.user.user_id or fallback_user_id, bsuid, phone

@@ -15,6 +15,8 @@ from wappa.api.routes.whatsapp.whatsapp_specialized import (
     LocationRequest,
     LocationRequestRequest,
 )
+from wappa.domain.contacts import ContactCard, ContactName, ContactPhone
+from wappa.domain.interactive import ReplyButton
 from wappa.messaging import (
     LocationTemplateTransportRequest,
     MediaTemplateTransportRequest,
@@ -39,7 +41,6 @@ from wappa.messaging.whatsapp.models.interactive_models import (
     ListMessage,
     ListRow,
     ListSection,
-    ReplyButton,
 )
 from wappa.messaging.whatsapp.models.media_models import (
     AudioMessage,
@@ -51,10 +52,7 @@ from wappa.messaging.whatsapp.models.media_models import (
     VideoMessage,
 )
 from wappa.messaging.whatsapp.models.specialized_models import (
-    ContactCard,
     ContactMessage,
-    ContactName,
-    ContactPhone,
     LocationMessage,
     LocationRequestMessage,
 )

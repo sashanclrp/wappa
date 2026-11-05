@@ -34,6 +34,7 @@ from wappa.domain.inbox import (
     PlatformAccountRef,
     ResolvedInboxCredentials,
 )
+from wappa.messaging import DeliveryAddresses, DirectMessage
 from wappa.webhooks import InboundMessageWebhook, SystemWebhook
 
 INBOX_1 = "111111111111111"
@@ -128,7 +129,11 @@ class _RecordingHandler(WappaEventHandler):
         )
         cached_state = await state_cache.get("multi-inbox-context")
         send_result = await self.messenger.send_text(
-            text=f"reply from {self.inbox_id}", recipient=webhook.user.user_id
+            text=f"reply from {self.inbox_id}",
+            target=DirectMessage(
+                inbox_ref=self.inbox_ref,
+                addresses=DeliveryAddresses.of(webhook.user.user_id),
+            ),
         )
         self.records.append(
             {
@@ -153,6 +158,10 @@ class _SystemRecordingHandler(WappaEventHandler):
         return None
 
     async def process_system_webhook(self, webhook: SystemWebhook) -> None:
+        assert webhook.inbox.inbox_id == self.inbox_id
+        self.inboxes.append(self.inbox_id or "")
+
+    async def process_inbox_connection(self, webhook) -> None:
         assert webhook.inbox.inbox_id == self.inbox_id
         self.inboxes.append(self.inbox_id or "")
 
@@ -278,7 +287,10 @@ async def test_webhooks_from_multiple_inboxes_get_isolated_handler_contexts() ->
         await runtime.dispatch(context)
 
     assert [r["handler_inbox_id"] for r in handler.records] == [INBOX_1, INBOX_2]
-    assert [r["cache_inbox_id"] for r in handler.records] == [INBOX_1, INBOX_2]
+    assert [r["cache_inbox_id"] for r in handler.records] == [
+        f"whatsapp__{INBOX_1}",
+        f"whatsapp__{INBOX_2}",
+    ]
     assert [r["messenger_inbox_id"] for r in handler.records] == [INBOX_1, INBOX_2]
     assert [r["send_result_inbox_id"] for r in handler.records] == [INBOX_1, INBOX_2]
     assert [r["context_inbox_id"] for r in handler.records] == [INBOX_1, INBOX_2]

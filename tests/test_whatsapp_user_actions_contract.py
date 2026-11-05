@@ -113,7 +113,7 @@ def test_link_click_data_tolerates_undocumented_client_user_agent() -> None:
     assert action.marketing_messages_link_click_data.client_user_agent == "(Android 14)"
 
 
-def test_undocumented_click_data_field_logs_a_warning(caplog) -> None:
+def test_undocumented_click_data_field_logs_a_warning(caplog, monkeypatch) -> None:
     """A genuinely new field on the tolerated model must still surface — as a
     warning, not a silent drop — even though the model no longer 400s on it."""
     payload = _payload(
@@ -128,15 +128,22 @@ def test_undocumented_click_data_field_logs_a_warning(caplog) -> None:
         ]
     )
 
-    with caplog.at_level("WARNING"):
-        WhatsAppWebhook.model_validate(payload)
+    import logging
 
-    [record] = [
-        r for r in caplog.records if "WHATSAPP_WEBHOOK_UNDOCUMENTED_FIELDS" in r.message
-    ]
-    assert "marketing_messages_link_click_data" in record.message
-    assert "brand_new_meta_field" in record.message
-    assert "surprise" in record.message
+    from wappa.webhooks.core import schema_drift
+
+    monkeypatch.setenv(schema_drift.STRICT_SCHEMA_ENV, "")
+    schema_drift._reported.clear()
+    with caplog.at_level("WARNING"):
+        schema_drift.report_schema_drift(
+            WhatsAppWebhook.model_validate(payload),
+            platform="whatsapp",
+            logger=logging.getLogger("drift-test"),
+        )
+
+    [record] = [r for r in caplog.records if "META_SCHEMA_DRIFT" in r.message]
+    assert "MarketingMessagesLinkClickData.brand_new_meta_field" in record.message
+    assert "surprise" not in record.message  # values may hold personal data
 
 
 def test_unknown_top_level_value_key_still_reports_contract_drift() -> None:
@@ -157,12 +164,10 @@ async def test_link_click_dispatches_as_inbox_scoped_user_action() -> None:
     assert isinstance(webhook, SystemWebhook)
     assert webhook.system_event_type is SystemEventType.USER_ACTION
     assert webhook.event_detail.action_type == "marketing_messages_link_click"
-    assert webhook.event_detail.user_action["marketing_messages_link_click_data"] == {
-        "click_component": "cta",
-        "product_id": "sku_id",
-        "click_id": "click_id",
-        "tracking_token": "example_token",
-    }
+    action = webhook.event_detail.user_action
+    assert action.action_type == "marketing_messages_link_click"
+    assert (action.click_component, action.product_id) == ("cta", "sku_id")
+    assert (action.click_id, action.tracking_token) == ("click_id", "example_token")
     assert webhook.timestamp.timestamp() == 1753000000
     # No contacts arrive with the payload, so there is no User to attach.
     assert webhook.user is None

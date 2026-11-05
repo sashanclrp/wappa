@@ -79,7 +79,7 @@ wappa:notify:{inbox}:{user_id}:{event_type}
 
 | Segment | Description | Example |
 |---|---|---|
-| `inbox` | Inbox cache namespace — the raw `inbox_id` for WhatsApp (Meta `phone_number_id`), `<platform>__<id>` for any other Platform | `15551234567890` |
+| `inbox` | Inbox cache namespace, `<platform>__<id>` on every Platform (WhatsApp: Meta `phone_number_id`) | `whatsapp__15551234567890` |
 | `user_id` | WhatsApp phone number or user identifier | `5511999887766` |
 | `event_type` | One of the four event types below | `incoming_message` |
 

@@ -6,30 +6,7 @@ introduced alongside the BSUID system. They are parsed by the processor
 and transformed into the universal SystemWebhook interface.
 """
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-
-from wappa.core.logging.logger import get_logger
-
-logger = get_logger(__name__)
-
-
-def _warn_on_undocumented_fields(model: BaseModel, *, context: str) -> None:
-    """Log a warning (not a 400) when a tolerant model receives unknown fields.
-
-    ``extra="allow"`` keeps Meta's undocumented additions from becoming a
-    sustained 400, but silently swallowing them means we'd never notice a new
-    field exists until a host asks why data is missing. This surfaces it in
-    logs instead, with the field names and the raw values Meta actually sent,
-    so the contract can be updated deliberately.
-    """
-    extra = model.model_extra
-    if extra:
-        logger.warning(
-            "WHATSAPP_WEBHOOK_UNDOCUMENTED_FIELDS context=%s fields=%s raw=%s",
-            context,
-            ",".join(extra.keys()),
-            extra,
-        )
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class UserPreferenceEntry(BaseModel):
@@ -39,7 +16,7 @@ class UserPreferenceEntry(BaseModel):
     Represents a user's marketing preference change (opt-in/opt-out).
     """
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     wa_id: str | None = Field(
         None,
@@ -60,7 +37,7 @@ class UserPreferenceEntry(BaseModel):
 class UserIdChange(BaseModel):
     """Object containing previous and current BSUID."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     previous: str = Field(..., description="User's old BSUID")
     current: str = Field(..., description="User's new BSUID")
@@ -69,7 +46,7 @@ class UserIdChange(BaseModel):
 class ParentUserIdChange(BaseModel):
     """Object containing previous and current parent BSUID."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     previous: str = Field(..., description="User's old parent BSUID")
     current: str = Field(..., description="User's new parent BSUID")
@@ -82,7 +59,7 @@ class UserIdUpdateEntry(BaseModel):
     Represents a BSUID change notification for a WhatsApp user.
     """
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     wa_id: str | None = Field(
         None,
@@ -100,7 +77,7 @@ class UserIdUpdateEntry(BaseModel):
 class GroupParticipantIdentity(BaseModel):
     """Participant identity used by Meta group membership events."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     input: str | None = None
     wa_id: str | None = None
@@ -112,7 +89,7 @@ class GroupParticipantIdentity(BaseModel):
 class GroupParticipantsUpdateEntry(BaseModel):
     """One group_participants_update event."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     timestamp: int
     group_id: str
@@ -160,11 +137,6 @@ class MarketingMessagesLinkClickData(BaseModel):
         description="User agent of the client that performed the click, e.g. '(Android 14)'",
     )
 
-    @model_validator(mode="after")
-    def _warn_on_extra(self) -> "MarketingMessagesLinkClickData":
-        _warn_on_undocumented_fields(self, context="marketing_messages_link_click_data")
-        return self
-
 
 class UserActionEntry(BaseModel):
     """One entry of the ``user_actions`` array on a ``messages`` webhook.
@@ -178,9 +150,8 @@ class UserActionEntry(BaseModel):
     announcing them, and the ones seen in production already carry undocumented
     sub-objects (e.g. device/agent descriptors). ``extra="allow"`` is therefore
     deliberate: an unknown action type must not turn into a sustained 400 that
-    makes Meta throttle or disable the whole webhook. Strictness is kept one
-    level up — ``WebhookValue`` still rejects unknown keys, so a genuinely new
-    top-level field still surfaces as contract drift.
+    makes Meta throttle or disable the whole webhook. Drift on any
+    level is logged by ``report_schema_drift`` (ADR-0010).
     """
 
     model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
@@ -199,13 +170,6 @@ class UserActionEntry(BaseModel):
     def timestamp_int(self) -> int:
         """Timestamp as an int, tolerating Meta's string-encoded form."""
         return int(self.timestamp)
-
-    @model_validator(mode="after")
-    def _warn_on_extra(self) -> "UserActionEntry":
-        _warn_on_undocumented_fields(
-            self, context=f"user_actions.action_type={self.action_type}"
-        )
-        return self
 
 
 # NOTE: Coexistence account-level events (account_offboarded / account_reconnected)

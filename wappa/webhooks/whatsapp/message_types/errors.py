@@ -29,7 +29,7 @@ class WhatsAppWebhookError(BaseModel):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Error information (uses the same structure as message errors)

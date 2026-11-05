@@ -82,7 +82,7 @@ async def publish_api_notification(event: APIMessageEvent) -> int:
         event_type="outgoing_message",
         inbox_id=event.inbox_id or "unknown",
         user_id=event.user_id or event.recipient,
-        platform="whatsapp",
+        platform=event.platform or "whatsapp",
         data={
             "message_id": event.message_id or "",
             "message_type": event.message_type,

@@ -19,7 +19,33 @@ from wappa.schemas.core.types import PlatformType, UniversalMessageData, Webhook
 
 from .core.base_message import BaseMessage
 from .core.base_webhook import BaseContact, BaseWebhook, BaseWebhookMetadata
-from .core.webhook_interfaces.base_components import InboxBase, SystemEventDetail
+from .core.webhook_interfaces.base_components import (
+    ContactSync,
+    GroupParticipant,
+    GroupUpdate,
+    InboxBase,
+    SystemEventDetail,
+    UserAction,
+)
+from .core.webhook_interfaces.conversation_webhooks import (
+    CommentAuthor,
+    CommentSource,
+    EchoOrigin,
+    EntryPointKind,
+    EntryReferral,
+    HistoryDirection,
+    HistoryMessage,
+    HistorySyncWebhook,
+    HistoryThread,
+    InboxConnectionState,
+    InboxConnectionWebhook,
+    IncomingCommentWebhook,
+    MentionSubject,
+    MentionWebhook,
+    MessageUpdateKind,
+    MessageUpdateWebhook,
+    OutboundEchoWebhook,
+)
 from .core.webhook_interfaces.universal_webhooks import (
     CallWebhook,
     CustomWebhook,
@@ -44,6 +70,27 @@ from .whatsapp.webhook_container import WhatsAppWebhook
 
 __all__ = [
     "UniversalWebhook",
+    "CommentAuthor",
+    "CommentSource",
+    "EntryPointKind",
+    "EntryReferral",
+    "IncomingCommentWebhook",
+    "MentionSubject",
+    "MentionWebhook",
+    "EchoOrigin",
+    "HistoryDirection",
+    "HistoryMessage",
+    "HistorySyncWebhook",
+    "HistoryThread",
+    "InboxConnectionState",
+    "InboxConnectionWebhook",
+    "ContactSync",
+    "GroupParticipant",
+    "GroupUpdate",
+    "UserAction",
+    "OutboundEchoWebhook",
+    "MessageUpdateKind",
+    "MessageUpdateWebhook",
     "InboundMessageWebhook",
     "CallWebhook",
     "StatusWebhook",

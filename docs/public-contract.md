@@ -2,143 +2,170 @@
 
 This file tracks Wappa surfaces that host applications may import, call, configure, subscribe to, or depend on.
 
-## FastAPI compatibility
+## Instagram conversations contract
 
-Wappa requires `fastapi>=0.162.0,<0.163.0`. The lockfile selects 0.162.0.
-New FastAPI minor releases need compatibility checks before widening this range.
-Host Applications must refresh their own lockfiles when upgrading Wappa.
+Implemented (unreleased); see the [migration guide](migration/instagram-conversation-contracts.md), the [capability matrix](backlog/in_progress/261103-instagram-conversations/references/capability-matrix.md) for per-capability offline/live status, and [ADR-0016](adr/0016-one-messenger-method-per-action.md) for the one-method-per-action rule. Publishing, analytics and moderation *policy* remain Host/extension responsibilities.
 
-`WappaBuilder.add_router(router, public=True, prefix=...)` exempts the combined
-include prefix and router prefix from `AuthMiddleware` in exclude mode. For
-example, including `APIRouter(prefix="/hooks")` with `prefix="/public"` exempts
-`/public/hooks` and its descendants. `/public/admin` and `/public/hooks-admin`
-still require authentication. Including that router again under `/private`
-keeps that mount protected. A router with no combined prefix adds no exemption.
-Protect mode continues to use its explicit `protect` list.
+### Event lanes (`from wappa.webhooks import ...`)
 
-## Inbox identity
+A User's choice uses the same shape on every Platform (ADR-0016): an `InboundMessageWebhook` whose `get_interactive_selection()` returns the chosen `ReplyButton.id` / `ListRow.id`. There is no separate interaction lane.
 
-Wappa's globally unique runtime identity is qualified by Platform. A raw `inbox_id` is unique only inside one Platform.
-
-- `InboxRef(platform, inbox_id)` — for WhatsApp, `inbox_id` is Meta's exact `phone_number_id`. `InboxRef.whatsapp(phone_number_id)` is the shorthand.
-- `PlatformAccountRef(platform, platform_account_id)` — for WhatsApp, the WABA ID (`entry[].id`).
-- Both are frozen, hashable, orderable (Platform first, then native identifier), reject blank or unsafe values (`:`, glob characters, whitespace, `__`), and expose one Wappa-owned `cache_namespace`. WhatsApp keeps its raw `phone_number_id` as the namespace so existing keys stay readable; every other Platform is qualified as `<platform>__<inbox_id>`. Hosts never rebuild the namespace by concatenation.
-
-Public imports: `from wappa import InboxRef, PlatformAccountRef` or `from wappa.domain.inbox import ...`.
-
-## Inbox Routing Mode
-
-`InboxRoutingMode` has exactly two members; an omitted mode is `legacy`. The modes never fall back to one another and a mixed configuration fails at build time with `InboxConfigurationError`.
-
-| | `legacy` | `explicit` |
+| Native Instagram evidence | Universal Model | Hook |
 | --- | --- | --- |
-| Selected by | default, `Wappa(inbox_routing="legacy")`, `SYSTEM_INBOX_ROUTING_MODE=legacy` | `Wappa(inbox_routing="explicit")`, `WappaBuilder.with_inbox_routing("explicit")`, `SYSTEM_INBOX_ROUTING_MODE=explicit` |
-| Requires | the complete `WP_ACCESS_TOKEN` + `WP_PHONE_ID` + `WP_BID` bundle | an `IInboxDirectorySource` and `SYSTEM_TOKEN_ENC_KEY` |
-| Rejects | any `IInboxDirectorySource` | any of `WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID` |
-| Inboxes | one: `WP_PHONE_ID`, with `WP_BID` as its Platform Account | every active record the source returns |
-| HTTP default Inbox | `WP_PHONE_ID` when `X-Wappa-Inbox-ID` is absent | none; the header is required |
+| text, image, audio, video, file, `share`/`ig_post`/`ig_reel`/`reel`/`story`, `story_mention`, story reply (`context.is_story_reply`) | `InboundMessageWebhook` | `process_message` |
+| `message.quick_reply` | `InboundMessageWebhook` with `InstagramQuickReplyMessage` (selection) | `process_message` (once) |
+| `postback` | `InboundMessageWebhook` with `InstagramButtonReplyMessage` (`interactive_type` `BUTTON_REPLY`, `is_button_reply`) | `process_message` |
+| `message_edit` / `message.is_deleted` | `MessageUpdateWebhook` | `process_message_update` |
+| `read` | `StatusWebhook(READ)` | `process_status` |
+| echo (`is_echo`) of a message sent outside Wappa | `OutboundEchoWebhook` (echoes of Wappa's own sends are filtered, ADR-0018) | `process_outbound_echo` |
+| standalone `referral` | `SystemWebhook(REFERRAL)` | `process_system_webhook` |
+| `reaction` | `InboundMessageWebhook` with `InstagramReactionMessage` (`BaseReactionMessage`) | `process_message` |
+| `is_unsupported`, unknown attachment/change field | `SystemWebhook(UNSUPPORTED_EVENT)` | `process_system_webhook` |
+| `changes: comments` / `live_comments` | `IncomingCommentWebhook` | `process_comment` |
+| `changes: mentions` | `MentionWebhook` | `process_mention` |
+| registered extension field | `CustomWebhook` | registered handler |
 
-Only the legacy settings adapter built by Wappa's assembly reads the three `WP_*` variables. `WP_ACCESS_TOKEN` keeps its name as a legacy WhatsApp input; it is not renamed `META_ACCESS_TOKEN`.
+Comment, mention and message-update lanes exist because only Instagram emits those events. New hooks are optional with no-op defaults and default INFO logs (references only, no comment text/payloads). Instagram media messages expose `url`/`urls` (CDN references, may expire), and `media_id` is that URL, not a WhatsApp Media ID. `IncomingCommentWebhook.parent_comment_ref is None` means *unknown*. `MentionWebhook` with `subject=media` has no Comment. Comment dispatch uses the author's scoped ID only as cache scope; it does not make the author DM-addressable.
 
-Health (`/health`, `/health/detailed`) reports `inbox_routing_mode`, whether the Inbox Directory is configured (and, detailed, reachable), whether a legacy default Inbox exists and its `inbox_id`, and Meta callback readiness. It never returns tokens, envelopes, App Secrets, encryption keys, full records, or raw exception strings.
+### Messenger operations: one method per action (ADR-0016)
 
-## Inbox Directory (explicit mode)
+Every action that exists on more than one Platform has exactly one `IMessenger` method; each adapter maps it onto its native API and raises a clear error before any provider call when it cannot honour the call. Presentation the Platform cannot show may be dropped; meaning never is. Hosts check `messenger.supported_operations` once and never branch on Platform name. Instagram's `supported_operations`: `send_text`, `send_text:private_reply`, `send_image`, `send_audio`, `send_video`, `send_document`, `send_button_message`, `send_list_message`, `send_cta_message`, `send_carousel`, `mark_as_read`, `send_sticker`, `send_location`, `send_contact`. Others (today `send_location_request` and `send_contact_request`) raise `UnsupportedOperationError`.
 
-Wappa ships one mandatory `InboxDirectory` over `InboxDirectoryTable`, a Wappa-owned Table Cache under the System Scope. Hosts cannot replace its model, cache shape, TTL rules, indexes, or mutation behaviour. The Host's only adaptation point is the read-only source:
+| Operation | WhatsApp | Instagram (rejected before I/O when a limit fails) |
+| --- | --- | --- |
+| `send_text` | text message | DirectMessage or `PrivateReply(comment_ref=...)`; 1000 UTF-8 bytes; PrivateReply excludes `reply_to_message_id` |
+| `send_image/audio/video/document` | media message (URL or Media ID) | https URL, an `IMediaLibrary.upload` attachment_id, or a local `Path` (uploaded first); image png/jpeg/gif ≤ 8 MB, audio aac/m4a/wav/mp4, video mp4/ogg/avi/mov/webm, file pdf ≤ 25 MB; a caption is sent as a follow-up text; `filename` and `transcript` are ignored |
+| `send_sticker` | sticker: `.webp` only (512x512; 100 KB static, 500 KB animated) | sent as an image: `.png`/`.jpg`/`.jpeg`/`.gif` (8 MB) |
+| `send_location(latitude, longitude, target, name=None, address=None)` | location message | text: name, address and a `📍` Google Maps link |
+| `send_contact(contact, target)` | contacts message | text card (👤 name, organization, 📞 phones, ✉️ emails, 🔗 urls), validated with the WhatsApp `ContactCard` shape |
+| `send_location_request` / `send_contact_request` | interactive request | `UnsupportedOperationError`: a text prompt cannot return the data; gate on `supported_operations` |
+| `mark_as_read(message_id, typing=False, target=None)` | marks the message read; `typing` sends the typing indicator | thread-level `mark_seen`, then `typing_on` if `typing` (only after seen is accepted); `target` required; returns `MessageResult` |
+| `send_button_message(buttons, target, body, header=None, footer=None, reply_to_message_id=None)` | interactive reply buttons | button template with postback buttons: text ≤ 640, 1–3 `ReplyButton`, title ≤ 20; text header and footer fold into the text (`"\n\n"`-joined); an image header (`InteractiveHeader(type=HeaderType.IMAGE, image={"link": "https://..."})`) becomes a one-element generic card (body = title ≤ 80, footer = subtitle ≤ 80); video/document headers raise `UnsupportedOperationError` |
+| `send_list_message(sections, target, body, button_text, header=None, footer=None)` | interactive list | quick replies: all rows flattened, ≤ 13, row title ≤ 20, row `id` = payload; section titles, row descriptions and `button_text` are dropped; header/footer fold into the text |
+| `send_cta_message(...)` | `cta_url` | button template with one `web_url` button; header/footer fold into the text |
+| `send_carousel(cards, target, body)` | 2–10 cards; interactive media carousel; every card needs `image_url`; title + subtitle become the card body (≤ 160); buttons are one `UrlButton` or 1–2 `ReplyButton`s, same kind and count on every card | 2–10 cards; `body` is sent as a text message first, then a generic template (title/subtitle ≤ 80, ≤ 3 buttons) |
+
+`send_sticker(sticker_source, target)` takes one source or a list of renditions of the same sticker (`MediaRenditions` = `str | Path | Sequence[str | Path]`, in `wappa.domain.media_renditions`). Each adapter sends the first rendition whose extension its Platform accepts: WhatsApp `.webp`; Instagram `.png`/`.jpg`/`.jpeg`/`.gif`. A single extension-less source (a Platform media ID) passes through. When nothing fits, `ValueError` is raised before any Platform call (HTTP route: 400). Wappa never converts media. Serve both Platforms with `send_sticker(["sticker.webp", "sticker.png"], target)`.
+
+For a single card, use `send_button_message` with an image header. Media storage and inbound media reads are the `IMediaLibrary` capability, and WhatsApp Templates the `ITemplateMessaging` capability (below). `send_location_request` and `send_contact_request` are core contract methods that only WhatsApp implements today.
+
+Known gap: `send_reaction(message_id, emoji, target)` is a missing core method (WhatsApp, Instagram and Telegram all support reactions); no Platform sends reactions yet. Inbound reactions on both Platforms arrive in `process_message` as `BaseReactionMessage`. See `docs/backlog/drafts/261105-mid-send-reaction-core-method.md`.
+
+Interactive values `ReplyButton(id, title)`, `UrlButton`, `CardButton = ReplyButton | UrlButton`, `MessageCard(title, subtitle, image_url, default_url, buttons)`, `ListSection`, `ListRow`, `InteractiveHeader` and `HeaderType`, and results (`MessageResult`, `CommentResult`, `ControlResult`, `OperationOutcome`, `message_outcome`) are exported from `wappa.messaging`. `ReplyButton` lives in the neutral `wappa.domain.interactive` and is re-exported by the WhatsApp models; results live in `wappa.domain.results` (`MessageResult`'s class still lives in the WhatsApp basic-models module). Outcomes are `accepted`/`rejected`/`indeterminate`; indeterminate sends and mutations are never retried.
+
+### Focused capabilities (separate responsibilities and Platform-only exceptions)
+
+Responsibilities other than sending conversation messages, and actions with no reasonable mapping on other Platforms, are capabilities, not contract methods. `messenger.capability(kind)` returns an Inbox-bound implementation or `None`; `require_capability(kind)` raises `UnsupportedOperationError`. `kind` is the capability class (`IMediaLibrary`, `ITemplateMessaging`, `ICommentControls`, `IConversationContentReader`, `IAttachmentMediaReader`).
+
+`IMediaLibrary` (WhatsApp and Instagram; exported from `wappa.messaging` with `MediaFamily` and `UploadResult`) offers `upload(path, family: MediaFamily) -> UploadResult` (`success`, `media_id`, `outcome`, `error_code`) and `download(media_id) -> ReadResult[MediaBytes]`. WhatsApp uploads to the Media API and downloads by Media ID; Instagram uploads to `/{ig}/message_attachments` with `is_reusable` (the `media_id` is an attachment_id) and downloads by a credential-free Meta CDN fetch of the attachment URL. Send an uploaded file with `send_image(result.media_id, target)` (or video/audio/document) on the same Inbox. For inbound media, pass `webhook.message.media_id` to `download` unchanged on both Platforms. `ITemplateMessaging` (WhatsApp) offers `send_text_template`, `send_media_template` and `send_location_template` with the earlier signatures. Through a `MessengerPipeline` it still runs message middleware under those method names; `OutboundRuntime` / `InboxTemplateTransport` resolve it internally. `ICommentControls` offers `reply_comment(comment_ref, text)` → `CommentResult`, plus `hide_comment`, `unhide_comment`, `delete_comment` and `set_comments_enabled`. Private replies to a commenter use `send_text(text, target=PrivateReply(comment_ref=...))`. Instagram's reader also offers `get_mentioned_post` / `get_mentioned_comment`. Reads return `ReadResult` (`found`, `not_found`, `access_denied`, `rejected`, `unavailable`); comment pages are `ContentPage` with `next_cursor` (≤ 50). Prefer `IMediaLibrary.download` over `IAttachmentMediaReader`; the reader never sends credentials, only fetches https Meta CDN hosts (`fbsbx.com`, `fbcdn.net`, `cdninstagram.com`), and bounds redirects (3), time and size (25 MB default).
+
+### Credential access, outbound runtime, extensions, connection
+
+- `wappa.domain.inbox.InboxCredentialAccess.from_app(app).resolve(inbox_ref)` →
+  `TrustedInboxCredential` (current token/version, Graph version/base; masked
+  repr). Directory errors propagate typed. Host authorizes first.
+- `OutboundRuntime.from_app(app).messenger(inbox_ref)` → Inbox-bound
+  Messenger with app middleware for Host-initiated sends.
+- `register_webhook_field(..., platform=PlatformType.INSTAGRAM)` on `Wappa`
+  and `WappaBuilder`; Instagram built-in fields are reserved.
+- `wappa.connections` (ADR-0017): the `IInboxConnector` contract (`begin` →
+  `AuthorizationRequest`, `complete` → `ConnectionGrant` with `DiscoveredInbox`
+  + `InboxReadiness`, `activate` → `ActivationResult` with the encrypted
+  record, `disconnect(inbox_ref, account_ref, token)`), implemented by
+  `InstagramConnector` and `WhatsAppConnector` on `MetaLoginConfig`; plus
+  `IConnectionIntentStore`/`InMemoryConnectionIntentStore`,
+  `InstagramSubscriptions`, `parse_signed_request` and the
+  `InboxConnectionError` hierarchy.
+
+## Instagram text adapter and explicit send targets
+
+Instagram uses the existing GET/POST `/webhook/inboxes/instagram` callback,
+separate from `/webhook/inboxes/whatsapp`. Both use the same application Meta
+trust configuration, including the existing `WP_WEBHOOK_VERIFY_TOKEN` name.
+There is no signature bypass. GET verification needs no Inbox registration.
+POST admission requires registered active credentials in explicit mode; unknown
+or inactive Inboxes return 400, directory/integrity outages return 503, invalid
+signatures return 401, and malformed or mismatched payloads return 400.
+
+InstagramActiveInboxCredentialRecord and InstagramInactiveInboxCredentialRecord
+are available from `wappa.domain.inbox`. They use `platform=instagram`, with
+`inbox_id` and `platform_account_id` both identifying the professional account.
+The active record's encrypted token is a Unified Login Business Integration
+System User Access Token. The same source, refresh, rotation, deactivation, and
+envelope-binding rules apply as for WhatsApp. Wappa requires no `IG_*`
+environment variables; a consumer obtains credentials during its connection
+flow and supplies records through IInboxDirectorySource. The controlled echo
+example uses its own local settings to bootstrap a record.
+
+The first lanes are:
+
+- User plain text → InboundMessageWebhook → process_message.
+- `read.mid` seen evidence → StatusWebhook READ → process_status.
+- Echo of a message sent outside Wappa → OutboundEchoWebhook → process_outbound_echo (Wappa's own sends are filtered, ADR-0018).
+- Other valid messaging events → SystemWebhook UNSUPPORTED_EVENT, with native
+  evidence in event_detail.platform_event; no automatic reply or invented text.
+
+The full lane table is in "Instagram conversations contract" above. An ErrorWebhook is not
+invented from an outbound HTTP error. UserBase.platform_user_id carries IGSID
+and is mutually exclusive with WA phone/BSUID evidence. StatusWebhook exposes
+recipient_platform_id; recipient_id selects it when present. InboxBase permits
+display_address=None when the callback supplies no display address.
+
+All recipient-based IMessenger methods now take `target: DirectMessage`:
 
 ```python
-class IInboxDirectorySource(Protocol):
-    async def get_inbox(self, inbox_ref: InboxRef) -> InboxCredentialRecord | None: ...
-    async def list_inboxes_for_platform_account(
-        self, account_ref: PlatformAccountRef
-    ) -> tuple[InboxCredentialRecord, ...]: ...
+from wappa.messaging import DirectMessage
+
+result = await self.messenger.send_text(
+    text=webhook.get_message_text(),
+    target=DirectMessage(
+        inbox_ref=self.inbox_ref,
+        addresses=webhook.user.delivery_addresses(),
+    ),
+)
 ```
 
-Both reads use the Host's primary database path by default. A Host that serves them from a replica accepts the stale-credential risk itself.
+`DirectMessage(inbox_ref, addresses=DeliveryAddresses)` carries every known
+Delivery Address of one User (ADR-0019). `user.delivery_addresses()` builds it
+from a webhook (WhatsApp BSUID + phone, Instagram scoped ID); outside webhooks
+use `DeliveryAddresses.of(*known)`. The target is the only way to address a
+send; the Messenger never holds a recipient. The WhatsApp adapter sends to the
+phone first, then the BSUID, and moves on only when Meta rejects the address
+itself (`131030`, `131062`); authentication Templates go to phones only.
+`MessageResult.attempted_recipients` lists the addresses tried after a
+fallback. `DirectMessage.recipient_id` / `.address` read the first address.
 
-### Canonical records
+DirectMessage is immutable, rejects extra fields/blank recipients, and includes
+InboxRef. Cross-Inbox targets fail before middleware/provider I/O. Bare strings
+and `recipient=` no longer work on IMessenger; there is no compatibility
+wrapper. This applies to WhatsApp sends too. Read actions retain their separate
+message-ID contract. `send_text` additionally accepts PrivateReply (Instagram).
+WhatsApp REST request models and independent typed Template transport retain
+their recipient inputs and explicitly translate them inside their adapters.
 
-`from wappa.domain.inbox import ...`
+SendInvocation stores target rather than a recipient field, and its serialized
+request has a structured target object. Its derived recipient property exposes
+the native address to middleware. `supported_operations` is the implemented
+adapter operation set (Instagram's full set is listed above). Other
+operations raise UnsupportedOperationError, also exported from wappa.messaging.
 
-- `WhatsAppActiveInboxCredentialRecord`: `schema_version=1`, `platform="whatsapp"`, `status="active"`, `inbox_id`, `platform_account_id`, `access_token: EncryptedSecretEnvelope`, `credential_version` (positive, monotonic across the Inbox's lifetime), `updated_at` (timezone-aware).
-- `WhatsAppInactiveInboxCredentialRecord`: the same fields without `access_token`. An inactive record cannot carry credential material.
-- `InboxCredentialRecord`: the Platform- and status-discriminated union (v0.27 ships only WhatsApp members). `parse_inbox_credential_record(data)` validates any object into it; `dump_record_for_storage(record)` is the only dump that carries ciphertext. Every other `model_dump`, `repr`, or log masks it, and a masked envelope cannot be re-loaded.
-- `EncryptedSecretEnvelope(format_version=1, ciphertext)`: Wappa's authenticated, context-bound secret. Hosts persist and return it, never construct, alter, or decrypt it.
-- `PlatformAccountActiveIndexRecord` / `PlatformAccountEmptyIndexRecord`: the cached reverse index rows. They are projections, never authority.
+Instagram text accepts up to 1000 UTF-8 bytes and an optional reply_to_message_id.
+Preview suppression is unsupported. MessageResult sets platform=instagram,
+retains native recipient/message IDs, and leaves WA phone/BSUID evidence empty.
+Its excluded platform_response carries native response evidence. Success means
+API acceptance. Timeout/disconnect, 5xx, and a 2xx response lacking a Message ID
+are INDETERMINATE; callers must not automatically resend. No retry or provider
+error-body logging is added. Results remain in the historical WA basic-model
+module in this first slice; neutral module extraction remains follow-up.
 
-### Wappa-owned commands
-
-`runtime = app.state.inbox_runtime` after build exposes `credential_service` (`InboxCredentialService`) and `directory` (`InboxDirectory`) in explicit mode.
-
-- `create_active_record(inbox_ref=, account_ref=, access_token=SecretStr, credential_version=1)` → active record. Call it before persisting; store what it returns.
-- `rotate_active_record(previous, access_token=SecretStr, account_ref=None)` → version + 1.
-- `create_inactive_record(previous)` → version + 1, no token.
-- `rotate_encrypted_record(record)` → the same record re-encrypted under the active key, without exposing plaintext.
-- `await directory.refresh_inbox(inbox_ref)` → reloads through the source after the Host commits, validates, updates the primary row and both affected account indexes, evicts cached Messengers, returns the record (or `None` when the source confirms absence). Idempotent; raises on failure.
-- `await directory.deactivate_inbox(inbox_ref)` → the same, requiring the source to report the Inbox inactive; raises `InboxMutationConflictError` if it is still active and `InboxNotFoundError` if it is absent.
-
-There is no `upsert(record)`, no Host-written cache row, and no normal hard-delete command.
-
-### Freshness, versions, and repair
-
-| Record | TTL | Read behaviour |
-| --- | --- | --- |
-| Active Inbox primary row | 60 min | renewed on every validated hit |
-| Active Platform Account index | 60 min | renewed on every validated hit |
-| Inactive Inbox row | fixed 60 min | never renewed |
-| Confirmed absent Inbox row | fixed 60 min | never renewed |
-| Confirmed empty account index | fixed 60 min | never renewed |
-
-A cache miss makes one source call. Source or cache failures raise `InboxDirectoryUnavailableError` and never create a negative record. A higher `credential_version` wins; a lower one is stale (`InboxMutationConflictError`); an equal version is accepted only for an identical record, and that retry still repairs indexes and evicts Messengers. Primary rows are written before indexes; retrying the same command repairs partial work. TTL is never the revocation mechanism: call `deactivate_inbox`.
-
-The Platform Account index is validated on every use: each listed member must be active, be the same `InboxRef`, and belong to the requested `PlatformAccountRef`. Any corruption triggers one synchronous source reload and repair; repair failure is unavailable (503). A valid index cannot detect an omitted member, so Hosts must call `refresh_inbox` after onboarding, rotation, WABA reassignment, and deactivation.
-
-### Encryption boundary and key rotation
-
-```text
-SYSTEM_TOKEN_ENC_KEY=<active Fernet key>
-SYSTEM_TOKEN_ENC_PREVIOUS_KEYS=<optional, ordered, comma-separated older keys>
-```
-
-Wappa encrypts a document binding `format_version`, `platform`, `inbox_id`, the credential field name, and the plaintext. Decryption re-checks those bindings, so ciphertext copied into another Inbox or field fails with `InboxCredentialIntegrityError`. Reads try the active key first and then the previous keys; a cache read that only succeeds under a previous key is rewritten under the active key. Durable rows are migrated with `rotate_encrypted_record`. Remove an old key only after every durable record is re-encrypted and committed, every deployment reads the active key, at least the 60-minute directory TTL has passed since the last old-key cache write, and the deployment overlap window has ended. Losing every accepted key makes stored credentials unrecoverable. Startup rejects a missing or malformed key without echoing key material.
-
-Tokens are never hashed. Wappa has to reproduce the exact bearer value to place it in Meta's `Authorization` header, and a cryptographic hash is intentionally irreversible, so a hashed token could never authenticate an outbound call. The only valid representations for a stored Inbox credential are Wappa's reversible `EncryptedSecretEnvelope` or an external secret manager; plaintext is never a valid durable or cache value, and `SecretStr` alone is not storage protection because it masks representations without encrypting anything.
-
-`CredentialCodec` and `SecretBinding` (`from wappa.core.security import ...`) are the codec surface; Hosts do not need them beyond `CredentialCodec.generate_key()`.
-
-### Typed failures
-
-`from wappa.domain.inbox import ...` — all subclass `InboxDirectoryError`:
-
-| Error | Meaning |
-| --- | --- |
-| `InboxConfigurationError` | startup cannot select one credential authority or Meta configuration |
-| `InboxNotFoundError` | a healthy lookup confirmed the Inbox unknown or inactive |
-| `InboxMembershipError` | known identities contradict the required Platform Account relation |
-| `InboxDirectoryUnavailableError` | cache, source, or another required dependency failed |
-| `InboxCredentialIntegrityError` | the record or envelope failed validation and cannot be used |
-| `InboxMutationConflictError` | a mutation lost to a newer or conflicting version |
-
-Messages may name qualified identity; they never contain tokens, ciphertext, keys, payloads, or source queries. Programmatic entry points raise these; HTTP boundaries map them as documented below.
-
-## Meta Application Configuration
-
-One Wappa application binds to one Meta App. `MetaApplicationConfig(app_secret, whatsapp_webhook_verify_token, graph_api_version="v26.0", graph_base_url="https://graph.facebook.com/")` is supplied explicitly (`Wappa(meta_application_config=...)`, `WappaBuilder.with_meta_application_config`) **or** built from the environment:
-
-| Variable | Meaning |
-| --- | --- |
-| `META_APP_SECRET` | the Meta App's HMAC secret for POST callbacks |
-| `WP_WEBHOOK_VERIFY_TOKEN` | the shared value for the GET challenge only |
-| `META_API_VERSION` | Graph API version |
-| `META_BASE_URL` | Graph API base URL |
-
-Supplying an explicit object while either environment secret is set fails startup; there is no precedence. Mounting the WhatsApp callback requires both secrets in every environment with no development bypass. An outbound-only application that mounts no callback needs neither. `META_APP_SECRET` is application-scoped: it never enters an Inbox record and `SYSTEM_TOKEN_ENC_KEY` does not encrypt it.
+See [ADR-0014](adr/0014-instagram-text-and-explicit-messenger-targets.md) and the
+[Instagram setup walkthrough](backlog/in_progress/261103-instagram-conversations/references/setup.md).
 
 ## Inbox Execution Context (`X-Wappa-Inbox-ID`)
 
-Wappa's own HTTP operations have no Meta payload to route from, so an authorized caller selects the Inbox with `X-Wappa-Inbox-ID: <phone_number_id>`. **The header selects runtime scope and proves only that Wappa knows an active Inbox. It is not a credential and grants no permission.** Host authentication and authorization (for example `AuthPlugin`) decide whether the caller may operate that Inbox, and they run before Inbox resolution.
+Wappa's messaging HTTP API is mounted at `/api/{platform}` (`whatsapp` or `instagram`; [ADR-0021](adr/0021-platform-messaging-http-api.md)). It has no Meta payload to route from, so an authorized caller selects the Inbox with the Platform in the path plus `X-Wappa-Inbox-ID: <inbox_id>` (`phone_number_id` for WhatsApp, the Instagram professional account ID for Instagram). **The header selects runtime scope and proves only that Wappa knows an active Inbox. It is not a credential and grants no permission.** Host authentication and authorization (for example `AuthPlugin`) decide whether the caller may operate that Inbox, and they run before Inbox resolution.
 
-Resolution happens once per request through `get_inbox_execution_context` (`from wappa.api.dependencies import ...`): Host auth → read the header → combine with the route's Platform (WhatsApp) → legacy default when the header is absent → resolve the active record through the credential resolver → build the required capabilities → share the `InboxExecutionContext` with every dependency in the route. The context exposes `inbox_ref`, `inbox_id`, `account_ref`, `platform_account_id`, and `routing_mode`; it never exposes the decrypted token.
+Resolution happens once per request through `get_inbox_execution_context` (`from wappa.api.dependencies import ...`): Host auth → read the header → combine with the path's Platform → legacy default when the header is absent (only for the default Inbox's own Platform) → resolve the active record through the credential resolver → build the required capabilities → share the `InboxExecutionContext` with every dependency in the route. The context exposes `inbox_ref`, `inbox_id`, `account_ref`, `platform_account_id`, and `routing_mode`; it never exposes the decrypted token.
 
 | Operation family | Inbox required |
 | --- | ---: |
@@ -154,6 +181,16 @@ Resolution happens once per request through `get_inbox_execution_context` (`from
 | Validate contact or coordinates | no |
 | Text, media, interactive, Template limits | no |
 | Root health, docs, OpenAPI | no |
+
+Platform behaviour of the same routes:
+
+- Send routes call the Inbox's own Messenger through `OutboundRuntime` (with app Messenger middleware), so `/api/instagram/messages/send-text` and `/api/whatsapp/messages/send-text` are the same call. `POST /interactive/send-carousel` maps to `send_carousel`.
+- Send bodies (`DeliveryRequest`) take `recipient` plus optional `addresses` (the User's other known addresses; WhatsApp falls back between phone and BSUID, ADR-0019). `mark-as-read` takes an optional `recipient`, required on Instagram.
+- Every Platform gap answers **501** `"<platform> does not provide <capability>"`. Capability routes gate on what the Inbox's Messenger provides (`requires_capability(kind)`): comments and post reads (`ICommentControls`, `IConversationContentReader`), history (`IConversationHistoryReader`), media upload (`IMediaLibrary`; WhatsApp keeps its Media API handler). Routes with no capability interface yet (Templates, Template info, media info/download/delete, limits, validators, `/health`) are WhatsApp-only.
+- Capability routes: `POST /comments/{id}/reply|hide|unhide`, `DELETE /comments/{id}`, `POST /posts/{media_id}/comments-enabled` (group `comment_controls`), `GET /posts/{media_id}`, `/posts/{media_id}/comments`, `/comments/{id}`, `/comments/{id}/replies`, `/conversations/{user_id}/messages` (always mounted), `POST /messages/send-private-reply` (outbound transport).
+- A Host route that depends on `get_inbox_execution_context` must declare a `{platform}` path parameter.
+- An action the Platform cannot perform (`UnsupportedOperationError`, e.g. `send-location-request` on Instagram) answers **501**; a local rule violation (`ValueError`, e.g. a non-WebP WhatsApp sticker) answers **400**.
+- An unknown `{platform}` answers 404 before any directory lookup.
 
 Local-only routes ignore a supplied header entirely: they do not validate it, bind it, or read the directory, so an unknown header or an unavailable directory cannot make them fail.
 
@@ -210,6 +247,7 @@ The canonical and only Meta WhatsApp callback is `GET + POST /webhook/inboxes/wh
 | Inbox and WABA membership mismatch | 400 |
 | Confirmed WABA with no active Inboxes | 400 |
 | Other structurally unroutable authenticated payload | 400 |
+| Authenticated, routable payload with unmodelled fields or an unmodelled webhook field | 200 (processed, or `SystemWebhook(UNSUPPORTED_EVENT)`) plus a `META_SCHEMA_DRIFT` log |
 | Directory, cache, source, decrypt, or runtime dependency unavailable | 503 |
 | Unexpected Wappa defect | 500 |
 
@@ -261,13 +299,21 @@ For incoming group messages, `conversation_id` is the Meta `group_id` and
 `conversation_type` is `group`; `sender_id` remains the participant's BSUID or
 phone fallback. Group status `user_id` resolves from the participant identity,
 not the group ID.
-Consumer `edit` and `revoke` messages use `MessageType.EDIT` and
-`MessageType.REVOKE`. Coexistence `history`, `smb_message_echoes`, and
-`smb_app_state_sync` values dispatch through `SystemWebhook`; the validated
-Meta value is retained at `event_detail.coexistence_payload`.
-Unknown built-in fields remain HTTP 400 contract failures and emit the stable
-critical log signature `WHATSAPP_WEBHOOK_CONTRACT_DRIFT`; production hosts are
-expected to alert on that signature.
+One event, one lane, on every Platform (ADR-0016), all typed:
+
+| Event | Universal Model / hook | WhatsApp source | Instagram source |
+| --- | --- | --- | --- |
+| Edit / delete of an earlier message | `MessageUpdateWebhook` → `process_message_update` (typed replacement in `message`) | `edit`, `revoke` | `message_edit`, unsend |
+| Reaction | `InboundMessageWebhook` with `BaseReactionMessage` (`target_message_id`, `emoji`, `is_removal`) | `reaction` | `message_reactions` |
+| Entry point | `InboundMessageWebhook.entry_referral: EntryReferral` (`EntryPointKind`); standalone Instagram referral → `SystemWebhook(REFERRAL)` with `event_detail.entry_referral` | Click-to-WhatsApp `referral`  | ad / ig.me `referral` |
+| Business message sent outside Wappa | `OutboundEchoWebhook` → `process_outbound_echo` (Wappa's own sends filtered out) | Coexistence `smb_message_echoes` | `message_echoes` |
+| History backfill | `HistorySyncWebhook` → `process_history_sync` (push) or `IConversationHistoryReader.read_history` (pull), both `HistoryThread` | Coexistence `history` | Conversations API |
+| Inbox connection | `InboxConnectionWebhook` → `process_inbox_connection` | `account_offboarded`, `account_reconnected` | `POST /webhook/inboxes/instagram/deauthorize` |
+
+`OutboundEchoWebhook` carries only messages sent outside Wappa; the filter is fixed (ADR-0018). WhatsApp Coexistence needs none. Instagram echoes carry no sender-app evidence, so Wappa drops an echo whose `message_id` is in its `ISentMessageRegistry` (IDs of messages it sent, one key per send: 10-minute TTL, cut to a 2-minute grace when its echo is claimed; Table Cache `<inbox>:df:wappa_sent_messages:pkid:<message_id>`; shared across workers only on Redis). `origin=UNKNOWN` means the registry could not answer and the echo was delivered rather than lost. Hosts store what arrives. `SystemEventDetail` payloads are typed: `contact_sync: ContactSync` (Coexistence `smb_app_state_sync`), `group_update: GroupUpdate`, `user_action: UserAction`, `entry_referral: EntryReferral`. `platform_event` is set only for `UNSUPPORTED_EVENT`. The `SystemEventType` members `SMB_MESSAGE_ECHO`, `HISTORY_SYNC`, `ACCOUNT_OFFBOARDED` and `ACCOUNT_RECONNECTED` are no longer emitted, and `coexistence_payload` is removed.
+A WhatsApp `change.field` that Wappa does not model and the Host did not register with `register_webhook_field` is answered `200` and reaches `process_system_webhook` as `SystemWebhook(UNSUPPORTED_EVENT)` with `event_detail.platform_event = {"field", "value"}`, the same as Instagram. It was HTTP 400 before 0.34.
+
+Unmodelled properties inside a modelled Meta payload (for example a new `pricing.subtype`) are accepted, the event is processed, and Wappa logs `META_SCHEMA_DRIFT platform=<p> field=<Model.field>` once per field per process, without the value. Alert on that signature and model the field when it appears. The `WHATSAPP_WEBHOOK_CONTRACT_DRIFT` critical log no longer exists. Set `WAPPA_STRICT_META_SCHEMA=1` in test suites to raise `MetaSchemaDriftError` on drift instead. Wrong types or formats in modelled fields are still errors, and Hosts never see the extra properties.
 
 `InboundMessageWebhook` is the only public inbound-message Universal Model name. Wappa does not provide a compatibility alias for previous inbound-message model names.
 
@@ -601,12 +647,13 @@ does not provide a distributed retry or circuit-breaker contract.
 
 ## Messenger
 
-`IMessenger` is Wappa's public outbound message interface. Host applications use it to send text, media, interactive, template, and specialized messages through an Inbox.
+`IMessenger` is Wappa's public outbound message interface. Host applications use it to send text, media, interactive and specialized messages through an Inbox; WhatsApp Templates go through the `ITemplateMessaging` capability (`messenger.require_capability(ITemplateMessaging)`).
 
 **Stable surface:**
 
 - `from wappa.domain.interfaces import IMessenger`
-- All `send_*` methods and `mark_as_read` on the interface
+- All `send_*` methods and `mark_as_read` on the interface, one method per action across Platforms (ADR-0016)
+- `capability(kind)` / `require_capability(kind)` for `IMediaLibrary`, `ITemplateMessaging` and the Instagram-only capabilities
 - `MessageResult` as the uniform return type
 
 `MessageResult.recipient_phone` is nullable normalized phone evidence. Factories
@@ -624,10 +671,7 @@ the sanitized phone and remains nullable; an accepted Template with a Message ID
 remains `accepted` when its phone becomes unknown. This adds no discovery call,
 address rewrite, or retry. Host Applications still own durable identity policy.
 
-`IMessenger.send_contact_request(body, recipient, reply_to_message_id=None)` is
-the capability-aware contact-information request. WhatsApp implements it with
-Meta's `request_contact_info` interactive payload; platforms that don't support
-the feature raise `NotImplementedError` unless their Messenger overrides it.
+`IMessenger.send_contact_request(body, target, reply_to_message_id=None)` is the contact-information request. WhatsApp implements it with Meta's `request_contact_info` interactive payload; Instagram raises `UnsupportedOperationError`, so Hosts gate on `supported_operations`.
 
 **Design commitment:**
 
@@ -764,8 +808,9 @@ Route composition never gates sending. `IMessenger`, `OutboundRuntime`, and
 `InboxTemplateTransport` behave identically under every profile; what a profile
 removes is the *unauthenticated HTTP path* to them.
 
-`create_whatsapp_router(profile=..., include_*=...)` is the underlying
-composition function for hosts assembling routers directly.
+`create_messaging_router(profile=..., include_*=...)` is the underlying
+composition function for hosts assembling routers directly; it mounts at
+`/api/{platform}`.
 
 **Upgrade note.** Standalone applications need no action. Hosts already passing
 `include_outbound_transport_api=False` get the wider gating automatically and
@@ -1039,7 +1084,7 @@ Platform Account (WABA), not a User. Consumers handle them in `process_system_we
 
 - `expiry_registry`, `run_expiry_listener`
 - `get_app_context`, `AppContext`
-- `create_expiry_messenger`, `create_expiry_cache_factory`, `parse_inbox_from_expired_key`, `parse_inbox_ref_from_expired_key`
+- `create_expiry_messenger(inbox_ref)`, `create_expiry_cache_factory(inbox_ref, user_id)`, `parse_inbox_ref_from_expired_key`
 
 ### Migration Notes (v0.27.0)
 

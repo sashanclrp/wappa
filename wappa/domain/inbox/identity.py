@@ -80,23 +80,27 @@ class InboxRef(BaseModel):
     def cache_namespace(self) -> str:
         """The Wappa-owned first key segment for this Inbox's cache data.
 
-        WhatsApp keeps its raw ``phone_number_id`` so keys written by earlier
-        releases stay readable. Every other Platform is qualified.
+        Every Platform is qualified, ``<platform>__<inbox_id>``, WhatsApp
+        included (0.34). Keys written by 0.33 and earlier used the raw
+        ``phone_number_id`` for WhatsApp; ``wappa migrate cache-namespaces``
+        renames them.
         """
-        if self.platform is PlatformType.WHATSAPP:
-            return self.inbox_id
         return f"{self.platform.value}{QUALIFIED_NAMESPACE_SEPARATOR}{self.inbox_id}"
 
     @classmethod
     def from_cache_namespace(cls, namespace: str) -> InboxRef:
         """Decode Wappa's cache namespace back into its qualified identity.
 
-        Raw namespaces are the deliberate backwards-compatible WhatsApp form;
-        all other Platforms use ``<platform>__<inbox_id>``.  Parsers use this
-        method rather than guessing an adapter from a raw key segment.
+        Every namespace is ``<platform>__<inbox_id>``. A raw (pre-0.34
+        WhatsApp) namespace is rejected rather than guessed: run
+        ``wappa migrate cache-namespaces``.
         """
         if QUALIFIED_NAMESPACE_SEPARATOR not in namespace:
-            return cls.whatsapp(namespace)
+            raise ValueError(
+                f"Unqualified cache namespace {namespace!r}: Wappa 0.34 qualifies "
+                "every Platform (whatsapp__<phone_number_id>). Run "
+                "`wappa migrate cache-namespaces` to rename pre-0.34 keys."
+            )
         platform_value, inbox_id = namespace.split(QUALIFIED_NAMESPACE_SEPARATOR, 1)
         return cls(platform=PlatformType(platform_value), inbox_id=inbox_id)
 

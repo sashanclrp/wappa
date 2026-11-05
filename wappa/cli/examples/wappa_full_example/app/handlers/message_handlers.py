@@ -8,6 +8,9 @@ including text, media, location, contact, and interactive messages.
 import time
 from typing import Any, cast
 
+from wappa.domain.inbox.identity import InboxRef
+from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
+from wappa.messaging import ContactCard
 from wappa.webhooks import InboundMessageWebhook
 
 from ..models.user_models import UserProfile
@@ -64,7 +67,15 @@ class MessageHandlers:
 
             # Send metadata response
             metadata_result = await self.messenger.send_text(
-                recipient=user_id, text=metadata_text, reply_to_message_id=message_id
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
+                text=metadata_text,
+                reply_to_message_id=message_id,
             )
 
             if not metadata_result.success:
@@ -74,7 +85,14 @@ class MessageHandlers:
             # Send echo response
             echo_text = f"Echo - {text_content}"
             echo_result = await self.messenger.send_text(
-                recipient=user_id, text=echo_text
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
+                text=echo_text,
             )
 
             if not echo_result.success:
@@ -144,7 +162,15 @@ class MessageHandlers:
 
             # Send metadata response
             metadata_result = await self.messenger.send_text(
-                recipient=user_id, text=metadata_text, reply_to_message_id=message_id
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
+                text=metadata_text,
+                reply_to_message_id=message_id,
             )
 
             if not metadata_result.success:
@@ -161,7 +187,16 @@ class MessageHandlers:
 
                 # Send fallback text response if media relay fails
                 fallback_text = f"📎 Media echo - {message_type} (relay failed, media_id: {media_info.get('media_id', 'unknown')[:20]}...)"
-                await self.messenger.send_text(recipient=user_id, text=fallback_text)
+                await self.messenger.send_text(
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=self.messenger.platform,
+                            inbox_id=self.messenger.inbox_id,
+                        ),
+                        addresses=DeliveryAddresses.of(user_id),
+                    ),
+                    text=fallback_text,
+                )
 
             # Update user activity
             await self.cache_helper.update_user_activity(user_id, "media")
@@ -233,7 +268,15 @@ class MessageHandlers:
 
             # Send metadata response
             metadata_result = await self.messenger.send_text(
-                recipient=user_id, text=metadata_text, reply_to_message_id=message_id
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
+                text=metadata_text,
+                reply_to_message_id=message_id,
             )
 
             if not metadata_result.success:
@@ -244,7 +287,13 @@ class MessageHandlers:
             location_result = await self.messenger.send_location(
                 latitude=float(latitude),
                 longitude=float(longitude),
-                recipient=user_id,
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
                 name=location_name,
                 address=location_address,
             )
@@ -256,7 +305,16 @@ class MessageHandlers:
                 fallback_text = f"📍 Location echo - {latitude}, {longitude}"
                 if location_name:
                     fallback_text += f" ({location_name})"
-                await self.messenger.send_text(recipient=user_id, text=fallback_text)
+                await self.messenger.send_text(
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=self.messenger.platform,
+                            inbox_id=self.messenger.inbox_id,
+                        ),
+                        addresses=DeliveryAddresses.of(user_id),
+                    ),
+                    text=fallback_text,
+                )
 
             # Update user activity
             await self.cache_helper.update_user_activity(user_id, "location")
@@ -327,7 +385,15 @@ class MessageHandlers:
 
             # Send metadata response
             metadata_result = await self.messenger.send_text(
-                recipient=user_id, text=metadata_text, reply_to_message_id=message_id
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
+                text=metadata_text,
+                reply_to_message_id=message_id,
             )
 
             if not metadata_result.success:
@@ -343,7 +409,14 @@ class MessageHandlers:
                 contact_dict = self._convert_contact_to_dict(contact_to_send)
 
                 contact_result = await self.messenger.send_contact(
-                    contact=contact_dict, recipient=user_id
+                    contact=ContactCard.model_validate(contact_dict),
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=self.messenger.platform,
+                            inbox_id=self.messenger.inbox_id,
+                        ),
+                        addresses=DeliveryAddresses.of(user_id),
+                    ),
                 )
 
                 contact_sent = contact_result.success
@@ -355,7 +428,14 @@ class MessageHandlers:
                     contact_name = self._extract_contact_name(contact_to_send)
                     fallback_text = f"👤 Contact echo - {contact_name} (relay failed)"
                     await self.messenger.send_text(
-                        recipient=user_id, text=fallback_text
+                        target=DirectMessage(
+                            inbox_ref=InboxRef(
+                                platform=self.messenger.platform,
+                                inbox_id=self.messenger.inbox_id,
+                            ),
+                            addresses=DeliveryAddresses.of(user_id),
+                        ),
+                        text=fallback_text,
                     )
 
             # Update user activity
@@ -419,7 +499,15 @@ class MessageHandlers:
 
             # Send metadata response
             metadata_result = await self.messenger.send_text(
-                recipient=user_id, text=metadata_text, reply_to_message_id=message_id
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
+                text=metadata_text,
+                reply_to_message_id=message_id,
             )
 
             if not metadata_result.success:
@@ -428,7 +516,16 @@ class MessageHandlers:
 
             # Send acknowledgment of selection
             ack_text = f"✅ Interactive selection acknowledged: `{selection_id}`"
-            await self.messenger.send_text(recipient=user_id, text=ack_text)
+            await self.messenger.send_text(
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
+                text=ack_text,
+            )
 
             # Update user activity
             await self.cache_helper.update_user_activity(user_id, "interactive")

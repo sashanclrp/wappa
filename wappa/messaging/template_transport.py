@@ -27,6 +27,7 @@ from wappa.domain.interfaces.session_provider import (
     HTTPSessionClosedError,
     RuntimeDrainingError,
 )
+from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.schemas.core.recipient import RecipientKind, resolve_recipient
 
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
 
     from wappa.domain.factories import MessengerFactory
     from wappa.domain.interfaces.messaging_interface import IMessenger
+from wappa.domain.interfaces.template_messaging import ITemplateMessaging
 
 
 class TemplateTransportOutcome(StrEnum):
@@ -526,14 +528,31 @@ class OutboundRuntime:
             runtime=self, inbox_id=inbox_id, credentials=credentials
         )
 
-    def evict_inbox(self, inbox_id: str) -> None:
-        """Drop the cached Messenger for one WhatsApp Inbox.
+    async def messenger(
+        self,
+        inbox_ref: InboxRef,
+        *,
+        credentials: ResolvedInboxCredentials | None = None,
+    ) -> IMessenger:
+        """Inbox-bound Messenger (with app middleware) for Host-initiated sends.
+
+        Use it for agent replies, delayed jobs or human-takeover sends outside
+        a webhook dispatch. The Host authorizes the caller and enforces its own
+        takeover/pause policy before sending.
+        """
+        raw = await self._messenger_factory.create_messenger(
+            inbox_ref, credentials=credentials
+        )
+        return MessengerPipeline(raw=raw, middleware=self._messenger_middleware)
+
+    def evict_inbox(self, inbox_ref: InboxRef) -> None:
+        """Drop the cached Messenger for one Inbox.
 
         The Inbox Directory evicts automatically after ``refresh_inbox`` and
-        ``deactivate_inbox``; this hook exists for hosts that rotate a legacy
-        settings-backed token out of band.
+        ``deactivate_inbox``; this hook exists for hosts that rotate a token
+        out of band.
         """
-        self._messenger_factory.evict(InboxRef.whatsapp(inbox_id))
+        self._messenger_factory.evict(inbox_ref)
 
     async def _messenger(
         self,
@@ -551,13 +570,19 @@ async def _send_request(
     messenger: IMessenger,
     request: TemplateTransportRequest,
 ) -> MessageResult:
+    templates = messenger.require_capability(ITemplateMessaging)
     body_parameters = [
         parameter.model_dump(exclude_none=True) for parameter in request.body_parameters
     ] or None
     if isinstance(request, TextTemplateTransportRequest):
-        return await messenger.send_text_template(
+        return await templates.send_text_template(
             template_name=request.template_name,
-            recipient=request.recipient.value,
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(request.recipient.value),
+            ),
             body_parameters=body_parameters,
             language_code=request.language_code,
             template_type=request.category.value,
@@ -571,9 +596,14 @@ async def _send_request(
         )
     if isinstance(request, MediaTemplateTransportRequest):
         media_header = request.media_header
-        return await messenger.send_media_template(
+        return await templates.send_media_template(
             template_name=request.template_name,
-            recipient=request.recipient.value,
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(request.recipient.value),
+            ),
             media_type=media_header.media_type.value,
             media_id=media_header.media_id,
             media_url=media_header.media_url,
@@ -583,9 +613,14 @@ async def _send_request(
             routing_policy=request.routing.policy.value,
         )
     location_header = request.location_header
-    return await messenger.send_location_template(
+    return await templates.send_location_template(
         template_name=request.template_name,
-        recipient=request.recipient.value,
+        target=DirectMessage(
+            inbox_ref=InboxRef(
+                platform=messenger.platform, inbox_id=messenger.inbox_id
+            ),
+            addresses=DeliveryAddresses.of(request.recipient.value),
+        ),
         latitude=location_header.latitude,
         longitude=location_header.longitude,
         name=location_header.name,

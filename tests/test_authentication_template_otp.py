@@ -43,6 +43,7 @@ from wappa.messaging.whatsapp.models.template_models import (
     TemplateParameterType,
     WhatsAppTemplateType,
 )
+from wappa.schemas.core.types import PlatformType
 
 CODE = "ABC234"
 
@@ -176,6 +177,15 @@ async def test_non_authentication_templates_emit_no_button() -> None:
 
 
 class _RecordingMessenger:
+    platform = PlatformType.WHATSAPP
+    inbox_id = "inbox-1"
+
+    def capability(self, kind):  # noqa: ANN001, ANN201 - test double
+        return self
+
+    def require_capability(self, kind):  # noqa: ANN001, ANN201 - test double
+        return self
+
     def __init__(self) -> None:
         self.values: dict[str, Any] = {}
 

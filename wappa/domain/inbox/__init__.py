@@ -1,9 +1,13 @@
 """Inbox identity, credential records, ports, services, and typed failures."""
 
+from .access import InboxCredentialAccess, TrustedInboxCredential
 from .credentials import (
+    CredentialRecord,
     EncryptedSecretEnvelope,
     InboxCredentialRecord,
     InboxCredentialStatus,
+    InstagramActiveInboxCredentialRecord,
+    InstagramInactiveInboxCredentialRecord,
     PlatformAccountActiveIndexRecord,
     PlatformAccountEmptyIndexRecord,
     PlatformAccountIndexRecord,
@@ -39,9 +43,14 @@ from .services import InboxCredentialService, InboxDirectory
 from .settings_resolver import SettingsInboxCredentialResolver
 
 __all__ = [
+    "InboxCredentialAccess",
+    "TrustedInboxCredential",
     "NAMESPACE_ENCODING_VERSION",
     "QUALIFIED_NAMESPACE_SEPARATOR",
     "EncryptedSecretEnvelope",
+    "InstagramActiveInboxCredentialRecord",
+    "InstagramInactiveInboxCredentialRecord",
+    "CredentialRecord",
     "IInboxCredentialResolver",
     "IInboxDirectorySource",
     "InboxConfigurationError",

@@ -20,7 +20,7 @@ Example::
         raw=whatsapp_messenger,
         middleware=[(cache_mw, 50), (sse_mw, 70)],
     )
-    await pipeline.send_text("hi", recipient)
+    await pipeline.send_text("hi", target)
     # Flow: caller → sse_mw(70) → cache_mw(50) → raw.send_text
 
 Adding a new :class:`IMessenger` method requires a one-method addition here;
@@ -34,15 +34,25 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast, runtime_checkable
 
+from ...domain.contacts import ContactCard
+from ...domain.inbox.identity import InboxRef
 from ...domain.interfaces.messaging_interface import IMessenger
+from ...domain.interfaces.template_messaging import (
+    TEMPLATE_METHODS,
+    ITemplateMessaging,
+)
+from ...domain.media_renditions import MediaRenditions
+from ...domain.messaging_targets import DirectMessage, MessageTarget
 from ...schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
+    from wappa.domain.interactive import ReplyButton
+
+    from ...domain.interactive import MessageCard
     from ...messaging.whatsapp.models.basic_models import MessageResult
     from ...messaging.whatsapp.models.interactive_models import (
         InteractiveHeader,
         ListSection,
-        ReplyButton,
     )
 
 
@@ -59,7 +69,7 @@ PRIORITY_OBSERVABILITY: int = 90
 class SendInvocation:
     """Structured view of one outbound call travelling through the pipeline.
 
-    Middleware reads ``method_name``, ``message_type``, ``recipient`` for
+    Middleware reads ``method_name``, ``message_type``, ``target`` for
     routing decisions and ``arguments`` for the named payload. The
     invocation is immutable; middleware that needs to rewrite arguments
     constructs a new invocation via :meth:`with_arguments` before calling
@@ -75,10 +85,19 @@ class SendInvocation:
 
     method_name: str
     message_type: str
-    recipient: str
+    target: MessageTarget
     args: tuple[Any, ...]
     kwargs: Mapping[str, Any] = field(default_factory=dict)
     arguments: Mapping[str, Any] = field(default_factory=dict)
+
+    @property
+    def recipient(self) -> str:
+        """Native address evidence for middleware; sending uses target.
+
+        A DirectMessage yields its recipient ID; a PrivateReply yields
+        ``comment:<comment_id>`` because the User is not yet addressable.
+        """
+        return self.target.address
 
     def with_arguments(
         self,
@@ -98,7 +117,7 @@ class SendInvocation:
         return SendInvocation(
             method_name=self.method_name,
             message_type=self.message_type,
-            recipient=self.recipient,
+            target=self.target,
             args=resolved_args,
             kwargs=resolved_kwargs,
             arguments=arguments,
@@ -143,7 +162,7 @@ MiddlewareEntry = tuple[MessengerMiddleware, int]
 class MessengerPipeline(IMessenger):
     """``IMessenger`` implementation composed from raw messenger + middleware.
 
-    The 18 ``IMessenger`` methods are implemented here exactly once. Each
+    The 17 ``IMessenger`` methods are implemented here exactly once. Each
     builds a :class:`SendInvocation` and hands it to :meth:`_dispatch`,
     which walks the chain from outer to inner middleware and finally
     invokes the matching method on the raw messenger via reflection.
@@ -185,6 +204,10 @@ class MessengerPipeline(IMessenger):
     # ------------------------------------------------------------------ #
 
     @property
+    def supported_operations(self) -> frozenset[str]:
+        return self._raw.supported_operations
+
+    @property
     def platform(self) -> PlatformType:
         return self._raw.platform
 
@@ -197,7 +220,10 @@ class MessengerPipeline(IMessenger):
     # ------------------------------------------------------------------ #
 
     async def _call_raw(self, invocation: SendInvocation) -> MessageResult:
-        method = getattr(self._raw, invocation.method_name)
+        owner: object = self._raw
+        if invocation.method_name in TEMPLATE_METHODS:
+            owner = self._raw.require_capability(ITemplateMessaging)
+        method = getattr(owner, invocation.method_name)
         result: MessageResult = await method(*invocation.args, **invocation.kwargs)
         return result
 
@@ -205,7 +231,7 @@ class MessengerPipeline(IMessenger):
         self,
         method_name: str,
         message_type: str,
-        recipient: str,
+        target: MessageTarget,
         arguments: Mapping[str, Any],
         *,
         keyword_only: Mapping[str, Any] | None = None,
@@ -221,13 +247,14 @@ class MessengerPipeline(IMessenger):
         ``*``). Those keys are excluded from the positional ``args`` tuple
         but remain in ``arguments`` for middleware inspection.
         """
+        target.resolve(InboxRef(platform=self.platform, inbox_id=self.inbox_id))
         kw = keyword_only or {}
         positional = {k: v for k, v in arguments.items() if k not in kw}
         return self._entrypoint(
             SendInvocation(
                 method_name=method_name,
                 message_type=message_type,
-                recipient=recipient,
+                target=target,
                 args=tuple(positional.values()),
                 kwargs=kw,
                 arguments=arguments,
@@ -238,31 +265,55 @@ class MessengerPipeline(IMessenger):
     # IMessenger basic messaging.
     # ------------------------------------------------------------------ #
 
+    def capability[C](self, kind: Callable[..., C]) -> C | None:
+        # Template sends are messages: wrap them so middleware still runs.
+        # Every other focused capability is not a message and bypasses it.
+        found = self._raw.capability(kind)
+        if kind is ITemplateMessaging and found is not None:
+            return _PipelineTemplates(self)  # type: ignore[return-value]
+        return found
+
     async def send_text(
         self,
         text: str,
-        recipient: str,
+        target: MessageTarget,
         reply_to_message_id: str | None = None,
         disable_preview: bool = False,
     ) -> MessageResult:
         return await self._invoke(
             "send_text",
             "text",
-            recipient,
+            target,
             {
                 "text": text,
-                "recipient": recipient,
+                "target": target,
                 "reply_to_message_id": reply_to_message_id,
                 "disable_preview": disable_preview,
             },
         )
 
     async def mark_as_read(
-        self, message_id: str, typing: bool = False
+        self,
+        message_id: str,
+        typing: bool = False,
+        target: DirectMessage | None = None,
     ) -> MessageResult:
         # mark_as_read isn't really an outbound message — skip the pipeline
         # to preserve semantics (no wrapper ever published it anyway).
-        return await self._raw.mark_as_read(message_id, typing)
+        return await self._raw.mark_as_read(message_id, typing, target)
+
+    async def send_carousel(
+        self,
+        cards: Sequence[MessageCard],
+        target: DirectMessage,
+        body: str,
+    ) -> MessageResult:
+        return await self._invoke(
+            "send_carousel",
+            "interactive",
+            target,
+            {"cards": cards, "target": target, "body": body},
+        )
 
     # ------------------------------------------------------------------ #
     # IMessenger media.
@@ -271,17 +322,17 @@ class MessengerPipeline(IMessenger):
     async def send_image(
         self,
         image_source: str | Path,
-        recipient: str,
+        target: DirectMessage,
         caption: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
         return await self._invoke(
             "send_image",
             "image",
-            recipient,
+            target,
             {
                 "image_source": image_source,
-                "recipient": recipient,
+                "target": target,
                 "caption": caption,
                 "reply_to_message_id": reply_to_message_id,
             },
@@ -290,7 +341,7 @@ class MessengerPipeline(IMessenger):
     async def send_video(
         self,
         video_source: str | Path,
-        recipient: str,
+        target: DirectMessage,
         caption: str | None = None,
         reply_to_message_id: str | None = None,
         transcript: str | None = None,
@@ -298,10 +349,10 @@ class MessengerPipeline(IMessenger):
         return await self._invoke(
             "send_video",
             "video",
-            recipient,
+            target,
             {
                 "video_source": video_source,
-                "recipient": recipient,
+                "target": target,
                 "caption": caption,
                 "reply_to_message_id": reply_to_message_id,
                 "transcript": transcript,
@@ -311,26 +362,28 @@ class MessengerPipeline(IMessenger):
     async def send_audio(
         self,
         audio_source: str | Path,
-        recipient: str,
+        target: DirectMessage,
         reply_to_message_id: str | None = None,
         transcript: str | None = None,
+        is_voice: bool = False,
     ) -> MessageResult:
         return await self._invoke(
             "send_audio",
             "audio",
-            recipient,
+            target,
             {
                 "audio_source": audio_source,
-                "recipient": recipient,
+                "target": target,
                 "reply_to_message_id": reply_to_message_id,
                 "transcript": transcript,
+                "is_voice": is_voice,
             },
         )
 
     async def send_document(
         self,
         document_source: str | Path,
-        recipient: str,
+        target: DirectMessage,
         filename: str | None = None,
         caption: str | None = None,
         reply_to_message_id: str | None = None,
@@ -338,10 +391,10 @@ class MessengerPipeline(IMessenger):
         return await self._invoke(
             "send_document",
             "document",
-            recipient,
+            target,
             {
                 "document_source": document_source,
-                "recipient": recipient,
+                "target": target,
                 "filename": filename,
                 "caption": caption,
                 "reply_to_message_id": reply_to_message_id,
@@ -350,17 +403,17 @@ class MessengerPipeline(IMessenger):
 
     async def send_sticker(
         self,
-        sticker_source: str | Path,
-        recipient: str,
+        sticker_source: MediaRenditions,
+        target: DirectMessage,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
         return await self._invoke(
             "send_sticker",
             "sticker",
-            recipient,
+            target,
             {
                 "sticker_source": sticker_source,
-                "recipient": recipient,
+                "target": target,
                 "reply_to_message_id": reply_to_message_id,
             },
         )
@@ -372,7 +425,7 @@ class MessengerPipeline(IMessenger):
     async def send_button_message(
         self,
         buttons: list[ReplyButton],
-        recipient: str,
+        target: DirectMessage,
         body: str,
         header: InteractiveHeader | None = None,
         footer: str | None = None,
@@ -381,10 +434,10 @@ class MessengerPipeline(IMessenger):
         return await self._invoke(
             "send_button_message",
             "button",
-            recipient,
+            target,
             {
                 "buttons": buttons,
-                "recipient": recipient,
+                "target": target,
                 "body": body,
                 "header": header,
                 "footer": footer,
@@ -395,7 +448,7 @@ class MessengerPipeline(IMessenger):
     async def send_list_message(
         self,
         sections: list[ListSection],
-        recipient: str,
+        target: DirectMessage,
         body: str,
         button_text: str,
         header: str | None = None,
@@ -405,10 +458,10 @@ class MessengerPipeline(IMessenger):
         return await self._invoke(
             "send_list_message",
             "list",
-            recipient,
+            target,
             {
                 "sections": sections,
-                "recipient": recipient,
+                "target": target,
                 "body": body,
                 "button_text": button_text,
                 "header": header,
@@ -421,7 +474,7 @@ class MessengerPipeline(IMessenger):
         self,
         button_text: str,
         button_url: str,
-        recipient: str,
+        target: DirectMessage,
         body: str,
         header: str | None = None,
         footer: str | None = None,
@@ -430,11 +483,11 @@ class MessengerPipeline(IMessenger):
         return await self._invoke(
             "send_cta_message",
             "cta",
-            recipient,
+            target,
             {
                 "button_text": button_text,
                 "button_url": button_url,
-                "recipient": recipient,
+                "target": target,
                 "body": body,
                 "header": header,
                 "footer": footer,
@@ -445,118 +498,18 @@ class MessengerPipeline(IMessenger):
     async def send_contact_request(
         self,
         body: str,
-        recipient: str,
+        target: DirectMessage,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
         return await self._invoke(
             "send_contact_request",
             "request_contact_info",
-            recipient,
+            target,
             {
                 "body": body,
-                "recipient": recipient,
+                "target": target,
                 "reply_to_message_id": reply_to_message_id,
             },
-        )
-
-    # ------------------------------------------------------------------ #
-    # IMessenger templates.
-    # ------------------------------------------------------------------ #
-
-    async def send_text_template(
-        self,
-        template_name: str,
-        recipient: str,
-        body_parameters: list[dict] | None = None,
-        language_code: str = "es",
-        *,
-        template_type: str,
-        routing_policy: str = "category_default",
-        authentication_method: str | None = None,
-        authentication_button_index: int = 0,
-    ) -> MessageResult:
-        kw = {
-            "template_type": template_type,
-            "routing_policy": routing_policy,
-            "authentication_method": authentication_method,
-            "authentication_button_index": authentication_button_index,
-        }
-        return await self._invoke(
-            "send_text_template",
-            "text_template",
-            recipient,
-            {
-                "template_name": template_name,
-                "recipient": recipient,
-                "body_parameters": body_parameters,
-                "language_code": language_code,
-                **kw,
-            },
-            keyword_only=kw,
-        )
-
-    async def send_media_template(
-        self,
-        template_name: str,
-        recipient: str,
-        media_type: str,
-        media_id: str | None = None,
-        media_url: str | None = None,
-        body_parameters: list[dict] | None = None,
-        language_code: str = "es",
-        *,
-        template_type: str,
-        routing_policy: str = "category_default",
-    ) -> MessageResult:
-        kw = {"template_type": template_type, "routing_policy": routing_policy}
-        return await self._invoke(
-            "send_media_template",
-            "media_template",
-            recipient,
-            {
-                "template_name": template_name,
-                "recipient": recipient,
-                "media_type": media_type,
-                "media_id": media_id,
-                "media_url": media_url,
-                "body_parameters": body_parameters,
-                "language_code": language_code,
-                **kw,
-            },
-            keyword_only=kw,
-        )
-
-    async def send_location_template(
-        self,
-        template_name: str,
-        recipient: str,
-        latitude: str,
-        longitude: str,
-        name: str,
-        address: str,
-        body_parameters: list[dict] | None = None,
-        language_code: str = "es",
-        *,
-        template_type: str,
-        routing_policy: str = "category_default",
-    ) -> MessageResult:
-        kw = {"template_type": template_type, "routing_policy": routing_policy}
-        return await self._invoke(
-            "send_location_template",
-            "location_template",
-            recipient,
-            {
-                "template_name": template_name,
-                "recipient": recipient,
-                "latitude": latitude,
-                "longitude": longitude,
-                "name": name,
-                "address": address,
-                "body_parameters": body_parameters,
-                "language_code": language_code,
-                **kw,
-            },
-            keyword_only=kw,
         )
 
     # ------------------------------------------------------------------ #
@@ -565,17 +518,17 @@ class MessengerPipeline(IMessenger):
 
     async def send_contact(
         self,
-        contact: dict,
-        recipient: str,
+        contact: ContactCard,
+        target: DirectMessage,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
         return await self._invoke(
             "send_contact",
             "contact",
-            recipient,
+            target,
             {
                 "contact": contact,
-                "recipient": recipient,
+                "target": target,
                 "reply_to_message_id": reply_to_message_id,
             },
         )
@@ -584,7 +537,7 @@ class MessengerPipeline(IMessenger):
         self,
         latitude: float,
         longitude: float,
-        recipient: str,
+        target: DirectMessage,
         name: str | None = None,
         address: str | None = None,
         reply_to_message_id: str | None = None,
@@ -592,11 +545,11 @@ class MessengerPipeline(IMessenger):
         return await self._invoke(
             "send_location",
             "location",
-            recipient,
+            target,
             {
                 "latitude": latitude,
                 "longitude": longitude,
-                "recipient": recipient,
+                "target": target,
                 "name": name,
                 "address": address,
                 "reply_to_message_id": reply_to_message_id,
@@ -606,16 +559,16 @@ class MessengerPipeline(IMessenger):
     async def send_location_request(
         self,
         body: str,
-        recipient: str,
+        target: DirectMessage,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
         return await self._invoke(
             "send_location_request",
             "location_request",
-            recipient,
+            target,
             {
                 "body": body,
-                "recipient": recipient,
+                "target": target,
                 "reply_to_message_id": reply_to_message_id,
             },
         )
@@ -645,3 +598,110 @@ def _to_serializable(value: Any) -> Any:
         return [_to_serializable(item) for item in value]
 
     return value
+
+
+class _PipelineTemplates(ITemplateMessaging):
+    """Template capability that still runs the pipeline's message middleware.
+
+    Invocations keep the historic method names (``send_text_template`` …) so
+    window guards and cache middleware see Templates exactly as before.
+    """
+
+    def __init__(self, pipeline: MessengerPipeline) -> None:
+        self._pipeline = pipeline
+
+    async def send_text_template(
+        self,
+        template_name: str,
+        target: DirectMessage,
+        body_parameters: list[dict] | None = None,
+        language_code: str = "es",
+        *,
+        template_type: str,
+        routing_policy: str = "category_default",
+        authentication_method: str | None = None,
+        authentication_button_index: int = 0,
+    ) -> MessageResult:
+        kw = {
+            "template_type": template_type,
+            "routing_policy": routing_policy,
+            "authentication_method": authentication_method,
+            "authentication_button_index": authentication_button_index,
+        }
+        return await self._pipeline._invoke(
+            "send_text_template",
+            "text_template",
+            target,
+            {
+                "template_name": template_name,
+                "target": target,
+                "body_parameters": body_parameters,
+                "language_code": language_code,
+                **kw,
+            },
+            keyword_only=kw,
+        )
+
+    async def send_media_template(
+        self,
+        template_name: str,
+        target: DirectMessage,
+        media_type: str,
+        media_id: str | None = None,
+        media_url: str | None = None,
+        body_parameters: list[dict] | None = None,
+        language_code: str = "es",
+        *,
+        template_type: str,
+        routing_policy: str = "category_default",
+    ) -> MessageResult:
+        kw = {"template_type": template_type, "routing_policy": routing_policy}
+        return await self._pipeline._invoke(
+            "send_media_template",
+            "media_template",
+            target,
+            {
+                "template_name": template_name,
+                "target": target,
+                "media_type": media_type,
+                "media_id": media_id,
+                "media_url": media_url,
+                "body_parameters": body_parameters,
+                "language_code": language_code,
+                **kw,
+            },
+            keyword_only=kw,
+        )
+
+    async def send_location_template(
+        self,
+        template_name: str,
+        target: DirectMessage,
+        latitude: str,
+        longitude: str,
+        name: str,
+        address: str,
+        body_parameters: list[dict] | None = None,
+        language_code: str = "es",
+        *,
+        template_type: str,
+        routing_policy: str = "category_default",
+    ) -> MessageResult:
+        kw = {"template_type": template_type, "routing_policy": routing_policy}
+        return await self._pipeline._invoke(
+            "send_location_template",
+            "location_template",
+            target,
+            {
+                "template_name": template_name,
+                "target": target,
+                "latitude": latitude,
+                "longitude": longitude,
+                "name": name,
+                "address": address,
+                "body_parameters": body_parameters,
+                "language_code": language_code,
+                **kw,
+            },
+            keyword_only=kw,
+        )

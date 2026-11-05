@@ -57,7 +57,8 @@ Both `dev` and `prod` construct the import string as `<module>:<app_var>.asgi` w
 2. List existing files, excluding `pyproject.toml`, `uv.lock`, `README.md`. Prompt to continue if any are found.
 3. Create `app/` and `app/scores/` directories.
 4. Read each template from `cli/templates/` and write it to the corresponding output path.
-5. Print next-step instructions listing the required environment variables — the Meta Application Configuration (`META_APP_SECRET`, `WP_WEBHOOK_VERIFY_TOKEN`) and the legacy single-Inbox bundle (`WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID`) — plus the one canonical callback URL, `/webhook/inboxes/whatsapp`.
+5. Emit the shipped developer skills (`_emit_skills`, see below) without overwriting existing skill folders.
+6. Print next-step instructions listing the required environment variables — the Meta Application Configuration (`META_APP_SECRET`, `WP_WEBHOOK_VERIFY_TOKEN`) and the legacy single-Inbox bundle (`WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID`) — plus the one canonical callback URL, `/webhook/inboxes/whatsapp`.
 
 The scaffolded `app/main.py` imports `Wappa` and calls `app.set_event_handler(MasterEventHandler())`. The Host Application fills in `MasterEventHandler` with business logic.
 
@@ -68,3 +69,11 @@ The scaffolded `app/main.py` imports `Wappa` and calls `app.set_event_handler(Ma
 - **Static examples**: examples are complete directories committed to source. `wappa examples` is a file-copy operation, not code generation.
 - **Subprocess delegation**: `dev` and `prod` spawn the ASGI server as a subprocess via `subprocess.run`, keeping the CLI process thin and server-agnostic.
 - **Safe-file allowlist**: a frozen set (`_SAFE_EXISTING_FILES`) guards non-empty directory detection without blocking valid project roots.
+
+## Explicit targets in generated handlers
+
+Generated scaffolds and bundled consumer examples construct `DirectMessage` with the Messenger's Platform/Inbox and a native recipient address. They do not send bare recipient strings to `IMessenger`. Examples that send WhatsApp Templates reach them through `messenger.require_capability(ITemplateMessaging)`. `wappa dev` continues importing `<module>:<app_var>.asgi`; the sibling `wappa_examples/simple_echo_example` uses that existing command with its Instagram host source. No new CLI command or hidden credential authority is introduced.
+
+## Developer skills (`wappa/cli/skills/`)
+
+The canonical source of Wappa's shipped Agent Skills: `wappa-instagram-apps` (router), `wappa-conversational-scores` and `wappa-runtime-state`. Each has `SKILL.md`, directly linked `references/`, `agents/openai.yaml` and `evals/evals.json`. The repo root exposes them through relative symlinks in `.claude/skills/` and `.agents/skills/`. They are wheel package data, and `wappa init` copies them into the generated project's `.claude/skills/<name>` with an `.agents/skills/<name>` symlink, keeping any existing skill folder untouched (`_emit_skills`). `tests/test_instagram_skills.py` checks that every taught `from wappa… import …` exists, that no code block teaches `recipient=`, that the isolation example runs, and that emission never overwrites. Lint with the `skills-engineering` linter (normal, `--professional` and `--lanes`) after each edit.

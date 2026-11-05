@@ -13,6 +13,9 @@ from wappa.schemas.core.types import MessageStatus, PlatformType
 from wappa.webhooks.core.base_status import BaseMessageStatus
 from wappa.webhooks.whatsapp.base_models import Conversation, MessageError, Pricing
 
+KNOWN_WHATSAPP_STATUSES = frozenset({"sent", "delivered", "read", "played", "failed"})
+"""``played``: the User played a voice note (Meta, observed 2026-11-05)."""
+
 
 class WhatsAppMessageStatus(BaseMessageStatus):
     """
@@ -28,12 +31,12 @@ class WhatsAppMessageStatus(BaseMessageStatus):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Core status fields
     id: str = Field(..., description="WhatsApp message ID that this status refers to")
-    wa_status: Literal["sent", "delivered", "read", "failed"] = Field(
+    wa_status: Literal["sent", "delivered", "read", "played", "failed"] = Field(
         ..., alias="status", description="Message delivery status"
     )
     wa_timestamp: str = Field(
@@ -194,7 +197,7 @@ class WhatsAppMessageStatus(BaseMessageStatus):
     @property
     def is_successful(self) -> bool:
         """Check if message was successfully processed (sent, delivered, or read)."""
-        return self.wa_status in ["sent", "delivered", "read"]
+        return self.wa_status in ["sent", "delivered", "read", "played"]
 
     @property
     def unix_timestamp(self) -> int:
@@ -464,7 +467,7 @@ class WhatsAppStatusWebhook(BaseModel):
     Convenience model for handling status-only webhooks.
     """
 
-    model_config = ConfigDict(extra="forbid", validate_assignment=True)
+    model_config = ConfigDict(extra="allow", validate_assignment=True)
 
     statuses: list[WhatsAppMessageStatus] = Field(
         ..., description="Array of message status updates"

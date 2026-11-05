@@ -185,7 +185,7 @@ async def debug_publish_event(request: Request) -> dict[str, str]:
         user_id=user_id,
         bsuid=user_id,
         phone_number=body.get("phone_number", ""),
-        platform="whatsapp",
+        platform=body.get("platform", "whatsapp"),
     ):
         event_hub = _get_event_hub(request)
         result = await event_hub.publish(

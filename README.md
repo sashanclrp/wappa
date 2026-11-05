@@ -50,7 +50,7 @@ app.run()
 - **All Message Types** - Text, media, interactive buttons, lists, templates
 - **Rich Interactions** - Buttons, lists, call-to-action messages
 - **Media Handling** - Images, videos, audio, documents with automatic upload/download
-- **Templates** - Pre-approved business message templates
+- **Templates** - Pre-approved business message templates through the `ITemplateMessaging` capability
 
 ### 🆔 **Recipient Contract and BSUID Support**
 - **Stable Internal Contract** - Wappa keeps the framework-facing parameter as `recipient` across `self.messenger.send_*`, API routes, and request models
@@ -162,7 +162,7 @@ messenger = WhatsAppMessenger(
 )
 ```
 
-**Why only text/media have factories?** Interactive messages, templates, and specialized types (contact, location) are platform-specific — Telegram has inline keyboards instead of WhatsApp buttons/lists, templates are WA-only, and Instagram has quick replies but no lists. Factories are reserved for concepts that truly cross platforms. Platform-specific types are owned by their corresponding handlers.
+**Why only text/media have factories?** Interactive messages, templates, and specialized types (contact, location) are platform-specific — Telegram has inline keyboards instead of WhatsApp buttons/lists and templates are WA-only. The Messenger contract still keeps one method per action: the Instagram adapter maps lists onto quick replies, buttons onto button templates, and location/contact onto text (ADR-0016). Factories are reserved for concepts that truly cross platforms. Platform-specific types are owned by their corresponding handlers.
 
 ## 📦 Installation
 
@@ -187,6 +187,8 @@ pip install wappa
 wappa init my-wappa-project
 cd my-wappa-project
 ```
+
+`wappa init` also adds Wappa's agent skills (`wappa-instagram-apps`, `wappa-conversational-scores`, `wappa-runtime-state`) under `.claude/skills/` and `.agents/skills/`, so coding agents build against the current public API. Existing skill folders are never overwritten.
 
 ### Using Poetry
 ```bash
@@ -487,3 +489,17 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 **Built with ❤️ by [Mimeia](https://mimeia.com) • Open Source • Apache 2.0 License**
 
 *Transform your business communication with WhatsApp automation.*
+
+### Instagram text (Unified Login)
+
+Wappa has an Instagram adapter for DMs, comments and mentions. Use explicit Inbox routing and an encrypted Instagram credential record through IInboxDirectorySource. The callback is `/webhook/inboxes/instagram`; Meta signature authentication remains mandatory. Recipient-based Messenger sends use Inbox-qualified DirectMessage targets, including on WhatsApp. The same Messenger methods (`send_button_message`, `send_list_message`, `send_carousel`, `send_location`, `send_contact`, `mark_as_read`, ...) work on both Platforms, and a User's choice always arrives in `process_message` via `get_interactive_selection()` ([ADR-0016](docs/adr/0016-one-messenger-method-per-action.md)). Media upload and download go through the shared `IMediaLibrary` capability; comment actions (`ICommentControls`) and WhatsApp Templates (`ITemplateMessaging`) are capability-gated too.
+
+See the [setup walkthrough](docs/backlog/in_progress/261103-instagram-conversations/references/setup.md) and
+[public contract](docs/public-contract.md#instagram-conversations-contract)
+for startup, addressing migration, and capability boundaries. Live receipt still
+requires an authorized account, subscriptions, and appropriate Meta app access.
+
+The [Instagram implementation PRD series](docs/backlog/in_progress/261103-instagram-conversations/plan.md)
+tracks the remaining message/public-conversation capabilities, Unified Login,
+Symphonai integration, DDD updates and developer skill packages. Its planned
+capabilities and skills are not all available in the current adapter.

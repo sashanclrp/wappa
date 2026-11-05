@@ -12,7 +12,6 @@ from .media_models import (
 )
 from .specialized_models import (
     BusinessContact,
-    ContactCard,
     ContactMessage,
     ContactValidationResult,
     LocationMessage,
@@ -41,7 +40,6 @@ __all__ = [
     "AudioMessage",
     "DocumentMessage",
     "StickerMessage",
-    "ContactCard",
     "ContactMessage",
     "ContactValidationResult",
     "LocationMessage",

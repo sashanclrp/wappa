@@ -23,7 +23,6 @@ from wappa.domain.inbox import InboxRef
 from wappa.domain.interfaces.external_webhook_context import (
     ResolvedExternalWebhookContext,
 )
-from wappa.schemas.core.types import PlatformType
 from wappa.webhooks import InboundMessageWebhook
 
 
@@ -104,22 +103,20 @@ class _ContextFactory:
 
     async def create_context(
         self,
-        inbox_id: str | None,
+        inbox_ref: InboxRef | None = None,
         user_id: str | None = None,
         *,
         include_messenger: bool = False,
-        platform: PlatformType = PlatformType.WHATSAPP,
     ) -> WappaContext:
         self.calls.append(
             {
-                "inbox_id": inbox_id,
+                "inbox_ref": inbox_ref,
                 "user_id": user_id,
                 "include_messenger": include_messenger,
-                "platform": platform,
             }
         )
         return WappaContext(
-            inbox_id=inbox_id,
+            inbox_id=inbox_ref.inbox_id if inbox_ref else None,
             user_id=user_id,
             db=self.db,  # type: ignore[arg-type]
             db_read=self.db_read,  # type: ignore[arg-type]
@@ -179,10 +176,9 @@ async def test_unscoped_external_webhook_gets_database_only_context() -> None:
     assert admitted.request_handler.messenger is None
     assert context_factory.calls == [
         {
-            "inbox_id": None,
+            "inbox_ref": None,
             "user_id": None,
             "include_messenger": False,
-            "platform": PlatformType.WHATSAPP,
         }
     ]
 
@@ -230,10 +226,9 @@ async def test_resolver_uses_authenticated_request_evidence_for_context() -> Non
         }
     ]
     assert context_factory.calls[1] == {
-        "inbox_id": "inbox-1",
+        "inbox_ref": InboxRef.whatsapp("inbox-1"),
         "user_id": "user-1",
         "include_messenger": True,
-        "platform": PlatformType.WHATSAPP,
     }
 
 

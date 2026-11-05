@@ -9,8 +9,10 @@ from wappa.api.middleware.inbox import InboxMiddleware
 from wappa.api.middleware.request_id import RequestIdMiddleware
 from wappa.api.middleware.request_logging import RequestLoggingMiddleware
 from wappa.api.routes.health import router as health_router
-from wappa.api.routes.whatsapp_combined import create_whatsapp_router
+from wappa.api.routes.whatsapp_combined import create_messaging_router
 from wappa.core.lifecycle import BackgroundWorkTracker, SessionLifecycle
+from wappa.domain.inbox.routing import InboxRoutingMode
+from wappa.schemas.core.types import PlatformType
 
 from ..config.settings import settings
 from ..logging.logger import ContextLogger, get_app_logger, setup_app_logging
@@ -33,6 +35,7 @@ class WappaCorePlugin:
         include_media_management_api: bool | None = None,
         include_media_upload_api: bool | None = None,
         include_state_handler_api: bool | None = None,
+        include_comment_controls_api: bool | None = None,
     ) -> None:
         self.cache_type = cache_type
         self.route_profile = route_profile
@@ -41,6 +44,7 @@ class WappaCorePlugin:
         self.include_media_management_api = include_media_management_api
         self.include_media_upload_api = include_media_upload_api
         self.include_state_handler_api = include_state_handler_api
+        self.include_comment_controls_api = include_comment_controls_api
         self._session_lifecycle: SessionLifecycle | None = None
         self._background_work_tracker: BackgroundWorkTracker | None = None
 
@@ -59,13 +63,14 @@ class WappaCorePlugin:
 
         builder.add_router(health_router, public=True)
         builder.add_router(
-            create_whatsapp_router(
+            create_messaging_router(
                 profile=self.route_profile,
                 include_template_transport=self.include_template_transport_api,
                 include_outbound_transport=self.include_outbound_transport_api,
                 include_media_management=self.include_media_management_api,
                 include_media_upload=self.include_media_upload_api,
                 include_state_handler_api=self.include_state_handler_api,
+                include_comment_controls=self.include_comment_controls_api,
             )
         )
 
@@ -222,16 +227,33 @@ class WappaCorePlugin:
     ) -> None:
         try:
             # Imported here to avoid circular imports during startup
-            from ..events.webhook_factory import webhook_url_factory
+            from wappa.processors.factory import processor_factory
 
-            logger.info("=== WHATSAPP WEBHOOK URL ===")
-            logger.info(
-                "📍 WhatsApp Webhook URL: %s",
-                webhook_url_factory.generate_whatsapp_webhook_url(),
-            )
-            logger.info("   • Configure this one URL in the Meta App")
+            from ..events.webhook_factory import WebhookURLFactory
+
+            if getattr(app.state, "meta_application_config", None) is None:
+                return
+
+            platforms = processor_factory.get_supported_platforms()
+            if app.state.inbox_runtime.mode is InboxRoutingMode.LEGACY:
+                platforms = platforms & {PlatformType.WHATSAPP}
+            factory = WebhookURLFactory(base_url=base_url)
+            labels = {
+                PlatformType.WHATSAPP: "WhatsApp",
+                PlatformType.INSTAGRAM: "Instagram",
+            }
+
+            logger.info("=== META WEBHOOK URLS ===")
+            for platform in sorted(platforms, key=lambda item: item.value):
+                logger.info(
+                    "📍 %s Webhook URL: %s",
+                    labels.get(platform, platform.value),
+                    factory.generate_webhook_url(platform),
+                )
+            logger.info("   • Configure each URL in its matching Meta use case")
             logger.info("   • POST bodies are authenticated with META_APP_SECRET")
-            logger.info("   • POST routing uses metadata.phone_number_id or WABA scope")
+            logger.info("   • GET verification uses WP_WEBHOOK_VERIFY_TOKEN")
+            logger.info("   • Use a public HTTPS URL in the Meta dashboard")
             logger.info("   • Handles both verification (GET) and webhooks (POST)")
             logger.info("=============================")
             logger.info("")

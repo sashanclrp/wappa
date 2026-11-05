@@ -22,7 +22,6 @@ from .base_message import BaseMessage, BaseTextMessage
 from .base_status import BaseMessageStatus
 from .base_webhook import BaseWebhook
 from .webhook_interfaces import (
-    AdReferralBase,
     BusinessContextBase,
     ConversationBase,
     CustomWebhook,
@@ -50,7 +49,6 @@ __all__ = [
     "UserBase",
     "BusinessContextBase",
     "ForwardContextBase",
-    "AdReferralBase",
     "ConversationBase",
     "ErrorDetailBase",
     "PlatformType",

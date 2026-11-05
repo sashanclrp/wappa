@@ -1,0 +1,193 @@
+# Live test plan: gates A, B and C
+
+Runbook for the live checks. Record results in the matrix ([capability-matrix.md](../references/capability-matrix.md)) and below, keeping the same evidence rules as [simple-text-test.md](simple-text-test.md): callback acknowledgement, provider acceptance, echo/read and what the recipient actually saw are different facts. Never paste tokens, codes or personal IDs.
+
+## 0. Prepare (once)
+
+```bash
+cd ../wappa_examples/instagram_conversations_example   # from the wappa repo
+uv sync
+# .env was copied from simple_echo_example; set PUBLIC_BASE_URL to your tunnel
+uv run wappa dev app/main.py --port 8000
+ngrok http 8000
+uv run python -m app.setup --subscribe   # core + comments + mentions, then message_edit separately
+```
+
+In Meta → Instagram → API setup with Unified login → Configure webhooks, tick the same fields (`messages`, `messaging_postbacks`, `messaging_seen`, `messaging_referral`, `message_edit`, `comments`, `live_comments`, `mentions`). App-level field selection and account subscription are separate steps. Comment and mention events need the app to be Live, with Advanced Access for comments.
+
+Status on 2026-11-03: account access was verified and `--subscribe` was run. A read-back shows all eight fields subscribed: `messages, messaging_postbacks, messaging_seen, messaging_referral, comments, live_comments, mentions, message_edit`. That proves the subscription only. Delivery of each field still has to be observed live.
+
+## Gate A: conversations
+
+| ID | Step (DM the account from a tester) | Expect |
+| --- | --- | --- |
+| A-01 | `hello` | text echo + hint |
+| A-02 | `/help` | quick replies; tap one → `process_message` once (no duplicate interaction) |
+| A-03 | `/image`, `/audio`, `/video`, `/file` | each family arrives (sample assets via PUBLIC_BASE_URL) |
+| A-04 | `/image-upload` | upload path accepted, or an explicit provider code is recorded (verifies `message_attachments` for IG IDs) |
+| A-05 | send a photo, voice note, video and PDF | "Downloaded N bytes (mime)" + echo of the same media |
+| A-06 | share a post/Reel; reply to a story; mention the account in a story | share/story types and IDs reported; post read when an ID is supplied |
+| A-07 | `/buttons` (tap Ping), `/cta`, `/card`, `/carousel` (tap Choose) | each tap arrives in `process_message` with `get_interactive_selection()` (ADR-0016) |
+| A-08 | `/read` | thread marked seen, then typing dots for about 3 s (`mark_as_read(typing=True)`) |
+| A-09 | edit a sent message; unsend a message | `✏️ edited` / `deleted` logs (edit depends on A-00 field outcome) |
+| A-10 | **Form Score:** `/form` → name → service (quick reply) → budget (button) → email (try an invalid one first) → confirm card | validation re-prompts, branch on "Other", submission recorded |
+| A-11 | during the form: `/form` (resume), tap an old button (stale), `cancel`, restart; confirm twice | resume / stale / cancel / "already submitted" |
+| A-12 | two testers run `/form` at the same time | no answer crosses Users (check the summaries) |
+| A-13 | the same tester runs `/form` on a second connected account | separate state per Inbox |
+| A-14 | comment `#reply` on a disposable post you own | public reply under the comment; our reply ignored (no loop) |
+| A-15 | comment `#dm` → answer the DM → `hello` | private reply, then a normal DM follow-up works |
+| A-16 | comment `#hidecycle`, `#delete`, `#lock` / `#unlock`, `#read` | controls return accepted; read logs comment, replies and media |
+| A-17 | mention the account in a caption and in a comment | `📣 mention` with media/comment subject + read |
+| A-18 | Live broadcast: comment, `#dm` during Live | Live source; public reply/hide expected to be refused by Meta (documented) |
+| A-19 | `/post <media_id>`, `/comments <media_id>` | post/children/caption; paginated comments |
+
+## Parity: one method, WhatsApp and Instagram (ADR-0016)
+
+Run each command on both Platforms against the same server and code. Expect the same flow, with each Platform's native rendering. WhatsApp number setup (test number via `.env`, or Embedded Signup): [whatsapp-setup.md](../references/whatsapp-setup.md).
+
+| ID | Command | WhatsApp renders | Instagram renders | Same handler result |
+| --- | --- | --- | --- | --- |
+| P-01 | `/form` (full run) | list for service, reply buttons for budget, image + buttons for confirm | quick replies, button template, generic card | submission saved under the Inbox's own Redis keys |
+| P-02 | `/quick` | list menu | quick replies | "You selected color:… via list_reply / quick_reply" |
+| P-03 | `/buttons`, tap Ping | reply buttons | postback buttons | "You selected ping via button_reply" |
+| P-04 | `/card`, `/carousel` (tap Choose) | image header + button; media carousel | generic card; intro text + carousel | "You selected plan:…" |
+| P-05 | `/cta` | URL button | `web_url` button | link opens; no webhook |
+| P-06 | `/image` `/audio` `/video` `/file` `/image-upload` | media by URL; `/image-upload` = `IMediaLibrary.upload` to the Media API, then `send_image` by Media ID | media by URL; `/image-upload` = `IMediaLibrary.upload` to `message_attachments`, then `send_image` by attachment_id | accepted |
+| P-07 | send a photo / voice note / PDF | `IMediaLibrary.download` by Media ID, echo by ID | `IMediaLibrary.download` by CDN URL, echo by URL | "Downloaded N bytes" + echo |
+| P-08 | `/read` | blue ticks + typing | seen + typing | success=True |
+| P-09 | `/post x`, `/comments x` | "not available on whatsapp" | post / comments read | capability-gated |
+| P-10 | Owner replies by hand from the phone app (WhatsApp Business app / Instagram app) | `process_outbound_echo`, `origin=business_app`, typed text | same | one echo lane |
+| P-11 | Bot sends `/help`; check logs | no `OutboundEchoWebhook` (Coexistence never echoes API sends) | echo dropped (`Dropped echo of Wappa's own send` debug log); record whether the raw echo carries `app_id` and whether its `mid` equals the send's `message_id` | fixed own-send filter |
+| P-12 | React ❤️ to a bot message, then remove it | `InboundMessageWebhook(REACTION)` add + removal | same, `InstagramReactionMessage` | one reaction shape |
+| P-13 | Edit a sent message (WhatsApp edit / Instagram edit) | `process_message_update` EDITED, typed text | same | one update lane |
+| P-14 | Remove the app from the Instagram account settings | — | `process_inbox_connection` DISCONNECTED via `/webhook/inboxes/instagram/deauthorize` | one connection lane |
+
+## WhatsApp inbound rerun (every interactive and webhook)
+
+Added 2026-11-05 after a live `list_reply` without `description` was answered 400. Run against the test number after a server restart. For every row: no `Response 400`, no `ValidationError`, and the expected handler line. Record any `META_SCHEMA_DRIFT` line verbatim (field names only).
+
+| ID | Do | Expect |
+| --- | --- | --- |
+| W-01 | `/quick`, tap a row (rows have no description) | `list_reply` → "You selected color:…" |
+| W-02 | `/buttons`, tap Ping | `button_reply` → "You selected ping" |
+| W-03 | `/form` full run, plus the "Other" branch and an invalid email | list → buttons → card buttons; re-prompt on bad email; submission in DB2 `whatsapp__<pnid>:df:form_submissions:…` |
+| W-04 | `/card`, `/carousel`, tap a card button | `button_reply` with the card payload |
+| W-05 | `/ask-location`, share a location | location message |
+| W-06 | `/ask-contact`, share a contact; `/contact` | contacts message; `ContactCard` sent |
+| W-07 | Send text, photo with caption, voice note, video, PDF, sticker | one `InboundMessageWebhook` per type; media download + echo |
+| W-08 | Send a location and a contact unprompted | location / contacts message |
+| W-09 | Reply (swipe) to a bot message; forward a message to the bot | `context.id` present; forwarded flag set |
+| W-10 | React ❤️ to a bot message, then remove it | REACTION add, then removal |
+| W-11 | Edit a sent text; delete one for everyone | `process_message_update` EDITED / REVOKED |
+| W-12 | `/read` and any bot send | statuses sent → delivered → read, 200 on `pricing` |
+| W-13 | Send something WhatsApp marks unsupported (a poll or event, if the client allows) | `UNSUPPORTED` with Meta's 131051 error, 200 |
+| W-14 | Any other `field=` system event seen in the log (`account_update`, `user_preferences`…) | 200; typed event or `SystemWebhook(UNSUPPORTED_EVENT)` |
+
+Not reachable from a test number: Coexistence echoes and history (P-10 WhatsApp), Flow replies (`nfm_reply`, covered by unit tests), calls.
+
+### Templates through the capability (ADR-0016)
+
+Sent with `messenger.capability(ITemplateMessaging)` to the `DirectMessage` target (phone first, ADR-0019). Meta sample Templates, `en_US`.
+
+| ID | Do | Expect |
+| --- | --- | --- |
+| T-01 | `/template order` | `jaspers_market_order_confirmation_v1` (utility, `/messages`) with your profile name, the last 6 chars of your message ID and today's date; ✅ in log, then sent/delivered statuses |
+| T-02 | `/template hello` | `hello_world` (utility, `/messages`) |
+| T-03 | `/template plain` | `jaspers_market_plain_text_v1` (marketing, default route = Marketing Messages API). Record the result: a test number may not be onboarded to that API |
+| T-04 | `/template plain-cloud` | same Template forced to `/messages` (`cloud_messages_fallback`) |
+| T-05 | `/template order` on Instagram | "/template works only on WhatsApp: instagram has no Templates." No send |
+
+## Gate B: self-service Unified Login
+
+Set `META_APP_ID`, `IG_LOGIN_CONFIG_ID` and `CONNECT_OPERATOR_TOKEN`, and register `https://<tunnel>/connect/instagram/callback` as a valid OAuth redirect URI. Register the **Deauthorize callback URL** as `https://<tunnel>/webhook/inboxes/instagram/deauthorize` (Wappa verifies the `signed_request` and dispatches `InboxConnectionWebhook(DISCONNECTED)`; the lab's `process_inbox_connection` deactivates the record) and the **Data Deletion Request URL** as `https://<tunnel>/connect/instagram/data-deletion` (host-owned; returns a confirmation code). The app no longer has its own `/connect/instagram/deauthorize`.
+
+| ID | Step | Expect |
+| --- | --- | --- |
+| B-01 | open `/connect/instagram/start?token=…`, log in (Facebook or Instagram), share accounts | the callback page lists accounts, readiness and per-field subscription outcomes; no token shown |
+| B-02 | DM the newly connected account | handled without copying any ID or token |
+| B-03 | reload the callback URL | 400 (one-use state) |
+| B-04 | start, then cancel the dialog | "Connection cancelled", nothing changed |
+| B-05 | deselect messaging permission during consent | account reported "missing instagram_manage_messages", not connected |
+| B-06 | connect again | record rotated (`credential_version` +1), Messenger evicted |
+| B-07 | remove the app in Instagram/Facebook settings | Wappa's deauthorize route → `process_inbox_connection` DISCONNECTED → record inactive in `inbox_records.json`, directory refreshed; later webhooks for that Inbox are rejected |
+| B-08 | Creator account | record whether a bootstrap is needed |
+
+App-role-only testing doesn't satisfy an independent-customer audience. App Review/Advanced Access is an external gate.
+
+## Gate C: Symphonai
+
+Implemented on the Symphonai branch `feat/instagram-wappa-adoption`. The branch temporarily points `backend/pyproject.toml` at the local editable Wappa (`[tool.uv.sources]`), so replace that with the released Wappa version before merging.
+
+- `SymphonaiInboxDirectorySource` and the channel credential lifecycle serve Instagram Owner Channels.
+- `runtime_inbox` resolves through `InboxCredentialAccess` and adds `resolve_runtime_credential(inbox_ref)` for extensions.
+- Every send path uses `target=` (`services/wappa/targets.py`, `ScoreDependencies.user_target`, `require_user_target()`).
+- Inbound and delayed agent runs call `messenger.mark_as_read(message_id, target=direct_target(...))`, which is Platform-neutral (Instagram: `mark_seen`, then `typing_on` when asked), so they no longer abort on Instagram and need no Platform branch.
+- Operator (human) sends accept Instagram text.
+- The cache middleware records `send_carousel` like the other interactive sends; `mark_as_read` and `IMediaLibrary` calls are not cached as messages.
+
+| ID | Step | Expect |
+| --- | --- | --- |
+| C-01 | Create an Instagram Owner Channel (`channel='instagram'`, `external_inbox_id` = `external_account_id` = IG account ID) and store its credential through `ChannelCredentialService.set_active_token`, then refresh after commit | `symphonai doctor`/directory resolves `instagram:<id>` |
+| C-02 | DM the account | Agent reply arrives in the same thread; Conversation and history appear in the operator UI |
+| C-03 | Two testers at once; the same tester on two IG accounts | Separate Conversations, no crossed context |
+| C-04 | Operator takes over, then replies (text) from the UI | Agent and delayed jobs paused; human text delivered; resume per policy |
+| C-05 | Extension: `resolve_runtime_credential(InboxRef(instagram, id))` → Graph read; rotate token; deactivate | New version used next call; deactivated raises `RuntimeInboxInvalid` |
+
+Not covered: Instagram operator media (WhatsApp media IDs have no IG equivalent), frontend changes, and Symphonai-side comment/mention handling. Symphonai's `MasterEventHandler` inherits Wappa's no-op defaults for comments, which is host policy to add.
+
+## Developer skills evidence
+
+- Lint: `lint_skill.py` normal and `--professional` report 0 errors and 0 warnings for all three skills. `--lanes` reports 0/0 for this repo and for a disposable `wappa init` output.
+- Deterministic tests: `tests/test_instagram_skills.py`. Every taught import exists, no code block uses `recipient=`, the isolation example runs, and emission never overwrites.
+- Fresh-agent evaluation (Claude Opus 5.5, Claude Code subagent, 2026-11-03). The agent ran the private-reply, stale-action/cancel and colliding-IDs/token eval prompts, and every assertion passed. It used `PrivateReply` and deferred the PDF until the User answered, used step-tagged payloads with cancel, and used scoped caches while refusing to cache the token. No other model or harness was evaluated, and the skill picker was not visually checked.
+
+## Results log
+
+| Date | ID | Result | Evidence and limits |
+| --- | --- | --- | --- |
+| 2026-11-03 | setup | pass (read-only) | `app.setup`: access verified via `InboxCredentialAccess`; subscribed `messages, messaging_seen` |
+| 2026-11-03 | A-19 (library) | pass | reader read a REELS video and a 10-child carousel, comments with pagination, and `not_found` for an unknown ID (`100/33`) |
+| 2026-11-03 | subscribe | pass (subscription only) | `app.setup --subscribe`, then a read-back: all 8 fields subscribed, `message_edit` included. Delivery not yet observed |
+| 2026-11-03 | C (offline) | pass (unit/contract) | Symphonai `-m "not real"` suite: 6 failed, 9877 passed. The 5 `test_installed_packages` failures come from the temporary local Wappa path, and the business-rules count is from unrelated RBAC commit `73d8138a`. Live C-01…C-05 not run |
+| 2026-11-05 | A-01/A-02 | pass | Text and quick-reply taps arrived on `messages` (04:32–04:34); echo and READ status events also arrived |
+| 2026-11-05 | A-10 (partial) | blocked at budget | "Start form" quick reply, name, and "Chatbot" service quick reply all handled. Budget button template accepted by Meta (200). Tapping "< $1K" produced **no webhook delivery at all**, so `messaging_postbacks` is likely not ticked at the app-level webhook config, even though the account-level subscription lists it |
+| 2026-11-05 | setup (app fields) | fixed | The app-level Instagram webhook had only `messages, messaging_seen`, so postbacks were dropped. After the user enabled the remaining fields in the dashboard, postbacks were delivered. Account-level and app-level subscriptions are separate gates |
+| 2026-11-05 | A-07 (postback) / A-10 | pass (happy path) | 04:42:17 budget postback, then `InteractionWebhook` and the email prompt. 04:42:27 email text, then the summary card (accepted). 04:42:40 confirm postback, then the confirmation text. The email was masked in the logs. Not yet exercised: the invalid-email re-prompt and the "Other" branch |
+| 2026-11-05 | A-10 ("Other" branch, Redis) | pass | With `CACHE_BACKEND=redis`: service "other", then the details step, then budget "medium", email and confirm (09:47–09:49 UTC). State is in DB1 `instagram__<inbox>:state:form_intake:<user>` (hash, `step=done`, TTL 1800 s). The submission is in DB2 `instagram__<inbox>:df:form_submissions:pkid:<user>` (hash, about 24 h). Keys are Platform- and Inbox-qualified. Free text after `done` falls through to the other handlers |
+| 2026-11-05 | W-01 (fix) / W-03 / P-01 (WhatsApp) | pass (happy path) | After the restart at 12:57 (directory cache cleared): list tap `form:service:branding` with no `description` handled at 12:59:01, then budget buttons, email, the image-header summary card, and confirm at 12:59:20. Every send went `to` the phone (ADR-0019). Submission in DB2 `whatsapp__1014417365082534:df:form_submissions:pkid:CO.…` and state in DB1 `whatsapp__1014417365082534:state:form_intake:CO.…`. No 4xx, `ValidationError` or `META_SCHEMA_DRIFT` since the restart. Not yet exercised: the "Other" branch and the invalid-email re-prompt |
+| 2026-11-05 | W-04 / P-04 `/carousel` (WhatsApp) | fail → fixed, rerun pending | 13:01:50: Meta 400, code 100, "`interactive.action.cards.N` missing `type`". Quick-reply cards carried no `type`; Meta's examples set `"type": "cta_url"` on every card. Fixed in `_wa_cards` with a test. Rerun after a restart |
+| 2026-11-05 | W-03 ("Other" + invalid email, WhatsApp) | pass | 13:00:28–13:01:08: "Other", then free-text details, budget, an invalid email ("Abc") re-prompted, then valid email and confirm |
+| 2026-11-05 | W-01 / W-02 / W-04 `/quick` `/buttons` `/card` | pass | 13:01:12–13:01:43: `lab:color:blue` (list without description), `lab:ping`, `lab:plan:pro` |
+| 2026-11-05 | stale tap after the fix | expected | 13:02:35: Meta redelivered the 12:52 "Chatbot" tap that had been answered 400 (message timestamp 12:52:14). That form was already done, so the stale-action guard replied "already submitted or expired". Retries of rejected webhooks can arrive minutes later and out of order |
+| 2026-11-05 | W-04 `/carousel` (WhatsApp) rerun | pass (send) | 13:04:54 accepted with `type: cta_url` on every card. Card tap not yet recorded |
+| 2026-11-05 | P-05 `/cta` | pass (send) | 13:06:39 |
+| 2026-11-05 | W-05 `/ask-location` | pass | 13:07:11: pin with `latitude`/`longitude` only (no name/address for a dropped pin) and `context.id` = the request message. All fields reach `WhatsAppLocationMessage`; no drift |
+| 2026-11-05 | W-06 `/ask-contact` | pass | 13:07:21: `contacts[0]` with name parts, phone + `wa_id`, base64 `vcard`, `origin=contact_request`, no `context`. All reach `ContactInfo`; no drift. The lab now replies with a summary of both |
+| 2026-11-05 | `/location`, `/contact` | pass (send) | 13:07:39, 13:08:20 |
+| 2026-11-05 | `/sticker` (WhatsApp) | fail → fixed, rerun pending | 13:08:29 PNG link accepted (200), then status `failed` 131053 "Unsupported Sticker mime type image/png". `send_sticker` now takes renditions and WhatsApp picks `.webp` (non-WebP raises before the call); the lab sends `[sample.webp, sample.png]` |
+| 2026-11-05 | Instagram card echo | fixed | `META_SCHEMA_DRIFT field=InstagramAttachmentPayload.generic` on the echo of a card; now modelled |
+| 2026-11-05 | `/sticker` (WhatsApp) rerun | pass | 13:16:28: `send_sticker([webp, png])` picked `sample.webp`; accepted, then sent, delivered and read (no 131053) |
+| 2026-11-05 | W-04 carousel tap | fail → fixed, rerun pending | 13:17:36: the tap arrived as `type: button`, `button.payload = lab:plan:team`, not `interactive`. `get_interactive_selection()` ignored it, so the lab echoed "Choose". Wappa now treats `button` taps as selections |
+| 2026-11-05 | token | expired → renewed | 14:23:48 sends failed with code 190 (token expired at 14:00); after the restart at 14:25 every send was accepted |
+| 2026-11-05 | W-07 inbound media (WhatsApp) | pass | Photo with caption "Bonjour" (14:25), voice note (14:29, echoed back as a voice note with `is_voice`), PDF (14:30), sticker (14:30), video (14:33): each downloaded through `IMediaLibrary` and echoed by media ID. The PDF echo showed "Untitled" because the lab did not pass `filename`; fixed in the lab |
+| 2026-11-05 | W-09 reply / forward | pass (reply) / not observed (forward) | Swipe reply "Hello" carried `context.from`. No message with a `forwarded` flag reached the log |
+| 2026-11-05 | W-10 reaction | pass | ❤️ at 14:30:52, removal at 14:30:59 (`reaction` without `emoji`), both `InboundMessageWebhook(REACTION)` |
+| 2026-11-05 | W-11 edit / delete | not deliverable | The WhatsApp app could not edit a message sent to the business. Delete-for-everyone produced no webhook from Meta, so there is nothing to handle |
+| 2026-11-05 | W-12 `/read` | pass | 14:31:33 `mark_as_read(typing=True)` accepted; statuses sent, delivered and read with `pricing.subtype` (200) |
+| 2026-11-05 | W-13 unsupported | not run | No poll or event was sent |
+| 2026-11-05 | Block 2 health | pass | No 4xx, `ValidationError` or `META_SCHEMA_DRIFT` after 14:25 |
+| 2026-11-05 | P-06 media sends (WhatsApp) | pass | 14:35–14:36: `/image` by URL, `/image-upload` (Media API upload, send by ID), `/audio`, `/voice` (OGG/Opus `is_voice` → voice note), `/file`, `/video`, all accepted |
+| 2026-11-05 | document echo filename | pass | 14:36:24 inbound PDF echoed with its original `filename` |
+| 2026-11-05 | T-01 `/template order` | pass | 14:36:44 `jaspers_market_order_confirmation_v1` (utility) accepted with the User's name, order code and date |
+| 2026-11-05 | T-02 `/template hello` | pass | 14:36:54 `hello_world` accepted |
+| 2026-11-05 | T-03 `/template plain` | pass | 14:37:01 `jaspers_market_plain_text_v1` (marketing, default route) accepted |
+| 2026-11-05 | T-04 `/template plain-cloud` | pass | 14:37:10 same Template forced to `/messages`, accepted |
+| 2026-11-05 | `played` status | fail → fixed, rerun pending | 14:35:58–14:36:27: five status webhooks with `status: played` (voice note played) answered 400 and were dropped by Meta. Fixed: `played` is a `StatusWebhook`; unknown statuses → `UNSUPPORTED_EVENT` + drift |
+| 2026-11-05 | `account_update` | expected | 14:34:40 `META_SCHEMA_DRIFT field=webhook field 'account_update'`, answered 200 |
+
+### Echo filter evidence (2026-11-05, 08:06)
+
+- `/help` from the test user → Wappa sent a generic-template card (Send API 200 at 08:06:16.275) → echo arrived 08:06:17.135 with keys `mid`, `is_echo`, `attachments` only (no `app_id`, no `metadata`) → `registry hit after 0.0s` → dropped. P-11 pass; Send API `message_id` == echo `mid` confirmed.
+- "Manual test" typed in the Instagram app (business account) → echo 08:07:00.609, keys `mid`, `is_echo`, `text` only → registry miss after 1 s + 2 s → `process_outbound_echo origin=business_app type=text text='Manual test'` at 08:07:03.621. P-10 (Instagram) pass.
+- Decision: no Platform evidence distinguishes the two, so the filter is registry-only; the `app_id` branch and `META_APP_ID` were removed.
+

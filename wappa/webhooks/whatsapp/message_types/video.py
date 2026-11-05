@@ -26,7 +26,7 @@ from wappa.webhooks.whatsapp.base_models import (
 class VideoContent(BaseModel):
     """Video message content."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     caption: str | None = Field(None, description="Video caption text (optional)")
     mime_type: str = Field(
@@ -47,8 +47,6 @@ class VideoContent(BaseModel):
             v = v.strip()
             if not v:
                 return None
-            if len(v) > 1024:  # WhatsApp caption limit
-                raise ValueError("Video caption cannot exceed 1024 characters")
         return v
 
     @field_validator("mime_type")
@@ -79,7 +77,7 @@ class WhatsAppVideoMessage(WhatsAppMessageIdentity, BaseVideoMessage):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Standard message fields (BSUID support v24.0+)

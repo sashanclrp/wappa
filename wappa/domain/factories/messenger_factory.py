@@ -12,6 +12,7 @@ from wappa.domain.inbox.errors import InboxDirectoryError
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.inbox.ports import IInboxCredentialResolver, ResolvedInboxCredentials
 from wappa.domain.interfaces.messaging_interface import IMessenger
+from wappa.domain.interfaces.sent_message_registry import ISentMessageRegistry
 from wappa.domain.interfaces.session_provider import HTTPSessionClosedError
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
@@ -50,8 +51,10 @@ class MessengerFactory:
         graph_api_version: str | None = None,
         graph_base_url: str | None = None,
         max_cached_messengers: int = 128,
+        sent_registry: ISentMessageRegistry | None = None,
     ) -> None:
         self._session_provider = session_provider
+        self._sent_registry = sent_registry
         self._credential_resolver = credential_resolver
         self._media_download_client_provider = media_download_client_provider
         self._graph_api_version = graph_api_version
@@ -105,7 +108,7 @@ class MessengerFactory:
 
         self.logger.debug("Creating new messenger for %s", cache_key)
 
-        if inbox_ref.platform is not PlatformType.WHATSAPP:
+        if inbox_ref.platform not in {PlatformType.WHATSAPP, PlatformType.INSTAGRAM}:
             raise ValueError(f"Unsupported platform: {inbox_ref.platform.value}")
 
         resolved = credentials
@@ -124,7 +127,21 @@ class MessengerFactory:
             )
 
         try:
-            messenger = self._create_whatsapp_messenger(resolved)
+            messenger: IMessenger
+            if inbox_ref.platform is PlatformType.INSTAGRAM:
+                from wappa.messaging.instagram.messenger import InstagramMessenger
+
+                messenger = InstagramMessenger(
+                    inbox_ref=inbox_ref,
+                    access_token=resolved.access_token,
+                    session_provider=self._session_provider,
+                    graph_api_version=self._graph_api_version or "v26.0",
+                    graph_base_url=self._graph_base_url or "https://graph.facebook.com",
+                    media_download_client_provider=self._media_download_client_provider,
+                    sent_registry=self._sent_registry,
+                )
+            else:
+                messenger = self._create_whatsapp_messenger(resolved)
         except InboxDirectoryError:
             raise
         except Exception as e:
@@ -178,7 +195,7 @@ class MessengerFactory:
         return messenger
 
     def get_supported_platforms(self) -> list[PlatformType]:
-        return [PlatformType.WHATSAPP]
+        return [PlatformType.WHATSAPP, PlatformType.INSTAGRAM]
 
     def is_platform_supported(self, platform: PlatformType) -> bool:
         return platform in self.get_supported_platforms()

@@ -124,6 +124,44 @@ def _list_existing_user_files(directory: Path) -> list[Path]:
     ]
 
 
+SKILLS_SOURCE = Path(__file__).parent / "skills"
+
+
+def _emit_skills(project_path: Path) -> list[str]:
+    """Copy Wappa's developer skills into both discovery lanes.
+
+    ``.claude/skills/<name>`` gets real files; ``.agents/skills/<name>`` is a
+    relative symlink to it (identical files where symlinks are unavailable).
+    Existing user-owned skill folders are never overwritten.
+    """
+    import shutil
+
+    if not SKILLS_SOURCE.is_dir():
+        return []
+    notes: list[str] = []
+    for skill in sorted(p for p in SKILLS_SOURCE.iterdir() if p.is_dir()):
+        if skill.name.startswith(("_", ".")):
+            continue
+        claude = project_path / ".claude" / "skills" / skill.name
+        agents = project_path / ".agents" / "skills" / skill.name
+        if claude.exists() or claude.is_symlink():
+            notes.append(f"kept existing .claude/skills/{skill.name}")
+        else:
+            claude.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(skill, claude, ignore=shutil.ignore_patterns("__pycache__"))
+            notes.append(f"created .claude/skills/{skill.name}")
+        if agents.exists() or agents.is_symlink():
+            notes.append(f"kept existing .agents/skills/{skill.name}")
+            continue
+        agents.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            agents.symlink_to(Path("../../.claude/skills") / skill.name)
+        except OSError:
+            shutil.copytree(claude, agents)
+        notes.append(f"linked .agents/skills/{skill.name}")
+    return notes
+
+
 def _initialize_project(directory: str, *, inbox_routing: str = "legacy") -> None:
     project_path = Path(directory).resolve()
 
@@ -174,6 +212,9 @@ def _initialize_project(directory: str, *, inbox_routing: str = "legacy") -> Non
             full_path = project_path / file_path
             full_path.write_text(_get_template_content(template_name))
             typer.echo(f"📝 Created: {file_path}")
+
+        for note in _emit_skills(project_path):
+            typer.echo(f"🧠 Skill: {note}")
 
         typer.echo()
         typer.echo("✅ Wappa project initialized successfully!")
@@ -536,6 +577,78 @@ def _copy_example(example_key: str, target_directory: str) -> None:
     except Exception as e:
         console.print(f"❌ Failed to copy example: {e}")
         raise typer.Exit(1) from None
+
+
+migrate_app = typer.Typer(help="One-off data migrations between Wappa releases")
+app.add_typer(migrate_app, name="migrate")
+
+
+@migrate_app.command("cache-namespaces")
+def migrate_cache_namespaces(
+    whatsapp_inbox: list[str] = typer.Option(
+        ...,
+        "--whatsapp-inbox",
+        "-i",
+        help="WhatsApp phone_number_id whose pre-0.34 keys to rename (repeatable)",
+    ),
+    redis_url: str | None = typer.Option(
+        None,
+        "--redis-url",
+        envvar="REDIS_URL",
+        help="Redis base URL without a database number (default: REDIS_URL)",
+    ),
+    json_root: Path | None = typer.Option(
+        None, "--json-root", help="JSON cache root folder (the JSON backend's cache/)"
+    ),
+    apply: bool = typer.Option(
+        False, "--apply", help="Rename for real (default: dry run, change nothing)"
+    ),
+) -> None:
+    """Rename WhatsApp cache keys from <pnid> to whatsapp__<pnid> (0.33 -> 0.34).
+
+    Stop every 0.33 worker first. Keys keep their TTL; existing qualified
+    keys are never overwritten (reported as conflicts).
+    """
+    import asyncio
+
+    from wappa.persistence.namespace_migration import (
+        migrate_json_namespaces,
+        migrate_redis_namespaces,
+    )
+
+    if not redis_url and json_root is None:
+        console.print("❌ Give --redis-url (or REDIS_URL) and/or --json-root")
+        raise typer.Exit(2)
+    reports = []
+    if redis_url:
+        reports.append(
+            (
+                "Redis",
+                asyncio.run(
+                    migrate_redis_namespaces(redis_url, whatsapp_inbox, apply=apply)
+                ),
+            )
+        )
+    if json_root is not None:
+        reports.append(
+            ("JSON", migrate_json_namespaces(json_root, whatsapp_inbox, apply=apply))
+        )
+    verb = "Renamed" if apply else "Would rename"
+    for backend, report in reports:
+        console.print(f"[bold]{backend}[/bold]: {verb} {len(report.renamed)} keys")
+        for old, new in report.renamed[:20]:
+            console.print(f"  {old} -> {new}")
+        if len(report.renamed) > 20:
+            console.print(f"  ... and {len(report.renamed) - 20} more")
+        if report.conflicts:
+            console.print(
+                f"[yellow]{len(report.conflicts)} target keys already exist "
+                "(left untouched):[/yellow]"
+            )
+            for key in report.conflicts[:20]:
+                console.print(f"  {key}")
+    if not apply:
+        console.print("Dry run only. Re-run with --apply to rename.")
 
 
 if __name__ == "__main__":

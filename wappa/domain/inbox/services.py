@@ -23,6 +23,10 @@ from wappa.core.logging.logger import get_logger
 from wappa.schemas.core.types import PlatformType
 
 from .credentials import (
+    ActiveInboxCredentialRecord,
+    InactiveInboxCredentialRecord,
+    InstagramActiveInboxCredentialRecord,
+    InstagramInactiveInboxCredentialRecord,
     PlatformAccountActiveIndexRecord,
     PlatformAccountEmptyIndexRecord,
     SecretBinding,
@@ -63,7 +67,7 @@ def _binding(inbox_ref: InboxRef) -> SecretBinding:
 
 
 class InboxCredentialService:
-    """Create, rotate, and re-encrypt canonical WhatsApp credential records."""
+    """Create, rotate, and re-encrypt canonical Platform credential records."""
 
     def __init__(self, codec: CredentialCodec) -> None:
         self._codec = codec
@@ -75,11 +79,16 @@ class InboxCredentialService:
         account_ref: PlatformAccountRef,
         access_token: SecretStr,
         credential_version: int = 1,
-    ) -> WhatsAppActiveInboxCredentialRecord:
+    ) -> ActiveInboxCredentialRecord:
         """Encrypt a plaintext token into a persistable active record."""
-        self._require_whatsapp(inbox_ref, account_ref)
+        self._require_platform(inbox_ref, account_ref)
         envelope = self._codec.encrypt(access_token, binding=_binding(inbox_ref))
-        return WhatsAppActiveInboxCredentialRecord(
+        record_type = (
+            InstagramActiveInboxCredentialRecord
+            if inbox_ref.platform is PlatformType.INSTAGRAM
+            else WhatsAppActiveInboxCredentialRecord
+        )
+        return record_type(
             inbox_id=inbox_ref.inbox_id,
             platform_account_id=account_ref.platform_account_id,
             credential_version=credential_version,
@@ -93,7 +102,7 @@ class InboxCredentialService:
         *,
         access_token: SecretStr,
         account_ref: PlatformAccountRef | None = None,
-    ) -> WhatsAppActiveInboxCredentialRecord:
+    ) -> ActiveInboxCredentialRecord:
         """Produce the next active record with a strictly higher version."""
         target_account = account_ref or previous.account_ref
         return self.create_active_record(
@@ -105,9 +114,14 @@ class InboxCredentialService:
 
     def create_inactive_record(
         self, previous: CredentialRecord
-    ) -> WhatsAppInactiveInboxCredentialRecord:
+    ) -> InactiveInboxCredentialRecord:
         """Produce the deactivation record that follows ``previous``."""
-        return WhatsAppInactiveInboxCredentialRecord(
+        record_type = (
+            InstagramInactiveInboxCredentialRecord
+            if previous.platform is PlatformType.INSTAGRAM
+            else WhatsAppInactiveInboxCredentialRecord
+        )
+        return record_type(
             inbox_id=previous.inbox_id,
             platform_account_id=previous.platform_account_id,
             credential_version=previous.credential_version + 1,
@@ -120,7 +134,10 @@ class InboxCredentialService:
         The canonical fields, including ``credential_version``, are unchanged;
         only the envelope is rewritten. Inactive records are returned as-is.
         """
-        if not isinstance(record, WhatsAppActiveInboxCredentialRecord):
+        if not isinstance(
+            record,
+            (WhatsAppActiveInboxCredentialRecord, InstagramActiveInboxCredentialRecord),
+        ):
             return record
         envelope = self._codec.rotate(
             record.access_token, binding=_binding(record.inbox_ref)
@@ -128,9 +145,9 @@ class InboxCredentialService:
         return record.model_copy(update={"access_token": envelope})
 
     @staticmethod
-    def _require_whatsapp(inbox_ref: InboxRef, account_ref: PlatformAccountRef) -> None:
-        if inbox_ref.platform is not PlatformType.WHATSAPP:
-            raise ValueError("v0.27 ships credential records for WhatsApp only")
+    def _require_platform(inbox_ref: InboxRef, account_ref: PlatformAccountRef) -> None:
+        if inbox_ref.platform not in {PlatformType.WHATSAPP, PlatformType.INSTAGRAM}:
+            raise ValueError("Credential records require an implemented Platform")
         if account_ref.platform is not inbox_ref.platform:
             raise ValueError("Inbox and Platform Account must share a Platform")
 
@@ -162,6 +179,16 @@ class InboxDirectory(IInboxCredentialResolver):
             if inspect.isawaitable(outcome):
                 await outcome
 
+    async def reset_cache(self) -> int:
+        """Forget every cached directory row (ADR-0011, startup freshness).
+
+        The Host's source stays the authority: Inboxes reload lazily on their
+        next message, so a record changed in the source while Wappa was down
+        (a rotated token, a deactivation) takes effect after a restart. A
+        change made while Wappa runs still needs ``refresh_inbox``.
+        """
+        return await self._table.clear()
+
     async def check_health(self) -> bool:
         """Whether the directory's Table Cache answers a probe read."""
         try:
@@ -184,7 +211,10 @@ class InboxDirectory(IInboxCredentialResolver):
                 reason="inactive" if row.status == "inactive" else "unknown",
             )
         record = row.credential_record()
-        if not isinstance(record, WhatsAppActiveInboxCredentialRecord):
+        if not isinstance(
+            record,
+            (WhatsAppActiveInboxCredentialRecord, InstagramActiveInboxCredentialRecord),
+        ):
             raise InboxCredentialIntegrityError(
                 f"active directory row for {inbox_ref} holds a non-active record"
             )
@@ -257,7 +287,7 @@ class InboxDirectory(IInboxCredentialResolver):
 
     async def deactivate_inbox(
         self, inbox_ref: InboxRef
-    ) -> WhatsAppInactiveInboxCredentialRecord:
+    ) -> InactiveInboxCredentialRecord:
         """Refresh after the Host committed an inactive state.
 
         Raises ``InboxMutationConflictError`` when the source still reports
@@ -266,7 +296,13 @@ class InboxDirectory(IInboxCredentialResolver):
         record = await self.refresh_inbox(inbox_ref)
         if record is None:
             raise InboxNotFoundError(inbox_ref, reason="absent at the source")
-        if not isinstance(record, WhatsAppInactiveInboxCredentialRecord):
+        if not isinstance(
+            record,
+            (
+                WhatsAppInactiveInboxCredentialRecord,
+                InstagramInactiveInboxCredentialRecord,
+            ),
+        ):
             raise InboxMutationConflictError(
                 f"source still reports {inbox_ref} as active; commit the inactive "
                 "state before calling deactivate_inbox"
@@ -342,7 +378,7 @@ class InboxDirectory(IInboxCredentialResolver):
     async def _decrypt(
         self,
         row: InboxDirectoryRow,
-        record: WhatsAppActiveInboxCredentialRecord,
+        record: ActiveInboxCredentialRecord,
     ) -> ResolvedInboxCredentials:
         inbox_ref = record.inbox_ref
         decrypted = self._codec.decrypt(

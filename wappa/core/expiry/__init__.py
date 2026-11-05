@@ -39,7 +39,6 @@ from .context_helpers import (
     SessionLifecycleNotAvailableError,
     create_expiry_cache_factory,
     create_expiry_messenger,
-    parse_inbox_from_expired_key,
     parse_inbox_ref_from_expired_key,
 )
 
@@ -80,7 +79,6 @@ __all__ = [
     # Context helpers for expiry handlers
     "create_expiry_messenger",
     "create_expiry_cache_factory",
-    "parse_inbox_from_expired_key",
     "parse_inbox_ref_from_expired_key",
     # Context helper exceptions
     "ExpiryContextError",

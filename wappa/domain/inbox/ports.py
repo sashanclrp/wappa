@@ -19,14 +19,9 @@ from typing import Protocol, runtime_checkable
 from pydantic import SecretStr
 
 from .credentials import (
-    WhatsAppActiveInboxCredentialRecord,
-    WhatsAppInactiveInboxCredentialRecord,
+    CredentialRecord,
 )
 from .identity import InboxRef, PlatformAccountRef
-
-CredentialRecord = (
-    WhatsAppActiveInboxCredentialRecord | WhatsAppInactiveInboxCredentialRecord
-)
 
 
 @runtime_checkable

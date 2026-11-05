@@ -17,7 +17,63 @@ from wappa.core.messaging.pipeline import (
     SendInvocation,
     SendNext,
 )
+from wappa.domain.contacts import (
+    ContactAddress,
+    ContactCard,
+    ContactEmail,
+    ContactName,
+    ContactOrganization,
+    ContactPhone,
+    ContactUrl,
+)
+from wappa.domain.interactive import CardButton, MessageCard, ReplyButton, UrlButton
+from wappa.domain.interfaces.conversation_capabilities import (
+    CommentContent,
+    ContentPage,
+    IAttachmentMediaReader,
+    ICommentControls,
+    IConversationContentReader,
+    MediaBytes,
+    PostChild,
+    PostContent,
+    ReadOutcome,
+    ReadResult,
+)
+from wappa.domain.interfaces.history_reader import (
+    HistoryPage,
+    IConversationHistoryReader,
+)
+from wappa.domain.interfaces.media_library import (
+    IMediaLibrary,
+    MediaFamily,
+    UploadResult,
+)
 from wappa.domain.interfaces.messaging_interface import IMessenger
+from wappa.domain.interfaces.template_messaging import ITemplateMessaging
+from wappa.domain.messaging_targets import (
+    CommentRef,
+    DeliveryAddresses,
+    DirectMessage,
+    MessageTarget,
+    PostRef,
+    PrivateReply,
+    TargetInboxMismatchError,
+    UnsupportedOperationError,
+)
+from wappa.domain.results import (
+    CommentControlOperation,
+    CommentResult,
+    ControlResult,
+    MessageResult,
+    OperationOutcome,
+    message_outcome,
+)
+from wappa.messaging.whatsapp.models.interactive_models import (
+    HeaderType,
+    InteractiveHeader,
+    ListRow,
+    ListSection,
+)
 
 from .classification import (
     OutboundClassification,
@@ -51,8 +107,56 @@ from .template_transport import (
 )
 
 __all__ = [
+    "ContactAddress",
+    "ContactCard",
+    "ContactEmail",
+    "ContactName",
+    "ContactOrganization",
+    "ContactPhone",
+    "ContactUrl",
+    "DeliveryAddresses",
     # Core Interface
     "IMessenger",
+    "DirectMessage",
+    "PrivateReply",
+    "MessageTarget",
+    "CommentRef",
+    "PostRef",
+    "TargetInboxMismatchError",
+    "UnsupportedOperationError",
+    # Interactive Messages (one shape on every Platform, ADR-0016)
+    "ReplyButton",
+    "UrlButton",
+    "CardButton",
+    "MessageCard",
+    "ListSection",
+    "ListRow",
+    "InteractiveHeader",
+    "HeaderType",
+    # Results
+    "MessageResult",
+    "CommentResult",
+    "ControlResult",
+    "CommentControlOperation",
+    "OperationOutcome",
+    "message_outcome",
+    # Optional focused capabilities (IMessenger.capability(kind))
+    "ICommentControls",
+    "IConversationContentReader",
+    "IAttachmentMediaReader",
+    "ITemplateMessaging",
+    "IConversationHistoryReader",
+    "HistoryPage",
+    "IMediaLibrary",
+    "MediaFamily",
+    "UploadResult",
+    "PostContent",
+    "PostChild",
+    "CommentContent",
+    "ContentPage",
+    "MediaBytes",
+    "ReadOutcome",
+    "ReadResult",
     # Messenger Pipeline
     "MessengerMiddleware",
     "MessengerPipeline",

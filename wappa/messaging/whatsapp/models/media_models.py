@@ -5,7 +5,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
-from wappa.schemas.core.recipient import RecipientRequest
+from wappa.schemas.core.recipient import DeliveryRequest
 
 # Shared field for AI context description across media types.
 # NOT sent to WhatsApp - used for internal AI agent context only.
@@ -77,7 +77,7 @@ class MediaType(Enum):
         return max_sizes[media_type]
 
 
-class MediaMessage(RecipientRequest):
+class MediaMessage(DeliveryRequest):
     media_type: MediaType = Field(
         ..., description="Type of media (audio, document, image, sticker, video)"
     )
@@ -123,7 +123,7 @@ class MediaMessage(RecipientRequest):
         return v
 
 
-class ImageMessage(RecipientRequest):
+class ImageMessage(DeliveryRequest):
     media_source: str | Path = Field(
         ..., description="Either a URL string or a Path object to the local media file"
     )
@@ -136,7 +136,7 @@ class ImageMessage(RecipientRequest):
     )
 
 
-class VideoMessage(RecipientRequest):
+class VideoMessage(DeliveryRequest):
     media_source: str | Path = Field(
         ..., description="Either a URL string or a Path object to the local media file"
     )
@@ -150,18 +150,25 @@ class VideoMessage(RecipientRequest):
     )
 
 
-class AudioMessage(RecipientRequest):
+class AudioMessage(DeliveryRequest):
     media_source: str | Path = Field(
         ..., description="Either a URL string or a Path object to the local media file"
     )
     description: str | None = AI_DESCRIPTION_FIELD
     transcript: str | None = AI_TRANSCRIPT_FIELD
+    is_voice: bool = Field(
+        False,
+        description=(
+            "Deliver as a voice note (waveform). WhatsApp needs an OGG/Opus file; "
+            "Instagram ignores it"
+        ),
+    )
     reply_to_message_id: str | None = Field(
         None, description="Optional message ID for replies"
     )
 
 
-class DocumentMessage(RecipientRequest):
+class DocumentMessage(DeliveryRequest):
     media_source: str | Path = Field(
         ..., description="Either a URL string or a Path object to the local media file"
     )
@@ -175,7 +182,7 @@ class DocumentMessage(RecipientRequest):
     )
 
 
-class StickerMessage(RecipientRequest):
+class StickerMessage(DeliveryRequest):
     media_source: str | Path = Field(
         ..., description="Either a URL string or a Path object to the local media file"
     )

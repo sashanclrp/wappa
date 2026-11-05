@@ -14,10 +14,15 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from wappa.core.messaging.pipeline import MessengerPipeline
+from wappa.core.messaging.sent_message_registry import TableSentMessageRegistry
 from wappa.domain.factories.messenger_factory import MessengerFactory
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.inbox.ports import IInboxCredentialResolver, ResolvedInboxCredentials
+from wappa.domain.interfaces.sent_message_registry import ISentMessageRegistry
 from wappa.persistence.cache_factory import create_cache_factory
+
+# Table Cache ignores the User; any non-empty placeholder satisfies the factory.
+_REGISTRY_USER = "__sent_registry__"
 
 if TYPE_CHECKING:
     import httpx
@@ -95,7 +100,11 @@ class DispatchContextBuilder:
 
     def __init__(self, capabilities: RuntimeCapabilities) -> None:
         self.capabilities = capabilities
+        self.sent_message_registry: ISentMessageRegistry = TableSentMessageRegistry(
+            lambda ref: self.cache_factory(ref, _REGISTRY_USER).create_table_cache()
+        )
         self._messenger_factory = MessengerFactory(
+            sent_registry=self.sent_message_registry,
             session_provider=capabilities.session_provider,
             media_download_client_provider=capabilities.media_download_client_provider,
             credential_resolver=capabilities.credential_resolver,

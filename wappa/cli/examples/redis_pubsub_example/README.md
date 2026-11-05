@@ -117,7 +117,7 @@ All notifications follow the pattern:
 wappa:notify:{inbox}:{user_id}:{event_type}
 ```
 
-The `{inbox}` segment is the Inbox cache namespace: the raw `inbox_id` for WhatsApp (Meta `phone_number_id`), or `<platform>__<id>` for any other Platform.
+The `{inbox}` segment is the Inbox cache namespace, `<platform>__<id>` on every Platform (for WhatsApp the id is Meta's `phone_number_id`, e.g. `whatsapp__15551234567890`).
 
 Examples:
 - `wappa:notify:15551234567890:5511999887766:incoming_message`

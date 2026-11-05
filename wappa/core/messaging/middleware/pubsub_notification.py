@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from ....domain.messaging_targets import DirectMessage
 from ...pubsub.handlers import publish_notification
 from ...sse.context import get_sse_context
 from ..pipeline import MessengerMiddleware, SendInvocation, SendNext
@@ -52,7 +53,7 @@ class PubSubNotificationMiddleware(MessengerMiddleware):
         await publish_notification(
             event_type="bot_reply",
             inbox_id=ctx.inbox_id,
-            user_id=ctx.user_id,
+            user_id=_destination_user(invocation, ctx.user_id),
             platform=ctx.platform,
             data={
                 "message_id": result.message_id or "",
@@ -61,3 +62,18 @@ class PubSubNotificationMiddleware(MessengerMiddleware):
         )
 
         return result
+
+
+def _destination_user(invocation: SendInvocation, request_user: str | None) -> str:
+    """Attribute the reply to its destination, not the ambient webhook User.
+
+    A send to the webhook's own User keeps its canonical ``user_id`` key (the
+    BSUID even when the phone delivered it); a send to anyone else is keyed
+    by that destination's address (ADR-0019).
+    """
+    target = invocation.target
+    if isinstance(target, DirectMessage):
+        if request_user and request_user in target.addresses.values:
+            return request_user
+        return target.address
+    return request_user or invocation.recipient

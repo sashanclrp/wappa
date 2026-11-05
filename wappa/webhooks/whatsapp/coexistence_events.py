@@ -10,7 +10,7 @@ from wappa.webhooks.whatsapp.base_models import WhatsAppContact, WhatsAppMetadat
 class CoexistenceModel(BaseModel):
     """Strict base for Meta Coexistence payload components."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
 
 class HistoryContext(CoexistenceModel):

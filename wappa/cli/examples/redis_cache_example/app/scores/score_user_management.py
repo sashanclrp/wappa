@@ -9,6 +9,8 @@ This module handles all user-related operations including:
 
 from typing import cast
 
+from wappa.domain.inbox.identity import InboxRef
+from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.webhooks import InboundMessageWebhook
 
 from ..models.redis_demo_models import User
@@ -220,7 +222,13 @@ class UserManagementScore(ScoreBase):
 
             # Step 2: Send welcome/acknowledgment message
             result = await self.messenger.send_text(
-                recipient=user_id,
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
                 text=welcome_text,
                 reply_to_message_id=webhook.message.message_id,
             )

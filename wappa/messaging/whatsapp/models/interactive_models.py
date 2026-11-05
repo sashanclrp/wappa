@@ -4,7 +4,8 @@ from enum import Enum
 
 from pydantic import BaseModel, Field, ValidationInfo, field_validator
 
-from wappa.schemas.core.recipient import RecipientRequest
+from wappa.domain.interactive import ReplyButton
+from wappa.schemas.core.recipient import DeliveryRequest
 
 
 class HeaderType(Enum):
@@ -14,18 +15,13 @@ class HeaderType(Enum):
     DOCUMENT = "document"
 
 
-class InteractiveMessage(RecipientRequest):
+class InteractiveMessage(DeliveryRequest):
     body: str = Field(
         ..., min_length=1, max_length=4096, description="Main message text"
     )
     reply_to_message_id: str | None = Field(
         None, description="Optional message ID for replies"
     )
-
-
-class ReplyButton(BaseModel):
-    id: str = Field(..., max_length=256, description="Unique button identifier")
-    title: str = Field(..., max_length=20, description="Button display text")
 
 
 class InteractiveHeader(BaseModel):

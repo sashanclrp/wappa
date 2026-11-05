@@ -4,15 +4,13 @@
 
 - Parse and validate raw HTTP payloads from messaging platforms into typed Pydantic models.
 - Produce `UniversalWebhook` instances (`InboundMessageWebhook`, `CallWebhook`,
-  `StatusWebhook`, `ErrorWebhook`, `SystemWebhook`, `CustomWebhook`) for downstream dispatch.
+  `StatusWebhook`, `ErrorWebhook`, `SystemWebhook`, `CustomWebhook`, the shared `MessageUpdateWebhook`, `OutboundEchoWebhook`, `HistorySyncWebhook`, `InboxConnectionWebhook`, and the Instagram-only `IncomingCommentWebhook`, `MentionWebhook`) for downstream dispatch.
 - Validate provider schemas after the API boundary has split a batch and derived
   its Inbox from the payload.
 - Own every inbound webhook Pydantic schema, including platform payload schemas
   and Universal Model forms.
-- Gate unknown Meta `change.field` values against a runtime registry; reject unregistered fields.
-- Emit the stable critical-log event `WHATSAPP_WEBHOOK_CONTRACT_DRIFT` when a
-  strict built-in Meta schema rejects an `extra_forbidden` field. Deployments
-  must alert on this event so deliberate contract rejection is operationally loud.
+- Gate unknown Meta `change.field` values against a runtime registry; a field that is neither built in nor registered becomes `SystemWebhook(UNSUPPORTED_EVENT)` (HTTP 200), never a 400.
+- Tolerate and report Meta schema drift: models that parse Meta input use `extra="allow"`, and `core/schema_drift.py` (`report_schema_drift`) logs `META_SCHEMA_DRIFT platform=<p> field=<Model.field>` once per field per process, never the value. `WAPPA_STRICT_META_SCHEMA=1` raises `MetaSchemaDriftError` instead (set by Wappa's tests).
 - Expose platform-agnostic inspection (`is_incoming_message`, `is_status_update`, etc.)
   through the `BaseWebhook` interface.
 - Register and look up per-platform, per-message-type schema classes.
@@ -38,14 +36,19 @@ wappa/webhooks/
 ├── factory.py                  # SchemaFactory singleton + MessageSchemaRegistry + WebhookSchemaRegistry
 │
 ├── core/
+│   ├── schema_drift.py         # report_schema_drift, MetaSchemaDriftError (drift log + strict mode)
 │   ├── base_webhook.py         # BaseWebhook, BaseContact, BaseWebhookMetadata, BaseWebhookError (ABCs)
 │   ├── base_message.py         # BaseMessage ABC
 │   ├── base_status.py          # Base status model
 │   └── webhook_interfaces/
 │       ├── base_components.py  # InboxBase, UserBase, BusinessContextBase, ForwardContextBase,
 │       │                       # AdReferralBase, ConversationBase, ErrorDetailBase, SystemEventDetail
-│       └── universal_webhooks.py  # InboundMessageWebhook, CallWebhook, StatusWebhook,
-│                                  # ErrorWebhook, SystemWebhook, CustomWebhook, union
+│       ├── universal_webhooks.py  # InboundMessageWebhook, CallWebhook, StatusWebhook,
+│       │                          # ErrorWebhook, SystemWebhook, CustomWebhook, union
+│       └── conversation_webhooks.py  # update, comment, mention, echo, history, connection lanes
+│
+├── instagram/
+│   └── models.py               # Instagram envelope (messaging[] + changes[]) and typed message families
 │
 └── whatsapp/
     ├── base_models.py          # WhatsAppMetadata, WhatsAppContact, ContactProfile,
@@ -122,10 +125,15 @@ forms under `wappa/schemas`.
   `ACCOUNT_EVENT_FIELDS` set: `account_offboarded`, `account_reconnected`) carry a flat,
   WABA-scoped value with no `metadata`, so they use the strict `AccountWebhookValue` model
   instead. Built-in fields never fall through to the permissive path.
-- **Contract-drift tripwire**: Known built-in payloads retain `extra="forbid"`.
-  A rejected extra field emits `WHATSAPP_WEBHOOK_CONTRACT_DRIFT` at critical
-  level with field paths but no payload values. Production log aggregation must
-  page the owning team on this signature.
+- **Meta input tolerant and reported, Wappa output strict**: Models that parse
+  data from Meta (webhook payloads; Graph API responses) use `extra="allow"` so an
+  additive Meta change cannot turn into a 400 and a dropped delivery. The
+  webhook processors call `report_schema_drift` from `core/schema_drift.py` after
+  parsing; the log carries the model field path and never a value. Wrong types or
+  formats in modelled fields remain validation errors. Wappa's own output
+  contracts (Universal Webhooks, `SystemEventDetail`, domain models) stay
+  `extra="forbid"`, so Hosts never see extras. Unrouteable payloads keep the
+  400/503 table of ADR-0010.
 
 ## Data Flow
 
@@ -151,3 +159,9 @@ HTTP POST (raw JSON)
         ▼
   wappa/core/events/ dispatcher  →  host application handlers
 ```
+
+## Instagram messaging intake
+
+`instagram/models.py` owns the Instagram envelope and typed message families. `processors/instagram_processor.py` is pure translation (its docstring holds the lane table): text, media, shares, story mentions, quick replies and postbacks become `InboundMessageWebhook` (one selection shape with WhatsApp button/list replies, ADR-0016); deletions and edits become `MessageUpdateWebhook`; `read` becomes `StatusWebhook(READ)`; echoes, standalone referrals, reactions and unknown events become `SystemWebhook`; comments and mentions get their own lanes. Inbound media `media_id` is the CDN attachment URL; Hosts read it through `IMediaLibrary.download` unchanged. Inbound reactions are dropped as `UNSUPPORTED_EVENT` until the `send_reaction` gap is addressed ([backlog draft](../../docs/backlog/drafts/261105-mid-send-reaction-core-method.md)).
+
+UserBase carries `platform_user_id` for native non-WhatsApp identity; it cannot be mixed with WA phone/BSUID evidence. InboxBase permits an absent display address rather than inventing a phone. StatusWebhook carries `recipient_platform_id`; it never stores an IGSID in phone or BSUID fields. Runtime SSE identity skips WA identifier-shape classification for Instagram. All provider parsing happens after signature verification, and processors perform no I/O.

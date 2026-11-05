@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from ...domain.inbox.ports import IInboxDirectorySource
 from ...domain.inbox.routing import InboxRoutingMode
 from ...domain.interfaces.identity_resolver import IIdentityResolver
+from ...schemas.core.types import PlatformType
 from ..config.meta_application import (
     MetaApplicationConfig,
     resolve_meta_application_config,
@@ -248,6 +249,7 @@ class WappaBuilder:
         *,
         parser: type[BaseModel] | Callable[[dict[str, Any]], BaseModel],
         handler: Callable[["CustomWebhook"], Awaitable[None]],
+        platform: PlatformType = PlatformType.WHATSAPP,
     ) -> "WappaBuilder":
         """
         Register a typed handler for a non-built-in Meta webhook field.
@@ -296,7 +298,9 @@ class WappaBuilder:
                 handler=on_template_status,
             )
         """
-        self.field_registry.register(field_name, parser=parser, handler=handler)
+        self.field_registry.register(
+            field_name, parser=parser, handler=handler, platform=platform
+        )
         return self
 
     def with_identity_resolver(self, resolver: IIdentityResolver) -> "WappaBuilder":
@@ -460,6 +464,19 @@ class WappaBuilder:
             cache_type=self.persistence_backend,
         )
         app.state.inbox_runtime = inbox_runtime
+        if inbox_runtime.directory is not None:
+            directory = inbox_runtime.directory
+
+            async def _reset_inbox_directory_cache(_app: FastAPI) -> None:
+                cleared = await directory.reset_cache()
+                get_app_logger().info(
+                    "Inbox Directory cache cleared at startup (%s rows); "
+                    "Inboxes reload from the source on first use",
+                    cleared,
+                )
+
+            # After cache infrastructure (20), before Host hooks (50).
+            self.startup_hooks.append((_reset_inbox_directory_cache, 25))
         app.state.inbox_routing_mode = inbox_runtime.mode
         app.state.meta_application_config = resolve_meta_application_config(
             self.meta_application_config,

@@ -23,9 +23,10 @@ from fastapi import Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
+from wappa.api.dependencies.inbox_context import get_inbox_messenger
+from wappa.api.dependencies.media_transfer import MediaUploader, get_media_uploader
 from wappa.api.dependencies.whatsapp_dependencies import (
     get_whatsapp_media_handler,
-    get_whatsapp_messenger,
 )
 from wappa.api.dependencies.whatsapp_media_dependencies import (
     get_whatsapp_media_factory,
@@ -34,8 +35,14 @@ from wappa.api.routes.whatsapp.route_families import RouteFamily
 from wappa.api.utils import dispatch_message_event
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.domain.factories.media_factory import MediaFactory
+from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.media_interface import IMediaHandler
 from wappa.domain.interfaces.messaging_interface import IMessenger
+from wappa.domain.messaging_targets import (
+    DeliveryAddresses,
+    DirectMessage,
+    UnsupportedOperationError,
+)
 from wappa.domain.models.media_result import (
     MediaDeleteResult,
     MediaInfoResult,
@@ -75,16 +82,21 @@ router = _family.router()  # reads: download, info, limits
     "/upload",
     response_model=MediaUploadResult,
     summary="Upload Media",
-    description="Upload a media file to WhatsApp servers and get media ID for sending",
+    description=(
+        "Upload a media file and get a media ID for sending. WhatsApp: Media API "
+        "(`media_type` honoured). Instagram: `message_attachments` via the "
+        "Inbox's IMediaLibrary (image png/jpeg/gif, audio, video, pdf). A "
+        "Platform without a media library answers 501."
+    ),
 )
 async def upload_media(
     file: UploadFile = File(..., description="Media file to upload"),
     media_type: str | None = Form(
         None, description="MIME type (auto-detected if not provided)"
     ),
-    media_handler: IMediaHandler = Depends(get_whatsapp_media_handler),
+    media_handler: MediaUploader = Depends(get_media_uploader),
 ) -> MediaUploadResult:
-    """Upload media file to WhatsApp servers.
+    """Upload media for the selected Inbox (any Platform with a media library).
 
     Based on existing WhatsAppServiceMedia.upload_media() functionality.
     Supports all WhatsApp media types with proper validation.
@@ -138,7 +150,7 @@ async def upload_media(
 async def send_image_message(
     request: ImageMessage,
     fastapi_request: Request,
-    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send image message via WhatsApp.
@@ -148,7 +160,12 @@ async def send_image_message(
     try:
         result = await messenger.send_image(
             image_source=request.media_source,
-            recipient=request.recipient,
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
+            ),
             caption=request.caption,
             reply_to_message_id=request.reply_to_message_id,
         )
@@ -160,6 +177,10 @@ async def send_image_message(
 
     except HTTPException:
         raise
+    except UnsupportedOperationError as e:  # not on this Platform
+        raise HTTPException(status_code=501, detail=str(e)) from e
+    except ValueError as e:  # rejected locally, before any Platform call
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -177,7 +198,7 @@ async def send_image_message(
 async def send_video_message(
     request: VideoMessage,
     fastapi_request: Request,
-    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send video message via WhatsApp.
@@ -187,7 +208,12 @@ async def send_video_message(
     try:
         result = await messenger.send_video(
             video_source=request.media_source,
-            recipient=request.recipient,
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
+            ),
             caption=request.caption,
             reply_to_message_id=request.reply_to_message_id,
             transcript=request.transcript,
@@ -200,6 +226,10 @@ async def send_video_message(
 
     except HTTPException:
         raise
+    except UnsupportedOperationError as e:  # not on this Platform
+        raise HTTPException(status_code=501, detail=str(e)) from e
+    except ValueError as e:  # rejected locally, before any Platform call
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -217,7 +247,7 @@ async def send_video_message(
 async def send_audio_message(
     request: AudioMessage,
     fastapi_request: Request,
-    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send audio message via WhatsApp.
@@ -228,9 +258,15 @@ async def send_audio_message(
     try:
         result = await messenger.send_audio(
             audio_source=request.media_source,
-            recipient=request.recipient,
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
+            ),
             reply_to_message_id=request.reply_to_message_id,
             transcript=request.transcript,
+            is_voice=request.is_voice,
         )
 
         if not result.success:
@@ -240,6 +276,10 @@ async def send_audio_message(
 
     except HTTPException:
         raise
+    except UnsupportedOperationError as e:  # not on this Platform
+        raise HTTPException(status_code=501, detail=str(e)) from e
+    except ValueError as e:  # rejected locally, before any Platform call
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -257,7 +297,7 @@ async def send_audio_message(
 async def send_document_message(
     request: DocumentMessage,
     fastapi_request: Request,
-    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send document message via WhatsApp.
@@ -267,7 +307,12 @@ async def send_document_message(
     try:
         result = await messenger.send_document(
             document_source=request.media_source,
-            recipient=request.recipient,
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
+            ),
             filename=request.filename,
             caption=request.caption,
             reply_to_message_id=request.reply_to_message_id,
@@ -280,6 +325,10 @@ async def send_document_message(
 
     except HTTPException:
         raise
+    except UnsupportedOperationError as e:  # not on this Platform
+        raise HTTPException(status_code=501, detail=str(e)) from e
+    except ValueError as e:  # rejected locally, before any Platform call
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -291,24 +340,35 @@ async def send_document_message(
     "/send-sticker",
     response_model=MessageResult,
     summary="Send Sticker Message",
-    description="Send a sticker message with optional reply context",
+    description=(
+        "Send a WhatsApp sticker. Format: WebP only (image/webp; 512x512, up to "
+        "100 KB static or 500 KB animated). `media_source` is a `.webp` URL, a "
+        "`.webp` file path or an uploaded media ID; any other extension is "
+        "rejected with 400 before Meta is called."
+    ),
 )
 @dispatch_message_event(platform="whatsapp")
 async def send_sticker_message(
     request: StickerMessage,
     fastapi_request: Request,
-    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send sticker message via WhatsApp.
 
-    Supports WebP images only (100KB static, 500KB animated).
-    Note: Sticker messages do not support captions.
+    WhatsApp stickers are WebP only (512x512; 100 KB static, 500 KB animated).
+    A non-WebP source is a 400 here: Meta would accept a PNG link and only
+    fail later with status 131053. Stickers do not support captions.
     """
     try:
         result = await messenger.send_sticker(
             sticker_source=request.media_source,
-            recipient=request.recipient,
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
+            ),
             reply_to_message_id=request.reply_to_message_id,
         )
 
@@ -319,6 +379,10 @@ async def send_sticker_message(
 
     except HTTPException:
         raise
+    except ValueError as e:  # wrong sticker format, caught before any Meta call
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except UnsupportedOperationError as e:  # not on this Platform
+        raise HTTPException(status_code=501, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -362,7 +426,10 @@ async def get_media_info(
 @router.get(
     "/download/{media_id}",
     summary="Download Media",
-    description="Download media file by ID as streaming response",
+    description=(
+        "Download WhatsApp media by ID (Media API). Instagram attachment URLs are "
+        "public CDN links: fetch them directly. Other Platforms answer 501."
+    ),
 )
 async def download_media(
     media_id: str, media_handler: IMediaHandler = Depends(get_whatsapp_media_handler)

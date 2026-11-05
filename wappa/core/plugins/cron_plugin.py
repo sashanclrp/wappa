@@ -90,7 +90,6 @@ class CronPlugin:
         expr: str,
         *,
         inbox_ref: InboxRef | None = None,
-        inbox_id: str | None = None,
         user_id: str | None = None,
         tags: list[str] | None = None,
         payload: dict[str, Any] | None = None,
@@ -105,7 +104,6 @@ class CronPlugin:
             cron_id: Unique job name — used as dispatch key in process_cron_event()
             expr: Cron expression (e.g., "0 9 * * *" for daily at 9 AM)
             inbox_ref: Optional qualified Inbox scope — if set, full context available.
-            inbox_id: Legacy WhatsApp-only shorthand for ``inbox_ref``.
             user_id: Optional user scope — for messenger/cache targeting
             tags: Optional tags for secondary filtering
             payload: Optional static data available in the CronEvent
@@ -116,11 +114,7 @@ class CronPlugin:
         Returns:
             Self for fluent API chaining
         """
-        if inbox_ref is not None and inbox_id is not None:
-            raise ValueError("Specify either inbox_ref or inbox_id, not both")
-        resolved_inbox_ref = inbox_ref or (
-            InboxRef.whatsapp(inbox_id) if inbox_id is not None else None
-        )
+        resolved_inbox_ref = inbox_ref
         if user_id is not None and resolved_inbox_ref is None:
             raise ValueError("A user-scoped cron requires inbox_ref")
 
@@ -266,10 +260,9 @@ class CronPlugin:
         """
         if reg.inbox_ref is not None and self._context_factory:
             ctx = await self._context_factory.create_context(
-                inbox_id=reg.inbox_ref.inbox_id,
-                user_id=reg.user_id,
+                reg.inbox_ref,
+                reg.user_id,
                 include_messenger=reg.user_id is not None,
-                platform=reg.inbox_ref.platform,
             )
             return self.event_handler.with_context(
                 inbox_id=reg.inbox_ref.inbox_id,
@@ -284,7 +277,7 @@ class CronPlugin:
         # System cron: database-only context. System Scope is a Table Cache
         # namespace, never an Inbox identity.
         if self._context_factory:
-            ctx = await self._context_factory.create_context(inbox_id=None)
+            ctx = await self._context_factory.create_context(None)
             return self.event_handler.with_context(
                 inbox_id=None,
                 inbox_ref=None,

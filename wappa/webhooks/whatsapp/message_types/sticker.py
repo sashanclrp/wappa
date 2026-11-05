@@ -27,7 +27,7 @@ from wappa.webhooks.whatsapp.base_models import (
 class StickerContent(BaseModel):
     """Sticker message content."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     mime_type: str = Field(
         ..., description="MIME type of the sticker file (e.g., 'image/webp')"
@@ -76,7 +76,7 @@ class WhatsAppStickerMessage(WhatsAppMessageIdentity, BaseMediaMessage):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Standard message fields (BSUID support v24.0+)

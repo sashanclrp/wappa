@@ -36,6 +36,8 @@ class MessageType(StrEnum):
     SYSTEM = "system"  # System notifications, member joins, etc.
     EDIT = "edit"  # A user replaced the contents of an earlier message
     REVOKE = "revoke"  # A user removed an earlier message
+    SHARE = "share"  # Shared post/Reel/story reference (Instagram)
+    STORY_MENTION = "story_mention"  # User mentioned the account in their story
     UNSUPPORTED = "unsupported"  # Unsupported message types
 
 

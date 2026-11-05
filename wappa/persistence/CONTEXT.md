@@ -22,7 +22,7 @@ Reference: [root CONTEXT.md](../../CONTEXT.md)
 
 | Term | Definition |
 |------|-----------|
-| **Inbox Namespace** | `InboxRef.cache_namespace`: the collision-free string Wappa derives from an Inbox Reference for persistence. WhatsApp keeps its raw `phone_number_id` so deployed keys stay readable; every other Platform uses `<platform>__<inbox_id>`. Host Applications never construct it. |
+| **Inbox Namespace** | `InboxRef.cache_namespace`: the collision-free string Wappa derives from an Inbox Reference for persistence. Every Platform, WhatsApp included since 0.34, uses `<platform>__<inbox_id>`; pre-0.34 raw WhatsApp keys are renamed once with `wappa migrate cache-namespaces`. Host Applications never construct it. |
 | **Key Pattern** | The Redis naming template used to namespace data. Inbox Namespace is the first segment for Inbox runtime caches. Table Cache alone may use another explicit `context_id` as its first segment. All patterns are built by `KeyFactory`. |
 | **Expiry Key** | A Redis entry with a TTL whose expiration fires an Expiry Action. Format: `{inbox_namespace}:EXPTRIGGER:{action}:{identifier}`. |
 | **PubSub Channel** | Redis Pub/Sub channel for real-time notifications. Format: `wappa:notify:{inbox_namespace}:{user_id}:{event_type}`. The namespace comes from `InboxRef.cache_namespace`; callers never concatenate a Platform and Inbox ID themselves. |

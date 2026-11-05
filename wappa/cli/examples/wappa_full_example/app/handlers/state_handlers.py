@@ -8,8 +8,11 @@ selections, including state validation, response processing, and cleanup.
 import time
 from typing import Any
 
+from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.cache_factory import ICacheFactory
 from wappa.domain.interfaces.messaging_interface import IMessenger
+from wappa.domain.interfaces.template_messaging import ITemplateMessaging
+from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.webhooks import InboundMessageWebhook
 
 from ..models.state_models import ButtonState, ListState, StateType
@@ -208,7 +211,14 @@ class StateHandlers:
 
         # Send metadata response
         await self.messenger.send_text(
-            recipient=user_id, text=metadata_text, reply_to_message_id=message_id
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=self.messenger.platform, inbox_id=self.messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(user_id),
+            ),
+            text=metadata_text,
+            reply_to_message_id=message_id,
         )
 
         # Send corresponding media file based on selection
@@ -233,7 +243,16 @@ class StateHandlers:
             if not media_sent:
                 # Send fallback text if media fails
                 fallback_text = f"🎉 You selected: *{selected_button['title']}*\n\n(Media file not found: {media_file})"
-                await self.messenger.send_text(recipient=user_id, text=fallback_text)
+                await self.messenger.send_text(
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=self.messenger.platform,
+                            inbox_id=self.messenger.inbox_id,
+                        ),
+                        addresses=DeliveryAddresses.of(user_id),
+                    ),
+                    text=fallback_text,
+                )
 
         # Send completion message
         completion_text = (
@@ -246,7 +265,15 @@ class StateHandlers:
             f"and got your chosen animal {'image' if media_sent else '(image failed to load)'}!"
         )
 
-        await self.messenger.send_text(recipient=user_id, text=completion_text)
+        await self.messenger.send_text(
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=self.messenger.platform, inbox_id=self.messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(user_id),
+            ),
+            text=completion_text,
+        )
 
         # Update user activity
         await self.cache_helper.update_user_activity(
@@ -295,7 +322,14 @@ class StateHandlers:
 
         # Send metadata response
         await self.messenger.send_text(
-            recipient=user_id, text=metadata_text, reply_to_message_id=message_id
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=self.messenger.platform, inbox_id=self.messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(user_id),
+            ),
+            text=metadata_text,
+            reply_to_message_id=message_id,
         )
 
         # Send corresponding media file based on selection
@@ -330,7 +364,16 @@ class StateHandlers:
             if not media_sent:
                 # Send fallback text if media fails
                 fallback_text = f"🎉 You selected: *{selected_item['title']}*\n\n(Media file not found: {media_file})"
-                await self.messenger.send_text(recipient=user_id, text=fallback_text)
+                await self.messenger.send_text(
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=self.messenger.platform,
+                            inbox_id=self.messenger.inbox_id,
+                        ),
+                        addresses=DeliveryAddresses.of(user_id),
+                    ),
+                    text=fallback_text,
+                )
 
         # Send completion message
         completion_text = (
@@ -345,7 +388,15 @@ class StateHandlers:
             f"and got your chosen {media_type} {'file' if media_sent else '(file failed to load)'}!"
         )
 
-        await self.messenger.send_text(recipient=user_id, text=completion_text)
+        await self.messenger.send_text(
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=self.messenger.platform, inbox_id=self.messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(user_id),
+            ),
+            text=completion_text,
+        )
 
         # Update user activity
         await self.cache_helper.update_user_activity(
@@ -384,7 +435,14 @@ class StateHandlers:
         )
 
         await self.messenger.send_text(
-            recipient=user_id, text=reminder_text, reply_to_message_id=message_id
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=self.messenger.platform, inbox_id=self.messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(user_id),
+            ),
+            text=reminder_text,
+            reply_to_message_id=message_id,
         )
 
     async def _send_list_state_reminder(
@@ -403,7 +461,14 @@ class StateHandlers:
         )
 
         await self.messenger.send_text(
-            recipient=user_id, text=reminder_text, reply_to_message_id=message_id
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=self.messenger.platform, inbox_id=self.messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(user_id),
+            ),
+            text=reminder_text,
+            reply_to_message_id=message_id,
         )
 
     async def _send_invalid_button_selection_message(
@@ -418,7 +483,14 @@ class StateHandlers:
         )
 
         await self.messenger.send_text(
-            recipient=user_id, text=error_text, reply_to_message_id=message_id
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=self.messenger.platform, inbox_id=self.messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(user_id),
+            ),
+            text=error_text,
+            reply_to_message_id=message_id,
         )
 
     async def _send_invalid_list_selection_message(
@@ -433,7 +505,14 @@ class StateHandlers:
         )
 
         await self.messenger.send_text(
-            recipient=user_id, text=error_text, reply_to_message_id=message_id
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=self.messenger.platform, inbox_id=self.messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(user_id),
+            ),
+            text=error_text,
+            reply_to_message_id=message_id,
         )
 
     async def handle_template_example_state(
@@ -498,8 +577,15 @@ class StateHandlers:
 
         try:
             # Echo template back (simple text template)
-            result = await self.messenger.send_text_template(
-                recipient=user_id,
+            templates = self.messenger.require_capability(ITemplateMessaging)
+            result = await templates.send_text_template(
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
                 template_name=template_name,
                 language_code="en_US",
                 template_type="utility",
@@ -512,7 +598,13 @@ class StateHandlers:
                         "⚠️ Sorry, couldn't echo the template back.\n\n"
                         "Type */EXIT* to leave template demo."
                     ),
-                    recipient=user_id,
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=self.messenger.platform,
+                            inbox_id=self.messenger.inbox_id,
+                        ),
+                        addresses=DeliveryAddresses.of(user_id),
+                    ),
                 )
 
                 processing_time = int((time.time() - start_time) * 1000)
@@ -541,7 +633,16 @@ class StateHandlers:
                 f"Send another message to see the template again, "
                 f"or type */EXIT* to leave template demo."
             )
-            await self.messenger.send_text(text=follow_up, recipient=user_id)
+            await self.messenger.send_text(
+                text=follow_up,
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
+            )
 
             processing_time = int((time.time() - start_time) * 1000)
 
@@ -561,7 +662,13 @@ class StateHandlers:
                     "⚠️ Sorry, couldn't echo the template back.\n\n"
                     "Type */EXIT* to leave template demo."
                 ),
-                recipient=user_id,
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
             )
 
             processing_time = int((time.time() - start_time) * 1000)
@@ -617,7 +724,15 @@ class StateHandlers:
             "• Try `/button` or `/list` for more interactive features!"
         )
 
-        await self.messenger.send_text(text=summary, recipient=user_id)
+        await self.messenger.send_text(
+            text=summary,
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=self.messenger.platform, inbox_id=self.messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(user_id),
+            ),
+        )
 
         await self.cache_helper.update_user_activity(
             user_id=user_id,

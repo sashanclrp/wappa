@@ -15,14 +15,17 @@ from wappa.schemas.core.types import (
     PlatformType,
     UniversalMessageData,
 )
-from wappa.webhooks.core.base_message import BaseMessage, BaseMessageContext
+from wappa.webhooks.core.base_message import (
+    BaseMessageContext,
+    BaseReactionMessage,
+)
 from wappa.webhooks.whatsapp.base_models import MessageContext, WhatsAppMessageIdentity
 
 
 class ReactionContent(BaseModel):
     """Reaction message content."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     message_id: str = Field(..., description="ID of the message being reacted to")
     emoji: str | None = Field(
@@ -54,7 +57,7 @@ class ReactionContent(BaseModel):
         return v
 
 
-class WhatsAppReactionMessage(WhatsAppMessageIdentity, BaseMessage):
+class WhatsAppReactionMessage(WhatsAppMessageIdentity, BaseReactionMessage):
     """
     WhatsApp reaction message model.
 
@@ -65,7 +68,7 @@ class WhatsAppReactionMessage(WhatsAppMessageIdentity, BaseMessage):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Standard message fields (BSUID support v24.0+)
@@ -143,7 +146,7 @@ class WhatsAppReactionMessage(WhatsAppMessageIdentity, BaseMessage):
         return self.reaction.message_id
 
     @property
-    def emoji(self) -> str | None:
+    def emoji(self) -> str:
         """Get the reaction emoji."""
         return self.reaction.emoji or ""
 
@@ -151,6 +154,10 @@ class WhatsAppReactionMessage(WhatsAppMessageIdentity, BaseMessage):
     def is_adding_reaction(self) -> bool:
         """Check if this is adding a reaction (emoji present)."""
         return self.reaction.emoji is not None
+
+    @property
+    def is_removal(self) -> bool:
+        return self.reaction.emoji is None
 
     @property
     def is_removing_reaction(self) -> bool:

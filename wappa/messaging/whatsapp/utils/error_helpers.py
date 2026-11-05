@@ -16,6 +16,15 @@ ERROR_CODE_BSUID_NOT_SUPPORTED = 131062
 # Tag surfaced on MessageResult.error_code and reused by the API layer's HTTP mapping.
 BSUID_ERROR_TAG = "BSUID_RECIPIENT_NOT_SUPPORTED"
 
+# Meta rejected the Delivery Address itself, synchronously and before any
+# delivery, so trying the User's next known address can neither duplicate a
+# message nor be pointless (ADR-0019):
+# - 131030: recipient not in a test number's allow-list (allow-lists hold phones).
+# - BSUID_ERROR_TAG (Meta 131062): this message type cannot go to a BSUID.
+# Window (131047), rate limit (131056), content (131051), undeliverable
+# (131026), timeouts and 5xx are deliberately absent.
+ADDRESS_REJECTION_CODES: frozenset[str] = frozenset({"131030", BSUID_ERROR_TAG})
+
 
 def is_authentication_error(error: Exception) -> bool:
     error_str = str(error).lower()
@@ -31,7 +40,10 @@ def is_bsuid_unsupported_error(error: Exception | dict) -> bool:
         return _platform_error_code(error.response) == str(
             ERROR_CODE_BSUID_NOT_SUPPORTED
         )
-    return str(ERROR_CODE_BSUID_NOT_SUPPORTED) in str(error)
+    # Only Meta's structured error code counts. Matching the number in free
+    # text could tag a timeout as an address rejection and trigger a
+    # fallback send (ADR-0019).
+    return False
 
 
 def handle_whatsapp_error(

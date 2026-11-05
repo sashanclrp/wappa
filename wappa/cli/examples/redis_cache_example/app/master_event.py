@@ -19,6 +19,9 @@ from wappa.webhooks import ErrorWebhook, InboundMessageWebhook, StatusWebhook
 if TYPE_CHECKING:
     from wappa.domain.events.api_message_event import APIMessageEvent
 
+from wappa.domain.inbox.identity import InboxRef
+from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
+
 from .scores import AVAILABLE_SCORES, ScoreDependencies
 from .scores.score_base import ScoreRegistry
 from .utils.message_utils import extract_user_data, sanitize_message_text
@@ -376,7 +379,13 @@ class RedisCacheExampleHandler(WappaEventHandler):
             )
 
             result = await self.messenger.send_text(
-                recipient=user_id,
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
                 text=error_message,
                 reply_to_message_id=webhook.message.message_id,
             )

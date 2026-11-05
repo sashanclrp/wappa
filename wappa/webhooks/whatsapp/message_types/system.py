@@ -23,7 +23,7 @@ from wappa.webhooks.whatsapp.base_models import MessageContext, WhatsAppMessageI
 class SystemContent(BaseModel):
     """System message content with BSUID support (v24.0+)."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     body: str = Field(..., description="System message text describing the event")
     wa_id: str | None = Field(
@@ -93,7 +93,7 @@ class WhatsAppSystemMessage(WhatsAppMessageIdentity, BaseMessage):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Standard message fields (BSUID support v24.0+)

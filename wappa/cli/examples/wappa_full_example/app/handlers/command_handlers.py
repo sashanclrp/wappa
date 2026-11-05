@@ -8,11 +8,13 @@ that demonstrate interactive features and specialized messaging capabilities.
 import time
 from typing import Any
 
+from wappa.domain.inbox.identity import InboxRef
+from wappa.domain.interactive import ReplyButton
+from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.messaging.whatsapp.models.interactive_models import (
     InteractiveHeader,
     ListRow,
     ListSection,
-    ReplyButton,
 )
 from wappa.webhooks import InboundMessageWebhook
 
@@ -90,7 +92,13 @@ class CommandHandlers:
             # Send button message
             button_result = await self.messenger.send_button_message(
                 buttons=buttons,
-                recipient=user_id,
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
                 body="🎯 *Button Demo Activated!*\n\nChoose your favorite animal below. You have 10 minutes to make your selection, or the state will expire automatically.",
                 header=InteractiveHeader(type="text", text="Interactive Button Demo"),
                 footer="⏰ Expires in 10 minutes",
@@ -119,7 +127,16 @@ class CommandHandlers:
                 "💡 *Pro tip*: This demonstrates state management with TTL!"
             )
 
-            await self.messenger.send_text(recipient=user_id, text=instruction_text)
+            await self.messenger.send_text(
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
+                text=instruction_text,
+            )
 
             # Update user activity
             await self.cache_helper.update_user_activity(user_id, "text", "/button")
@@ -211,7 +228,13 @@ class CommandHandlers:
             # Send list message
             list_result = await self.messenger.send_list_message(
                 sections=sections,
-                recipient=user_id,
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
                 body="🎯 *List Demo Activated!*\n\nSelect the type of media file you want to receive. You have 10 minutes to make your selection, or the state will expire automatically.",
                 button_text="Choose Media",
                 header="Interactive List Demo",
@@ -240,7 +263,16 @@ class CommandHandlers:
                 "💡 *Pro tip*: This demonstrates list interactions with media responses!"
             )
 
-            await self.messenger.send_text(recipient=user_id, text=instruction_text)
+            await self.messenger.send_text(
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
+                text=instruction_text,
+            )
 
             # Update user activity
             await self.cache_helper.update_user_activity(user_id, "text", "/list")
@@ -286,7 +318,13 @@ class CommandHandlers:
             cta_result = await self.messenger.send_cta_message(
                 button_text="📚 View Documentation",
                 button_url="https://wappa.mimeia.com/docs",
-                recipient=user_id,
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
                 body="🎯 *Call-to-Action Demo*\n\nThis is a demonstration of CTA (Call-to-Action) buttons that link to external websites. Click the button below to visit the Wappa framework documentation!",
                 header="CTA Button Demo",
                 footer="External link - opens in browser",
@@ -312,7 +350,16 @@ class CommandHandlers:
                 "💡 *Pro tip*: CTA buttons are great for bridging WhatsApp conversations with web experiences!"
             )
 
-            await self.messenger.send_text(recipient=user_id, text=explanation_text)
+            await self.messenger.send_text(
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
+                text=explanation_text,
+            )
 
             # Update user activity
             await self.cache_helper.update_user_activity(user_id, "text", "/cta")
@@ -363,7 +410,13 @@ class CommandHandlers:
             location_result = await self.messenger.send_location(
                 latitude=latitude,
                 longitude=longitude,
-                recipient=user_id,
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
                 name=location_name,
                 address=location_address,
                 reply_to_message_id=message_id,
@@ -389,7 +442,16 @@ class CommandHandlers:
                 f"💡 *Pro tip*: Location messages are perfect for businesses to share their address with customers!"
             )
 
-            await self.messenger.send_text(recipient=user_id, text=explanation_text)
+            await self.messenger.send_text(
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
+                text=explanation_text,
+            )
 
             # Update user activity
             await self.cache_helper.update_user_activity(user_id, "text", "/location")
@@ -471,7 +533,13 @@ class CommandHandlers:
 
             await self.messenger.send_text(
                 text=instructions,
-                recipient=user_id,
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
                 reply_to_message_id=message_id,
             )
 
@@ -612,7 +680,13 @@ class CommandHandlers:
             # Send stats message
             await self.messenger.send_text(
                 text=stats_message,
-                recipient=user_id,
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
                 reply_to_message_id=message_id,
             )
 
@@ -637,7 +711,13 @@ class CommandHandlers:
 
             await self.messenger.send_text(
                 text=f"⚠️ Failed to generate API statistics.\n\nError: {str(e)}",
-                recipient=user_id,
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
             )
 
             processing_time = int((time.time() - start_time) * 1000)
@@ -686,7 +766,12 @@ class CommandHandlers:
 
         await self.messenger.send_text(
             text=docs_info,
-            recipient=user_id,
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=self.messenger.platform, inbox_id=self.messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(user_id),
+            ),
             reply_to_message_id=webhook.message.message_id,
         )
 

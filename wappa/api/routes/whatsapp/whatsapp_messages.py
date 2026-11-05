@@ -14,16 +14,22 @@ Router configuration:
 from fastapi import Depends, HTTPException, Request
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
+from wappa.api.dependencies.inbox_context import get_inbox_messenger
 from wappa.api.dependencies.whatsapp_dependencies import (
     get_whatsapp_message_factory,
-    get_whatsapp_messenger,
 )
 from wappa.api.routes.whatsapp.route_families import RouteFamily
 from wappa.api.utils import dispatch_message_event
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.logger import get_logger
 from wappa.domain.factories.message_factory import MessageFactory
+from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.messaging_interface import IMessenger
+from wappa.domain.messaging_targets import (
+    DeliveryAddresses,
+    DirectMessage,
+    UnsupportedOperationError,
+)
 from wappa.messaging.whatsapp.models.basic_models import (
     BasicTextMessage,
     MessageResult,
@@ -55,7 +61,7 @@ router = _family.router()
 async def send_text_message(
     request: BasicTextMessage,
     fastapi_request: Request,
-    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send a text message via WhatsApp.
@@ -85,7 +91,12 @@ async def send_text_message(
 
         result = await messenger.send_text(
             text=request.text,
-            recipient=request.recipient,
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
+            ),
             reply_to_message_id=request.reply_to_message_id,
             disable_preview=request.disable_preview,
         )
@@ -103,6 +114,8 @@ async def send_text_message(
             status_code=400,
             detail=f"Text message validation failed for recipient '{request.recipient}': {e}",
         ) from e
+    except UnsupportedOperationError as e:  # not on this Platform
+        raise HTTPException(status_code=501, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error sending text message: {str(e)}")
         raise HTTPException(
@@ -121,7 +134,7 @@ async def send_text_message(
     description="Mark a WhatsApp message as read with optional typing indicator",
 )
 async def mark_message_as_read(
-    request: ReadStatusMessage, messenger: IMessenger = Depends(get_whatsapp_messenger)
+    request: ReadStatusMessage, messenger: IMessenger = Depends(get_inbox_messenger)
 ) -> MessageResult:
     """Mark a WhatsApp message as read with optional typing indicator.
 
@@ -150,6 +163,16 @@ async def mark_message_as_read(
         result = await messenger.mark_as_read(
             message_id=request.message_id,
             typing=request.typing,  # Key requirement: typing boolean support
+            target=(
+                DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=messenger.platform, inbox_id=messenger.inbox_id
+                    ),
+                    addresses=DeliveryAddresses.of(request.recipient),
+                )
+                if request.recipient
+                else None
+            ),
         )
 
         if result.success:
@@ -165,6 +188,8 @@ async def mark_message_as_read(
             status_code=400,
             detail=f"Invalid message ID '{request.message_id}': {e}",
         ) from e
+    except UnsupportedOperationError as e:  # not on this Platform
+        raise HTTPException(status_code=501, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Unexpected error marking message as read: {str(e)}")
         raise HTTPException(

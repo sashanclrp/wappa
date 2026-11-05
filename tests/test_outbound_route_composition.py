@@ -15,71 +15,89 @@ from __future__ import annotations
 import pytest
 from fastapi import FastAPI
 
-from wappa.api.routes.whatsapp_combined import create_whatsapp_router
+from wappa.api.routes.whatsapp_combined import create_messaging_router
 
 # ── capability groups, by what an unauthenticated caller could do ────────────
 
 ORDINARY_OUTBOUND_ROUTES = {
-    ("/api/whatsapp/messages/send-text", "POST"),
-    ("/api/whatsapp/messages/mark-as-read", "POST"),
-    ("/api/whatsapp/media/send-image", "POST"),
-    ("/api/whatsapp/media/send-video", "POST"),
-    ("/api/whatsapp/media/send-audio", "POST"),
-    ("/api/whatsapp/media/send-document", "POST"),
-    ("/api/whatsapp/media/send-sticker", "POST"),
-    ("/api/whatsapp/specialized/send-contact", "POST"),
-    ("/api/whatsapp/specialized/send-location", "POST"),
-    ("/api/whatsapp/specialized/send-location-request", "POST"),
+    ("/api/{platform}/messages/send-text", "POST"),
+    ("/api/{platform}/messages/send-private-reply", "POST"),
+    ("/api/{platform}/messages/mark-as-read", "POST"),
+    ("/api/{platform}/media/send-image", "POST"),
+    ("/api/{platform}/media/send-video", "POST"),
+    ("/api/{platform}/media/send-audio", "POST"),
+    ("/api/{platform}/media/send-document", "POST"),
+    ("/api/{platform}/media/send-sticker", "POST"),
+    ("/api/{platform}/specialized/send-contact", "POST"),
+    ("/api/{platform}/specialized/send-location", "POST"),
+    ("/api/{platform}/specialized/send-location-request", "POST"),
 }
 
 INTERACTIVE_OUTBOUND_ROUTES = {
-    ("/api/whatsapp/interactive/send-buttons", "POST"),
-    ("/api/whatsapp/interactive/send-list", "POST"),
-    ("/api/whatsapp/interactive/send-cta", "POST"),
+    ("/api/{platform}/interactive/send-buttons", "POST"),
+    ("/api/{platform}/interactive/send-list", "POST"),
+    ("/api/{platform}/interactive/send-cta", "POST"),
+    ("/api/{platform}/interactive/send-carousel", "POST"),
 }
 
 # Demonstration endpoints removed from the production contract in v0.27.
 REMOVED_DEMO_ROUTES = {
-    ("/api/whatsapp/interactive/send-complex-buttons", "POST"),
-    ("/api/whatsapp/interactive/send-menu-list", "POST"),
+    ("/api/{platform}/interactive/send-complex-buttons", "POST"),
+    ("/api/{platform}/interactive/send-menu-list", "POST"),
 }
 
 TEMPLATE_OUTBOUND_ROUTES = {
-    ("/api/whatsapp/templates/send-text", "POST"),
-    ("/api/whatsapp/templates/send-media", "POST"),
-    ("/api/whatsapp/templates/send-location", "POST"),
+    ("/api/{platform}/templates/send-text", "POST"),
+    ("/api/{platform}/templates/send-media", "POST"),
+    ("/api/{platform}/templates/send-location", "POST"),
 }
 
 # Destroys a media asset on the platform.
-MEDIA_MANAGEMENT_ROUTES = {("/api/whatsapp/media/{media_id}", "DELETE")}
+MEDIA_MANAGEMENT_ROUTES = {("/api/{platform}/media/{media_id}", "DELETE")}
 
 # Creates a platform media asset. Kept under the embedded profile by design.
-MEDIA_UPLOAD_ROUTES = {("/api/whatsapp/media/upload", "POST")}
+MEDIA_UPLOAD_ROUTES = {("/api/{platform}/media/upload", "POST")}
 
 # Reads, overwrites, and deletes any named recipient's conversational state.
 STATE_HANDLER_ROUTES = {
-    ("/api/whatsapp/state-handlers/set", "POST"),
-    ("/api/whatsapp/state-handlers/get/{recipient}/{handler_value}", "GET"),
-    ("/api/whatsapp/state-handlers/delete/{recipient}/{handler_value}", "DELETE"),
+    ("/api/{platform}/state-handlers/set", "POST"),
+    ("/api/{platform}/state-handlers/get/{recipient}/{handler_value}", "GET"),
+    ("/api/{platform}/state-handlers/delete/{recipient}/{handler_value}", "DELETE"),
 }
 
 MEDIA_READ_ROUTES = {
-    ("/api/whatsapp/media/info/{media_id}", "GET"),
-    ("/api/whatsapp/media/download/{media_id}", "GET"),
-    ("/api/whatsapp/media/limits", "GET"),
+    ("/api/{platform}/media/info/{media_id}", "GET"),
+    ("/api/{platform}/media/download/{media_id}", "GET"),
+    ("/api/{platform}/media/limits", "GET"),
+}
+
+COMMENT_CONTROL_ROUTES = {
+    ("/api/{platform}/comments/{comment_id}/reply", "POST"),
+    ("/api/{platform}/comments/{comment_id}/hide", "POST"),
+    ("/api/{platform}/comments/{comment_id}/unhide", "POST"),
+    ("/api/{platform}/comments/{comment_id}", "DELETE"),
+    ("/api/{platform}/posts/{media_id}/comments-enabled", "POST"),
+}
+
+CONVERSATION_READ_ROUTES = {
+    ("/api/{platform}/posts/{media_id}", "GET"),
+    ("/api/{platform}/posts/{media_id}/comments", "GET"),
+    ("/api/{platform}/comments/{comment_id}", "GET"),
+    ("/api/{platform}/comments/{comment_id}/replies", "GET"),
+    ("/api/{platform}/conversations/{user_id}/messages", "GET"),
 }
 
 SERVICE_READ_ROUTES = {
-    ("/api/whatsapp/health", "GET"),
-    ("/api/whatsapp/messages/limits", "GET"),
-    ("/api/whatsapp/interactive/limits", "GET"),
-    ("/api/whatsapp/specialized/validate-contact", "POST"),
-    ("/api/whatsapp/specialized/validate-coordinates", "POST"),
-    ("/api/whatsapp/templates/limits", "GET"),
-    ("/api/whatsapp/templates/info", "GET"),
-    ("/api/whatsapp/templates/info/by-id/{template_id}", "GET"),
-    ("/api/whatsapp/templates/info/by-name/{template_name}", "GET"),
-    ("/api/whatsapp/templates/info/namespace", "GET"),
+    ("/api/{platform}/health", "GET"),
+    ("/api/{platform}/messages/limits", "GET"),
+    ("/api/{platform}/interactive/limits", "GET"),
+    ("/api/{platform}/specialized/validate-contact", "POST"),
+    ("/api/{platform}/specialized/validate-coordinates", "POST"),
+    ("/api/{platform}/templates/limits", "GET"),
+    ("/api/{platform}/templates/info", "GET"),
+    ("/api/{platform}/templates/info/by-id/{template_id}", "GET"),
+    ("/api/{platform}/templates/info/by-name/{template_name}", "GET"),
+    ("/api/{platform}/templates/info/namespace", "GET"),
 }
 
 # Everything that reaches the platform or rewrites stored state. The validate-*
@@ -92,6 +110,7 @@ EVERY_MUTATION = (
     | MEDIA_MANAGEMENT_ROUTES
     | MEDIA_UPLOAD_ROUTES
     | STATE_HANDLER_ROUTES
+    | COMMENT_CONTROL_ROUTES
 )
 
 
@@ -103,7 +122,7 @@ def routes_of(**options: object) -> set[tuple[str, str]]:
     while the schema reports the surface a client can actually call.
     """
     app = FastAPI()
-    app.include_router(create_whatsapp_router(**options))  # type: ignore[arg-type]
+    app.include_router(create_messaging_router(**options))  # type: ignore[arg-type]
     return {
         (path, method.upper())
         for path, operations in app.openapi()["paths"].items()
@@ -125,6 +144,8 @@ def test_standalone_default_keeps_every_route_it_always_had() -> None:
         MEDIA_READ_ROUTES,
         STATE_HANDLER_ROUTES,
         SERVICE_READ_ROUTES,
+        COMMENT_CONTROL_ROUTES,
+        CONVERSATION_READ_ROUTES,
     ):
         assert group.issubset(mounted)
     # Templates stay opt-in; that decision is unchanged.
@@ -167,6 +188,7 @@ def test_embedded_profile_keeps_every_read_and_lookup() -> None:
 
     assert MEDIA_READ_ROUTES.issubset(mounted)
     assert SERVICE_READ_ROUTES.issubset(mounted)
+    assert CONVERSATION_READ_ROUTES.issubset(mounted)
 
 
 def test_embedded_profile_can_also_close_media_upload() -> None:
@@ -250,6 +272,7 @@ def test_omitting_outbound_transport_removes_exactly_the_intended_groups() -> No
         | INTERACTIVE_OUTBOUND_ROUTES
         | MEDIA_MANAGEMENT_ROUTES
         | STATE_HANDLER_ROUTES
+        | COMMENT_CONTROL_ROUTES
     )
     assert embedded.issubset(full)
 
@@ -290,3 +313,12 @@ def test_messaging_services_stay_importable_without_any_routes() -> None:
             TextTemplateTransportRequest,
         )
     )
+
+
+def test_comment_controls_are_their_own_capability_group() -> None:
+    assert COMMENT_CONTROL_ROUTES.isdisjoint(routes_of(profile="embedded"))
+    assert (
+        routes_of(profile="embedded", include_comment_controls=True)
+        >= COMMENT_CONTROL_ROUTES
+    )
+    assert COMMENT_CONTROL_ROUTES.isdisjoint(routes_of(include_comment_controls=False))

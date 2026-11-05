@@ -8,7 +8,9 @@ from typing import Any, Self
 
 import httpx
 
+from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.messaging_interface import IMessenger
+from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.webhooks import InboundMessageWebhook
 
 
@@ -152,7 +154,12 @@ class MediaHandler:
             if media_type == "image":
                 result = await messenger.send_image(
                     image_source=file_path,
-                    recipient=recipient,
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=messenger.platform, inbox_id=messenger.inbox_id
+                        ),
+                        addresses=DeliveryAddresses.of(recipient),
+                    ),
                     caption=caption,
                     reply_to_message_id=reply_to_message_id,
                 )
@@ -160,7 +167,12 @@ class MediaHandler:
             elif media_type == "video":
                 result = await messenger.send_video(
                     video_source=file_path,
-                    recipient=recipient,
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=messenger.platform, inbox_id=messenger.inbox_id
+                        ),
+                        addresses=DeliveryAddresses.of(recipient),
+                    ),
                     caption=caption,
                     reply_to_message_id=reply_to_message_id,
                 )
@@ -168,7 +180,12 @@ class MediaHandler:
             elif media_type == "audio":
                 result = await messenger.send_audio(
                     audio_source=file_path,
-                    recipient=recipient,
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=messenger.platform, inbox_id=messenger.inbox_id
+                        ),
+                        addresses=DeliveryAddresses.of(recipient),
+                    ),
                     reply_to_message_id=reply_to_message_id,
                 )
 
@@ -176,7 +193,12 @@ class MediaHandler:
                 filename = os.path.basename(file_path)
                 result = await messenger.send_document(
                     document_source=file_path,
-                    recipient=recipient,
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=messenger.platform, inbox_id=messenger.inbox_id
+                        ),
+                        addresses=DeliveryAddresses.of(recipient),
+                    ),
                     filename=filename,
                     caption=caption,
                     reply_to_message_id=reply_to_message_id,
@@ -222,7 +244,12 @@ class MediaHandler:
             if media_type == "image":
                 result = await messenger.send_image(
                     image_source=media_id,  # Using media_id as source
-                    recipient=recipient,
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=messenger.platform, inbox_id=messenger.inbox_id
+                        ),
+                        addresses=DeliveryAddresses.of(recipient),
+                    ),
                     caption=caption,
                     reply_to_message_id=reply_to_message_id,
                 )
@@ -230,7 +257,12 @@ class MediaHandler:
             elif media_type == "video":
                 result = await messenger.send_video(
                     video_source=media_id,
-                    recipient=recipient,
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=messenger.platform, inbox_id=messenger.inbox_id
+                        ),
+                        addresses=DeliveryAddresses.of(recipient),
+                    ),
                     caption=caption,
                     reply_to_message_id=reply_to_message_id,
                 )
@@ -238,14 +270,24 @@ class MediaHandler:
             elif media_type in ["audio", "voice"]:
                 result = await messenger.send_audio(
                     audio_source=media_id,
-                    recipient=recipient,
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=messenger.platform, inbox_id=messenger.inbox_id
+                        ),
+                        addresses=DeliveryAddresses.of(recipient),
+                    ),
                     reply_to_message_id=reply_to_message_id,
                 )
 
             elif media_type == "document":
                 result = await messenger.send_document(
                     document_source=media_id,
-                    recipient=recipient,
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=messenger.platform, inbox_id=messenger.inbox_id
+                        ),
+                        addresses=DeliveryAddresses.of(recipient),
+                    ),
                     caption=caption,
                     reply_to_message_id=reply_to_message_id,
                 )
@@ -253,7 +295,12 @@ class MediaHandler:
             elif media_type == "sticker":
                 result = await messenger.send_sticker(
                     sticker_source=media_id,
-                    recipient=recipient,
+                    target=DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=messenger.platform, inbox_id=messenger.inbox_id
+                        ),
+                        addresses=DeliveryAddresses.of(recipient),
+                    ),
                     reply_to_message_id=reply_to_message_id,
                 )
 

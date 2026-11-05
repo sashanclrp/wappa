@@ -7,8 +7,11 @@ represent the "standard" that all messaging platforms should adapt to.
 """
 
 from datetime import UTC, datetime
+from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from wappa.domain.messaging_targets import DeliveryAddresses
 
 
 class InboxBase(BaseModel):
@@ -25,7 +28,7 @@ class InboxBase(BaseModel):
 
     # Core inbox identification
     inbox_id: str = Field(description="Unique inbox ID (e.g. business phone number ID)")
-    display_address: str = Field(
+    display_address: str | None = Field(
         description="Business display address (e.g. phone number)"
     )
 
@@ -50,7 +53,7 @@ class UserBase(BaseModel):
     Field vs Property Pattern:
     - phone_number: Raw phone number field from webhook (WhatsApp wa_id)
     - bsuid: Raw BSUID field from webhook (v24.0+)
-    - user_id: @property returning phone_number if available, else BSUID
+    - user_id: @property returning BSUID if available, else phone_number
     """
 
     model_config = ConfigDict(
@@ -61,6 +64,12 @@ class UserBase(BaseModel):
     phone_number: str = Field(
         default="",
         description="User's phone number (may be empty for username-only users)",
+    )
+
+    platform_user_id: str | None = Field(
+        default=None,
+        min_length=1,
+        description="Native Inbox-scoped User ID for non-WhatsApp Platforms",
     )
 
     # BSUID support (v24.0+)
@@ -90,6 +99,16 @@ class UserBase(BaseModel):
         description="Identity key hash for security validation (WhatsApp feature)",
     )
 
+    @model_validator(mode="after")
+    def _identity_evidence(self) -> "UserBase":
+        if self.platform_user_id is not None and (
+            self.phone_number or self.bsuid or self.parent_bsuid
+        ):
+            raise ValueError(
+                "Native Platform identity must not be mixed with WhatsApp address evidence"
+            )
+        return self
+
     @property
     def user_id(self) -> str:
         """
@@ -98,11 +117,24 @@ class UserBase(BaseModel):
         Returns:
             BSUID if available (stable, Meta v24.0+), otherwise wa_id (phone number).
         """
+        if self.platform_user_id and self.platform_user_id.strip():
+            return self.platform_user_id.strip()
         if self.bsuid and self.bsuid.strip():
             return self.bsuid.strip()
         if self.phone_number and self.phone_number.strip():
             return self.phone_number.strip()
         return ""
+
+    def delivery_addresses(self) -> DeliveryAddresses:
+        """Every address this webhook proved for the User (ADR-0019).
+
+        WhatsApp: BSUID and phone (``wa_id``); the Parent BSUID is identity
+        evidence, not a fallback. Instagram: the scoped ID. The WhatsApp
+        adapter decides the order and when to fall back.
+        """
+        if self.platform_user_id and self.platform_user_id.strip():
+            return DeliveryAddresses.of(self.platform_user_id)
+        return DeliveryAddresses.of(self.bsuid, self.phone_number)
 
     @property
     def has_bsuid(self) -> bool:
@@ -192,55 +224,53 @@ class ForwardContextBase(BaseModel):
     )
 
 
-class AdReferralBase(BaseModel):
+class EntryPointKind(StrEnum):
+    """The surface that brought a User into a conversation."""
+
+    AD = "ad"
+    """A paid ad (Click-to-WhatsApp, Instagram ad)."""
+    POST = "post"
+    """An organic post (WhatsApp ``source_type=post``)."""
+    LINK = "link"
+    """A conversation link carrying a Host ``ref`` (ig.me, shortlink)."""
+    OTHER = "other"
+    """An entry point the Platform named that Wappa does not classify yet."""
+
+
+class EntryReferral(BaseModel):
+    """Entry-point attribution, one model on every Platform (ADR-0016).
+
+    Answers "what brought this User here": WhatsApp Click-to-WhatsApp ``referral``
+    and Instagram ad / link ``referral`` fill the same fields; a field the
+    Platform does not send stays ``None``.
     """
-    Universal advertisement referral context component.
 
-    Represents information when users interact via advertisements.
-    Based on WhatsApp's Click-to-WhatsApp ads but designed to be universal
-    for all advertising platforms.
-    """
-
-    model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: EntryPointKind
+    source: str | None = Field(
+        default=None, description="The Platform's own source label (ad, ADS, …)"
     )
-
-    # Core ad identification
-    source_type: str = Field(
-        description="Type of ad source (e.g., 'ad', 'social', 'search')"
+    ref: str | None = Field(
+        default=None, description="Host-defined ref carried by a link or ad"
     )
-    source_id: str = Field(description="Advertisement ID")
-    source_url: str = Field(description="Advertisement URL")
-
-    # Ad content
-    ad_body: str | None = Field(default=None, description="Advertisement primary text")
-    ad_headline: str | None = Field(default=None, description="Advertisement headline")
-
-    # Media content
-    media_type: str | None = Field(
-        default=None, description="Ad media type (image, video)"
+    ad_id: str | None = None
+    post_id: str | None = None
+    product_id: str | None = None
+    source_url: str | None = None
+    headline: str | None = Field(default=None, description="Ad headline or title")
+    body: str | None = Field(default=None, description="Ad primary text")
+    media_type: str | None = None
+    image_url: str | None = None
+    video_url: str | None = None
+    thumbnail_url: str | None = None
+    click_id: str | None = Field(
+        default=None, description="Ad click ID (WhatsApp ctwa_clid)"
     )
-    image_url: str | None = Field(default=None, description="Ad image URL")
-    video_url: str | None = Field(default=None, description="Ad video URL")
-    thumbnail_url: str | None = Field(
-        default=None, description="Ad video thumbnail URL"
-    )
+    welcome_message_text: str | None = None
 
-    # Tracking and attribution
-    click_id: str | None = Field(default=None, description="Click tracking ID")
-
-    # Welcome message (for chat ads)
-    welcome_message_text: str | None = Field(
-        default=None, description="Predefined welcome message from the ad"
-    )
-
-    def has_media(self) -> bool:
-        """Check if this ad referral includes media content."""
-        return self.image_url is not None or self.video_url is not None
-
-    def is_video_ad(self) -> bool:
-        """Check if this is a video advertisement."""
-        return self.media_type == "video" and self.video_url is not None
+    @property
+    def is_ad(self) -> bool:
+        return self.kind is EntryPointKind.AD
 
 
 class ConversationBase(BaseModel):
@@ -351,6 +381,60 @@ class ErrorDetailBase(BaseModel):
         return f"Error {self.error_code}: {self.error_title}"
 
 
+class GroupParticipant(BaseModel):
+    """A participant named by a group membership event."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    input: str | None = None
+    wa_id: str | None = None
+    user_id: str | None = None
+    parent_user_id: str | None = None
+    username: str | None = None
+
+
+class GroupUpdate(BaseModel):
+    """A group membership change (WhatsApp ``group_participants_update``)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    group_id: str
+    event_type: str
+    timestamp: int
+    request_id: str | None = None
+    initiated_by: str | None = None
+    reason: str | None = None
+    join_request_id: str | None = None
+    added: tuple[GroupParticipant, ...] = ()
+    removed: tuple[GroupParticipant, ...] = ()
+
+
+class UserAction(BaseModel):
+    """A User interaction outside a message (e.g. a marketing link click)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    action_type: str
+    timestamp: int
+    click_component: str | None = None
+    click_id: str | None = None
+    tracking_token: str | None = None
+    product_id: str | None = None
+    client_user_agent: str | None = None
+
+
+class ContactSync(BaseModel):
+    """A contact added, edited or removed in the Platform's own business app
+    (WhatsApp Coexistence ``smb_app_state_sync``)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    action: str
+    timestamp: int
+    full_name: str
+    first_name: str
+    phone_number: str | None = None
+    user_id: str
+    parent_user_id: str | None = None
+    username: str | None = None
+
+
 class SystemEventDetail(BaseModel):
     """
     Universal system event detail component.
@@ -361,6 +445,14 @@ class SystemEventDetail(BaseModel):
 
     model_config = ConfigDict(
         extra="forbid", str_strip_whitespace=True, validate_assignment=True
+    )
+
+    platform_event: dict | None = Field(
+        default=None,
+        description=(
+            "Native evidence for UNSUPPORTED_EVENT only: an event Wappa has no "
+            "contract for yet. Every supported event is typed (ADR-0016)."
+        ),
     )
 
     # User identification (present in most system events)
@@ -439,12 +531,14 @@ class SystemEventDetail(BaseModel):
     group_event_type: str | None = Field(
         default=None, description="Meta group participant event type"
     )
-    group_update: dict | None = Field(
-        default=None, description="Typed group update serialized for host handling"
+    group_update: GroupUpdate | None = Field(
+        default=None, description="Typed group membership change"
     )
-    coexistence_payload: dict | None = Field(
-        default=None,
-        description="Typed Meta Coexistence value serialized without field loss",
+    contact_sync: ContactSync | None = Field(
+        default=None, description="Business-app contact change (Coexistence)"
+    )
+    entry_referral: EntryReferral | None = Field(
+        default=None, description="Standalone entry-point referral (no message)"
     )
 
     # User interaction events (marketing message link clicks and future actions).
@@ -452,7 +546,6 @@ class SystemEventDetail(BaseModel):
         default=None,
         description="Provider action name, e.g. 'marketing_messages_link_click'",
     )
-    user_action: dict | None = Field(
-        default=None,
-        description="Typed user action serialized without field loss",
+    user_action: UserAction | None = Field(
+        default=None, description="Typed User interaction event"
     )

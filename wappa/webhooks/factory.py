@@ -39,6 +39,11 @@ class MessageSchemaRegistry:
 
         # Initialize with WhatsApp schemas
         self._register_whatsapp_schemas()
+        from .instagram.models import InstagramTextMessage
+
+        self._message_schemas[PlatformType.INSTAGRAM] = {
+            MessageType.TEXT: InstagramTextMessage
+        }
 
     def _register_whatsapp_schemas(self) -> None:
         """Register all WhatsApp message schema classes."""
@@ -215,6 +220,9 @@ class WebhookSchemaRegistry:
 
         # Initialize with WhatsApp webhook schema
         self._register_whatsapp_webhook_schema()
+        from .instagram.models import InstagramWebhook
+
+        self._webhook_schemas[PlatformType.INSTAGRAM] = InstagramWebhook
 
     def _register_whatsapp_webhook_schema(self) -> None:
         """Register WhatsApp webhook container schema."""

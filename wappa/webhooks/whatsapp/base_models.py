@@ -19,7 +19,7 @@ class WhatsAppMetadata(BaseModel):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     display_phone_number: str = Field(
@@ -55,7 +55,7 @@ class ContactProfile(BaseModel):
     - country_code: User's country code (subject to change)
     """
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     name: str | None = Field(
         None,
@@ -110,7 +110,7 @@ class WhatsAppContact(BaseModel):
     - Falls back to wa_id (phone number) otherwise
     """
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     wa_id: str = Field(
         default="",
@@ -176,7 +176,7 @@ class WhatsAppContact(BaseModel):
 class ReferredProduct(BaseModel):
     """Product catalog reference for message business button context."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     catalog_id: str = Field(..., description="Product catalog ID")
     product_retailer_id: str = Field(..., description="Product retailer ID")
@@ -197,7 +197,7 @@ class MessageContext(BaseModel):
     Used for replies, forwards, and message business button interactions.
     """
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     # For replies and message business buttons
     from_: str | None = Field(
@@ -242,7 +242,7 @@ class MessageContext(BaseModel):
 class WhatsAppMessageIdentity(BaseModel):
     """Identity companions Meta adds to every incoming message object."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     from_parent_bsuid: str | None = Field(
         None,
@@ -258,7 +258,7 @@ class WhatsAppMessageIdentity(BaseModel):
 class WelcomeMessage(BaseModel):
     """Welcome message for Click-to-WhatsApp ads."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     text: str = Field(..., description="Ad greeting text")
 
@@ -270,7 +270,7 @@ class AdReferral(BaseModel):
     Present when a user sends a message via a Click-to-WhatsApp ad.
     """
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     source_url: str = Field(..., description="Click-to-WhatsApp ad URL")
     source_id: str = Field(..., description="Click-to-WhatsApp ad ID")
@@ -327,7 +327,7 @@ class AdReferral(BaseModel):
 class ConversationOrigin(BaseModel):
     """Conversation origin information for pricing."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     type: Literal[
         "authentication",
@@ -343,7 +343,7 @@ class ConversationOrigin(BaseModel):
 class Conversation(BaseModel):
     """Conversation information for message status."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     id: str = Field(..., description="Conversation ID")
     expiration_timestamp: str | None = Field(
@@ -363,7 +363,7 @@ class Conversation(BaseModel):
 class Pricing(BaseModel):
     """Pricing information for message status."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     billable: bool = Field(..., description="Whether message is billable")
     pricing_model: Literal["CBP", "PMP"] = Field(
@@ -371,6 +371,13 @@ class Pricing(BaseModel):
     )
     type: Literal["regular", "free_customer_service", "free_entry_point"] | None = (
         Field(None, description="Pricing type (available from July 1, 2025)")
+    )
+    subtype: str | None = Field(
+        None,
+        description=(
+            "Pricing subtype, e.g. 'free_tier' on a free customer-service "
+            "message (observed live 2026-11-05). Free text: Meta adds values."
+        ),
     )
     category: Literal[
         "authentication",
@@ -386,7 +393,7 @@ class Pricing(BaseModel):
 class ErrorData(BaseModel):
     """Error details for failed messages."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     details: str = Field(..., description="Detailed error description")
 
@@ -394,7 +401,7 @@ class ErrorData(BaseModel):
 class MessageError(BaseModel):
     """Error information for failed messages."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     code: int = Field(..., description="Error code")
     title: str = Field(..., description="Error title")

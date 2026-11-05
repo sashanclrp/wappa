@@ -9,7 +9,9 @@ from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
 from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.webhooks.core.webhook_interfaces import (
     CallWebhook,
+    EchoOrigin,
     InboundMessageWebhook,
+    OutboundEchoWebhook,
     SystemEventType,
     SystemWebhook,
 )
@@ -403,14 +405,16 @@ async def test_history_sync_preserves_thread_identity_companions() -> None:
 
     webhook = await WhatsAppWebhookProcessor().create_universal_webhook(payload)
 
-    assert isinstance(webhook, SystemWebhook)
-    assert webhook.system_event_type == SystemEventType.HISTORY_SYNC
-    history = webhook.event_detail.coexistence_payload["history"][0]
-    assert history["threads"][0]["context"]["user_id"] == "CO.2186878922080769"
-    assert (
-        history["threads"][0]["messages"][0]["from_parent_user_id"]
-        == "CO.ENT.2186878922080769"
-    )
+    from wappa.webhooks import HistoryDirection, HistorySyncWebhook
+
+    assert isinstance(webhook, HistorySyncWebhook)
+    thread = webhook.threads[0]
+    assert thread.user.user_id == "CO.2186878922080769"
+    first = thread.messages[0]
+    assert first.direction is HistoryDirection.INBOUND and first.status == "read"
+    assert first.message is not None
+    assert first.message.from_parent_bsuid == "CO.ENT.2186878922080769"
+    assert first.message.text_content == "hello"
 
 
 @pytest.mark.asyncio
@@ -455,14 +459,12 @@ async def test_smb_echo_and_app_state_sync_accept_username_only_user() -> None:
     }
     echo = await processor.create_universal_webhook(echo_payload)
 
-    assert isinstance(echo, SystemWebhook)
-    assert echo.system_event_type == SystemEventType.SMB_MESSAGE_ECHO
-    assert echo.user is not None
+    assert isinstance(echo, OutboundEchoWebhook)
+    assert echo.origin is EchoOrigin.BUSINESS_APP
     assert echo.user.user_id == "CO.2186878922080769"
-    assert (
-        echo.event_detail.coexistence_payload["message_echoes"][0]["to_parent_user_id"]
-        == "CO.ENT.2186878922080769"
-    )
+    assert echo.message_id == "wamid.echo-001"
+    assert echo.native_type == "revoke"
+    assert echo.message is not None  # typed with the inbound lifecycle model
 
     app_state_payload = {
         "object": "whatsapp_business_account",
@@ -547,10 +549,19 @@ async def test_consumer_lifecycle_messages_preserve_bsuid(
         )
     )
 
-    assert isinstance(webhook, InboundMessageWebhook)
-    assert webhook.message.message_type.value == message_type
-    assert webhook.message.sender_id == "CO.2186878922080769"
-    assert webhook.message.get_context().original_message_id == "wamid.original-001"
+    from wappa.webhooks import MessageUpdateKind, MessageUpdateWebhook
+
+    assert isinstance(webhook, MessageUpdateWebhook)
+    assert webhook.update_kind is (
+        MessageUpdateKind.EDITED
+        if message_type == "edit"
+        else MessageUpdateKind.DELETED
+    )
+    assert webhook.message_id == "wamid.original-001"
+    assert webhook.user.user_id == "CO.2186878922080769"
+    # This fixture's replacement image lacks mime_type/sha256, so the strict
+    # inbound image model rejects it: ``message`` stays None, never a dict.
+    assert webhook.message is None
 
 
 @pytest.mark.asyncio
@@ -722,11 +733,11 @@ async def test_system_user_id_change_maps_observed_previous_user_id() -> None:
 
 
 @pytest.mark.asyncio
-async def test_system_schema_still_rejects_unobserved_fields() -> None:
-    """``extra="forbid"`` still applies: a never-observed ``system`` key fails."""
+async def test_system_schema_reports_unobserved_fields_as_drift() -> None:
+    """Strict mode (conftest): a never-observed ``system`` key is reported as drift."""
     from wappa.processors.base_processor import ProcessorError
 
-    with pytest.raises(ProcessorError):
+    with pytest.raises(ProcessorError, match="surprise_field"):
         await WhatsAppWebhookProcessor().create_universal_webhook(
             _payload(
                 {
@@ -828,3 +839,54 @@ async def test_real_contact_name_is_still_preserved() -> None:
 
     assert webhook.user is not None
     assert webhook.user.profile_name == "Sasha Nicolai Canal"
+
+
+async def test_status_with_pricing_subtype_free_tier_is_accepted() -> None:
+    """Live 2026-11-05: Meta sent pricing.subtype on a free service message."""
+    from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
+    from wappa.webhooks import StatusWebhook
+
+    payload = {
+        "object": "whatsapp_business_account",
+        "entry": [
+            {
+                "id": "1831186907601026",
+                "changes": [
+                    {
+                        "field": "messages",
+                        "value": {
+                            "messaging_product": "whatsapp",
+                            "metadata": {
+                                "display_phone_number": "15551889071",
+                                "phone_number_id": "1014417365082534",
+                            },
+                            "contacts": [
+                                {
+                                    "wa_id": "573168227670",
+                                    "user_id": "CO.862165913565991",
+                                }
+                            ],
+                            "statuses": [
+                                {
+                                    "id": "wamid.HBgMNTczMTY4MjI3NjcwFQIAERgSRUIyQzM3NEFFRkYzRUM3NDAyAA==",
+                                    "status": "sent",
+                                    "timestamp": "1793900237",
+                                    "recipient_id": "573168227670",
+                                    "recipient_user_id": "CO.862165913565991",
+                                    "pricing": {
+                                        "billable": False,
+                                        "pricing_model": "PMP",
+                                        "category": "service",
+                                        "type": "free_customer_service",
+                                        "subtype": "free_tier",
+                                    },
+                                }
+                            ],
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(payload)
+    assert isinstance(webhook, StatusWebhook)

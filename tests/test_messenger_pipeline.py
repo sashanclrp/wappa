@@ -32,8 +32,14 @@ from wappa.core.messaging.pipeline import (
 )
 from wappa.core.sse import SSEEventHub
 from wappa.core.sse.context import sse_event_scope
+from wappa.domain.inbox import InboxRef
+from wappa.messaging import DeliveryAddresses, DirectMessage
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.schemas.core.types import PlatformType
+
+TARGET = DirectMessage(
+    inbox_ref=InboxRef.whatsapp("test-inbox"), addresses=DeliveryAddresses.of("5599")
+)
 
 
 def _make_raw() -> MagicMock:
@@ -78,10 +84,10 @@ async def test_pipeline_without_middleware_is_passthrough():
     raw = _make_raw()
     pipeline = MessengerPipeline(raw=raw)
 
-    result = await pipeline.send_text("hi", "5599")
+    result = await pipeline.send_text("hi", TARGET)
 
     assert result.success
-    raw.send_text.assert_awaited_once_with("hi", "5599", None, False)
+    raw.send_text.assert_awaited_once_with("hi", TARGET, None, False)
 
 
 @pytest.mark.asyncio
@@ -97,7 +103,7 @@ async def test_priority_order_is_outer_to_inner():
         ],
     )
 
-    await pipeline.send_text("hi", "5599")
+    await pipeline.send_text("hi", TARGET)
 
     assert log == [
         "pre:high",
@@ -124,7 +130,7 @@ async def test_send_invocation_captures_named_arguments():
     pipeline = MessengerPipeline(raw=raw, middleware=[(_Capture(), 50)])
     await pipeline.send_button_message(
         buttons=[{"id": "a", "title": "A"}],
-        recipient="5599",
+        target=TARGET,
         body="Pick one",
     )
 
@@ -157,7 +163,7 @@ async def test_exception_skips_outer_post_hook():
     )
 
     with pytest.raises(RuntimeError, match="inner failure"):
-        await pipeline.send_text("hi", "5599")
+        await pipeline.send_text("hi", TARGET)
 
     # Outer saw pre but not post; no raw call happened.
     assert log == ["pre:outer"]
@@ -200,7 +206,7 @@ async def test_cache_completes_before_sse_publishes():
             (_SSE(), 70),  # outer
         ],
     )
-    await pipeline.send_text("hi", "5599")
+    await pipeline.send_text("hi", TARGET)
 
     assert order == ["cache_wrote", "sse_published"]
 
@@ -217,7 +223,7 @@ async def test_mark_as_read_bypasses_pipeline():
 
     await pipeline.mark_as_read("wamid.123", typing=True)
 
-    raw.mark_as_read.assert_awaited_once_with("wamid.123", True)
+    raw.mark_as_read.assert_awaited_once_with("wamid.123", True, None)
     assert log == []
 
 
@@ -242,7 +248,7 @@ async def test_sse_lifecycle_middleware_publishes_after_raw_send():
             inbox_id="test-inbox",
             event_types={"outgoing_bot_message"},
         )
-        await pipeline.send_text("hola", "5599")
+        await pipeline.send_text("hola", TARGET)
         # Event is published in-line (no asyncio.create_task) so it's
         # immediately available on the queue.
         event = await subscription.queue.get()
@@ -251,5 +257,5 @@ async def test_sse_lifecycle_middleware_publishes_after_raw_send():
     assert event["source"] == "bot_messenger"
     assert event["payload"]["message_type"] == "text"
     assert event["payload"]["request"]["text"] == "hola"
-    assert event["payload"]["request"]["recipient"] == "5599"
+    assert event["payload"]["request"]["target"] == TARGET.model_dump(mode="json")
     assert event["payload"]["result"]["success"] is True

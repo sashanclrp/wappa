@@ -6,17 +6,20 @@ runtime scope and proves only that Wappa knows an active Inbox. It grants no
 permission: Host authentication and authorization decide whether the caller
 may operate that Inbox, and they run before this dependency.
 
-The route already fixes the Platform (WhatsApp), so the header carries only
-the native identifier. Resolution happens once per request and the result is
+The Platform comes from the route path (``/api/{platform}/...``; a route
+without it is a wiring error), so the header carries only the native
+identifier. Resolution happens once per request and the result is
 shared by every dependency in the route through FastAPI's dependency cache.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, Any, Final
 
-from fastapi import Header, HTTPException, Request
+from fastapi import Depends, Header, HTTPException, Path, Request
 
 from wappa.core.logging.context import set_request_context
 from wappa.core.logging.logger import get_logger
@@ -34,12 +37,14 @@ from wappa.domain.inbox.identity import (
 from wappa.domain.inbox.ports import ResolvedInboxCredentials
 from wappa.domain.inbox.routing import InboxRoutingMode
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
+from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
     import httpx
     from fastapi import FastAPI
 
     from wappa.core.factory.inbox_assembly import InboxRuntimeConfiguration
+    from wappa.domain.interfaces.messaging_interface import IMessenger
     from wappa.messaging.template_transport import InboxTemplateTransport
 
 INBOX_ID_HEADER: Final[str] = "X-Wappa-Inbox-ID"
@@ -49,6 +54,57 @@ INBOX_HEADER_DESCRIPTION: Final[str] = (
     "permission. Required in explicit mode; optional in legacy mode, where the "
     "configured single Inbox is the default."
 )
+
+
+class RoutePlatform(StrEnum):
+    """Platforms served by Wappa's messaging HTTP API (``/api/{platform}``)."""
+
+    WHATSAPP = "whatsapp"
+    INSTAGRAM = "instagram"
+
+
+async def route_platform(
+    platform: Annotated[
+        RoutePlatform,
+        Path(description="Platform of the Inbox: whatsapp or instagram"),
+    ],
+) -> RoutePlatform:
+    """Router-level dependency: validates and documents ``{platform}``."""
+    return platform
+
+
+def _request_platform(request: Request) -> PlatformType:
+    raw = request.path_params.get("platform")
+    if raw is None:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Inbox-dependent route has no {platform} path parameter; mount it "
+                "under /api/{platform}"
+            ),
+        )
+    try:
+        return PlatformType(RoutePlatform(raw).value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404, detail=f"Unsupported Platform: {raw}"
+        ) from exc
+
+
+def whatsapp_only(inbox_ref: InboxRef, feature: str = "this route") -> None:
+    """Reject a WhatsApp-only operation for another Platform's Inbox (501).
+
+    Used where no capability interface exists yet (Templates info, the
+    WhatsApp Media API, limits). Prefer :func:`requires_capability`.
+    """
+    if inbox_ref.platform is not PlatformType.WHATSAPP:
+        raise HTTPException(
+            status_code=501,
+            detail=(
+                f"{inbox_ref.platform.value} does not provide {feature} "
+                "(WhatsApp-only route)"
+            ),
+        )
 
 
 @dataclass(frozen=True)
@@ -87,12 +143,26 @@ class InboxExecutionContext:
         """
         from wappa.messaging.template_transport import OutboundRuntime
 
+        whatsapp_only(self.inbox_ref, "Templates")
         return OutboundRuntime.from_app(app).templates(
             self.inbox_id, credentials=self._credentials
         )
 
+    async def messenger(self, app: FastAPI) -> IMessenger:
+        """This Inbox's Messenger for its own Platform, with app middleware.
+
+        Built by ``OutboundRuntime`` (the same path as Host-initiated sends),
+        reusing the credentials this request already resolved.
+        """
+        from wappa.messaging.template_transport import OutboundRuntime
+
+        return await OutboundRuntime.from_app(app).messenger(
+            self.inbox_ref, credentials=self._credentials
+        )
+
     def whatsapp_client(self) -> WhatsAppClient:
         """Build the WhatsApp client for this Inbox's credentials."""
+        whatsapp_only(self.inbox_ref)
         client_kwargs: dict[str, str] = {}
         if self.graph_api_version is not None:
             client_kwargs["api_version"] = self.graph_api_version
@@ -143,6 +213,7 @@ def select_inbox_ref(request: Request, header_value: str | None = None) -> Inbox
     reading the raw request headers so non-route callers keep working.
     """
     runtime = _runtime(request)
+    platform = _request_platform(request)
     raw = (
         header_value
         if header_value is not None
@@ -150,15 +221,19 @@ def select_inbox_ref(request: Request, header_value: str | None = None) -> Inbox
     )
     if raw is not None and raw.strip():
         try:
-            return InboxRef.whatsapp(
-                validate_platform_native_id(raw.strip(), field_name=INBOX_ID_HEADER)
+            return InboxRef(
+                platform=platform,
+                inbox_id=validate_platform_native_id(
+                    raw.strip(), field_name=INBOX_ID_HEADER
+                ),
             )
         except ValueError as exc:
             raise HTTPException(
                 status_code=400, detail=f"Invalid Inbox ID in {INBOX_ID_HEADER}: {exc}"
             ) from exc
-    if runtime.default_inbox_ref is not None:
-        return runtime.default_inbox_ref
+    default = runtime.default_inbox_ref
+    if default is not None and default.platform is platform:
+        return default
     raise HTTPException(
         status_code=400,
         detail=(
@@ -232,11 +307,51 @@ async def get_inbox_execution_context(
     return context
 
 
+async def get_inbox_messenger(
+    request: Request,
+    context: InboxExecutionContext = Depends(get_inbox_execution_context),
+) -> IMessenger:
+    """Messenger for the selected Inbox's Platform (send routes)."""
+    return await context.messenger(request.app)
+
+
+def requires_capability[C](kind: Callable[..., C]) -> Any:
+    """Dependency: the selected Inbox's ``kind`` capability, or 501.
+
+    Routes gate on what the Inbox's Messenger can do, never on the Platform
+    name (ADR-0016, ADR-0021), so a Platform that gains the capability serves
+    the route without changes.
+    """
+
+    async def dependency(
+        request: Request,
+        context: InboxExecutionContext = Depends(get_inbox_execution_context),
+    ) -> C:
+        messenger = await context.messenger(request.app)
+        found = messenger.capability(kind)
+        if found is None:
+            raise HTTPException(
+                status_code=501,
+                detail=(
+                    f"{context.inbox_ref.platform.value} does not provide "
+                    f"{getattr(kind, '__name__', kind)}"
+                ),
+            )
+        return found
+
+    return dependency
+
+
 __all__ = [
     "INBOX_HEADER_DESCRIPTION",
     "INBOX_ID_HEADER",
     "InboxIdHeader",
     "InboxExecutionContext",
+    "RoutePlatform",
     "get_inbox_execution_context",
+    "get_inbox_messenger",
+    "requires_capability",
+    "route_platform",
     "select_inbox_ref",
+    "whatsapp_only",
 ]

@@ -24,7 +24,7 @@ class WhatsAppRouteProfile(StrEnum):
     """A named starting point for which capability groups get mounted.
 
     A profile sets defaults only; any capability passed explicitly to
-    ``create_whatsapp_router`` overrides it.
+    ``create_messaging_router`` overrides it.
     """
 
     STANDALONE = "standalone"
@@ -60,6 +60,12 @@ class WhatsAppRouteCapabilities:
     """``/state-handlers/*`` — reads, overwrites, and deletes the cached
     conversational state of any recipient named in the request."""
 
+    comment_controls: bool = False
+    """``/comments/*`` and ``/posts/{id}/comments-enabled`` mutations — reply to,
+    hide, unhide or delete a public comment, or turn comments off on a post.
+    Mounted for every Platform; a Platform without ``ICommentControls``
+    answers 501 (today only Instagram provides it)."""
+
     @classmethod
     def for_profile(cls, profile: WhatsAppRouteProfile) -> WhatsAppRouteCapabilities:
         if profile is WhatsAppRouteProfile.EMBEDDED:
@@ -69,6 +75,7 @@ class WhatsAppRouteCapabilities:
                 media_management=False,
                 media_upload=True,
                 state_handler_api=False,
+                comment_controls=False,
             )
         return cls(
             outbound_transport=True,
@@ -76,6 +83,7 @@ class WhatsAppRouteCapabilities:
             media_management=True,
             media_upload=True,
             state_handler_api=True,
+            comment_controls=True,
         )
 
     def override(self, **explicit: bool | None) -> WhatsAppRouteCapabilities:

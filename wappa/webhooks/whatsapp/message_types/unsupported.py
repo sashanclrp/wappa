@@ -39,7 +39,7 @@ class WhatsAppUnsupportedMessage(WhatsAppMessageIdentity, BaseMessage):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Standard identity fields (BSUID support v24.0+)

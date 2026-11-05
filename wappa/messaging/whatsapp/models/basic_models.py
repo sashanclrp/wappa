@@ -5,7 +5,10 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from wappa.schemas.core.recipient import RecipientRequest, looks_like_bsuid
+from wappa.schemas.core.recipient import (
+    DeliveryRequest,
+    looks_like_bsuid,
+)
 from wappa.schemas.core.types import PlatformType
 
 
@@ -98,6 +101,9 @@ class WhatsAppAPIResponse(BaseModel):
 class MessageResult(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
 
+    platform_response: dict | None = Field(
+        default=None, exclude=True, description="Native non-WhatsApp response evidence"
+    )
     success: bool
     platform: PlatformType = PlatformType.WHATSAPP
     message_id: str | None = None
@@ -115,6 +121,13 @@ class MessageResult(BaseModel):
     )
     recipient_parent_bsuid: str | None = None
     recipient_username: str | None = None
+    attempted_recipients: tuple[str, ...] = Field(
+        default=(),
+        description=(
+            "Every Delivery Address tried, in order, when the adapter fell back "
+            "(ADR-0019); empty when the first address decided the outcome"
+        ),
+    )
     error: str | None = None
     error_code: str | None = None
     timestamp: datetime = Field(default_factory=_utc_now)
@@ -183,7 +196,7 @@ class MessageResult(BaseModel):
         return result
 
 
-class BasicTextMessage(RecipientRequest):
+class BasicTextMessage(DeliveryRequest):
     text: str = Field(
         ..., min_length=1, max_length=4096, description="Text content of the message"
     )
@@ -196,8 +209,13 @@ class BasicTextMessage(RecipientRequest):
 
 
 class ReadStatusMessage(BaseModel):
-    message_id: str = Field(
-        ..., min_length=1, description="WhatsApp message ID to mark as read"
+    message_id: str = Field(..., min_length=1, description="Message ID to mark as read")
+    recipient: str | None = Field(
+        None,
+        description=(
+            "The User whose thread to mark. Required on Instagram (no per-message "
+            "read); optional on WhatsApp"
+        ),
     )
     typing: bool = Field(
         False, description="Show typing indicator when marking as read"

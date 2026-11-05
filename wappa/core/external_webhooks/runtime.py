@@ -12,7 +12,6 @@ from wappa.core.logging.logger import get_app_logger
 from wappa.domain.interfaces.external_webhook_context import (
     ResolvedExternalWebhookContext,
 )
-from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
     from wappa.core.context import WappaContext
@@ -62,11 +61,10 @@ class WappaContextCreator(Protocol):
 
     async def create_context(
         self,
-        inbox_id: str | None,
+        inbox_ref: InboxRef | None = None,
         user_id: str | None = None,
         *,
         include_messenger: bool = False,
-        platform: PlatformType = PlatformType.WHATSAPP,
     ) -> WappaContext:
         """Create scoped capabilities or a database-only context."""
         ...
@@ -150,10 +148,7 @@ class ExternalWebhookRuntime:
             inbox_ref = resolution.inbox_ref
             user_id = resolution.user_id
             context = await self.context_factory.create_context(
-                inbox_id=inbox_ref.inbox_id,
-                user_id=user_id,
-                include_messenger=True,
-                platform=inbox_ref.platform,
+                inbox_ref, user_id, include_messenger=True
             )
             if context.messenger is None:
                 raise RuntimeError(

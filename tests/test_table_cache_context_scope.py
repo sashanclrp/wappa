@@ -126,7 +126,7 @@ def test_inbox_namespaces_keep_platforms_apart_in_one_table_backend() -> None:
         InboxRef(platform=PlatformType.TELEGRAM, inbox_id="123").cache_namespace
     )
 
-    assert whatsapp._key("t", "p") == "123:df:t:pkid:p"
+    assert whatsapp._key("t", "p") == "whatsapp__123:df:t:pkid:p"
     assert telegram._key("t", "p") == "telegram__123:df:t:pkid:p"
     assert whatsapp._key("t", "p") != telegram._key("t", "p")
 

@@ -178,7 +178,11 @@ def dispatch_message_event(
                 response_error=message_result.error,
                 meta_response=getattr(message_result, "raw_response", None),
                 inbox_id=inbox_id,
-                platform=platform,
+                # The Platform that actually sent (``/api/{platform}``).
+                platform=str(
+                    getattr(message_result.platform, "value", message_result.platform)
+                    or platform
+                ),
             )
             tracker = (
                 getattr(fastapi_request.app.state, "background_work_tracker", None)

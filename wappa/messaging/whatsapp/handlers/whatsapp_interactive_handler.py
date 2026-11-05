@@ -3,13 +3,13 @@
 from typing import Any
 
 from wappa.core.logging.logger import get_logger
+from wappa.domain.interactive import ReplyButton
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.interactive_models import (
     HeaderType,
     InteractiveHeader,
     ListSection,
-    ReplyButton,
     validate_buttons_menu_limits,
     validate_header_constraints,
 )

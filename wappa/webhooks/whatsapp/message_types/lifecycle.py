@@ -67,7 +67,7 @@ class EditedMessageContext(BaseMessageContext):
 class EditedMessage(BaseModel):
     """Replacement message nested inside Meta's edit object."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     context: EditedMessageContext | None = None
     type: str

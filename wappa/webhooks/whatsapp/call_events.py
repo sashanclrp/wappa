@@ -8,14 +8,14 @@ from wappa.webhooks.whatsapp.base_models import WhatsAppContact, WhatsAppMetadat
 
 
 class CallSession(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     sdp_type: Literal["offer", "answer"]
     sdp: str
 
 
 class WhatsAppCall(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     id: str
     event: Literal["connect", "terminate"]
@@ -36,7 +36,7 @@ class WhatsAppCall(BaseModel):
 
 
 class WhatsAppCallStatus(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     id: str
     type: Literal["call"]
@@ -51,7 +51,7 @@ class WhatsAppCallStatus(BaseModel):
 class CallsWebhookValue(BaseModel):
     """Value object for Meta's `calls` webhook field."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     messaging_product: Literal["whatsapp"]
     metadata: WhatsAppMetadata

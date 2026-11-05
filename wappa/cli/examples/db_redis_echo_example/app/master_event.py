@@ -20,6 +20,8 @@ Responsibilities:
 from __future__ import annotations
 
 from wappa import WappaEventHandler
+from wappa.domain.inbox import InboxRef
+from wappa.messaging import DeliveryAddresses, DirectMessage
 from wappa.webhooks import ErrorWebhook, InboundMessageWebhook, StatusWebhook
 
 from .handlers.command_handlers import (
@@ -216,7 +218,13 @@ class DBRedisExampleHandler(WappaEventHandler):
             await self.messenger.send_text(
                 "Sorry, an error occurred while processing your message. "
                 "Please try again.",
-                user_id,
+                DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
             )
         except Exception as e:
             self.logger.error(f"Failed to send error response: {e}")

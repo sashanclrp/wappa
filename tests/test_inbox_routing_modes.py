@@ -450,7 +450,7 @@ def test_health_reports_legacy_mode_and_redacts_the_token(legacy_env: None) -> N
     assert basic["environment"]["inbox_routing_mode"] == "legacy"
     assert basic["environment"]["legacy_default_inbox_id"] == "111"
     whatsapp = detailed["platform_configs"]["whatsapp"]
-    assert whatsapp["inbox_routing_mode"] == "legacy"
+    assert detailed["inbox_runtime"]["inbox_routing_mode"] == "legacy"
     assert whatsapp["legacy_default_inbox"] == {"configured": True, "inbox_id": "111"}
     assert whatsapp["meta_callback"]["configured"] is True
     assert "legacy-access-token-value" not in str(detailed)
@@ -466,8 +466,8 @@ def test_health_reports_explicit_mode_and_directory_reachability(
     detailed = client.get("/health/detailed").json()
 
     whatsapp = detailed["platform_configs"]["whatsapp"]
-    assert whatsapp["inbox_routing_mode"] == "explicit"
-    assert whatsapp["inbox_directory"] == {
+    assert detailed["inbox_runtime"]["inbox_routing_mode"] == "explicit"
+    assert detailed["inbox_runtime"]["inbox_directory"] == {
         "configured": True,
         "reachability": "reachable",
     }
@@ -506,3 +506,46 @@ async def test_core_plugin_startup_logs_the_mode_and_needs_no_legacy_lookup(
         assert app.state.session_lifecycle is not None
     finally:
         await plugin._core_shutdown(app)
+
+
+@pytest.mark.parametrize(
+    ("mode", "expect_instagram"),
+    [(InboxRoutingMode.EXPLICIT, True), (InboxRoutingMode.LEGACY, False)],
+)
+async def test_startup_callback_guidance_matches_installed_adapters_and_mode(
+    mode: InboxRoutingMode,
+    expect_instagram: bool,
+) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    app = FastAPI()
+    app.state.inbox_runtime = SimpleNamespace(mode=mode)
+    app.state.meta_application_config = object()
+    logger = Mock()
+
+    await WappaCorePlugin()._display_webhook_urls(
+        app, logger, "https://callback.example.com"
+    )
+    messages = [
+        call.args[0] % call.args[1:] if len(call.args) > 1 else call.args[0]
+        for call in logger.info.call_args_list
+    ]
+    output = "\n".join(messages)
+    assert "https://callback.example.com/webhook/inboxes/whatsapp" in output
+    assert (
+        "https://callback.example.com/webhook/inboxes/instagram" in output
+    ) is expect_instagram
+    assert "/telegram" not in output and "/teams" not in output
+    assert "WP_WEBHOOK_VERIFY_TOKEN" in output
+    assert "Configure this one URL" not in output
+
+
+async def test_startup_omits_callback_urls_without_meta_configuration() -> None:
+    from unittest.mock import Mock
+
+    logger = Mock()
+    await WappaCorePlugin()._display_webhook_urls(
+        FastAPI(), logger, "https://example.com"
+    )
+    logger.info.assert_not_called()

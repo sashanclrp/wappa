@@ -12,6 +12,8 @@ When expiry fires (15s inactivity), the expiry handler echoes all messages back.
 from datetime import UTC, datetime
 
 from wappa import WappaEventHandler
+from wappa.domain.inbox.identity import InboxRef
+from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.webhooks import InboundMessageWebhook
 
 
@@ -97,7 +99,13 @@ class MasterEventHandler(WappaEventHandler):
             self.logger.error(f"❌ Error handling message: {e}", exc_info=True)
             assert self.messenger is not None
             await self.messenger.send_text(
-                recipient=webhook.user.user_id,
+                target=DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(webhook.user.user_id),
+                ),
                 text="⚠️ Sorry, something went wrong processing your message.",
             )
 
@@ -188,4 +196,12 @@ class MasterEventHandler(WappaEventHandler):
             )
 
         assert self.messenger is not None
-        await self.messenger.send_text(recipient=user_id, text=feedback)
+        await self.messenger.send_text(
+            target=DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=self.messenger.platform, inbox_id=self.messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(user_id),
+            ),
+            text=feedback,
+        )

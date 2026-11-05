@@ -2,7 +2,9 @@
 
 ## Responsibilities
 
-- Implement `IMessenger` for the WhatsApp platform.
+`IMessenger` has one method per conversation action on every Platform; each adapter maps it onto its native API ([ADR-0016](../../docs/adr/0016-one-messenger-method-per-action.md)). Separate responsibilities are Focused Capabilities reached with `messenger.capability(kind)`: `IMediaLibrary` (WhatsApp and Instagram upload/download), `ITemplateMessaging` (WhatsApp Templates), and the Instagram-only `ICommentControls` and `IConversationContentReader`. Their existence does not put consumer moderation policy, AI or publishing/analytics inside messaging. Extra provider clients remain extension-owned and use `InboxCredentialAccess`.
+
+- Implement `IMessenger` for WhatsApp and Instagram, and `IMediaLibrary` for both (`whatsapp/media_library.py`, `instagram/media_library.py`).
 - Own the `WhatsAppClient` HTTP adapter: token auth, JSON and multipart POST, GET, DELETE, and streaming GET against the Meta Graph API.
 - Own media lifecycle: upload (path / bytes / stream / URL re-upload), download (to disk, temp file, or bytes), stream, delete, and MIME/size validation.
 - Own outbound message construction for all WhatsApp message types: text, media,
@@ -16,8 +18,7 @@
   This deep module resolves credentials and active clients, constructs the
   platform Messenger and Messenger Pipeline, executes Template transport, and
   normalizes platform evidence without exposing its composition.
-- Keep `Messenger` / `IMessenger` as the general outbound seam. Template-only
-  Host Applications use the smaller public Template transport capability.
+- Keep `Messenger` / `IMessenger` as the general outbound seam for conversation messages. WhatsApp Templates are the `ITemplateMessaging` capability (`WhatsAppMessenger` implements it; `MessengerPipeline.capability(ITemplateMessaging)` wraps it so message middleware still runs under the `send_*_template` method names). Template-only Host Applications use the smaller public Template transport capability.
   Internal WhatsApp handlers may stay grouped by message family, but public
   `TextMessenger`, `MediaMessenger`, or similar seams are deferred until there is
   concrete pressure from multiple platform adapters or tests.
@@ -175,10 +176,7 @@ through both construction paths:
 
 ## Outbound Seam Decision
 
-`IMessenger` remains Wappa's general outbound interface. The Template transport
-is the first deliberately smaller capability because a real Host Application
-needed to depend on platform sending without receiving the rest of Messenger or
-constructing its internal pipeline.
+`IMessenger` remains Wappa's general outbound interface for conversation messages. Responsibilities other than sending conversation messages are capabilities (ADR-0016 rule 5): media storage (`IMediaLibrary`) and WhatsApp Templates (`ITemplateMessaging`) left the interface for that reason. The Template transport is a further, deliberately smaller capability because a real Host Application needed to depend on platform sending without receiving the rest of Messenger or constructing its internal pipeline.
 
 **Why the seam stays whole:**
 
@@ -203,3 +201,13 @@ WhatsApp (and future adapters) may organize handler classes by message family in
 **If the threshold is met:**
 
 Split with a clean breaking change. No compatibility aliases, no deprecation shims, no adapter layers wrapping old → new.
+
+## Instagram adapter and targets
+
+`instagram/messenger.py` owns the Unified Login native request/response translation. Factory construction binds a professional account Inbox and Business Integration System User Access Token, plus a lifecycle-aware session provider and the application Graph configuration. It uses `graph.facebook.com` by default; this adapter does not support the legacy Instagram Login token/host contract. It maps the shared contract onto Instagram: media by https URL, uploaded attachment_id or local `Path`; captions as a follow-up text (`filename`/`transcript` ignored); `send_location` and `send_contact` as text; `send_sticker` as an image (`.webp` rejected before I/O); buttons, lists, CTA and carousels as templates or quick replies. `send_location_request` and `send_contact_request` raise `UnsupportedOperationError` (a text prompt cannot return the data). Unsupported preview suppression fails explicitly. Known gap: `send_reaction` is a missing core method on every Platform ([backlog draft](../../docs/backlog/drafts/261105-mid-send-reaction-core-method.md)). No automatic send retries occur; timeout/disconnect, server error, or success without a Message ID is indeterminate.
+
+All recipient-based `IMessenger` sends accept `DirectMessage`, including WhatsApp media, interactive, specialized, and `ITemplateMessaging` Template methods. WhatsApp native handlers keep their internal address strings. Pipeline invocations serialize a `target`; the derived `recipient` property is native-address evidence for middleware. Existing WhatsApp REST request models still accept their native recipient and construct qualified targets inside the HTTP adapter. The independent typed Template transport request remains separate and explicitly maps its recipient into a DirectMessage.
+
+`supported_operations` distinguishes implemented adapter operations from provider catalogs. IMessenger's optional-operation defaults raise `UnsupportedOperationError`; each adapter advertises its implemented methods, and the pipeline delegates discovery. Capabilities are discovered with `capability(kind)` instead: Instagram returns `None` for `ITemplateMessaging`.
+
+The shared MessageResult is still housed in the historical WhatsApp basic-model module. Instagram sets its Platform explicitly, leaves WA-specific recipient evidence empty, and uses the excluded `platform_response` field for native evidence instead of fabricating a WhatsApp response. Moving result ownership into a neutral module remains an explicit follow-up.

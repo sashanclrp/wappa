@@ -5,7 +5,7 @@ This module contains the top-level webhook structure models that wrap
 all WhatsApp message types and status updates.
 """
 
-from typing import Any, Literal, Self, cast
+from typing import Any, ClassVar, Literal, Self, cast
 
 from pydantic import (
     BaseModel,
@@ -57,7 +57,7 @@ class WebhookValue(BaseModel):
     Either 'messages' OR 'statuses' will be present, never both.
     """
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     messaging_product: Literal["whatsapp"] = Field(
         ..., description="Always 'whatsapp' for WhatsApp Business webhooks"
@@ -169,6 +169,8 @@ class CustomWebhookValue(BaseModel):
     """
 
     model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
+    # Not drift: the Host's parser owns this schema (schema_drift.py).
+    drift_exempt: ClassVar[bool] = True
 
 
 class AccountWebhookValue(BaseModel):
@@ -179,11 +181,11 @@ class AccountWebhookValue(BaseModel):
     phone-scoped :class:`WebhookValue` shape, so they get their own typed model
     instead of being forced through the permissive ``CustomWebhookValue`` path.
 
-    Unknown keys are rejected so Meta additions produce the same contract-drift
-    signal as every other built-in field.
+    Unknown keys are kept and reported as schema drift (ADR-0010), like every
+    other Meta input model.
     """
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     waba_id: str = Field(..., description="WhatsApp Business Account ID (required)")
     timestamp: int = Field(..., description="Unix timestamp of the event")
@@ -199,7 +201,7 @@ class AccountWebhookValue(BaseModel):
 class BusinessUsernameWebhookValue(BaseModel):
     """Strict value for Meta's business_username_updates field."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     display_phone_number: str = Field(..., description="Business display number")
     username: str | None = Field(None, description="Current business username")
@@ -221,7 +223,7 @@ class WebhookChange(BaseModel):
     a validation error.
     """
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     field: str = Field(..., description="Webhook field type")
     value: (
@@ -288,17 +290,9 @@ class WebhookChange(BaseModel):
                 return {**data, "value": WebhookValue.model_validate(raw_value)}
             return data
 
-        registry = (
-            info.context.get("field_registry") if info.context is not None else None
-        )
-
-        if registry is None or field not in registry:
-            registered = sorted(registry.fields()) if registry is not None else []
-            raise ValueError(
-                f"Unknown webhook field '{field}'. Built-in fields: "
-                f"{sorted(BUILTIN_WEBHOOK_FIELDS)}; registered fields: {registered}"
-            )
-
+        # A field Wappa does not model and no app parser covers is kept as an
+        # untyped value: the processor delivers it as UNSUPPORTED_EVENT and
+        # logs schema drift instead of rejecting the callback (ADR-0010).
         if isinstance(raw_value, dict):
             return {**data, "value": CustomWebhookValue.model_validate(raw_value)}
         return data
@@ -311,7 +305,7 @@ class WebhookEntry(BaseModel):
     Contains the business account ID and the changes that occurred.
     """
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     id: str = Field(..., description="WhatsApp Business Account ID")
     time: int | None = Field(
@@ -471,7 +465,7 @@ class WhatsAppWebhook(BaseWebhook):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     object: Literal["whatsapp_business_account"] = Field(

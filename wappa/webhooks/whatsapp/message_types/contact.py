@@ -26,7 +26,7 @@ from wappa.webhooks.whatsapp.base_models import (
 class ContactAddress(BaseModel):
     """Contact address information."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     city: str | None = Field(None, description="City name")
     country: str | None = Field(None, description="Country name")
@@ -50,7 +50,7 @@ class ContactAddress(BaseModel):
 class ContactEmail(BaseModel):
     """Contact email information."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     email: str = Field(..., description="Email address")
     type: str | None = Field(None, description="Email type (e.g., 'HOME', 'WORK')")
@@ -68,7 +68,7 @@ class ContactEmail(BaseModel):
 class ContactName(BaseModel):
     """Contact name information."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     formatted_name: str = Field(..., description="Full formatted name")
     first_name: str | None = Field(None, description="First name")
@@ -89,7 +89,7 @@ class ContactName(BaseModel):
 class ContactOrganization(BaseModel):
     """Contact organization information."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     company: str | None = Field(None, description="Company name")
     department: str | None = Field(None, description="Department")
@@ -99,7 +99,7 @@ class ContactOrganization(BaseModel):
 class ContactPhone(BaseModel):
     """Contact phone information."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     phone: str = Field(..., description="Phone number")
     wa_id: str | None = Field(
@@ -122,7 +122,7 @@ class ContactPhone(BaseModel):
 class ContactUrl(BaseModel):
     """Contact URL information."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     url: str = Field(..., description="URL")
     type: str | None = Field(None, description="URL type (e.g., 'HOME', 'WORK')")
@@ -144,7 +144,7 @@ class ContactUrl(BaseModel):
 class ContactInfo(BaseModel):
     """Individual contact information."""
 
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     addresses: list[ContactAddress] | None = Field(
         None, description="List of contact addresses"
@@ -185,7 +185,7 @@ class WhatsAppContactMessage(WhatsAppMessageIdentity, BaseContactMessage):
     """
 
     model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+        extra="allow", str_strip_whitespace=True, validate_assignment=True
     )
 
     # Standard message fields (BSUID support v24.0+)

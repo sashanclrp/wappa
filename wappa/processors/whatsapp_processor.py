@@ -11,25 +11,36 @@ from wappa.processors.base_processor import (
 from wappa.schemas.core.recipient import looks_like_bsuid, looks_like_phone_number
 from wappa.schemas.core.types import ErrorCode, MessageType, PlatformType
 from wappa.webhooks.core.base_message import BaseMessage
+from wappa.webhooks.core.schema_drift import report_schema_drift, report_unmodelled
 
 if TYPE_CHECKING:
     from wappa.core.events.field_registry import FieldHandlerRegistry
     from wappa.webhooks.core.webhook_interfaces import (
-        AdReferralBase,
         BusinessContextBase,
         CallWebhook,
         ConversationBase,
         CustomWebhook,
+        EntryReferral,
         ErrorDetailBase,
         ErrorWebhook,
         ForwardContextBase,
+        HistoryMessage,
+        HistorySyncWebhook,
         InboundMessageWebhook,
         InboxBase,
+        InboxConnectionWebhook,
+        MessageUpdateWebhook,
+        OutboundEchoWebhook,
         StatusWebhook,
         SystemWebhook,
         UniversalWebhook,
         UserBase,
         WhatsAppIncomingWebhookData,
+    )
+    from wappa.webhooks.whatsapp.coexistence_events import (
+        CoexistenceMessage,
+        HistoryWebhookValue,
+        SmbMessageEchoesWebhookValue,
     )
     from wappa.webhooks.whatsapp.message_types.system import WhatsAppSystemMessage
     from wappa.webhooks.whatsapp.status_models import WhatsAppMessageStatus
@@ -88,19 +99,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         """Attach (or clear) the app-supplied custom webhook field registry."""
         self._field_registry = registry
 
-    def _log_contract_drift(self, error: ValidationError) -> None:
-        """Emit a stable, page-worthy signal for strict Meta schema drift."""
-        extra_fields = [
-            ".".join(str(part) for part in item["loc"])
-            for item in error.errors(include_input=False)
-            if item["type"] == "extra_forbidden"
-        ]
-        if extra_fields:
-            self.logger.critical(
-                "WHATSAPP_WEBHOOK_CONTRACT_DRIFT error_type=extra_forbidden fields=%s",
-                ",".join(extra_fields),
-            )
-
     def _register_message_handlers(self) -> None:
         self.register_message_handler("text", self._create_text_message)
         self.register_message_handler("interactive", self._create_interactive_message)
@@ -128,13 +126,13 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             # A missing registry means no custom fields are registered.
             context = {"field_registry": self._field_registry}
             webhook = WhatsAppWebhook.model_validate(payload, context=context)
+            report_schema_drift(webhook, platform="whatsapp", logger=self.logger)
             self.logger.debug(
                 "Successfully parsed WhatsApp webhook from %s", webhook.business_id
             )
             return webhook
 
         except ValidationError as e:
-            self._log_contract_drift(e)
             error_msg = f"Failed to parse WhatsApp webhook structure: {e}"
             self.logger.error(error_msg)
             raise ValueError(error_msg) from e
@@ -155,7 +153,9 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
             raise UnsupportedMessageTypeError(message_type_str, self.platform)
 
-        return cast(BaseMessage, handler(message_data, **kwargs))
+        message = cast(BaseMessage, handler(message_data, **kwargs))
+        report_schema_drift(message, platform="whatsapp", logger=self.logger)
+        return message
 
     def create_status_from_data(
         self, status_data: dict[str, Any], **kwargs: Any
@@ -163,7 +163,9 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         try:
             from wappa.webhooks.whatsapp.status_models import WhatsAppMessageStatus
 
-            return WhatsAppMessageStatus.model_validate(status_data)
+            status = WhatsAppMessageStatus.model_validate(status_data)
+            report_schema_drift(status, platform="whatsapp", logger=self.logger)
+            return status
 
         except ValidationError as e:
             self.logger.error("Failed to parse WhatsApp message status: %s", e)
@@ -182,9 +184,40 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         self, message_data: dict[str, Any], **kwargs: Any
     ) -> BaseMessage:
         from wappa.webhooks.whatsapp.message_types.interactive import (
+            KNOWN_INTERACTIVE_REPLY_TYPES,
             WhatsAppInteractiveMessage,
         )
 
+        interactive = message_data.get("interactive") or {}
+        reply_type = interactive.get("type")
+        if reply_type not in KNOWN_INTERACTIVE_REPLY_TYPES:
+            # e.g. a Flow reply (nfm_reply): deliver it as Unsupported with a
+            # 200 instead of a 400 that Meta retries and drops (ADR-0010).
+            report_unmodelled(
+                [f"InteractiveContent.type={reply_type}"],
+                platform="whatsapp",
+                logger=self.logger,
+            )
+            return self._create_unsupported_message(
+                {
+                    **{k: v for k, v in message_data.items() if k != "interactive"},
+                    "type": "unsupported",
+                    "unsupported": {"type": "interactive", "interactive": interactive},
+                    "errors": [
+                        {
+                            "code": 131051,
+                            "title": "Unsupported message type",
+                            "message": (
+                                f"Interactive reply type '{reply_type}' is not "
+                                "modelled by Wappa"
+                            ),
+                            "error_data": {
+                                "details": "Read the reply from unsupported.interactive"
+                            },
+                        }
+                    ],
+                }
+            )
         return WhatsAppInteractiveMessage.model_validate(message_data)
 
     def _create_image_message(
@@ -305,7 +338,27 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
             # System events are checked BEFORE incoming messages because system
             # messages (type=="system") arrive in the messages field.
-            if webhook.is_system_event:
+            from wappa.webhooks.whatsapp.coexistence_events import (
+                HistoryWebhookValue,
+                SmbMessageEchoesWebhookValue,
+            )
+
+            coexistence = webhook.get_coexistence_event()
+            changes = webhook.entry[0].changes if webhook.entry else []
+            field = changes[0].field if changes else None
+            if isinstance(coexistence, SmbMessageEchoesWebhookValue):
+                universal_webhook = self._create_echo_webhook(
+                    webhook, coexistence, inbox_base
+                )
+            elif isinstance(coexistence, HistoryWebhookValue):
+                universal_webhook = self._create_history_webhook(
+                    webhook, coexistence, inbox_base
+                )
+            elif field in ("account_offboarded", "account_reconnected"):
+                universal_webhook = self._create_connection_webhook(
+                    webhook, field, inbox_base
+                )
+            elif webhook.is_system_event:
                 universal_webhook = await self._create_system_webhook(
                     webhook, inbox_base, **kwargs
                 )
@@ -325,9 +378,15 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 universal_webhook = await self._create_error_webhook(
                     webhook, inbox_base, **kwargs
                 )
-            elif webhook.is_custom_field and self._field_registry is not None:
+            elif webhook.is_custom_field and (
+                self._field_registry is not None and field in self._field_registry
+            ):
                 universal_webhook = await self._create_custom_webhook(
                     webhook, inbox_base, payload, **kwargs
+                )
+            elif webhook.is_custom_field:
+                universal_webhook = self._create_unmodelled_field_webhook(
+                    webhook, inbox_base
                 )
             else:
                 universal_webhook = None
@@ -361,8 +420,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             return universal_webhook
 
         except Exception as e:
-            if isinstance(e, ValidationError):
-                self._log_contract_drift(e)
             self.logger.error(
                 "Failed to create universal webhook: %s", e, exc_info=True
             )
@@ -371,6 +428,283 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 ErrorCode.PROCESSING_ERROR,
                 PlatformType.WHATSAPP,
             ) from e
+
+    def _create_message_update_webhook(
+        self,
+        webhook: "WhatsAppWebhook",
+        message: BaseMessage,
+        inbox_base: "InboxBase",
+    ) -> "MessageUpdateWebhook":
+        """Consumer ``edit`` / ``revoke`` → ``MessageUpdateWebhook`` (ADR-0016).
+
+        The same lane Instagram edits and unsends use. An edit's replacement
+        content is parsed with the inbound message models.
+        """
+        from wappa.webhooks.core.webhook_interfaces import (
+            MessageUpdateKind,
+            MessageUpdateWebhook,
+        )
+        from wappa.webhooks.whatsapp.message_types.lifecycle import (
+            WhatsAppLifecycleMessage,
+        )
+
+        lifecycle = cast(WhatsAppLifecycleMessage, message)
+        user = self._create_user_base_from_contacts(webhook, lifecycle.sender_id)
+        common: dict[str, Any] = {
+            "inbox": inbox_base,
+            "user": user,
+            "timestamp": datetime.fromtimestamp(lifecycle.timestamp, tz=UTC),
+            "platform": PlatformType.WHATSAPP,
+            "webhook_id": webhook.get_webhook_id(),
+        }
+        if lifecycle.revoke is not None:
+            return MessageUpdateWebhook(
+                **common,
+                update_kind=MessageUpdateKind.DELETED,
+                message_id=lifecycle.revoke.original_id,
+            )
+        assert lifecycle.edit is not None  # model validator guarantees one
+        edit = lifecycle.edit
+        replacement = self._typed_replacement(lifecycle, edit.original_id)
+        text = getattr(replacement, "text_content", None)
+        return MessageUpdateWebhook(
+            **common,
+            update_kind=MessageUpdateKind.EDITED,
+            message_id=edit.original_id,
+            text=text if isinstance(text, str) else None,
+            message=replacement,
+        )
+
+    def _typed_replacement(
+        self, lifecycle: Any, original_id: str
+    ) -> BaseMessage | None:
+        """Parse an edit's replacement with the inbound model of its type."""
+        content = lifecycle.edit.message
+        data: dict[str, Any] = {
+            "id": original_id,
+            "timestamp": lifecycle.timestamp_str,
+            "type": content.type,
+        }
+        if lifecycle.from_:
+            data["from"] = lifecycle.from_
+        if lifecycle.from_bsuid:
+            data["from_user_id"] = lifecycle.from_bsuid
+        body = getattr(content, content.type, None)
+        if body is None:
+            return None
+        data[content.type] = body
+        try:
+            kind = MessageType({"contacts": "contact"}.get(content.type, content.type))
+            return self.create_message_from_data(data, kind)
+        except Exception as exc:
+            self.logger.info(
+                "Edit replacement of type %r has no inbound model: %s",
+                content.type,
+                type(exc).__name__,
+            )
+            return None
+
+    # Keys a Coexistence echo carries that inbound message models do not.
+    _ECHO_ONLY_KEYS = frozenset(
+        {"to", "to_user_id", "to_parent_user_id", "history_context"}
+    )
+
+    def _typed_coexistence_message(
+        self, raw: "CoexistenceMessage"
+    ) -> tuple[BaseMessage | None, MessageType | None]:
+        """Parse a Coexistence message with the inbound model of its type.
+
+        Echo- and history-only keys are dropped first. A shape with no inbound
+        model (for example an interactive message the owner sent) returns
+        ``(None, type)``; it is never passed on as a dict.
+        """
+        data = {
+            k: v
+            for k, v in raw.model_dump(
+                mode="json", by_alias=True, exclude_none=True
+            ).items()
+            if k not in self._ECHO_ONLY_KEYS
+        }
+        message_type: MessageType | None = None
+        try:
+            message_type = MessageType({"contacts": "contact"}.get(raw.type, raw.type))
+            return self.create_message_from_data(data, message_type), message_type
+        except Exception as exc:
+            self.logger.info(
+                "Coexistence message %s of type %r has no inbound model: %s",
+                raw.id,
+                raw.type,
+                type(exc).__name__,
+            )
+            return None, message_type
+
+    def _create_echo_webhook(
+        self,
+        webhook: "WhatsAppWebhook",
+        value: "SmbMessageEchoesWebhookValue",
+        inbox_base: "InboxBase",
+    ) -> "OutboundEchoWebhook":
+        """Coexistence ``smb_message_echoes`` → ``OutboundEchoWebhook``.
+
+        Meta echoes only messages the owner sent from the WhatsApp Business
+        app or a linked device (Cloud API sends are never echoed), so the
+        origin is ``BUSINESS_APP``.
+        """
+        from wappa.webhooks.core.webhook_interfaces import (
+            EchoOrigin,
+            OutboundEchoWebhook,
+        )
+
+        echo = value.message_echoes[0]
+        message, message_type = self._typed_coexistence_message(echo)
+        user = self._create_user_base_from_contacts(
+            webhook, echo.to_user_id or echo.to or ""
+        )
+        return OutboundEchoWebhook(
+            inbox=inbox_base,
+            user=user,
+            message_id=echo.id,
+            message_type=message_type,
+            native_type=echo.type,
+            message=message,
+            origin=EchoOrigin.BUSINESS_APP,
+            timestamp=datetime.fromtimestamp(int(echo.timestamp), tz=UTC),
+            platform=PlatformType.WHATSAPP,
+            webhook_id=f"echo:{echo.id}",
+        )
+
+    def _history_message(
+        self,
+        raw: "CoexistenceMessage",
+        *,
+        outbound: bool | None = None,
+        user_ids: frozenset[str] = frozenset(),
+    ) -> "HistoryMessage":
+        from wappa.webhooks.core.webhook_interfaces import (
+            HistoryDirection,
+            HistoryMessage,
+        )
+
+        # A message is inbound when the thread's User sent it.
+        is_outbound = (
+            outbound
+            if outbound is not None
+            else not ({raw.from_user_id, raw.from_} & user_ids)
+        )
+        message, message_type = self._typed_coexistence_message(raw)
+        return HistoryMessage(
+            message_id=raw.id,
+            direction=HistoryDirection.OUTBOUND
+            if is_outbound
+            else HistoryDirection.INBOUND,
+            timestamp=datetime.fromtimestamp(int(raw.timestamp), tz=UTC),
+            native_type=raw.type,
+            message_type=message_type,
+            message=message,
+            status=raw.history_context.status if raw.history_context else None,
+        )
+
+    def _create_history_webhook(
+        self,
+        webhook: "WhatsAppWebhook",
+        value: "HistoryWebhookValue",
+        inbox_base: "InboxBase",
+    ) -> "HistorySyncWebhook":
+        """Coexistence ``history`` → ``HistorySyncWebhook`` (typed threads).
+
+        Covers both shapes Meta sends on this field: ``history`` chunks of
+        threads, and the media-sync form with top-level ``messages`` /
+        ``message_echoes`` for one contact.
+        """
+        from wappa.webhooks.core.webhook_interfaces import (
+            HistorySyncWebhook,
+            HistoryThread,
+            UserBase,
+        )
+
+        threads: list[HistoryThread] = []
+        phase = chunk_order = progress = None
+        for chunk in value.history or []:
+            meta = chunk.metadata
+            phase = int(meta.phase) if str(meta.phase).isdigit() else None
+            chunk_order, progress = meta.chunk_order, meta.progress
+            for thread in chunk.threads:
+                ctx = thread.context
+                threads.append(
+                    HistoryThread(
+                        user=UserBase(
+                            phone_number=ctx.wa_id or "",
+                            bsuid=ctx.user_id,
+                            parent_bsuid=ctx.parent_user_id,
+                            username=ctx.username,
+                        ),
+                        messages=tuple(
+                            self._history_message(
+                                m,
+                                user_ids=frozenset(
+                                    i for i in (ctx.user_id, ctx.wa_id) if i
+                                ),
+                            )
+                            for m in thread.messages
+                        ),
+                    )
+                )
+        if value.messages or value.message_echoes:
+            contact = value.contacts[0] if value.contacts else None
+            identity = (contact.user_id or contact.wa_id) if contact else None
+            threads.append(
+                HistoryThread(
+                    user=self._create_user_base_from_contacts(webhook, identity or ""),
+                    messages=tuple(
+                        [
+                            self._history_message(m, outbound=False)
+                            for m in value.messages or []
+                        ]
+                        + [
+                            self._history_message(m, outbound=True)
+                            for m in value.message_echoes or []
+                        ]
+                    ),
+                )
+            )
+        return HistorySyncWebhook(
+            inbox=inbox_base,
+            threads=tuple(threads),
+            phase=phase,
+            chunk_order=chunk_order,
+            progress=progress,
+            timestamp=datetime.now(UTC),
+            platform=PlatformType.WHATSAPP,
+            webhook_id=webhook.get_webhook_id(),
+        )
+
+    def _create_connection_webhook(
+        self, webhook: "WhatsAppWebhook", field: str, inbox_base: "InboxBase"
+    ) -> "InboxConnectionWebhook":
+        """Coexistence ``account_offboarded`` / ``account_reconnected``."""
+        from wappa.webhooks.core.webhook_interfaces import (
+            InboxConnectionState,
+            InboxConnectionWebhook,
+        )
+
+        account = webhook.get_account_event(field)
+        if account is None:
+            raise ProcessorError(
+                f"No {field} found in webhook",
+                ErrorCode.PROCESSING_ERROR,
+                PlatformType.WHATSAPP,
+            )
+        return InboxConnectionWebhook(
+            inbox=inbox_base,
+            state=InboxConnectionState.DISCONNECTED
+            if field == "account_offboarded"
+            else InboxConnectionState.RECONNECTED,
+            reason=account.reason,
+            account_id=account.waba_id,
+            timestamp=datetime.fromtimestamp(account.timestamp, tz=UTC),
+            platform=PlatformType.WHATSAPP,
+            webhook_id=webhook.get_webhook_id(),
+        )
 
     def _create_inbox_base(
         self, webhook: "WhatsAppWebhook", inbox_id: str | None = None
@@ -399,7 +733,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
     async def _create_incoming_message_webhook(
         self, webhook: "WhatsAppWebhook", inbox_base: "InboxBase", **kwargs: Any
-    ) -> "InboundMessageWebhook":
+    ) -> "InboundMessageWebhook | MessageUpdateWebhook":
         from wappa.webhooks.core.webhook_interfaces import InboundMessageWebhook
 
         raw_messages = webhook.get_raw_messages()
@@ -421,6 +755,9 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
         message_type = MessageType(universal_message_type)
         message = self.create_message_from_data(raw_message, message_type)
+        message_type = message.message_type  # an unmodelled subtype becomes UNSUPPORTED
+        if message_type in (MessageType.EDIT, MessageType.REVOKE):
+            return self._create_message_update_webhook(webhook, message, inbox_base)
 
         # Create user base from contacts
         user_base = self._create_user_base_from_contacts(webhook, message.sender_id)
@@ -429,7 +766,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         # Extract WhatsApp-specific contexts
         business_context = self._extract_business_context(raw_message)
         forward_context = self._extract_forward_context(raw_message)
-        ad_referral = self._extract_ad_referral(raw_message)
+        entry_referral = self._extract_entry_referral(raw_message)
 
         return InboundMessageWebhook(
             inbox=inbox_base,
@@ -438,7 +775,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             message=message,
             business_context=business_context,
             forward_context=forward_context,
-            ad_referral=ad_referral,
+            entry_referral=entry_referral,
             timestamp=datetime.fromtimestamp(message.timestamp),
             platform=PlatformType.WHATSAPP,
             webhook_id=webhook.get_webhook_id(),
@@ -523,8 +860,9 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
     async def _create_status_webhook(
         self, webhook: "WhatsAppWebhook", inbox_base: "InboxBase", **kwargs: Any
-    ) -> "StatusWebhook":
+    ) -> "StatusWebhook | SystemWebhook":
         from wappa.webhooks.core.webhook_interfaces import StatusWebhook
+        from wappa.webhooks.whatsapp.status_models import KNOWN_WHATSAPP_STATUSES
 
         raw_statuses = webhook.get_raw_statuses()
         if not raw_statuses:
@@ -536,6 +874,12 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
         # Parse the first status
         raw_status = raw_statuses[0]
+        if raw_status.get("status") not in KNOWN_WHATSAPP_STATUSES:
+            # A status value Meta added later: 200 + drift report, never a 400
+            # that Meta retries and drops (ADR-0010).
+            return self._create_unmodelled_status_webhook(
+                webhook, inbox_base, raw_status
+            )
         status = self.create_status_from_data(raw_status)
 
         # Extract conversation and error context
@@ -634,6 +978,72 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             webhook_id=webhook.get_webhook_id(),
         )
 
+    def _create_unmodelled_field_webhook(
+        self, webhook: "WhatsAppWebhook", inbox_base: "InboxBase"
+    ) -> "SystemWebhook":
+        """A Meta field Wappa does not model and no parser was registered for.
+
+        Delivered as ``UNSUPPORTED_EVENT`` with the native value as evidence,
+        exactly like Instagram's unknown change fields (ADR-0016), and logged
+        as schema drift. Meta gets a 200, so it does not retry (ADR-0010).
+        """
+        from wappa.webhooks.core.webhook_interfaces import (
+            SystemEventDetail,
+            SystemEventType,
+            SystemWebhook,
+        )
+
+        change = webhook.entry[0].changes[0]
+        report_unmodelled(
+            [f"webhook field '{change.field}'"], platform="whatsapp", logger=self.logger
+        )
+        return SystemWebhook(
+            inbox=inbox_base,
+            system_event_type=SystemEventType.UNSUPPORTED_EVENT,
+            event_detail=SystemEventDetail(
+                platform_event={
+                    "field": change.field,
+                    "value": change.value.model_dump(),
+                },
+                detail=f"WhatsApp webhook field '{change.field}' is not modelled",
+            ),
+            user=None,
+            timestamp=datetime.now(tz=UTC),
+            platform=PlatformType.WHATSAPP,
+            webhook_id=webhook.get_webhook_id(),
+        )
+
+    def _create_unmodelled_status_webhook(
+        self,
+        webhook: "WhatsAppWebhook",
+        inbox_base: "InboxBase",
+        raw_status: dict[str, Any],
+    ) -> "SystemWebhook":
+        from wappa.webhooks.core.webhook_interfaces import (
+            SystemEventDetail,
+            SystemEventType,
+            SystemWebhook,
+        )
+
+        value = raw_status.get("status")
+        report_unmodelled(
+            [f"WhatsAppMessageStatus.status={value}"],
+            platform="whatsapp",
+            logger=self.logger,
+        )
+        return SystemWebhook(
+            inbox=inbox_base,
+            system_event_type=SystemEventType.UNSUPPORTED_EVENT,
+            event_detail=SystemEventDetail(
+                platform_event={"field": "messages", "status": raw_status},
+                detail=f"WhatsApp message status '{value}' is not modelled",
+            ),
+            user=None,
+            timestamp=datetime.now(tz=UTC),
+            platform=PlatformType.WHATSAPP,
+            webhook_id=webhook.get_webhook_id(),
+        )
+
     async def _create_custom_webhook(
         self,
         webhook: "WhatsAppWebhook",
@@ -721,6 +1131,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                     )
 
                 pref = UserPreferenceEntry.model_validate(raw_prefs[0])
+                report_schema_drift(pref, platform="whatsapp", logger=self.logger)
 
                 system_event_type = SystemEventType.MARKETING_PREFERENCE
                 event_detail = SystemEventDetail(
@@ -749,6 +1160,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                     )
 
                 update = UserIdUpdateEntry.model_validate(raw_updates[0])
+                report_schema_drift(update, platform="whatsapp", logger=self.logger)
                 parent = update.parent_user_id
 
                 system_event_type = SystemEventType.USER_ID_CHANGE
@@ -766,26 +1178,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                     user_base = self._create_user_base_from_contacts(
                         webhook, update.wa_id
                     )
-
-            case "account_offboarded" | "account_reconnected":
-                # Coexistence account-level events share one flat WABA-scoped
-                # shape (AccountWebhookValue); the field name maps 1:1 to the
-                # SystemEventType. Account-scoped: no user context, user stays None.
-                account = webhook.get_account_event(field)
-                if account is None:
-                    raise ProcessorError(
-                        f"No {field} found in system webhook",
-                        ErrorCode.PROCESSING_ERROR,
-                        PlatformType.WHATSAPP,
-                    )
-
-                system_event_type = SystemEventType(field)
-                event_detail = SystemEventDetail(
-                    waba_id=account.waba_id,
-                    phone_number_id=account.phone_number_id,
-                    reason=account.reason,
-                )
-                event_timestamp = datetime.fromtimestamp(account.timestamp, tz=UTC)
 
             case "business_username_updates":
                 username_event = webhook.get_business_username_event()
@@ -820,8 +1212,16 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                         PlatformType.WHATSAPP,
                     )
 
+                from wappa.webhooks.core.webhook_interfaces import (
+                    GroupParticipant,
+                    GroupUpdate,
+                )
+
                 group_update = GroupParticipantsUpdateEntry.model_validate(
                     raw_group_updates[0]
+                )
+                report_schema_drift(
+                    group_update, platform="whatsapp", logger=self.logger
                 )
                 participant = None
                 if group_update.added_participants:
@@ -849,7 +1249,23 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                     parent_user_id=parent_user_id,
                     group_id=group_update.group_id,
                     group_event_type=group_update.type,
-                    group_update=group_update.model_dump(mode="json"),
+                    group_update=GroupUpdate(
+                        group_id=group_update.group_id,
+                        event_type=group_update.type,
+                        timestamp=group_update.timestamp,
+                        request_id=group_update.request_id,
+                        initiated_by=group_update.initiated_by,
+                        reason=group_update.reason,
+                        join_request_id=group_update.join_request_id,
+                        added=tuple(
+                            GroupParticipant(**p.model_dump())
+                            for p in group_update.added_participants or []
+                        ),
+                        removed=tuple(
+                            GroupParticipant(**p.model_dump())
+                            for p in group_update.removed_participants or []
+                        ),
+                    ),
                 )
                 event_timestamp = datetime.fromtimestamp(group_update.timestamp, tz=UTC)
                 if wa_id or user_id:
@@ -860,74 +1276,69 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                         username=username,
                     )
 
-            case "history" | "smb_message_echoes" | "smb_app_state_sync":
-                from wappa.webhooks.core.webhook_interfaces import UserBase
+            case "smb_app_state_sync":
+                from wappa.webhooks.core.webhook_interfaces import (
+                    ContactSync,
+                    UserBase,
+                )
                 from wappa.webhooks.whatsapp.coexistence_events import (
-                    HistoryWebhookValue,
                     SmbAppStateSyncWebhookValue,
-                    SmbMessageEchoesWebhookValue,
                 )
 
                 coexistence = webhook.get_coexistence_event()
-                if coexistence is None:
+                if not isinstance(coexistence, SmbAppStateSyncWebhookValue):
                     raise ProcessorError(
                         f"No typed {field} value found in system webhook",
                         ErrorCode.PROCESSING_ERROR,
                         PlatformType.WHATSAPP,
                     )
-
-                event_types = {
-                    "history": SystemEventType.HISTORY_SYNC,
-                    "smb_message_echoes": SystemEventType.SMB_MESSAGE_ECHO,
-                    "smb_app_state_sync": SystemEventType.SMB_APP_STATE_SYNC,
-                }
-                system_event_type = event_types[field]
+                state = coexistence.state_sync[0]
+                contact = state.contact
+                system_event_type = SystemEventType.SMB_APP_STATE_SYNC
                 event_detail = SystemEventDetail(
-                    coexistence_payload=coexistence.model_dump(
-                        mode="json", by_alias=True, exclude_none=True
+                    contact_sync=ContactSync(
+                        action=state.action,
+                        timestamp=int(state.metadata.timestamp),
+                        full_name=contact.full_name,
+                        first_name=contact.first_name,
+                        phone_number=contact.phone_number,
+                        user_id=contact.user_id,
+                        parent_user_id=contact.parent_user_id,
+                        username=contact.username,
                     )
                 )
-
-                if isinstance(coexistence, SmbAppStateSyncWebhookValue):
-                    state = coexistence.state_sync[0]
-                    contact = state.contact
-                    event_timestamp = datetime.fromtimestamp(
-                        int(state.metadata.timestamp), tz=UTC
-                    )
-                    user_base = UserBase(
-                        phone_number=contact.phone_number or "",
-                        bsuid=contact.user_id,
-                        parent_bsuid=contact.parent_user_id,
-                        username=contact.username,
-                        profile_name=contact.full_name,
-                    )
-                elif isinstance(coexistence, SmbMessageEchoesWebhookValue):
-                    echo = coexistence.message_echoes[0]
-                    event_timestamp = datetime.fromtimestamp(
-                        int(echo.timestamp), tz=UTC
-                    )
-                    user_base = self._create_user_base_from_contacts(
-                        webhook, echo.to_user_id or echo.to or ""
-                    )
-                elif isinstance(coexistence, HistoryWebhookValue):
-                    identity = None
-                    if coexistence.contacts:
-                        identity = coexistence.contacts[0].user_id
-                    if identity:
-                        user_base = self._create_user_base_from_contacts(
-                            webhook, identity
-                        )
+                event_timestamp = datetime.fromtimestamp(
+                    int(state.metadata.timestamp), tz=UTC
+                )
+                user_base = UserBase(
+                    phone_number=contact.phone_number or "",
+                    bsuid=contact.user_id,
+                    parent_bsuid=contact.parent_user_id,
+                    username=contact.username,
+                    profile_name=contact.full_name,
+                )
 
             case "messages" if webhook.is_user_action:
                 # User interaction events (marketing message link clicks) ride
                 # the messages field with no messages and no contacts, so there
                 # is no User to attach — the event is Inbox-scoped.
+                from wappa.webhooks.core.webhook_interfaces import UserAction
+
                 action = webhook.get_user_actions()[0]
+                click = action.marketing_messages_link_click_data
 
                 system_event_type = SystemEventType.USER_ACTION
                 event_detail = SystemEventDetail(
                     action_type=action.action_type,
-                    user_action=action.model_dump(mode="json", exclude_none=True),
+                    user_action=UserAction(
+                        action_type=action.action_type,
+                        timestamp=action.timestamp_int,
+                        click_component=click.click_component if click else None,
+                        click_id=click.click_id if click else None,
+                        tracking_token=click.tracking_token if click else None,
+                        product_id=click.product_id if click else None,
+                        client_user_agent=click.client_user_agent if click else None,
+                    ),
                 )
                 event_timestamp = datetime.fromtimestamp(action.timestamp_int, tz=UTC)
 
@@ -942,6 +1353,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                     )
 
                 message = self._create_system_message(raw_messages[0])
+                report_schema_drift(message, platform="whatsapp", logger=self.logger)
 
                 if message.is_number_change:
                     system_event_type = SystemEventType.NUMBER_CHANGE
@@ -1085,27 +1497,37 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             original_sender=None,
         )
 
-    def _extract_ad_referral(
+    def _extract_entry_referral(
         self, message_data: dict[str, Any]
-    ) -> "AdReferralBase | None":
-        from wappa.webhooks.core.webhook_interfaces import AdReferralBase
+    ) -> "EntryReferral | None":
+        """Click-to-WhatsApp ``referral`` → the shared ``EntryReferral``."""
+        from wappa.webhooks.core.webhook_interfaces import (
+            EntryPointKind,
+            EntryReferral,
+        )
 
         referral = message_data.get("referral")
         if not referral:
             return None
-
-        return AdReferralBase(
-            source_type=referral.get("source_type", "ad"),
-            source_id=referral.get("source_id", ""),
-            source_url=referral.get("source_url", ""),
-            ad_body=referral.get("body"),
-            ad_headline=referral.get("headline"),
+        source_type = referral.get("source_type")
+        kind = {"ad": EntryPointKind.AD, "post": EntryPointKind.POST}.get(
+            source_type or "", EntryPointKind.OTHER
+        )
+        source_id = referral.get("source_id") or None
+        return EntryReferral(
+            kind=kind,
+            source=source_type,
+            ad_id=source_id if kind is EntryPointKind.AD else None,
+            post_id=source_id if kind is EntryPointKind.POST else None,
+            source_url=referral.get("source_url"),
+            headline=referral.get("headline"),
+            body=referral.get("body"),
             media_type=referral.get("media_type"),
             image_url=referral.get("image_url"),
             video_url=referral.get("video_url"),
             thumbnail_url=referral.get("thumbnail_url"),
             click_id=referral.get("ctwa_clid"),
-            welcome_message_text=referral.get("welcome_message", {}).get("text"),
+            welcome_message_text=(referral.get("welcome_message") or {}).get("text"),
         )
 
     def _extract_conversation_context(

@@ -17,6 +17,8 @@ from uuid import UUID
 
 from sqlmodel import select
 
+from wappa.domain.inbox import InboxRef
+from wappa.messaging import DeliveryAddresses, DirectMessage
 from wappa.webhooks import InboundMessageWebhook
 
 from ..models.cache_models import ConversationCache
@@ -101,7 +103,14 @@ class CommandHandlers:
 
             if not conversation or conversation.get_message_count() == 0:
                 await self.messenger.send_text(
-                    "No active conversation to close.", user_id
+                    "No active conversation to close.",
+                    DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=self.messenger.platform,
+                            inbox_id=self.messenger.inbox_id,
+                        ),
+                        addresses=DeliveryAddresses.of(user_id),
+                    ),
                 )
                 return {
                     "success": True,
@@ -123,7 +132,13 @@ class CommandHandlers:
             # Confirm to user
             await self.messenger.send_text(
                 f"Conversation closed and {message_count} messages persisted to database!",
-                user_id,
+                DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
             )
 
             return {
@@ -136,7 +151,14 @@ class CommandHandlers:
         except Exception as e:
             self.logger.error(f"Error closing conversation: {e}", exc_info=True)
             await self.messenger.send_text(
-                "Sorry, an error occurred while closing the conversation.", user_id
+                "Sorry, an error occurred while closing the conversation.",
+                DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
             )
             return {"success": False, "error": str(e)}
 
@@ -159,13 +181,26 @@ class CommandHandlers:
 
             if msg_count == 0:
                 await self.messenger.send_text(
-                    "No messages in current conversation.", user_id
+                    "No messages in current conversation.",
+                    DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=self.messenger.platform,
+                            inbox_id=self.messenger.inbox_id,
+                        ),
+                        addresses=DeliveryAddresses.of(user_id),
+                    ),
                 )
             else:
                 await self.messenger.send_text(
                     f"Current conversation has {msg_count} messages in cache.\n"
                     f"Send '/CLOSE' to persist to database.",
-                    user_id,
+                    DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=self.messenger.platform,
+                            inbox_id=self.messenger.inbox_id,
+                        ),
+                        addresses=DeliveryAddresses.of(user_id),
+                    ),
                 )
 
             return {
@@ -176,7 +211,14 @@ class CommandHandlers:
         except Exception as e:
             self.logger.error(f"Error getting history: {e}", exc_info=True)
             await self.messenger.send_text(
-                "Sorry, an error occurred while retrieving history.", user_id
+                "Sorry, an error occurred while retrieving history.",
+                DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=DeliveryAddresses.of(user_id),
+                ),
             )
             return {"success": False, "error": str(e)}
 

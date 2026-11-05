@@ -34,9 +34,14 @@ def test_same_raw_account_id_on_two_platforms_does_not_share_an_index_key() -> N
     assert whatsapp.cache_namespace != instagram.cache_namespace
 
 
-def test_whatsapp_namespace_is_the_raw_phone_number_id() -> None:
-    """Existing WhatsApp Redis keys must stay byte-identical."""
-    assert InboxRef.whatsapp("111111111111111").cache_namespace == "111111111111111"
+def test_whatsapp_namespace_is_qualified_like_every_platform() -> None:
+    """0.34: one rule for every Platform; raw pre-0.34 namespaces are rejected."""
+    assert (
+        InboxRef.whatsapp("111111111111111").cache_namespace
+        == "whatsapp__111111111111111"
+    )
+    with pytest.raises(ValueError, match="migrate cache-namespaces"):
+        InboxRef.from_cache_namespace("111111111111111")
 
 
 def test_other_platforms_use_a_qualified_namespace() -> None:

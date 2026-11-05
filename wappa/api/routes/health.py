@@ -119,13 +119,16 @@ async def detailed_health_check(request: Request) -> dict[str, Any]:
             "port": settings.port,
             **runtime_status,
         },
+        # The Inbox Directory serves every Platform.
+        "inbox_runtime": {
+            "inbox_routing_mode": runtime_status["inbox_routing_mode"],
+            "inbox_directory": {
+                "configured": runtime_status["inbox_directory_configured"],
+                "reachability": directory_reachability,
+            },
+        },
         "platform_configs": {
             "whatsapp": {
-                "inbox_routing_mode": runtime_status["inbox_routing_mode"],
-                "inbox_directory": {
-                    "configured": runtime_status["inbox_directory_configured"],
-                    "reachability": directory_reachability,
-                },
                 "legacy_default_inbox": {
                     "configured": runtime_status["legacy_default_inbox_configured"],
                     "inbox_id": runtime_status["legacy_default_inbox_id"],

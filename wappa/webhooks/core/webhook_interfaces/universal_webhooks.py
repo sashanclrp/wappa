@@ -23,14 +23,22 @@ from pydantic import BaseModel, ConfigDict, Field
 from wappa.schemas.core.types import MessageStatus, PlatformType
 from wappa.webhooks.core.base_message import BaseMessage
 from wappa.webhooks.core.webhook_interfaces.base_components import (
-    AdReferralBase,
     BusinessContextBase,
     ConversationBase,
+    EntryReferral,
     ErrorDetailBase,
     ForwardContextBase,
     InboxBase,
     SystemEventDetail,
     UserBase,
+)
+from wappa.webhooks.core.webhook_interfaces.conversation_webhooks import (
+    HistorySyncWebhook,
+    InboxConnectionWebhook,
+    IncomingCommentWebhook,
+    MentionWebhook,
+    MessageUpdateWebhook,
+    OutboundEchoWebhook,
 )
 
 
@@ -40,16 +48,14 @@ class SystemEventType(StrEnum):
     NUMBER_CHANGE = "number_change"
     USER_ID_CHANGE = "user_id_change"
     MARKETING_PREFERENCE = "marketing_preference"
-    # Coexistence account-level events (WABA scope, not user scope).
-    ACCOUNT_OFFBOARDED = "account_offboarded"
-    ACCOUNT_RECONNECTED = "account_reconnected"
     BUSINESS_USERNAME_UPDATE = "business_username_update"
     GROUP_PARTICIPANTS_UPDATE = "group_participants_update"
-    HISTORY_SYNC = "history_sync"
-    SMB_MESSAGE_ECHO = "smb_message_echo"
     SMB_APP_STATE_SYNC = "smb_app_state_sync"
     # User interaction events (e.g. marketing message link clicks).
     USER_ACTION = "user_action"
+    # Standalone entry-point context (e.g. Instagram messaging_referral).
+    REFERRAL = "referral"
+    UNSUPPORTED_EVENT = "unsupported_event"
 
 
 class WhatsAppIncomingWebhookData(BaseModel):
@@ -117,9 +123,12 @@ class InboundMessageWebhook(BaseModel):
     forward_context: ForwardContextBase | None = Field(
         default=None, description="Context when message was forwarded by the user"
     )
-    ad_referral: AdReferralBase | None = Field(
+    entry_referral: EntryReferral | None = Field(
         default=None,
-        description="Context when message originated from advertisement interaction",
+        description=(
+            "How the User reached the conversation (ad, post, link) on every "
+            "Platform, e.g. Click-to-WhatsApp or an Instagram ad"
+        ),
     )
 
     # Universal metadata
@@ -160,12 +169,18 @@ class InboundMessageWebhook(BaseModel):
 
     def get_interactive_selection(self) -> str | None:
         """
-        Get the selected option from interactive messages.
+        Get the ID of the option the User chose.
+
+        Covers interactive replies (buttons, lists, quick replies, postbacks)
+        and WhatsApp ``button`` messages, which is how Meta delivers a tap on a
+        carousel card's quick reply or a Template quick-reply button
+        (``button.payload``).
 
         Returns:
-            The selected option ID/value or None if not an interactive message
+            The selected option ID/payload, or None if the User chose nothing
         """
-        # Check if this is an interactive message
+        if self.get_message_type_name() == "button":
+            return cast(str | None, getattr(self.message, "button_payload", None))
         if self.get_message_type_name() != "interactive":
             return None
 
@@ -201,9 +216,9 @@ class InboundMessageWebhook(BaseModel):
         """Check if this message has business interaction context."""
         return self.business_context is not None
 
-    def has_ad_referral(self) -> bool:
-        """Check if this message originated from an advertisement."""
-        return self.ad_referral is not None
+    def is_from_ad(self) -> bool:
+        """Check if this message came from an ad (``entry_referral.kind``)."""
+        return self.entry_referral is not None and self.entry_referral.is_ad
 
     def was_forwarded(self) -> bool:
         """Check if this message was forwarded."""
@@ -255,7 +270,7 @@ class InboundMessageWebhook(BaseModel):
             "sender": self.user.user_id,
             "inbox": self.inbox.get_inbox_key(),
             "has_business_context": self.has_business_context(),
-            "has_ad_referral": self.has_ad_referral(),
+            "is_from_ad": self.is_from_ad(),
             "was_forwarded": self.was_forwarded(),
             "timestamp": self.timestamp.isoformat(),
         }
@@ -322,6 +337,9 @@ class StatusWebhook(BaseModel):
     # Status information
     message_id: str = Field(description="ID of the message this status refers to")
     status: MessageStatus = Field(description="Current status of the message")
+    recipient_platform_id: str | None = Field(
+        default=None, description="Native recipient ID on non-WhatsApp Platforms"
+    )
     recipient_phone_id: str = Field(
         default="",
         description="Raw phone-based recipient ID from webhook (may be empty for BSUID-only)",
@@ -407,6 +425,8 @@ class StatusWebhook(BaseModel):
         Returns:
             BSUID if available, otherwise falls back to recipient_phone_id.
         """
+        if self.recipient_platform_id:
+            return self.recipient_platform_id
         if self.recipient_bsuid and self.recipient_bsuid.strip():
             return self.recipient_bsuid.strip()
         return self.recipient_phone_id
@@ -744,4 +764,10 @@ UniversalWebhook = (
     | ErrorWebhook
     | SystemWebhook
     | CustomWebhook
+    | MessageUpdateWebhook
+    | IncomingCommentWebhook
+    | MentionWebhook
+    | OutboundEchoWebhook
+    | HistorySyncWebhook
+    | InboxConnectionWebhook
 )

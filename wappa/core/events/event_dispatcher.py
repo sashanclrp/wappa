@@ -6,7 +6,13 @@ from wappa.webhooks import (
     CallWebhook,
     CustomWebhook,
     ErrorWebhook,
+    HistorySyncWebhook,
     InboundMessageWebhook,
+    InboxConnectionWebhook,
+    IncomingCommentWebhook,
+    MentionWebhook,
+    MessageUpdateWebhook,
+    OutboundEchoWebhook,
     StatusWebhook,
     SystemWebhook,
 )
@@ -25,6 +31,12 @@ _WEBHOOK_EMOJI = {
     "ErrorWebhook": "🚨",
     "SystemWebhook": "⚙️",
     "CustomWebhook": "🧩",
+    "MessageUpdateWebhook": "✏️",
+    "IncomingCommentWebhook": "💭",
+    "MentionWebhook": "📣",
+    "HistorySyncWebhook": "🗂️",
+    "InboxConnectionWebhook": "🔌",
+    "OutboundEchoWebhook": "🔁",
 }
 
 _STATUS_EMOJI = {
@@ -102,6 +114,42 @@ class WappaEventDispatcher:
                     result = await self._handle_custom_webhook(
                         universal_webhook, handler
                     )
+                case MessageUpdateWebhook():
+                    result = await self._handle_lane(
+                        "message_update_processed",
+                        handler.handle_message_update(universal_webhook),
+                        handler,
+                    )
+                case IncomingCommentWebhook():
+                    result = await self._handle_lane(
+                        "comment_processed",
+                        handler.handle_comment(universal_webhook),
+                        handler,
+                    )
+                case HistorySyncWebhook():
+                    result = await self._handle_lane(
+                        "history_sync_processed",
+                        handler.handle_history_sync(universal_webhook),
+                        handler,
+                    )
+                case InboxConnectionWebhook():
+                    result = await self._handle_lane(
+                        "inbox_connection_processed",
+                        handler.handle_inbox_connection(universal_webhook),
+                        handler,
+                    )
+                case OutboundEchoWebhook():
+                    result = await self._handle_lane(
+                        "outbound_echo_processed",
+                        handler.handle_outbound_echo(universal_webhook),
+                        handler,
+                    )
+                case MentionWebhook():
+                    result = await self._handle_lane(
+                        "mention_processed",
+                        handler.handle_mention(universal_webhook),
+                        handler,
+                    )
                 case _:
                     return {
                         "success": False,
@@ -135,6 +183,25 @@ class WappaEventDispatcher:
                 "error_type": type(e).__name__,
                 "processed_at": datetime.now(UTC).isoformat(),
             }
+
+    async def _handle_lane(
+        self,
+        action: str,
+        work: Any,
+        handler: "WappaEventHandler",
+    ) -> dict[str, Any]:
+        try:
+            await work
+            return {
+                "success": True,
+                "action": action,
+                "handler": handler.__class__.__name__,
+                "inbox_id": handler.inbox_id,
+                "user_id": handler.user_id,
+            }
+        except Exception as e:
+            self.logger.error(f"Error in {action} handler: {e}", exc_info=True)
+            return {"success": False, "error": str(e), "action": "handler_error"}
 
     async def _handle_message_webhook(
         self,
@@ -303,7 +370,7 @@ class WappaEventDispatcher:
             )
 
             spec = (
-                self._field_registry.get(field_name)
+                self._field_registry.get(field_name, webhook.platform)
                 if self._field_registry is not None
                 else None
             )
