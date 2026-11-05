@@ -10,6 +10,8 @@ This file orders active Wappa backlog work and lists every top-level item in the
 
 3. [261105-mid-inbox-connector-contract.md](./in_progress/261105-mid-inbox-connector-contract.md): the Inbox Connector contract. `IInboxConnector`, `InstagramConnector` and `WhatsAppConnector` already exist (ADR-0017); remaining work is the live check of both connectors, Symphonai's switch to `WhatsAppConnector`, a credential-step result for non-OAuth Platforms, and optional phone-number registration.
 
+4. [261106-architecture-hardening/](./in_progress/261106-architecture-hardening/plan.md): finish hardening Wappa as multi-Inbox and multi-Platform. Ten verified area audits feed a 33-item backlog in dependency order (neutral contract types, dead-seam deletions, the `PlatformWebhooks` registry, one media seam, the capability extension mechanism, connection typing) plus five ADR drafts and the third-Platform contract test. It waits on the review checkpoint before any code change.
+
 ## Pending
 
 No ordered items.
