@@ -1130,6 +1130,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             pricing_model=getattr(pricing, "pricing_model", None) if pricing else None,
             pricing_category=getattr(pricing, "category", None) if pricing else None,
             pricing_type=getattr(pricing, "type", None) if pricing else None,
+            pricing_subtype=getattr(pricing, "subtype", None) if pricing else None,
         )
 
     def _extract_status_errors(

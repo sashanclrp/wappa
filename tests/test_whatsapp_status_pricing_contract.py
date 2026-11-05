@@ -73,6 +73,32 @@ async def test_status_webhook_accepts_pricing_subtype(
     assert "WHATSAPP_WEBHOOK_CONTRACT_DRIFT" not in caplog.text
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("extra", "expected"),
+    [
+        pytest.param({"subtype": "free_tier"}, "free_tier", id="observed-free-tier"),
+        pytest.param({}, None, id="no-subtype"),
+    ],
+)
+async def test_universal_conversation_exposes_pricing_subtype(
+    extra: dict, expected: str | None
+) -> None:
+    payload = _status_payload(_pricing(**extra))
+    status = payload["entry"][0]["changes"][0]["value"]["statuses"][0]
+    status["conversation"] = {
+        "id": "conversation-001",
+        "origin": {"type": "service"},
+    }
+
+    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(payload)
+
+    assert webhook.conversation is not None
+    assert webhook.conversation.pricing_type == "free_customer_service"
+    assert webhook.conversation.pricing_subtype == expected
+    assert webhook.model_dump()["conversation"]["pricing_subtype"] == expected
+
+
 def test_status_info_exposes_pricing_subtype() -> None:
     status = WhatsAppMessageStatus.model_validate(
         {
