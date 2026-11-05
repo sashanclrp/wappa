@@ -372,6 +372,13 @@ class Pricing(BaseModel):
     type: Literal["regular", "free_customer_service", "free_entry_point"] | None = (
         Field(None, description="Pricing type (available from July 1, 2025)")
     )
+    subtype: str | None = Field(
+        None,
+        description=(
+            "Pricing subtype. Open string: Meta documents paid_exempt and also sends "
+            "the undocumented free_tier"
+        ),
+    )
     category: Literal[
         "authentication",
         "authentication-international",

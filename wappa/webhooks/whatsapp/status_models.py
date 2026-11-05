@@ -248,6 +248,7 @@ class WhatsAppMessageStatus(BaseMessageStatus):
                 "pricing_model": self.pricing.pricing_model,
                 "category": self.pricing.category,
                 "type": self.pricing.type,
+                "subtype": self.pricing.subtype,
             }
 
         return info
