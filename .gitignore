@@ -145,3 +145,6 @@ cython_debug/
 pruebas/
 send_templates/
 _test.py
+
+# JSON cache backend output (runtime data, may hold personal data)
+cache/

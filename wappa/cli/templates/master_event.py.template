@@ -1,10 +1,13 @@
-from wappa.domain.inbox import InboxRef
-from wappa.messaging import DirectMessage
 from wappa import WappaEventHandler
+from wappa.messaging import DirectMessage
 from wappa.webhooks import InboundMessageWebhook
 
+
 class MasterEventHandler(WappaEventHandler):
-    
     async def process_message(self, webhook: InboundMessageWebhook):
-        await self.messenger.mark_as_read(webhook.message.message_id)
-        await self.messenger.send_text("Wappa App ready", DirectMessage(inbox_ref=InboxRef(platform=self.messenger.platform, inbox_id=self.messenger.inbox_id), recipient_id=webhook.user.user_id))
+        target = DirectMessage(
+            inbox_ref=self.inbox_ref,
+            addresses=webhook.user.delivery_addresses(),
+        )
+        await self.messenger.mark_as_read(webhook.message.message_id, target=target)
+        await self.messenger.send_text("Wappa App ready", target)
