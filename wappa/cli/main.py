@@ -303,6 +303,17 @@ def _build_hypercorn_cmd(
     return cmd
 
 
+def _configured_log_dir() -> str:
+    """``SYSTEM_LOG_DIR`` as the app will see it (process env, then ``.env``)."""
+    from dotenv import dotenv_values
+
+    return (
+        os.getenv("SYSTEM_LOG_DIR")
+        or dotenv_values(".env").get("SYSTEM_LOG_DIR")
+        or "./logs"
+    )
+
+
 def _run_server(
     file_path: str,
     app_var: str,
@@ -340,6 +351,10 @@ def _run_server(
 
     if reload:
         typer.echo(f"📝 Docs: http://{host}:{port}/docs")
+        log_dir = Path(working_dir, _configured_log_dir())
+        typer.echo(
+            f"📜 Live log: {log_dir / 'current.log'} · PIDs/port: {log_dir / 'dev.pid'}"
+        )
     else:
         typer.echo(f"👥 Workers: {workers}")
 

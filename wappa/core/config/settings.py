@@ -80,6 +80,11 @@ class Settings:
         self.logs_rich_format: bool | None = (
             True if _rich_raw == "TRUE" else False if _rich_raw == "FALSE" else None
         )
+        # Opt-in raw webhook capture under ``<log_dir>/payloads/`` (DEV only;
+        # see ``payload_capture_enabled``).
+        self.capture_payloads: bool = os.getenv(
+            "SYSTEM_CAPTURE_PAYLOADS", ""
+        ).strip().lower() in {"1", "true", "yes"}
 
         # ── Meta / WhatsApp (META_* / WP_*) ─────────────────────
         self.api_version: str = os.getenv("META_API_VERSION", "v26.0")
@@ -138,6 +143,11 @@ class Settings:
     @property
     def is_production(self) -> bool:
         return self.environment == "PROD"
+
+    @property
+    def payload_capture_enabled(self) -> bool:
+        """Raw webhook capture runs only when requested and outside PROD."""
+        return self.capture_payloads and self.is_development
 
 
 settings = Settings()

@@ -15,7 +15,12 @@ from wappa.domain.inbox.routing import InboxRoutingMode
 from wappa.schemas.core.types import PlatformType
 
 from ..config.settings import settings
-from ..logging.logger import ContextLogger, get_app_logger, setup_app_logging
+from ..logging.logger import (
+    ContextLogger,
+    get_app_logger,
+    release_dev_pidfile,
+    setup_app_logging,
+)
 from ..types import CacheType
 
 if TYPE_CHECKING:
@@ -182,6 +187,7 @@ class WappaCorePlugin:
         """Phase 3 (priority 10): close HTTP session and clean up app state."""
         logger = get_app_logger()
         logger.info("🛑 Closing Wappa core resources...")
+        release_dev_pidfile()
 
         try:
             if self.cache_type == CacheType.MEMORY:

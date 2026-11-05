@@ -8,6 +8,7 @@ never sees Table Cache names, encryption keys, or token values.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -15,6 +16,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from wappa.core.config.meta_application import MetaApplicationConfig
+from wappa.core.config.settings import settings
 from wappa.core.dispatch.context_builder import RuntimeCapabilities
 from wappa.core.events import WappaEventDispatcher
 from wappa.core.inbound import (
@@ -27,6 +29,7 @@ from wappa.core.inbound import (
     route_whatsapp_payload,
 )
 from wappa.core.inbound.instagram_routing import route_instagram_payload
+from wappa.core.inbound.payload_capture import capture_payload
 from wappa.core.logging.logger import get_logger
 from wappa.domain.inbox.errors import (
     InboxCredentialIntegrityError,
@@ -48,6 +51,10 @@ class WebhookController:
         self.inbound_runtime = InboundRuntime(event_dispatcher)
         self.logger = get_logger(__name__)
         self.supported_platforms = {platform.value.lower() for platform in PlatformType}
+        if settings.capture_payloads and not settings.payload_capture_enabled:
+            self.logger.warning(
+                "SYSTEM_CAPTURE_PAYLOADS is ignored outside SYSTEM_ENVIRONMENT=DEV"
+            )
 
     # ── GET verification ─────────────────────────────────────────────
 
@@ -120,6 +127,8 @@ class WebhookController:
 
         # 2. Only now decode JSON and require an object root.
         payload = self._parse_object_root(body)
+        if settings.payload_capture_enabled:
+            await self._capture(payload, platform_type)
 
         # 3. Route, prove membership, build every Dispatch Context, then schedule.
         dependencies = RuntimeCapabilities.from_app(request.app)
@@ -169,6 +178,23 @@ class WebhookController:
             ) from exc
 
     # ── helpers ──────────────────────────────────────────────────────
+
+    async def _capture(self, payload: dict[str, Any], platform: PlatformType) -> None:
+        """Write a redacted copy for fixtures; never affects webhook handling."""
+        try:
+            path = await asyncio.to_thread(
+                capture_payload,
+                payload,
+                platform=platform.value,
+                log_dir=settings.log_dir,
+            )
+            self.logger.debug("Captured %s webhook payload: %s", platform.value, path)
+        except Exception as exc:
+            self.logger.warning(
+                "Payload capture failed (webhook still processed): %s: %s",
+                type(exc).__name__,
+                exc,
+            )
 
     @staticmethod
     def _parse_object_root(body: bytes) -> dict[str, Any]:

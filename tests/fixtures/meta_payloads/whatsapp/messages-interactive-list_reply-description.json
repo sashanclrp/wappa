@@ -1,0 +1,51 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "100000000000001",
+      "changes": [
+        {
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550000001",
+              "phone_number_id": "100000000000002"
+            },
+            "contacts": [
+              {
+                "profile": {
+                  "name": "Test User",
+                  "username": "testuser"
+                },
+                "wa_id": "15550001234",
+                "user_id": "US.100000000000003"
+              }
+            ],
+            "messages": [
+              {
+                "context": {
+                  "from": "15550000001",
+                  "id": "wamid.FAKE0000LIST0000PROMPT0001=="
+                },
+                "from": "15550001234",
+                "from_user_id": "US.100000000000003",
+                "id": "wamid.FAKE0000LIST0000REPLY0001==",
+                "timestamp": "1793901134",
+                "type": "interactive",
+                "interactive": {
+                  "type": "list_reply",
+                  "list_reply": {
+                    "id": "form:service:chatbot",
+                    "title": "Chatbot",
+                    "description": "Automated replies on WhatsApp"
+                  }
+                }
+              }
+            ]
+          },
+          "field": "messages"
+        }
+      ]
+    }
+  ]
+}
