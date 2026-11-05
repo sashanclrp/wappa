@@ -14,6 +14,8 @@ from wappa.persistence.inbox_directory import (
     PRIMARY_TABLE,
     InboxDirectoryTable,
 )
+from wappa.persistence.memory import storage_manager as memory_storage
+from wappa.persistence.memory.handlers.utils import memory_store
 from wappa.persistence.namespace_migration import (
     migrate_json_namespaces,
     migrate_redis_namespaces,
@@ -83,7 +85,18 @@ async def test_redis_migration_keeps_ttl_and_never_overwrites():
         await client.aclose()
 
 
-async def test_directory_clear_drops_rows_and_account_index():
+@pytest.fixture
+def fresh_memory_store(monkeypatch):
+    """The memory backend is process-global; other tests leave Inbox Directory
+    rows in it. Give this test an empty store so counts do not depend on order."""
+    store = memory_store.MemoryStore()
+    monkeypatch.setattr(memory_store, "_global_memory_store", store)
+    monkeypatch.setattr(memory_storage.storage_manager, "memory_store", store)
+    yield store
+    store.stop_cleanup_task()
+
+
+async def test_directory_clear_drops_rows_and_account_index(fresh_memory_store):
     cache = create_system_table_cache("memory")
     await cache.upsert(PRIMARY_TABLE, "whatsapp__1", {"x": 1})
     await cache.upsert(ACCOUNT_INDEX_TABLE, "whatsapp__9", {"x": 1})

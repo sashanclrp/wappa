@@ -443,6 +443,20 @@ def _call(
     return client.request(method, path, json=body, headers=headers or {})
 
 
+_STATE_GET = "/api/whatsapp/state-handlers/get/573001234567/flow"
+_STATE_SET = next(row for row in INBOX_DEPENDENT if row[1].endswith("/set"))
+
+
+def _seed_state_for(
+    client: TestClient, path: str, headers: dict[str, str] | None = None
+) -> None:
+    """The state GET route answers 404 until a state exists; seed it so the
+    test does not depend on the SET row running first."""
+    if path == _STATE_GET:
+        method, set_path, body = _STATE_SET
+        assert _call(client, method, set_path, body, headers).is_success
+
+
 @pytest.mark.parametrize(
     ("method", "path", "body"), INBOX_DEPENDENT, ids=[p for _, p, _ in INBOX_DEPENDENT]
 )
@@ -467,6 +481,7 @@ def test_inbox_dependent_routes_follow_the_selection_matrix(
         _call(client, method, path, body, {INBOX_ID_HEADER: INBOX_A}).status_code == 503
     ), "unavailable"
     resolver.failure = None
+    _seed_state_for(client, path, {INBOX_ID_HEADER: INBOX_A})
     resolver.calls.clear()
     response = _call(client, method, path, body, {INBOX_ID_HEADER: INBOX_A})
     assert response.status_code not in (400, 401, 403, 404, 503), (path, response.text)
@@ -480,7 +495,10 @@ def test_inbox_dependent_routes_use_the_legacy_default(
     legacy: Any, method: str, path: str, body: Any
 ) -> None:
     app, _, resolver = legacy
-    response = _call(TestClient(app), method, path, body)
+    client = TestClient(app)
+    _seed_state_for(client, path)
+    resolver.calls.clear()
+    response = _call(client, method, path, body)
 
     assert response.status_code not in (400, 401, 403, 404, 503), (path, response.text)
     assert resolver.calls == [INBOX_A]

@@ -14,7 +14,9 @@ uv run pytest -q
 git diff --check
 ```
 
-`pytest` needs the legacy Inbox bundle in the environment: without it, the builder and router tests raise `InboxConfigurationError`. A `.env` copied from `.env.example`, or any non-empty `WP_ACCESS_TOKEN`, `WP_PHONE_ID`, and `WP_BID`, is enough; no test calls Meta. Redis-backed tests skip when no server answers; `docker run -d -p 6379:6379 redis:7-alpine` runs them.
+CI (`.github/workflows/ci.yml`) runs the same gates, and `uv run pre-commit install` enables the local hook (`.pre-commit-config.yaml`). Tests need no `.env`: `tests/conftest.py` sets dummy credentials, and no test calls Meta. Redis-backed tests skip when no server answers; `docker run -d -p 6379:6379 redis:7-alpine` runs them.
+
+While iterating, run `uv run pytest --lf -x` or the touched test files; run the full suite once before committing.
 
 ## Formatting
 
@@ -51,5 +53,5 @@ Update the documentation graph in the same change as the code it describes:
 
 - Format: `[ACTION] [SCOPE] Short description`, imperative mood. `ACTION` is `ADD`, `MOD`, `FIX`, or `REL` (releases, cut by the `bump-version` skill).
 - Scope each commit to one Wappa area: runtime, Platform adapter, API contract, persistence, CLI/templates, docs, or tests. Examples: `[MOD] [CONTRACT] Rename webhook runtime identity to inbox_id`, `[FIX] [WHATSAPP] Handle empty webhook payload`.
-- Leave generated and local-only artifacts (`dist/`, `logs/`, `cache/`) untracked unless the task asks to commit them.
+- Leave generated and local-only artifacts (`dist/`, `logs/`, and JSON-cache output under `cache/`) untracked unless the task asks to commit them. `.gitignore` covers all three.
 - A pull request states what changed and why, links its issue, includes logs or screenshots when behaviour is visible, and confirms the check gates pass.
