@@ -1,6 +1,8 @@
 # Public Contract
 
-This file tracks Wappa surfaces that host applications may import, call, configure, subscribe to, or depend on.
+This file tracks Wappa surfaces that host applications may import, call, configure, subscribe to, or depend on. That includes the import surface, webhook routes, event envelopes, cache namespace shape, and what `wappa init` and `wappa examples` generate (`wappa/cli/templates/`, `wappa/cli/examples/`): update templates and examples in the same change as the API they use.
+
+A breaking change is a clean cut: no aliases, re-exports, or compatibility shims, and `CHANGELOG.md` lists every break.
 
 ## Instagram conversations contract
 

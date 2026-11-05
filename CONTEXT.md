@@ -205,7 +205,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | `multi-tenant` | "multi-inbox" if describing Wappa's ability to handle multiple inboxes; avoid entirely if describing business tenancy (not Wappa's concern) |
 | `provider` (as a code identifier) | `platform` — the canonical term in Wappa for external messaging services |
 | `Request Context` (for event dispatch) | `Dispatch Context` |
-| `Compatibility Shim` | No replacement. Wappa should prefer clean breaking changes over old import-path preservation. |
+| `Compatibility Shim` | No replacement; breaking changes are clean cuts (`docs/public-contract.md`). |
 | `TenantBase`, `TenantCredentialsService`, `IInboxCredentialStore` | `InboxBase`, `SettingsInboxCredentialResolver` or Wappa's `InboxDirectory`; Hosts adapt through `IInboxDirectorySource` only |
 | `auto` (as an Inbox routing mode) | `legacy` or `explicit`; no precedence rule selects a credential authority |
 | `Owner` (as Wappa runtime language) | A Host-defined Table Cache Scope value; Wappa does not define Owner |
