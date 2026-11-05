@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Wappa is a Platform-facing messaging runtime library and CLI, WhatsApp first. It owns webhook intake, message sending, event dispatch, runtime cache scoping, and its public contract; the embedding Host Application owns every business concept.
+Wappa is a Platform-facing messaging runtime library and CLI for WhatsApp and Instagram. It owns webhook intake, message sending, event dispatch, runtime cache scoping, and its public contract; the embedding Host Application owns every business concept.
 
 Before a non-trivial change, read what it touches:
 
