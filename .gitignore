@@ -4,7 +4,6 @@
 .claude/plans/
 .claude/documents/
 CLAUDE.md
-AGENTS.md
 logs/
 .ruff_cache
 # Python-related files

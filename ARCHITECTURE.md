@@ -295,6 +295,8 @@ Wappa manages two separate HTTP client pools, both owned by `SessionLifecycle`:
 
 **Dependency rule:** Domain Interfaces is the innermost layer. Outer layers depend inward. No layer depends on the API layer except the application entry point.
 
+**Edge ownership:** API route modules only adapt HTTP to Wappa modules; Platform parsing, credential lookup, cache namespace rules, and dispatch policy live behind them. Platform adapters own SDK/client construction, request/response translation, Platform errors, and Platform-specific identity mapping. The WhatsApp `inbox_id == phone_number_id` mapping stays explicit inside the WhatsApp adapter; every other module speaks `inbox_id`.
+
 ## Multi-Platform Strategy
 
 Wappa is multi-platform by design. Platform types remain stable while adapter
