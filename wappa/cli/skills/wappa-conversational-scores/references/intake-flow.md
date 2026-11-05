@@ -53,7 +53,7 @@ async def handle(self, event) -> bool:
         await self.prompt(state)
         return True
     value = parsed[1] if parsed else text
-    ...validate value for state.step, update answers, advance step, save, prompt...
+    # validate value for state.step, update answers, advance step, save, prompt
     return True
 ```
 

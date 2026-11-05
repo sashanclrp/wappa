@@ -87,6 +87,7 @@ await templates.send_text_template("order_ready", target, params, "es", template
 - `ReplyButton` moved to the neutral `wappa.domain.interactive` (exported from `wappa.messaging`; the WhatsApp models no longer re-export it) and is the one "choose this option" value on every Platform.
 - `FieldHandlerRegistry` keys registrations by `(platform, field)`; `get`/`fields` take an optional `platform` (default WhatsApp).
 - Instagram error codes are `code/subcode` strings; text limits are 1000 UTF-8 bytes (`ValueError` before I/O).
+- Wappa's daily log file (`wappa_YYYYMMDD.log`) now rolls over at midnight. Before, a long-running server kept writing to the previous day's file.
 
 ### Added
 
@@ -120,6 +121,15 @@ await templates.send_text_template("order_ready", target, params, "es", template
 - Instagram `changes` admission (`comments`, `live_comments`, `mentions`) and Instagram extension field registration with whole-batch admission.
 - Shipped developer skills `wappa-instagram-apps`, `wappa-conversational-scores` and `wappa-runtime-state` (package data under `wappa/cli/skills/`, emitted by `wappa init` into `.claude/skills` and `.agents/skills` without overwriting existing folders).
 - Inbox Connector contract `wappa.connections.IInboxConnector` ([ADR-0017](docs/adr/0017-inbox-connector-contract.md)): `begin` / `complete` / `activate` / `disconnect`, one shape for every Platform. `InstagramConnector` (Unified Login: `assigned_instagram_accounts` discovery, per-field webhook subscription with separate `message_edit` verification) and `WhatsAppConnector` (Embedded Signup: shared WABA discovery from `debug_token`, one Inbox per phone number, WABA `subscribed_apps`) share a Meta Business Login core (`MetaLoginConfig`: one-use operator-bound state, code exchange with or without `redirect_uri`, `debug_token` scope readiness, `signed_request` verification). `activate` returns the Wappa-encrypted record (rotating a previous one).
+- **DEV log handles.** In DEV, `SYSTEM_LOG_DIR` holds `current.log`, a symlink to the active log file, and `dev.pid`, which records the serving PID, the reloader or launcher PID, the PID to stop, the port and the log file. `wappa dev` prints both paths.
+- **Payload capture.** `SYSTEM_CAPTURE_PAYLOADS=true` (DEV only; ignored with a warning elsewhere) writes each authenticated webhook body, redacted, to `logs/payloads/<platform>/<kind>-<timestamp>.json`. Capture errors never affect webhook handling. `tests/fixtures/meta_payloads/` holds promoted captures, and `tests/test_meta_payload_fixtures.py` replays each one under strict schema validation, so Meta payload drift fails a test instead of live traffic.
+- **Read-only tools for repo maintainers** in `scripts/`, not shipped in the wheel:
+  - `devlog.sh`: reads the server log from the last restart, optionally filtered by time or pattern;
+  - `meta_inspect.py`: app subscriptions, `debug_token`, and an Instagram account's `subscribed_apps`; tokens are masked;
+  - `redis_inspect.py`: one Inbox's keys and TTLs;
+  - `promote_payload.py`: copies a capture into the fixtures and refuses one that holds secrets;
+  - `env_keys.sh`: `.env` key names without values.
+- **Repository guardrails.** CI (`.github/workflows/ci.yml`) runs ruff, ruff format, mypy, pytest with Redis, and gitleaks on every push and pull request. `.pre-commit-config.yaml` runs the same checks locally. Tests set dummy credentials in `tests/conftest.py` and no longer depend on a developer's `.env`. `tests/` is now linted, `tests/test_doc_claims.py` checks the paths, imports and code blocks in the agent-read docs, and `tests/test_backlog_index.py` keeps the backlog plan complete.
 
 ### Fixed
 
@@ -142,6 +152,10 @@ await templates.send_text_template("order_ready", target, params, "es", template
 - The WhatsApp carousel sent BSUIDs in `to`; it now uses `recipient` like every other send.
 - WhatsApp carousels with quick-reply cards were rejected with 400 (code 100, `cards.N` missing `type`). Every card now carries `"type": "cta_url"`, as Meta's carousel examples do for quick-reply cards too.
 - `WhatsAppMessenger.mark_as_read(typing=True)` now sends the `typing_indicator`. It used to drop it silently, on the wrong assumption that a recipient ID was needed.
+- **`wappa init` projects failed on their first send.** The scaffolded `master_event.py` built `DirectMessage(..., recipient_id=...)`, which `DirectMessage` rejects. It now builds the target from `self.inbox_ref` and `webhook.user.delivery_addresses()` and passes it to `mark_as_read` too. `tests/test_cli_templates.py` runs the scaffolded handler.
+- The README quick-start sample passed a bare user ID to `send_text`, which raises `UnsupportedOperationError`. It and the "Recipient Contract" section now use `DirectMessage`. The README also names the 9 shipped examples and the real plugin classes (`PostgresDatabasePlugin`, `CORSPlugin`).
+- The `init` example's `.env.example` claimed `LOG_LEVEL`, `API_VERSION` and `ENVIRONMENT` still worked with a deprecation warning. Wappa reads only `SYSTEM_LOG_LEVEL`, `META_API_VERSION` and `SYSTEM_ENVIRONMENT`, so the claim is removed.
+- **Privacy:** JSON-cache output under `cache/`, including one User's name and phone number, had been committed by accident. It is untracked and `cache/` is gitignored. It remains in git history.
 
 ### Documentation
 
@@ -149,24 +163,23 @@ await templates.send_text_template("order_ready", target, params, "es", template
 - `docs/public-contract.md`, `CONTEXT.md` (Media Library, Template Messaging, Inbox Connector, Interactive Selection), `ARCHITECTURE.md`, `wappa/messaging/ARCHITECTURE.md`, `README.md` and the [migration guide](docs/migration/instagram-conversation-contracts.md) describe the contract map: core methods, WhatsApp-only core methods, shared and Platform capabilities, and connection.
 - `wappa/cli/ARCHITECTURE.md` and `wappa/webhooks/ARCHITECTURE.md` had been overwritten by uncommitted work with a copy of the messaging doc. Both were restored from git and their sections re-added.
 - Backlog drafts for future work, in `docs/backlog/drafts/`: a `send_reaction` core method, a commerce capability (WhatsApp catalog alongside Instagram cards), `IProfileReader`, `IConversationEntryPoints`, a WhatsApp Flows PRD, a WhatsApp Calling PRD, and Inbox Connector follow-ups.
+- `AGENTS.md` is the single agent guide for every coding agent (Claude Code reads it when no `CLAUDE.md` exists): a short description plus pointers. `CLAUDE.md` is removed. Coding, test, docs and commit rules moved to `CODING_STANDARDS.md`, and `CONTRIBUTING.md` points there.
+- New `wappa/api/ARCHITECTURE.md` (router tree, Inbox selection, capability gates, request models). `wappa/messaging/ARCHITECTURE.md` gains "Changing a Messenger method", `wappa/webhooks/ARCHITECTURE.md` gains "Adding a message family or event lane", and the root new-Platform checklist names its files. Stale statements were corrected (Instagram reactions are messages, echoes are `OutboundEchoWebhook`, the cache namespace is the same on every Platform).
+- The Unified Login docs (public contract, `wappa-instagram-apps` skill, live test plan) now say the deauthorize callback fires only for Instagram Login grants. Unified Login issues `SYSTEM_USER` tokens, which are revoked through the business portfolio.
 
 ### Known gaps
 
 - **No reaction send.** `send_reaction` is missing from the core contract; ADR-0016 records it as a known gap.
-- **Unverified live:** the Instagram Conversations API history read, the deauthorize `user_id` being the Inbox ID, and Instagram reaction payload field names.
+- **Unverified live:** the Instagram Conversations API history read, Live-video comments, and the deauthorize lane (only Instagram Login grants send it; Wappa's connect flow uses Unified Login).
 - **WhatsApp-only core methods.** `send_location_request` and `send_contact_request` raise on Instagram. Gate them on `supported_operations`.
 - **Connector limits.** WhatsApp disconnect works per WABA, so it stops webhooks for every number in that WABA. Phone-number `/register` (two-step PIN) is not called. `begin` only returns a redirect, so a credential-entry step (Telegram bot token) is not built.
-- **Live certification is partial.** Live Instagram runs passed for text, quick replies, postbacks, the button / CTA / card / carousel sends, seen and typing, and the form-intake Score on Redis. Still open:
-  - media sends and inbound media download;
-  - `/read`;
-  - comments, mentions and Live;
-  - the WhatsApp/Instagram parity run;
-  - a live connector run (connectors are tested only against faked Meta responses);
-  - the Symphonai live run.
+- **Live certification.** Gate A (WhatsApp and Instagram parity: text, media, voice, interactive, cards, carousels, `/read`, comments, private replies, mentions, post and comment reads, forwards, reactions, `played`) and Gate B (Unified Login connect, reconnect, cancel and multi-Inbox routing) passed live on 2026-11-05. Still open:
+  - B-08, a Creator account;
+  - Gate C, the Symphonai live run.
 
 ### Verification
 
-`uv run pytest -q` → 1233 passed, 1 skipped; `uv run mypy wappa` clean (384 files); `uv run ruff check .` clean; shipped skill lint 0 errors / 0 warnings.
+`uv run pytest -q` → 1300 passed, 1 skipped (random order); `uv run mypy wappa` clean (388 files); `uv run ruff check .` clean; shipped skill lint 0 errors / 0 warnings.
 
 ## [0.33.0] - 2026-11-02
 

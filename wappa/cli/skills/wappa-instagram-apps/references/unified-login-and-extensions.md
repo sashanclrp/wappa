@@ -1,7 +1,7 @@
 ---
-checked_on: 2026-11-03
+checked_on: 2026-11-05
 checked_against: Meta Instagram API with Unified Login authentication and get-started pages (Graph v26.0) and Wappa's tests/test_instagram_connection.py
-revision: 1
+revision: 2
 ---
 
 # Unified Login, credentials and extensions
@@ -48,7 +48,9 @@ await runtime.directory.refresh_inbox(inbox.inbox_ref)        # 2. then refresh 
 # activated.webhooks_subscribed, activated.details (per-field outcomes)
 ```
 
-Refuse to silently reactivate an inactive (revoked) record. Deauthorize and data-deletion callbacks post a `signed_request`; verify it with `parse_signed_request(value, app_secret)`, then store `credential_service.create_inactive_record(record)` and refresh. To stop webhooks, call `connector.disconnect(record.inbox_ref, record.account_ref, token)`. After rotation or deactivation, the next resolution sees the change; in-flight calls are not cancelled.
+Refuse to silently reactivate an inactive (revoked) record. Deauthorize and data-deletion callbacks post a `signed_request` (the deauthorize callback fires only for grants made through Instagram Login); verify it with `parse_signed_request(value, app_secret)`, then store `credential_service.create_inactive_record(record)` and refresh. To stop webhooks, call `connector.disconnect(record.inbox_ref, record.account_ref, token)`. After rotation or deactivation, the next resolution sees the change; in-flight calls are not cancelled.
+
+Unified Login (Facebook Login for Business) issues business-owned `SYSTEM_USER` tokens that never expire, and Meta sends no per-user deauthorize for them. Revoke those through the business portfolio's system user or the Host's connector (deactivate the record, then `connector.disconnect`).
 
 ## Trusted credential access
 

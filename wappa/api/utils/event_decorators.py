@@ -106,7 +106,7 @@ def dispatch_message_event(
         async def send_text_message(
             request: BasicTextMessage,
             fastapi_request: Request,  # Enables self.db in process_api_message
-            messenger: IMessenger = Depends(get_whatsapp_messenger),
+            messenger: IMessenger = Depends(get_inbox_messenger),
             api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
         ) -> MessageResult:
             result = await messenger.send_text(...)

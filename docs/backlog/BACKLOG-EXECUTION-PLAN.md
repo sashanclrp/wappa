@@ -1,12 +1,14 @@
 # Backlog execution plan
 
-This file orders active Wappa backlog work. Individual PRDs remain the implementation source of truth for their scope, design, and exit criteria.
+This file orders active Wappa backlog work and lists every top-level item in the drafts, pending and in_progress folders. Individual PRDs remain the implementation source of truth for their scope, design, and exit criteria. When an item ships, delete it and regenerate this file (see [README.md](./README.md)).
 
 ## In progress
 
-1. [`260829-wappa-v0.27.0/`](./in_progress/260829-wappa-v0.27.0/plan.md): Wappa v0.27.0 multi-Inbox hardening — one authenticated payload-routed callback, qualified `InboxRef` identity, the Wappa-owned encrypted Inbox Directory, `legacy`/`explicit` routing modes, and the closed public contract. The local `v0.27.0` tag exists; the series remains open only for Symphonai adoption, PyPI verification, and the Meta callback cutover.
+1. [260829-wappa-v0.27.0/](./in_progress/260829-wappa-v0.27.0/plan.md): Wappa v0.27.0 multi-Inbox hardening — one authenticated payload-routed callback, qualified `InboxRef` identity, the Wappa-owned encrypted Inbox Directory, `legacy`/`explicit` routing modes, and the closed public contract. Released; the series remains open only for Symphonai adoption, PyPI verification, and the Meta callback cutover.
 
-2. [`261103-instagram-conversations/`](./in_progress/261103-instagram-conversations/plan.md): Complete Instagram conversations and public comment primitives, formalize trusted extension access, then verify Unified Login and Symphonai integration. Includes DDD/public-contract improvements, developer skill packages and Meta use-case setup guidance. The text/seen/echo baseline exists; remaining PRDs and live/skill gates stay open. Its own dependency graph governs execution; unrelated v0.27 external clocks do not block offline Instagram work.
+2. [261103-instagram-conversations/](./in_progress/261103-instagram-conversations/plan.md): Instagram conversations, public comment primitives, Unified Login connection lifecycle, Symphonai adoption and developer skills. PRDs I01–I08 are implemented and offline-tested; live gates (A conversations, B Unified Login, C Symphonai) and skill evidence stay open, recorded in [tests/live-test-plan.md](./in_progress/261103-instagram-conversations/tests/live-test-plan.md). Its own dependency graph governs execution; unrelated v0.27 external clocks do not block it.
+
+3. [261105-mid-inbox-connector-contract.md](./in_progress/261105-mid-inbox-connector-contract.md): the Inbox Connector contract. `IInboxConnector`, `InstagramConnector` and `WhatsAppConnector` already exist (ADR-0017); remaining work is the live check of both connectors, Symphonai's switch to `WhatsAppConnector`, a credential-step result for non-OAuth Platforms, and optional phone-number registration.
 
 ## Pending
 
@@ -14,10 +16,22 @@ No ordered items.
 
 ## Drafts
 
-- [`provider-delivery-identity.md`](./drafts/provider-delivery-identity.md): provider-aware delivery identity and idempotency, deferred until an adapter provides stable provider evidence.
+Unordered. Each needs a design pass before it can move to pending.
 
-- [`261105-mid-send-reaction-core-method.md`](./drafts/261105-mid-send-reaction-core-method.md): `send_reaction(message_id, emoji, target)` as a core Messenger method (ADR-0016 known gap); no Platform sends reactions and inbound Instagram reactions are dropped today.
+- [260414-whatsapp-template-management-and-template-webhooks.md](./drafts/260414-whatsapp-template-management-and-template-webhooks.md): WhatsApp Template CRUD against the Graph API and typed Template lifecycle webhooks (`message_template_status_update`); today Hosts can only receive these through `register_webhook_field`.
 
-- [`261105-mid-inbox-connector-contract.md`](./drafts/261105-mid-inbox-connector-contract.md): account connection (WhatsApp Embedded Signup, Instagram, Telegram bot token) as its own Inbox Connector contract, not an `IMessenger` capability (ADR-0016 known gap; needs its own ADR before building).
+- [261105-low-conversation-entry-points-capability.md](./drafts/261105-low-conversation-entry-points-capability.md): `IConversationEntryPoints` — conversation starters, commands/persistent menu and welcome message as one capability across Platforms.
 
-- [`ideas.md`](./drafts/ideas.md): Unordered ideas that are not ready for implementation.
+- [261105-low-profile-reader-capability.md](./drafts/261105-low-profile-reader-capability.md): `IProfileReader` — read the connected Inbox's own business profile in one shape on every Platform.
+
+- [261105-mid-commerce-capability.md](./drafts/261105-mid-commerce-capability.md): product messages homologated across Platforms (WhatsApp catalog messages, Instagram product templates); placement and product identity still open.
+
+- [261105-mid-send-reaction-core-method.md](./drafts/261105-mid-send-reaction-core-method.md): `send_reaction(message_id, emoji, target)` as a core Messenger method (ADR-0016 known gap). No Platform sends reactions yet; inbound reactions already arrive typed on both Platforms.
+
+- [261105-mid-whatsapp-calling-prd.md](./drafts/261105-mid-whatsapp-calling-prd.md): WhatsApp Business Calling — an `ICallControls` capability (accept, reject, terminate, outbound calls, call permission) on top of the existing `CallWebhook`.
+
+- [261105-mid-whatsapp-flows-prd.md](./drafts/261105-mid-whatsapp-flows-prd.md): WhatsApp Flows — an `IFlowMessaging` capability to send Flows and a typed `nfm_reply` on receive; data exchange and management in a later phase.
+
+- [provider-delivery-identity.md](./drafts/provider-delivery-identity.md): provider-aware delivery identity and idempotency, deferred until an adapter provides stable provider evidence.
+
+- [ideas.md](./drafts/ideas.md): unordered ideas that are not ready for implementation.

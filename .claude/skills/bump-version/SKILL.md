@@ -70,6 +70,10 @@ Open `CHANGELOG.md` and prepend a new entry above the current top section. Match
 
 Source the bullets from `git log <last-tag>..HEAD --oneline` and the actual diff — don't fabricate. Only include user-visible changes; skip pure refactors unless they're notable.
 
+### Step 3b — Prune the backlog
+
+Delete the backlog items this release completes (per `docs/backlog/README.md`) and regenerate the backlog plan (`docs/backlog/BACKLOG-EXECUTION-PLAN.md`) so it lists every remaining top-level item in the drafts, pending and in_progress folders. Use `git rm` for deleted items; git history is the archive.
+
 ### Step 4 — Bump the version everywhere
 
 Update **every** place the version string appears. At minimum:

@@ -4,7 +4,7 @@ This directory stores implementation backlogs for work that is planned but not y
 
 **Master index / ordering:** [`BACKLOG-EXECUTION-PLAN.md`](./BACKLOG-EXECUTION-PLAN.md) is the source of truth for what to attack next and in what order. The individual files below are the implementation detail.
 
-**Completed work = delete the file.** There is no `done/` or `archive/` folder — git history is the archive. Recover a deleted backlog with `git log --diff-filter=D -- backlog/`. A plan with *mixed* done/pending items is updated in place (add a "Code reality" note) rather than deleted until everything closes.
+**Completed work = delete the file.** There is no `done/` or `archive/` folder — git history is the archive. Recover a deleted backlog with `git log --diff-filter=D -- docs/backlog/`. A plan with *mixed* done/pending items is updated in place (add a "Code reality" note) rather than deleted until everything closes.
 
 ## The three folders
 
@@ -24,7 +24,7 @@ Rules for the transitions:
 
 Two things the folder deliberately does **not** encode:
 
-- **Blocked is not a folder.** An item waiting on an external clock, a Meta approval, or another PRD keeps its folder and says so in `status:`. `260803-high-template-meta-live-certification` is `pending` and blocked; `260805-mid-automation-builder-steering-step` is `pending` and blocked. Neither is in progress, because no code has landed for them.
+- **Blocked is not a folder.** An item waiting on an external clock, a Meta approval, or another PRD keeps its folder and says so in `status:`. Such an item stays in `pending/` until code for it lands.
 - **Urgency is not a folder.** `-low` / `-mid` / `-high` stay on the filename in every folder.
 
 ## Two ways to create a backlog item

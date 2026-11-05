@@ -4,6 +4,8 @@ Runbook for the live checks. Record results in the matrix ([capability-matrix.md
 
 ## 0. Prepare (once)
 
+First, check each Instagram account under test: "Allow access to messages" must be on (Settings → Messages and story replies → Message controls → Connected tools), the account must be professional (Business or Creator), and while the app is in development mode the account must have an accepted tester role. Without these, Instagram delivers DMs to the inbox but to no app, and no webhook arrives.
+
 ```bash
 cd ../wappa_examples/instagram_conversations_example   # from the wappa repo
 uv sync
@@ -60,7 +62,7 @@ Run each command on both Platforms against the same server and code. Expect the 
 | P-11 | Bot sends `/help`; check logs | no `OutboundEchoWebhook` (Coexistence never echoes API sends) | echo dropped (`Dropped echo of Wappa's own send` debug log); record whether the raw echo carries `app_id` and whether its `mid` equals the send's `message_id` | fixed own-send filter |
 | P-12 | React ❤️ to a bot message, then remove it | `InboundMessageWebhook(REACTION)` add + removal | same, `InstagramReactionMessage` | one reaction shape |
 | P-13 | Edit a sent message (WhatsApp edit / Instagram edit) | `process_message_update` EDITED, typed text | same | one update lane |
-| P-14 | Remove the app from the Instagram account settings | — | `process_inbox_connection` DISCONNECTED via `/webhook/inboxes/instagram/deauthorize` | one connection lane |
+| P-14 | Inbox connection lane (offline under Unified Login) | — | Not run live: Unified Login issues business-owned `SYSTEM_USER` tokens (no expiry), removing a person's integration revokes nothing and Meta sends no deauthorize. Covered offline: signed_request → `InboxConnectionWebhook(DISCONNECTED)` (`tests/test_adr0016_unified_lanes.py` and the lab's `test_deauthorize_lane.py`). A live callback applies only to an Instagram Login grant removed under Instagram → Apps and websites | one connection lane |
 
 ## WhatsApp inbound rerun (every interactive and webhook)
 
@@ -109,7 +111,7 @@ Set `META_APP_ID`, `IG_LOGIN_CONFIG_ID` and `CONNECT_OPERATOR_TOKEN`, and regist
 | B-04 | start, then cancel the dialog | "Connection cancelled", nothing changed |
 | B-05 | deselect messaging permission during consent | account reported "missing instagram_manage_messages", not connected |
 | B-06 | connect again | record rotated (`credential_version` +1), Messenger evicted |
-| B-07 | remove the app in Instagram/Facebook settings | Wappa's deauthorize route → `process_inbox_connection` DISCONNECTED → record inactive in `inbox_records.json`, directory refreshed; later webhooks for that Inbox are rejected |
+| B-07 | revocation | not applicable to Unified Login: no per-user deauthorize fires for business-owned `SYSTEM_USER` tokens; revocation is a business-portfolio action (system user or app/asset removal). For an Instagram Login grant: Wappa's deauthorize route → `process_inbox_connection` DISCONNECTED → record inactive in `inbox_records.json`, directory refreshed; later webhooks for that Inbox are rejected |
 | B-08 | Creator account | record whether a bootstrap is needed |
 
 App-role-only testing doesn't satisfy an independent-customer audience. App Review/Advanced Access is an external gate.
@@ -142,6 +144,8 @@ Not covered: Instagram operator media (WhatsApp media IDs have no IG equivalent)
 - Fresh-agent evaluation (Claude Opus 5.5, Claude Code subagent, 2026-11-03). The agent ran the private-reply, stale-action/cancel and colliding-IDs/token eval prompts, and every assertion passed. It used `PrivateReply` and deferred the PDF until the User answered, used step-tagged payloads with cancel, and used scoped caches while refusing to cache the token. No other model or harness was evaluated, and the skill picker was not visually checked.
 
 ## Results log
+
+Reading the logs: see `../wappa_examples/instagram_conversations_example/README.md` → Reading the logs
 
 | Date | ID | Result | Evidence and limits |
 | --- | --- | --- | --- |

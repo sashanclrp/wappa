@@ -139,7 +139,7 @@ fallback. `DirectMessage.recipient_id` / `.address` read the first address.
 
 DirectMessage is immutable, rejects extra fields/blank recipients, and includes
 InboxRef. Cross-Inbox targets fail before middleware/provider I/O. Bare strings
-and `recipient=` no longer work on IMessenger; there is no compatibility
+and the `recipient` keyword no longer work on IMessenger; there is no compatibility
 wrapper. This applies to WhatsApp sends too. Read actions retain their separate
 message-ID contract. `send_text` additionally accepts PrivateReply (Instagram).
 WhatsApp REST request models and independent typed Template transport retain
@@ -313,6 +313,8 @@ One event, one lane, on every Platform (ADR-0016), all typed:
 | History backfill | `HistorySyncWebhook` → `process_history_sync` (push) or `IConversationHistoryReader.read_history` (pull), both `HistoryThread` | Coexistence `history` | Conversations API |
 | Inbox connection | `InboxConnectionWebhook` → `process_inbox_connection` | `account_offboarded`, `account_reconnected` | `POST /webhook/inboxes/instagram/deauthorize` |
 
+The Instagram deauthorize callback fires only for grants made through Instagram Login. Unified Login (Facebook Login for Business) issues business-owned `SYSTEM_USER` tokens that never expire, and Meta sends no per-user deauthorize for them; revoke those through the business portfolio's system user or the Host's connector (deactivate the record, then `IInboxConnector.disconnect`).
+
 `OutboundEchoWebhook` carries only messages sent outside Wappa; the filter is fixed (ADR-0018). WhatsApp Coexistence needs none. Instagram echoes carry no sender-app evidence, so Wappa drops an echo whose `message_id` is in its `ISentMessageRegistry` (IDs of messages it sent, one key per send: 10-minute TTL, cut to a 2-minute grace when its echo is claimed; Table Cache `<inbox>:df:wappa_sent_messages:pkid:<message_id>`; shared across workers only on Redis). `origin=UNKNOWN` means the registry could not answer and the echo was delivered rather than lost. Hosts store what arrives. `SystemEventDetail` payloads are typed: `contact_sync: ContactSync` (Coexistence `smb_app_state_sync`), `group_update: GroupUpdate`, `user_action: UserAction`, `entry_referral: EntryReferral`. `platform_event` is set only for `UNSUPPORTED_EVENT`. The `SystemEventType` members `SMB_MESSAGE_ECHO`, `HISTORY_SYNC`, `ACCOUNT_OFFBOARDED` and `ACCOUNT_RECONNECTED` are no longer emitted, and `coexistence_payload` is removed.
 A WhatsApp `change.field` that Wappa does not model and the Host did not register with `register_webhook_field` is answered `200` and reaches `process_system_webhook` as `SystemWebhook(UNSUPPORTED_EVENT)` with `event_detail.platform_event = {"field", "value"}`, the same as Instagram. It was HTTP 400 before 0.34.
 
@@ -415,6 +417,8 @@ used inside a processor's `parse_event()`; Wappa never calls it for you, because
 only the processor knows which secret and header a source uses.
 
 ```python
+from wappa import HMACSignatureVerifier
+
 verifier = HMACSignatureVerifier(
     secret=settings.stripe_webhook_secret,
     header="Stripe-Signature",
@@ -423,9 +427,9 @@ verifier = HMACSignatureVerifier(
     encoding="hex",       # or "base64"
 )
 
-verifier.verify(raw_body, request.headers) -> bool
-verifier.verify_signature(raw_body, signature_string) -> bool
-verifier.sign(raw_body) -> str
+verifier.verify(raw_body, request.headers)  # -> bool
+verifier.verify_signature(raw_body, signature_string)  # -> bool
+verifier.sign(raw_body)  # -> str
 ```
 
 `verify()` returns `False` — it does not raise — for a missing header, a wrong
@@ -1071,6 +1075,8 @@ Platform Account (WABA), not a User. Consumers handle them in `process_system_we
 - `get_logger`, `get_app_logger`, `setup_app_logging`
 - `get_current_inbox_context`, `get_current_user_context`, `get_current_request_id`
 - `set_request_context`, `clear_request_context`, `get_context_info`
+- Log files: Wappa writes `wappa_YYYYMMDD.log` in `SYSTEM_LOG_DIR`, rolling over at midnight, with secrets redacted at write time. In DEV, the same folder also holds `current.log`, a symlink to the active file, and `dev.pid`, which has `key=value` lines for `serving_pid`, `parent_pid`, `parent_role`, `stop_pid`, `port`, `port_source`, `started_at` and `log_file`. `dev.pid` is removed on clean shutdown. Read logs through `current.log`, and never rewrite a live log in place.
+- Payload capture: `SYSTEM_CAPTURE_PAYLOADS=true` with `SYSTEM_ENVIRONMENT=DEV` writes each authenticated webhook body, redacted, to `<SYSTEM_LOG_DIR>/payloads/<platform>/<kind>-<timestamp>.json`. Off by default. Under any other environment the flag is ignored, with a warning.
 
 ### Resilience (`from wappa.resilience import ...`)
 

@@ -1,5 +1,5 @@
 ---
-status: draft (Wappa contract built 2026-11-05 per ADR-0017; remaining work below)
+status: in_progress (Wappa contract built 2026-11-05 per ADR-0017; remaining work below)
 origin: ADR-0016 contract map (2026-11-05)
 ---
 

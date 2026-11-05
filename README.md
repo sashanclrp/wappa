@@ -30,10 +30,17 @@ Wappa is a modern Python framework that transforms WhatsApp Business API into a 
 ### 🎯 **Simple & Clean**
 ```python
 from wappa import Wappa, WappaEventHandler
+from wappa.messaging import DirectMessage
 
 class MyBot(WappaEventHandler):
     async def process_message(self, webhook):
-        await self.messenger.send_text("Hello!", webhook.user.user_id)
+        await self.messenger.send_text(
+            "Hello!",
+            DirectMessage(
+                inbox_ref=self.inbox_ref,
+                addresses=webhook.user.delivery_addresses(),
+            ),
+        )
 
 app = Wappa()
 app.set_event_handler(MyBot())
@@ -52,28 +59,13 @@ app.run()
 - **Media Handling** - Images, videos, audio, documents with automatic upload/download
 - **Templates** - Pre-approved business message templates through the `ITemplateMessaging` capability
 
-### 🆔 **Recipient Contract and BSUID Support**
-- **Stable Internal Contract** - Wappa keeps the framework-facing parameter as `recipient` across `self.messenger.send_*`, API routes, and request models
-- **Transport Resolution** - In the WhatsApp adapter, `recipient` is resolved to:
-  - `to` when the identifier is a phone number
-  - `recipient` when the identifier is a BSUID
-- **BSUID-Aware Outbound** - Text, media, interactive, template, and specialized messages use the same internal recipient resolution
-- **No Framework Fallback** - If a message type cannot be sent via BSUID, Wappa does not automatically downgrade to phone-number transport
+### 🆔 **Message Targets and BSUID Support**
+- **Explicit Targets** - Every `self.messenger.send_*` call takes a `target`; there is no `recipient` keyword and bare strings are rejected. `send_text` also accepts a `PrivateReply` (Instagram).
+- **DirectMessage** - `DirectMessage(inbox_ref=..., addresses=...)` binds a User's Delivery Addresses to the Inbox allowed to use them. In a handler, use `self.inbox_ref` and `webhook.user.delivery_addresses()`; outside webhooks, use `DeliveryAddresses.of(*known)`. A target for a different Inbox fails before any send.
+- **BSUID-Aware Fallback** - The WhatsApp adapter tries the phone number first, then the BSUID, and moves to the next address only when Meta rejects the address itself (`131030`, or `131062` when a message type cannot go to a BSUID). Authentication Templates go to phone numbers only.
+- **No Blind Retries** - Window, rate-limit, content and timeout errors are returned as-is, never retried on another address. `MessageResult.attempted_recipients` lists the addresses tried after a fallback.
 
-#### Important BSUID Risk
-Wappa currently treats BSUID support as a transport concern, not as a delivery fallback workflow.
-
-This means:
-- your application can keep calling `send_*` with `recipient=...` exactly as before
-- Wappa will choose the correct WhatsApp request field internally
-- but if Meta rejects a BSUID for a specific message type, Wappa will return an explicit error instead of retrying with a phone number
-
-This is intentional for now. The fallback policy depends on each Wappa implementation because only the application knows:
-- whether a phone number is available
-- whether falling back is legally or product-wise acceptable
-- whether that specific message should be retried with a different recipient identity
-
-If your bot needs automatic fallback, implement it in your application layer around `self.messenger`, your user identity store, or your delivery orchestration logic.
+See `docs/public-contract.md` and ADR-0019 for the full contract.
 
 ### 🛠️ **Developer Experience**
 ```bash
@@ -305,22 +297,25 @@ graph TD
 
 ### Example Projects
 
-Explore 6 complete example applications:
+Explore 9 complete example applications:
 
 ```bash
 # Browse examples interactively
 wappa examples
 
-# Copy specific example
-wappa examples redis-cache-demo
+# Pick an example from the menu and copy it into ./my-bot/
+wappa examples my-bot
 ```
 
-- **Simple Echo** - Basic message echoing
-- **JSON Cache Demo** - File-based state persistence
-- **Redis Cache Demo** - High-performance caching
-- **OpenAI Transcription** - Voice message processing
-- **Full-Featured Bot** - Complete production example
-- **Basic Project** - Minimal setup template
+- **Basic Project** - Minimal Wappa project with basic message handling
+- **Simple Echo Bot** - Echoes all incoming messages with acknowledgment
+- **Expiry Actions Demo** - Inactivity detection with message accumulation using ExpiryActions
+- **JSON Cache Demo** - File-based caching with user management and state handling
+- **Redis Cache Demo** - Redis-powered caching with advanced state management
+- **OpenAI Transcription** - Voice message transcription using OpenAI Whisper API
+- **Redis PubSub Plugin** - Multi-inbox Redis PubSub with self-subscribing pattern
+- **DB + Redis Cache** - PostgreSQL + Redis two-tier storage with SOLID architecture
+- **Full-Featured Bot** - Complete WhatsApp bot with all features and deployment configs
 
 ## 🛠️ Advanced Usage
 
@@ -350,11 +345,12 @@ app.run()
 ### Plugin System
 
 ```python
-from wappa.plugins import DatabasePlugin, CorsPlugin
+from wappa import Wappa
+from wappa.core.plugins import CORSPlugin, PostgresDatabasePlugin
 
 app = Wappa(cache="redis")
-app.add_plugin(DatabasePlugin("postgresql://..."))
-app.add_plugin(CorsPlugin(allow_origins=["*"]))
+app.add_plugin(PostgresDatabasePlugin("postgresql://..."))
+app.add_plugin(CORSPlugin(allow_origins=["*"]))
 app.set_event_handler(MyHandler())
 app.run()
 ```
@@ -364,7 +360,7 @@ app.run()
 ```bash
 # Project management
 wappa init [directory]          # Initialize new project
-wappa examples [target]         # Browse/copy examples
+wappa examples [directory]      # Pick an example and copy it to directory
 
 # Development
 wappa dev app/main.py           # Development server with auto-reload
@@ -441,9 +437,8 @@ wappa/
 │   ├── core/              # Application core & plugins
 │   ├── messaging/         # WhatsApp messaging implementation
 │   ├── persistence/       # Cache backends (Memory/JSON/Redis)
-│   ├── cli/               # CLI tools & project templates
+│   ├── cli/               # CLI tools, project templates & examples/
 │   └── api/               # FastAPI routes & dependencies
-├── examples/              # Example applications
 ├── docs/                  # Documentation source
 └── tests/                # Test suite
 ```
@@ -457,7 +452,7 @@ wappa/
 
 ### 📞 **Get Support**
 - **📚 [Documentation](https://wappa.mimeia.com/docs)** - Comprehensive guides and API reference
-- **💡 [Examples](https://wappa.mimeia.com/docs/resources/examples)** - 6 complete working examples
+- **💡 [Examples](https://wappa.mimeia.com/docs/resources/examples)** - 9 complete working examples
 - **🔧 [Configuration Guide](https://wappa.mimeia.com/docs/setup/whatsapp-setup)** - WhatsApp Business API setup
 
 ### 🤝 **Contributing**
