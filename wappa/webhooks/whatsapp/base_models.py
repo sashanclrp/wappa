@@ -375,8 +375,8 @@ class Pricing(BaseModel):
     subtype: str | None = Field(
         None,
         description=(
-            "Pricing subtype, e.g. 'free_tier' on a free customer-service "
-            "message (observed live 2026-11-05). Free text: Meta adds values."
+            "Pricing subtype. Open string: Meta documents paid_exempt and also "
+            "sends the undocumented free_tier (observed live 2026-11-05)."
         ),
     )
     category: Literal[

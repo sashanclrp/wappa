@@ -318,6 +318,10 @@ class ConversationBase(BaseModel):
         default=None,
         description="Pricing type (regular, free_customer_service, free_entry_point)",
     )
+    pricing_subtype: str | None = Field(
+        default=None,
+        description="Pricing subtype as sent by the platform (e.g. paid_exempt)",
+    )
 
     def is_free_conversation(self) -> bool:
         """Check if this conversation is free (not billable)."""
