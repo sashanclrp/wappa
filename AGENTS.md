@@ -1,55 +1,17 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
-- `wappa/`: Core package.
-  - `core/`: app core, config, plugins, events, logging.
-  - `api/`: FastAPI routes, middleware, dependencies.
-  - `messaging/`: WhatsApp client, handlers, models.
-  - `persistence/`: cache backends (`memory/`, `json/`, `redis/`).
-  - `schemas/`: Pydantic models (core + WhatsApp).
-  - `cli/`: CLI entrypoint and project templates.
-- `dist/`: build artifacts. `logs/`: local logs.
-
 ## Build, Test, and Development Commands
-```bash
-# Install dev deps (Python 3.12+)
-uv sync --group dev
+Install with `uv sync --group dev`. All four checks must pass before committing:
 
-# Lint, format, types
+```bash
 uv run ruff check .
 uv run ruff format .
 uv run mypy wappa
-
-# Tests (pytest + pytest-asyncio)
 uv run pytest -q
-
-# CLI help (local)
-uv run wappa --help
 ```
 
-## Coding Style & Naming Conventions
-- Indent 4 spaces; line length 88; double quotes (ruff format).
-- Use type hints everywhere; pass `mypy` with strict settings.
-- Naming: `snake_case` functions/vars, `PascalCase` classes, modules in `lower_snake_case`.
-- Keep modules focused; prefer small, composable functions.
-- Run `ruff` before commits; avoid disabling rules unless justified.
-
-## Testing Guidelines
-- Framework: `pytest` with `pytest-asyncio` for async code.
-- Location: `tests/` with files named `test_*.py`; functions `test_*`.
-- Write unit tests for new modules and regression tests for fixes.
-- Use factories/fixtures; avoid external network calls in tests.
-
-## Commit & Pull Request Guidelines
-- Commit style: prefix with tags seen in history, e.g. `[ADD]`, `[FIX]`, `[MILESTONE]`.
-  - Imperative mood, concise scope: "[FIX] Handle empty webhook payload".
-- PRs: include description, linked issues, rationale, and screenshots/logs if relevant.
-- Required: code formatted, `ruff`/`mypy`/`pytest` pass locally; update README/docs when behavior changes.
-
 ## Security & Configuration Tips
-- Never commit secrets. Use `.env` (see `wappa/core/config/settings.py`).
 - Example vars (from docs/examples): `META_APP_SECRET`, `WP_WEBHOOK_VERIFY_TOKEN`, and in legacy mode `WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID`; explicit mode uses `SYSTEM_TOKEN_ENC_KEY` instead of the `WP_*` bundle.
-- Validate inputs at boundaries (API routes, webhook parsing) and log safely.
 
 ## Architecture Notes
 - Event-driven flow: webhooks → dispatcher → handler → messenger.
@@ -59,11 +21,11 @@ uv run wappa --help
 
 Wappa is a Platform-facing messaging runtime, not a business-tenancy system. Every non-trivial code, schema, architecture, public contract, or documentation change must start by grounding the work in the repository language:
 
-1. Read root `CONTEXT.md` for Wappa's canonical domain language. If it does not exist yet, treat the current task as documentation bootstrap and create it before making broad terminology changes.
-2. Read `CONTEXT-MAP.md` if present to locate the target context. If absent, assume Wappa is a single-context repo until a real second context exists.
+1. Read root `CONTEXT.md` for Wappa's canonical domain language.
+2. Read `CONTEXT-MAP.md` to locate the target context.
 3. Read root `ARCHITECTURE.md` and the nearest context `ARCHITECTURE.md` for the folder being touched. If missing and the change introduces or changes a module responsibility, seam, adapter, or folder rule, create or update the relevant architecture doc in the same change.
 4. Read relevant ADRs under `docs/adr/` and, when present, context-local `docs/adr/`.
-5. Check `docs/public-contract.md` before changing any surface that host applications may import, call, configure, subscribe to, or depend on. If the file does not exist and the change affects Wappa's public interface, create it or update the nearest public-contract documentation.
+5. Check `docs/public-contract.md` before changing any surface that host applications may import, call, configure, subscribe to, or depend on.
 
 If the user asks for architecture work, refactoring, DDD, domain naming, SOLID cleanup, or a design discussion, follow the `grill-with-docs` discipline:
 
