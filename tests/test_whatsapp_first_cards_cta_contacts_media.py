@@ -264,28 +264,37 @@ async def test_text_at_whatsapp_limit_is_split_on_instagram() -> None:
 
 async def test_whatsapp_card_header_is_image_or_video_by_link() -> None:
     wa, client = _wa()
-    cards = [
-        _card(CardMedia.image(url=IMG)),
-        _card(CardMedia.video(url=VID, poster_url=POSTER)),
-    ]
+    images = [_card(CardMedia.image(url=IMG))] * 2
+    videos = [_card(CardMedia.video(url=VID, poster_url=POSTER))] * 2
 
-    result = await wa.send_carousel(cards, WA_DM, "Picks", reply_to_message_id="w1")
+    result = await wa.send_carousel(images, WA_DM, "Picks", reply_to_message_id="w1")
+    assert (await wa.send_carousel(videos, WA_DM, "Picks")).success
 
     assert result.success
     payload = client.posted[0]
-    headers = [c["header"] for c in payload["interactive"]["action"]["cards"]]
-    # Card headers are a public link; poster_url never reaches WhatsApp.
-    assert headers == [
-        {"type": "image", "image": {"link": IMG}},
-        {"type": "video", "video": {"link": VID}},
+    image_headers = [c["header"] for c in payload["interactive"]["action"]["cards"]]
+    video_headers = [
+        c["header"] for c in client.posted[1]["interactive"]["action"]["cards"]
     ]
+    # Card headers are a public link; poster_url never reaches WhatsApp.
+    assert image_headers == [{"type": "image", "image": {"link": IMG}}] * 2
+    assert video_headers == [{"type": "video", "video": {"link": VID}}] * 2
     assert payload["context"] == {"message_id": "w1"}
+
+
+def test_carousel_cards_share_one_header_kind() -> None:
+    # WhatsApp answers 131009 "must have the same structure for all cards"
+    # to a mixed carousel, so it is rejected when built, on every Platform.
+    image = _card(CardMedia.image(url=IMG))
+    video = _card(CardMedia.video(url=VID, poster_url=POSTER))
+    with pytest.raises(ValueError, match="same header kind"):
+        check_carousel([image, video], "b")
 
 
 async def test_instagram_video_card_shows_its_poster_and_opens_the_video() -> None:
     ig, client, sent = _ig()
+    images = [_card(CardMedia.image(url=IMG))] * 2
     cards = [
-        _card(CardMedia.image(url=IMG)),
         _card(CardMedia.video(url=VID, poster_url=POSTER)),
         MessageCard(
             header=CardMedia.video(url=VID, poster_url=POSTER),
@@ -296,12 +305,14 @@ async def test_instagram_video_card_shows_its_poster_and_opens_the_video() -> No
     ]
     async with client:
         result = await ig.send_carousel(cards, IG_DM, "Picks", reply_to_message_id="m1")
+        assert (await ig.send_carousel(images, IG_DM, "Picks")).success
 
     assert result.success
-    intro, carousel = _bodies(sent)
+    intro, carousel, _, image_carousel = _bodies(sent)
     assert intro["message"] == {"text": "Picks"} and intro["reply_to"] == {"mid": "m1"}
     assert "reply_to" not in carousel
-    image, video, own = carousel["message"]["attachment"]["payload"]["elements"]
+    video, own = carousel["message"]["attachment"]["payload"]["elements"]
+    image = image_carousel["message"]["attachment"]["payload"]["elements"][0]
     assert image["image_url"] == IMG
     assert video["image_url"] == POSTER
     assert video["default_action"] == {"type": "web_url", "url": VID}
@@ -320,7 +331,7 @@ async def test_instagram_rejects_a_video_card_without_poster_before_any_call() -
     async with client:
         with pytest.raises(UnsupportedOperationError, match="pass poster_url"):
             await ig.send_carousel(
-                [_card(CardMedia.video(url=VID)), _card(CardMedia.image(url=IMG))],
+                [_card(CardMedia.video(url=VID))] * 2,
                 IG_DM,
                 "b",
             )

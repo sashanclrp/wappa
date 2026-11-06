@@ -308,6 +308,10 @@ def check_carousel(cards: Sequence[MessageCard], body: str) -> None:
     shapes = {(isinstance(c.buttons[0], UrlButton), len(c.buttons)) for c in cards}
     if len(shapes) != 1:
         raise ValueError("Carousel cards must all use the same button kind and count")
+    if len({c.header.kind for c in cards}) != 1:
+        # WhatsApp rejects a carousel whose cards differ in structure (131009,
+        # "must have the same structure for all cards"): all image or all video.
+        raise ValueError("Carousel cards must all use the same header kind")
     _nonblank(body)
     _check_len(body, CAROUSEL_BODY_MAX, "Carousel body")
 
