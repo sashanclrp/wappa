@@ -410,12 +410,14 @@ async def test_voice_note_renditions_serve_both_platforms_from_one_call():
     ig_dm = DirectMessage(inbox_ref=IG_REF, addresses=DeliveryAddresses.of("u1"))
     async with http:
         assert (await ig.send_audio(both, ig_dm, is_voice=True)).success
-        # A local OGG cannot be attached or linked: rejected before any call.
-        with pytest.raises(ValueError, match="Instagram audio.*does not convert media"):
-            await ig.send_audio(Path("v.ogg"), ig_dm)
+        # An OGG alone, file or URL, does not play on Instagram: refused
+        # before any call, as WhatsApp refuses what it cannot play.
+        for alone in (Path("v.ogg"), "https://example.com/v.ogg"):
+            with pytest.raises(
+                ValueError, match="Instagram audio.*does not convert media"
+            ):
+                await ig.send_audio(alone, ig_dm)
         assert len(sent) == 1
-        # An OGG URL alone is shared as a link instead of failing.
-        assert (await ig.send_audio("https://example.com/v.ogg", ig_dm)).success
     import json as _json
 
     body = _json.loads(sent[0].content)
@@ -423,7 +425,4 @@ async def test_voice_note_renditions_serve_both_platforms_from_one_call():
         "type": "audio",
         "payload": {"url": both[1]},
     }
-    assert _json.loads(sent[1].content)["message"] == {
-        "text": "🎵 v.ogg\nhttps://example.com/v.ogg"
-    }
-    assert len(sent) == 2
+    assert len(sent) == 1

@@ -24,9 +24,10 @@ Contract mappings (ADR-0025: one Messenger method per action):
   profile_pic`` merged over the webhook evidence; a failure returns the
   evidence with the failure outcome
 - media by http(s) URL, by ``IMediaLibrary.upload`` attachment_id, or a
-  ``Path`` (uploaded first, under ``filename`` for a document); a document,
-  audio or video URL whose format Instagram does not take is sent as a text
-  with the file name and the link
+  ``Path`` (uploaded first, under ``filename`` for a document); a document
+  URL whose format Instagram does not take is sent as a text with the file
+  name and the link, while an audio or video URL Instagram cannot play raises
+  ``ValueError`` before any call (as on WhatsApp)
 - ``send_location`` / ``send_contact`` → text (maps link / one block per card);
   ``send_sticker`` → image
 - ``IUserDataRequests`` (location / phone-number requests) → not provided
@@ -92,6 +93,7 @@ from .media import (
     CONVERT_HINT,
     MEDIA_RULES,
     InstagramAttachmentReader,
+    check_media_url,
     url_format_accepted,
     validate_media_url,
 )
@@ -281,15 +283,10 @@ def _list_menu(sections: Sequence[ListSection]) -> str | None:
     return "\n\n".join(blocks)
 
 
-# A media family whose URL may point at a format Instagram does not take; the
-# file is then shared as a link (images and stickers keep their own rules).
-_LINK_ICONS = {"document": "📄", "audio": "🎵", "video": "🎬"}
-
-
-def _media_link(family: str, url: str, filename: str | None) -> str:
-    """The text that shares a file Instagram cannot attach: its name and link."""
+def _document_link(url: str, filename: str | None) -> str:
+    """The text that shares a document Instagram cannot attach: name and link."""
     name = filename or unquote(PurePosixPath(urlsplit(url).path).name) or url
-    return f"{_LINK_ICONS[family]} {name}\n{url}"
+    return f"📄 {name}\n{url}"
 
 
 def _contact_text(card: ContactCard) -> str:
@@ -539,11 +536,13 @@ class InstagramMessengerAdapter(IMessenger):
     ) -> MessageResult:
         """One attachment, or a text with the file's name and link.
 
-        A document, audio or video URL whose extension Instagram does not take
-        (WhatsApp's ``.docx``, ``.mp3``, ``.3gp`` …) is sent as a text naming
-        the file (``filename``, else the URL's last path segment) with its
-        link. A ``Path`` uploads under ``filename``; one in a format Instagram
-        does not take raises ``ValueError`` before any call.
+        A document URL whose extension Instagram does not take (WhatsApp's
+        ``.docx``, ``.xlsx`` …) is sent as a text naming the file
+        (``filename``, else the URL's last path segment) with its link. An
+        audio or video URL Instagram cannot play (``.mp3``, ``.mov``, ``.3gp``
+        …) raises ``ValueError`` before any call, as on WhatsApp. A ``Path``
+        uploads under ``filename``; one in a format Instagram does not take
+        raises ``ValueError`` before any call.
         """
         direct = require_direct_message(target, f"Instagram send_{family}")
         direct.resolve(self._inbox_ref)
@@ -565,9 +564,11 @@ class InstagramMessengerAdapter(IMessenger):
             payload = {"attachment_id": uploaded.media_id}
         elif isinstance(source, str) and "://" in source:
             url = validate_media_url(source)
-            if family in _LINK_ICONS and not url_format_accepted(url, family):
+            if family in ("audio", "video"):
+                check_media_url(url, family)
+            elif family == "document" and not url_format_accepted(url, family):
                 return await self._send_texts(
-                    _media_link(family, url, filename),
+                    _document_link(url, filename),
                     direct,
                     reply_to_message_id,
                     operation=f"Instagram {family} link send",
@@ -653,9 +654,8 @@ class InstagramMessengerAdapter(IMessenger):
         ``is_voice`` therefore changes nothing here; the rendition is picked
         from Instagram's audio formats (no OGG), so ``[note.ogg, note.m4a]``
         serves a WhatsApp voice note and Instagram from one call. When no
-        rendition fits, a URL rendition (WhatsApp's ``.mp3``, ``.amr``, ``.ogg``)
-        is shared as a text with its name and link; local files only raise
-        ``ValueError``.
+        rendition fits (WhatsApp's ``.mp3``, ``.amr``, ``.ogg``), ``ValueError``
+        is raised before any call, as on WhatsApp.
         """
         _ = transcript  # Host metadata, never shown to the User (as on WhatsApp)
         _ = is_voice
@@ -664,17 +664,9 @@ class InstagramMessengerAdapter(IMessenger):
                 audio_source, MEDIA_RULES["audio"].extensions, what="Instagram audio"
             )
         except ValueError as exc:
-            sources = (
-                [audio_source]
-                if isinstance(audio_source, str | Path)
-                else list(audio_source)
-            )
-            url = next((s for s in sources if isinstance(s, str) and "://" in s), None)
-            if url is None:
-                raise ValueError(
-                    f"{exc} ({CONVERT_HINT}; M4A AAC works on both Platforms)"
-                ) from exc
-            source = url
+            raise ValueError(
+                f"{exc}; {CONVERT_HINT} (M4A AAC plays on both Platforms)"
+            ) from exc
         return await self._send_media("audio", source, target, reply_to_message_id)
 
     async def send_document(

@@ -208,7 +208,7 @@ async def send_document_message(
 
     Formats and sizes are the Platform's own (WhatsApp TXT, PDF and Office
     files up to 100 MB; Instagram PDF up to 25 MB, another format by URL
-    shared as a text with the file name and link).
+    shared as a text with the file name and link: the file opens from it).
     """
     return await messenger.send_document(
         document_source=request.media_source,

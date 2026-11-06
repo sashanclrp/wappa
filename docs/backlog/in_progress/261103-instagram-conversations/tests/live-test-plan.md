@@ -4,7 +4,7 @@ Runbook for the live checks. Record results in the matrix ([capability-matrix.md
 
 ## Current status (2026-11-06)
 
-Gate A was rerun live on November 6 after the hardening, on both Platforms; see the 2026-11-06 rows in the Results log. Open: the WhatsApp "not available" guard for `/post` and `/comments`, and the format matrix (image and video rerun, then audio, voice, document, sticker and card, with rendering observed on the phone). Core Gate B passed; Creator B-08 was not run, and independent-customer access and actual revocation remain limitations. Gate C has implementation notes but no recorded live results. The deauthorize experiments below are historical; architecture hardening removed that unsupported route for Unified Login.
+**Gate A passed (closed 2026-11-06)** after the hardening, on both Platforms: every command, the WhatsApp "not available" guard, the rate-limit governor live, and the full format matrix (every family by link and upload, rendering observed on the phone; results and the per-Platform "cannot process" lists in [`references/media-formats.md`](../references/media-formats.md)). See the 2026-11-06 rows in the Results log. Core Gate B passed; Creator B-08 was not run, and independent-customer access and actual revocation remain limitations. Gate C has implementation notes but no recorded live results. The deauthorize experiments below are historical; architecture hardening removed that unsupported route for Unified Login.
 
 ## 0. Prepare (once)
 
@@ -209,6 +209,10 @@ Reading the logs: see `../wappa_examples/instagram_conversations_example/README.
 | 2026-11-06 | `/post`, `/comments` (Instagram) | pass (send) | 12:26:36 and 12:26:47 on media 17985939194362301. WhatsApp "not available" guard not yet rerun |
 | 2026-11-06 | Concurrency | pass | `/formats image` dispatch ran 46.8 s; its webhook answered 200 in 19.6 ms, and status webhooks for the same User were handled in 3–5 ms during the run. A first WhatsApp `/formats video` never reached the server (no webhook POST between 12:28:19 and 12:30:02) |
 | 2026-11-06 | Format matrix image + video (first run) | partial | Results in `references/media-formats.md`; rerun pending after 2e5fd84 (code= visible, Instagram rejection reasons logged) and ef05128 (WhatsApp `.3gp` video as `video/3gpp`). WhatsApp HEIC link failed 6 min later: 131053, Meta could not fetch the URL (503). Instagram video links other than MP4 answered 403 |
+| 2026-11-06 | `/post 123`, `/comments 123` (WhatsApp guard) | pass | 12:36:46 and 12:36:52: "Post/comment reads: not available on whatsapp" |
+| 2026-11-06 | Rate-limit governor (Instagram, live) | pass | Usage warnings at 80–98% (`x-app-usage`), then code 4 → app-scope block 300 s; later calls refused locally (`rate_limited`, `retry_after`) without calling Meta; the lab aborted the run (FORMAT_ABORT). Meta's own window is about an hour, so slices of about five calls 10–15 min apart |
+| 2026-11-06 | MetaGraphClient (both Platforms) | pass | WhatsApp core commands and the WhatsApp `/formats video` re-check (15:01–15:02) through the shared transport: HEVC, MOV, MKV, WebM VP8/VP9 refused before I/O on link and upload; the lab's `link-raw` lane failed by status 131053 as expected |
+| 2026-11-06 | Format matrix, Instagram (every family) | pass → hardened | Image, sticker, document, card, video, audio and voice by link and upload. Hardened from the results: WebP uploads refused (965c3d2); video uploads only H.264 MP4 (b6625a8); audio and video URLs Instagram cannot play (MP3, OGG, WebM audio; MOV, MKV, 3GP video) refused before I/O instead of shared as link text, as WhatsApp does |
 
 ### Echo filter evidence (2026-11-05, 08:06)
 

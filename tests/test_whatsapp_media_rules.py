@@ -205,8 +205,9 @@ def test_instagram_takes_webp_by_url_only():
 
 
 def test_instagram_uploads_video_only_as_h264_mp4():
-    """Live matrix 2026-11-06: MOV and WebM uploads answer HTTP 500; an HEVC
-    MP4 uploads but its send is refused (3/1545003). By URL they still go."""
+    """Live matrix 2026-11-06: WebM and MOV uploads answer HTTP 500; an HEVC
+    MP4 uploads but its send is refused (3/1545003). WebM plays by URL; a MOV
+    link shows an empty placeholder, so MOV is refused everywhere."""
     from wappa.messaging.instagram.media import (
         check_upload_content,
         url_format_accepted,
@@ -215,9 +216,12 @@ def test_instagram_uploads_video_only_as_h264_mp4():
 
     validate_upload("a.mp4", 10, "video")
     check_upload_content(MP4_H264, "video")
-    for name in ("a.mov", "a.webm", "a.ogg", "a.avi"):
-        with pytest.raises(ValueError, match="MP4 \\(H.264\\)"):
+    with pytest.raises(ValueError, match="MP4 \\(H.264\\)"):
+        validate_upload("a.webm", 10, "video")
+    assert url_format_accepted("https://x.test/a.webm", "video")
+    for name in ("a.mov", "a.ogg", "a.avi", "a.mkv", "a.3gp"):
+        with pytest.raises(ValueError, match="does not convert media"):
             validate_upload(name, 10, "video")
-        assert url_format_accepted(f"https://x.test/{name}", "video")
+        assert not url_format_accepted(f"https://x.test/{name}", "video")
     with pytest.raises(ValueError, match="HEVC"):
         check_upload_content(MP4_HEVC, "video")

@@ -8,10 +8,17 @@ states no URL scheme and no file-name rule, so an http(s) URL passes through
 format matrix (2026-11-06) adds static WebP **by URL** (it renders), while
 the attachment upload endpoint answers a WebP with HTTP 500 ("unknown
 error", code 1), so a WebP upload is refused before I/O; an animated WebP
-renders only its first frame (GIF animates). Video uploads work only as MP4
-with H.264: MOV and WebM answer HTTP 500 and an HEVC MP4 uploads but its send
+renders only its first frame (GIF animates). Video: MP4 and WebM play by
+URL, while a MOV link shows an empty placeholder, so video is MP4 or WebM
+(the guide's OGG and AVI are untested and refused). Uploads work only as MP4
+with H.264: WebM and MOV answer HTTP 500 and an HEVC MP4 uploads but its send
 is refused ("Public attachments are not allowed to be sent directly",
-3/1545003), so those go by URL only.
+3/1545003). An HEVC MP4 **link** also shows the empty placeholder, but a URL's
+codec cannot be told without fetching it.
+
+As on WhatsApp, an audio or video URL in a format Instagram does not play
+raises ``ValueError`` before any call; only a document URL Instagram cannot
+attach is shared as a text with its name and link (the file still opens).
 
 Inbound attachment URLs are signed Meta CDN URLs
 (``lookaside.fbsbx.com/ig_messaging_cdn/...``) that may expire within minutes.
@@ -54,9 +61,7 @@ MEDIA_RULES: dict[str, MediaRule] = {
         "image", frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"}), 8 * MB
     ),
     "audio": MediaRule("audio", frozenset({".aac", ".m4a", ".wav", ".mp4"}), 25 * MB),
-    "video": MediaRule(
-        "video", frozenset({".mp4", ".ogg", ".avi", ".mov", ".webm"}), 25 * MB
-    ),
+    "video": MediaRule("video", frozenset({".mp4", ".webm"}), 25 * MB),
     "document": MediaRule("file", frozenset({".pdf"}), 25 * MB),
 }
 
@@ -70,9 +75,6 @@ _MIME_BY_SUFFIX = {
     ".m4a": "audio/mp4",
     ".wav": "audio/wav",
     ".mp4": "video/mp4",
-    ".ogg": "video/ogg",
-    ".avi": "video/x-msvideo",
-    ".mov": "video/quicktime",
     ".webm": "video/webm",
     ".pdf": "application/pdf",
 }
@@ -131,7 +133,7 @@ def ascii_name(name: str) -> str:
 # and the format to upload instead.
 URL_ONLY: dict[str, frozenset[str]] = {
     "image": frozenset({".webp"}),
-    "video": frozenset({".ogg", ".avi", ".mov", ".webm"}),
+    "video": frozenset({".webm"}),
 }
 _UPLOAD_INSTEAD = {"image": "a PNG or JPEG", "video": "an MP4 (H.264)"}
 
@@ -148,8 +150,7 @@ def validate_upload(name: str, size: int, family: str) -> MediaRule:
     if suffix.lower() not in rule.extensions:
         raise ValueError(
             f"Instagram {family} supports {sorted(rule.extensions)}, not "
-            f"{suffix or 'no extension'}; a file must already be in an accepted "
-            f"format ({CONVERT_HINT}), or send it by URL to share it as a link"
+            f"{suffix or 'no extension'}; {CONVERT_HINT}"
         )
     if size > rule.max_bytes:
         raise ValueError(
@@ -204,6 +205,21 @@ def validate_media_url(url: str) -> str:
     if parts.scheme not in ("http", "https") or not parts.hostname:
         raise ValueError("Instagram media URLs must be absolute http(s) URLs")
     return url
+
+
+def check_media_url(url: str, family: str) -> None:
+    """Refuse an audio or video URL in a format Instagram does not play.
+
+    Meta accepts such a link and the User gets nothing playable, so it fails
+    here, as WhatsApp's rules do. Documents are not checked: a document URL
+    Instagram cannot attach is shared as a link text instead.
+    """
+    if not url_format_accepted(url, family):
+        suffix = PurePosixPath(urlsplit(url).path).suffix.lower()
+        raise ValueError(
+            f"Instagram {family} plays {sorted(MEDIA_RULES[family].extensions)}, "
+            f"not {suffix}; {CONVERT_HINT}"
+        )
 
 
 def url_format_accepted(url: str, family: str) -> bool:

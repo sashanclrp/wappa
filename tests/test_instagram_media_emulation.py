@@ -1,7 +1,8 @@
 """Instagram emulates the media and lists WhatsApp accepts (ADR-0028 rule 4).
 
-- a document, audio or video URL in a format Instagram does not attach is
-  shared as a text with the file name and the link;
+- a document URL in a format Instagram does not attach is shared as a text
+  with the file name and the link; an audio or video URL Instagram cannot
+  play is refused before any call, as on WhatsApp;
 - http URLs pass through (Meta documents no scheme rule);
 - uploads honour ``filename`` and ``mime_type`` and go out with an ASCII name;
 - a local file in an unattachable format is still a ``ValueError`` telling the
@@ -81,20 +82,23 @@ async def test_an_unattachable_document_url_is_shared_as_a_named_link() -> None:
 
 
 @pytest.mark.parametrize(
-    ("method", "url", "text"),
+    ("method", "url"),
     [
-        ("send_video", "https://example.com/clip.3gp", "🎬 clip.3gp"),
-        ("send_audio", "https://example.com/a%C3%B1o.mp3", "🎵 año.mp3"),
-        ("send_audio", "https://example.com/note.amr", "🎵 note.amr"),
+        ("send_video", "https://example.com/clip.3gp"),
+        ("send_video", "https://example.com/clip.mov"),
+        ("send_audio", "https://example.com/a%C3%B1o.mp3"),
+        ("send_audio", "https://example.com/note.amr"),
     ],
 )
-async def test_unattachable_audio_and_video_urls_are_shared_as_links(
-    method: str, url: str, text: str
+async def test_unplayable_audio_and_video_urls_are_refused_before_io(
+    method: str, url: str
 ) -> None:
+    """Live 2026-11-06: such links reached the User as raw link text (audio)
+    or an empty placeholder (MOV); like WhatsApp, Wappa refuses them."""
     graph = _Graph()
-    result = await getattr(_messenger(graph), method)(url, DM)
-    assert result.success
-    assert graph.messages() == [{"text": f"{text}\n{url}"}]
+    with pytest.raises(ValueError, match="does not convert media"):
+        await getattr(_messenger(graph), method)(url, DM)
+    assert graph.requests == []
 
 
 async def test_attachable_and_extensionless_urls_stay_attachments() -> None:
