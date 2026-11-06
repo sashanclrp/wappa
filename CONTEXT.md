@@ -183,6 +183,14 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **Transient Failure** | An integration failure a retry can plausibly fix: timeouts, connection resets, DNS/TLS failures, and the retryable HTTP statuses. Distinct from contract failures (4xx, constraint violations, bad payloads) and from pool exhaustion, which retries make worse. |
 | **Retry Policy** | Attempt count plus bounded exponential backoff with jitter, applied by the `wappa.resilience` decorators. |
 
+## Scheduled Work
+
+| Term | Definition |
+|------|-----------|
+| **Scheduling** | The runtime lane through which Wappa receives triggered work and prepares the scoped Host handler. |
+| **Scheduled Task** | Host-defined work invoked by a timer, scheduler or other scheduled trigger. |
+| **Scheduled Event** | The Wappa event carrying a Scheduled Task's action, subject and source to the Host handler. |
+
 ## Expiry
 
 | Term | Definition |

@@ -4,7 +4,7 @@ Reviewed 2026-11-06 against the current code, recorded live evidence and the use
 
 ## In progress
 
-1. [261103-instagram-conversations/](./in_progress/261103-instagram-conversations/plan.md): runtime and skills implemented; substantial November 5 live conversation/media/interaction/public-read evidence. Gate A remains partial. Core Gate B passed, with Creator/access/revocation limitations recorded. Symphonai adoption code exists; live Gate C and final documentation/distribution verification remain. See the [live evidence](./in_progress/261103-instagram-conversations/tests/live-test-plan.md).
+1. [261103-instagram-conversations/](./in_progress/261103-instagram-conversations/plan.md): runtime and skills implemented; substantial November 5 live conversation/media/interaction/public-read evidence. Gate A remains partial. Core Gate B passed, with Creator/access/revocation limitations recorded. Symphonai adoption code exists; live Gate C and final documentation/distribution verification remain. User decision 2026-11-06: Wappa Scheduling delivery and a separate Symphonai adoption PRD are prerequisites for Gate C; this Wappa initiative does not edit Symphonai. See the [live evidence](./in_progress/261103-instagram-conversations/tests/live-test-plan.md).
 
 2. [261105-mid-inbox-connector-contract.md](./in_progress/261105-mid-inbox-connector-contract.md): shared connectors implemented and hardened. Core Instagram Gate B passed. Open Wappa work is the Creator account check, WhatsApp Embedded Signup acceptance, and deferred credential-step/new-number registration support when those paths are built. Host migration belongs in the Host backlog.
 
@@ -12,7 +12,7 @@ Reviewed 2026-11-06 against the current code, recorded live evidence and the use
 
 ## Pending
 
-No ordered items.
+1. [261106-high-scheduled-task-dispatch.md](./pending/261106-high-scheduled-task-dispatch.md): design approved 2026-11-06. One context-bound scheduled-event handler lane for existing Redis TTL and Host scheduler callbacks, with no new scheduler engine, SQL tables, replay/history store or admin API. Redis TTL remains Redis-only with current behavior. Wappa contracts/skills/examples and separate Symphonai adoption are prerequisites for Gate C. [Accepted session](../sasha/grilling-sessions/261106-scheduling-domain.md#q26-final-question-wappa-versus-host-responsibilities); [ADR-0030](../adr/0030-scheduled-work-dispatch.md).
 
 ## Drafts
 
@@ -24,11 +24,12 @@ Each retained draft contains scope that has not been fully absorbed by an active
 - [261105-mid-whatsapp-calling-prd.md](./drafts/261105-mid-whatsapp-calling-prd.md): call controls/settings and live call acceptance; inbound CallWebhook already exists.
 - [261105-mid-whatsapp-flows-prd.md](./drafts/261105-mid-whatsapp-flows-prd.md): outbound Flow capability, pipeline integration and live acceptance; phase-2 crypto/management scope still needs a decision. H-25 already implements typed inbound nfm_reply and must not be rebuilt.
 - [261106-low-whatsapp-first-remaining-gaps.md](./drafts/261106-low-whatsapp-first-remaining-gaps.md): retained at the user's request. Outbound reactions are deprioritized; remaining interactive types, address-message scope and result/Template details stay open.
-- [261106-mid-crons-domain.md](./drafts/261106-mid-crons-domain.md): Crons domain — one Schedule model for timers, one-time tasks, recurring expiring and non-expiring tasks and heartbeats, each Run fired once into `process_cron_event` with the full Inbox/User dispatch context; prebuilt `self.crons` (schedule, reschedule, cancel, fan-out, concurrency keys), a Redis sorted-set backend with claims, a firing seam for external schedulers (APScheduler), and expiry triggers replaced in a clean cut.
 
 - [provider-delivery-identity.md](./drafts/provider-delivery-identity.md): provider-event redelivery identity and replay/fan-out semantics. Separate from Instagram Inbox/User/address identity and echo filtering; not absorbed by either active series.
 
 ## Scope decisions (2026-11-06)
+
+- Scheduled-task dispatch is a prerequisite for Gate C, with actual Symphonai adoption in a separate Host PRD. The final clarified scope is shared Wappa context/handler dispatch, existing Redis TTL integration and external scheduler callback mechanisms. The proposed durable scheduler, native recovery/leases/history, backend parity, admin routes and declaration registry were rejected. Keep Redis TTL behavior and Host scheduler ownership. The user approved the final responsibility split; the PRD is now pending. No implementation slice exists yet.
 
 - Deleted the completed v0.27 series at the user's request after confirmation of the published-package gate. Git history retains the series and release reports.
 - Deleted the Template management draft from Wappa. Symphonai owns catalog create/delete and lifecycle extension handling in `backend/symphonai/services/wappa/template_catalog/application.py` and `backend/symphonai/engine/system/meta_template_status_webhook.py`. Full generic update coverage was not asserted; further catalog product scope remains Host-owned.

@@ -18,6 +18,10 @@ Wappa is a multi-context library. Each bounded context owns its own language, in
 | **Plugins** | `wappa/core/plugins/` | [`CONTEXT.md`](./wappa/core/plugins/CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/core/plugins/ARCHITECTURE.md) | Composable framework extensions (auth, CORS, rate limiting, Redis, DB) |
 | **CLI** | `wappa/cli/` | [`CONTEXT.md`](./wappa/cli/CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/cli/ARCHITECTURE.md) | Developer tooling: scaffolding, dev server, examples |
 
+## Planned scheduled-work lane
+
+The [scheduled-dispatch PRD](docs/backlog/pending/261106-high-scheduled-task-dispatch.md) adds one context-bound handler lane shared by existing Redis expiry and Host-owned scheduler callbacks. Dispatch/context ownership stays in Wappa; scheduler engines and Host business models stay outside it. Redis expiry remains Redis-only keyspace notification infrastructure. This is planned work; the current context inventory and implemented processor table below remain current-code descriptions until the implementation lands.
+
 ## Context Relationships
 
 ```

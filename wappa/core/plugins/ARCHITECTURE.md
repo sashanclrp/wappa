@@ -1,5 +1,9 @@
 # Plugins Architecture
 
+## Planned scheduled-work composition
+
+The [scheduled-dispatch PRD](../../../docs/backlog/pending/261106-high-scheduled-task-dispatch.md) plans a SchedulingPlugin/public scheduled-event lane that composes source adapters with the existing runtime lifecycle and DispatchContextBuilder. Redis TTL and existing static cron callbacks use that lane; Host-owned engines call its public async entry point. Plugin composition does not take over APScheduler/Celery database setup, scheduler supervision, job management or history, and adds no management router. Current plugin descriptions below refer to the implemented code until the clean public-contract replacement lands.
+
 ## Responsibilities
 
 - Define the `WappaPlugin` structural protocol used by all plugins.

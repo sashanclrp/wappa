@@ -1,5 +1,9 @@
 # Expiry Context — Architecture
 
+## Planned dispatch integration
+
+The [scheduled-dispatch PRD](../../../docs/backlog/pending/261106-high-scheduled-task-dispatch.md) preserves the Redis-only TTL pool, key/control operations, notification setup and reconnect/tracking behavior described here. Its planned change is to translate each notification and Host-supplied subject identity into the shared context-bound WappaEventHandler hook, replacing free-function business callbacks and manual capability helpers. It does not add due indexes, replay, claims/leases, persistent Run state, shadow payload keys, memory/JSON timers or stronger delivery guarantees. The current implementation below remains current-code documentation until that PRD lands.
+
 ## Responsibilities
 
 This context owns:
