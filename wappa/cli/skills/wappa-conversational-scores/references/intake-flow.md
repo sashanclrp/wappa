@@ -64,7 +64,7 @@ One method per step on every Platform (ADR-0025); the adapter maps it.
 | Step | Method | Instagram renders | WhatsApp renders |
 | --- | --- | --- | --- |
 | choose one of ≤ 3 | `send_button_message` with `ReplyButton`s | button template (postbacks) | reply buttons |
-| choose one of ≤ 10 | `send_list_message` with `ListSection`/`ListRow` (row title ≤ 20) | quick replies (section titles and descriptions folded into the text as a numbered menu) | list |
+| choose one of ≤ 10 | `send_list_message` with `ListSection`/`ListRow` (≤ 10 rows in total, row title ≤ 20; more options need a category step first) | quick replies (section titles and descriptions folded into the text as a numbered menu) | list |
 | open a URL | `send_cta_message` | button template with one URL button | CTA URL button |
 | summary + confirm | `send_button_message` with two `ReplyButton`s (optional `InteractiveHeader` image) | the image first, then the button template | reply buttons with an image header |
 | email/phone | ask for typed text | typed text | typed text, or `whatsapp.send_contact_request` when the handler's `self.whatsapp` is not `None` |
@@ -74,8 +74,12 @@ Selections from every row come back through `event.get_interactive_selection()`.
 ## Tests
 
 ```python
+from wappa.messaging import DeliveryAddresses, DirectMessage
+from wappa.persistence.cache_factory import create_cache_factory
+
 factory = create_cache_factory("memory")(inbox_id=REF.cache_namespace, user_id="u1")
-form = FormScore(ScoreContext(Recorder(REF), factory, DirectMessage(inbox_ref=REF, addresses=DeliveryAddresses.of("u1"))))
+target = DirectMessage(inbox_ref=REF, addresses=DeliveryAddresses.of("u1"))   # a test stand-in for webhook.user.delivery_addresses()
+form = FormScore(ScoreContext(Recorder(REF), None, factory, target))         # whatsapp=None: the Instagram path
 await form.start()
 await form.handle(text_event("A"))            # invalid name → re-prompt
 await form.handle(quick_event("form:service:other"))

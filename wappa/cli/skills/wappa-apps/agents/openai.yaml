@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wappa Conversational Apps"
+  short_description: "Build WhatsApp and Instagram apps on Wappa from one handler"
+  default_prompt: "Use $wappa-apps to build or extend a WhatsApp and Instagram conversation app with Wappa."

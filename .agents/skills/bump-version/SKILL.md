@@ -1,6 +1,6 @@
 ---
 name: bump-version
-description: Run the end-of-session release workflow for the Wappa library — bump the version, refresh CHANGELOG.md, rebuild the wheel, and create a tagged commit. Use this skill whenever the user says "bump version", "/bump-version", "release", "cut a release", "tag a new version", or asks to ship/publish the next version of wappa. Optionally runs the code-simplifier subagent first to clean up recently changed code before the release.
+description: Runs the end-of-session release workflow for the Wappa library — bumps the version, refreshes CHANGELOG.md and the shipped Host skills, rebuilds the wheel, and creates a tagged commit. Use when the user says "bump version", "/bump-version", "release", "cut a release", "tag a new version", or asks to ship/publish the next version of wappa. Optionally runs the code-simplifier subagent first to clean up recently changed code before the release.
 ---
 
 # bump-version
@@ -25,7 +25,7 @@ Execute the steps in this order. Each step depends on the previous one — don't
 
 ### Step 0 — (optional) code-simplifier pass
 
-Only if the user opted in. Spawn the `code-simplifier` subagent on the Sonnet 4.6 model with this brief:
+Only if the user opted in. Spawn the `code-simplifier` subagent on the Sonnet model with this brief:
 
 > Review the code changed in this session (git diff against the last release tag, or against `HEAD~N` covering the session's commits). Improve code quality, optimize where it helps, and tighten SOLID compliance. Do not introduce new features or change public behavior. Report what you changed.
 
@@ -35,7 +35,6 @@ Use the Agent tool:
 ```
 Agent(subagent_type="code-simplifier", model="sonnet", prompt="<the brief above>")
 ```
-(Sonnet on this harness is Sonnet 4.6.)
 
 ### Step 1 — Decide the new version
 
@@ -86,6 +85,10 @@ Then sweep for stragglers:
 grep -rn "<OLD_VERSION>" --include="*.toml" --include="*.md" --include="*.py" --include="*.cfg" .
 ```
 Update any remaining hits that are clearly the package version (skip unrelated coincidences like `python_version` or third-party deps). The README badge in particular has historically gone stale — always check it.
+
+### Step 4b — Check the shipped Host skills
+
+The wheel ships `wappa/cli/skills/`, and `wappa init` copies it into every new Host. Run `uv run pytest tests/test_shipped_skills.py -q`, then read this release's CHANGELOG "Breaking" lines against the skills: every renamed or removed API, new limit, new lane or closed known gap must already be reflected there (the `wappa-develop` skill, `references/shipped-skills.md`). Update the version the `wappa-apps` skill says it assumes. If anything is stale, fix it before building; a release never ships skills that teach a removed name.
 
 ### Step 5 — Build
 

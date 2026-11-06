@@ -1,0 +1,23 @@
+{
+  "skill_name": "wappa-develop",
+  "evals": [
+    {
+      "id": "add-send-reaction",
+      "prompt": "Add send_reaction to Wappa for WhatsApp and Instagram.",
+      "expected_output": "Follows wappa/messaging/ARCHITECTURE.md 'Changing a Messenger method' hop by hop (IMessenger signature, both adapters and supported_operations, pipeline and PlatformMessenger forwarders, HTTP request model and route, parity and parameter-reach tests, public-contract and CHANGELOG); WhatsApp shape first; updates the shipped wappa-apps skill to remove reactions from Known gaps; runs the five gates.",
+      "assertions": ["walks the Messenger-method chain including parity tests", "updates the shipped wappa-apps skill", "runs the five check gates"]
+    },
+    {
+      "id": "add-telegram",
+      "prompt": "Plan adding Telegram as a third Platform.",
+      "expected_output": "Uses references/add-a-platform.md: research and ADR decisions first, vocabulary (PlatformType.TELEGRAM already reserved, record pair + RECORD_TYPES), PlatformWebhooks with its own authenticate, IMessenger + media rules + capabilities, optional IInboxConnector, one PlatformEntry in wappa/platforms.py, the third-Platform contract and guard tests, live gates, then Host skill references; no Platform branch in shared code; WhatsApp limits never relaxed.",
+      "assertions": ["changes shared code only in wappa/platforms.py and the vocabulary", "uses test_third_platform_contract.py as the spec", "adds Host skill references for the Platform"]
+    },
+    {
+      "id": "live-format-rule",
+      "prompt": "Users say Instagram shows a blank video for some of our MP4 links. Fix it in Wappa.",
+      "expected_output": "Asks the user to run the live sends; reads devlog.sh and records results in the live test plan; distinguishes rate_limited from a format rejection; encodes only evidenced rules before I/O with a convert-first error (no conversion); notes an HEVC link is undetectable without a fetch; updates media-formats.md in the PRD and the shipped skill, tests and CHANGELOG.",
+      "assertions": ["does not send live messages itself", "does not add media conversion to Wappa", "updates the shipped media-formats reference"]
+    }
+  ]
+}

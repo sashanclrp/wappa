@@ -1,4 +1,0 @@
-interface:
-  display_name: "Instagram Apps with Wappa"
-  short_description: "Build and test Instagram conversation apps on Wappa"
-  default_prompt: "Use $wappa-instagram-apps to build or extend an Instagram conversation app with Wappa."

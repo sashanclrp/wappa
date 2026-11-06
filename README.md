@@ -154,7 +154,7 @@ wappa init my-wappa-project
 cd my-wappa-project
 ```
 
-`wappa init` also adds Wappa's agent skills (`wappa-instagram-apps`, `wappa-conversational-scores`, `wappa-runtime-state`) under `.claude/skills/` and `.agents/skills/`, so coding agents build against the current public API. Existing skill folders are never overwritten.
+`wappa init` also adds Wappa's agent skills under `.claude/skills/` and `.agents/skills/`, so coding agents build against the current public API: `wappa-apps` (WhatsApp and Instagram apps from one handler, media formats, connecting accounts, Meta setup), `wappa-conversational-scores` (Scores and guided forms), `wappa-state-and-storage` (caches, Redis, Postgres) and `wappa-host-integration` (multi-Inbox, plugins, external webhooks, crons, upgrades). Existing skill folders are never overwritten.
 
 ### Using Poetry
 ```bash

@@ -1,0 +1,65 @@
+{
+  "skill_name": "wappa-state-and-storage",
+  "evals": [
+    {
+      "id": "colliding-ids-isolated",
+      "prompt": "The same user id string '12345' shows up on my WhatsApp inbox and two Instagram accounts. Will their Redis state collide?",
+      "expected_output": "No: Wappa scopes caches by InboxRef.cache_namespace + user_id; use self.cache_factory (already bound) or create_cache_factory(...)(inbox_id=inbox_ref.cache_namespace, user_id=...); never hand-build keys; a host link between identities is host-owned evidence.",
+      "assertions": [
+        "mentions cache_namespace / qualified Inbox scope",
+        "forbids hand-built Redis keys"
+      ]
+    },
+    {
+      "id": "ttl-miss-outage",
+      "prompt": "What happens to my flow state when the TTL expires or Redis is down?",
+      "expected_output": "get returns None on miss/expiry and the flow must treat it as 'no active flow' (restart or explain); upsert takes ttl seconds and renew_ttl extends; outages raise and should fail the handler visibly rather than silently resetting; memory backend loses state on restart.",
+      "assertions": [
+        "miss handled as no state",
+        "ttl passed to upsert",
+        "outage is not silently treated as empty"
+      ]
+    },
+    {
+      "id": "no-secrets-or-records-in-flow-cache",
+      "prompt": "Can I store the customer's submitted form and the Instagram access token in the state cache so my AI tool can read them?",
+      "expected_output": "Workflow state holds only transient flow data; submitted business records belong in host persistence (DB or a Table Cache you own) and credentials never go into caches or tool arguments — trusted adapters resolve them per operation via InboxCredentialAccess.",
+      "assertions": [
+        "rejects storing tokens in cache",
+        "does not hand credentials to tools",
+        "points business records to host persistence"
+      ]
+    },
+    {
+      "id": "message-ids-and-profile-facts",
+      "prompt": "Where should I keep the message IDs of my sends and the user's Instagram username so I can use them later?",
+      "expected_output": "Profile facts (from resolve_platform_user_profile) go in the Host's User record or the per-User user cache scoped by Inbox; message IDs for status correlation go in host persistence keyed by InboxRef and message_id (state cache only for in-flight flow needs, with a TTL); never hand-built keys; the same IGSID on two Inboxes is two Users.",
+      "assertions": [
+        "keys data by Inbox and User, not a raw global ID",
+        "uses create_user_cache or host persistence, no hand-built keys",
+        "keeps durable correlation out of TTL-only flow state"
+      ]
+    },
+    {
+      "id": "postgres-in-handler",
+      "prompt": "Save every completed intake to Postgres from my Wappa handler and read them back for an admin page.",
+      "expected_output": "Adds PostgresDatabasePlugin(url=os.environ['DATABASE_URL'], models=[...], auto_create_tables=False for production); writes with `async with self.db() as session`, reads with self.db_read(); uses session.execute not .exec; keys rows by Inbox and User; does not keep submissions only in a cache.",
+      "assertions": [
+        "uses PostgresDatabasePlugin with an explicit url",
+        "calls self.db() as an async context manager",
+        "uses session.execute, not session.exec",
+        "rows carry the Inbox identity, not only user_id"
+      ]
+    },
+    {
+      "id": "redis-setup-and-timer",
+      "prompt": "Turn on Redis for my Wappa app and send a follow-up if the user goes silent for 15 minutes.",
+      "expected_output": "Wappa(cache='redis') with REDIS_URL (no second RedisPlugin); ExpiryPlugin plus a module-level @expiry_registry.on_expire_action handler; arms it with create_expiry_cache().set(action, user_id, 900) and re-arms on each message; parses the InboxRef from the key and uses create_expiry_messenger; mentions keyspace notifications and idempotency across workers; no CronPlugin for a per-User timer.",
+      "assertions": [
+        "uses Wappa(cache=\"redis\") without adding RedisPlugin again",
+        "uses ExpiryPlugin with @expiry_registry.on_expire_action",
+        "does not use a cron for a per-User timer"
+      ]
+    }
+  ]
+}

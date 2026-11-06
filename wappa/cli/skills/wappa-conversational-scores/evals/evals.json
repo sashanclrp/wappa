@@ -14,10 +14,11 @@
     {
       "id": "symphonai-routes-to-host-skill",
       "prompt": "In my Symphonai app, add a guided form that asks three questions over WhatsApp and Instagram.",
-      "expected_output": "Detects a Symphonai host and hands off to symphonai-add-state-handler (or symphonai-add-score for single-turn), naming the skill; uses target=self.deps.user_target in examples; if the skill is missing, names it and its source instead of inventing a path.",
+      "expected_output": "Detects a Symphonai host and hands off to Symphonai's own Score and StateHandler engine through its develop-symphonai skill; does not reimplement Symphonai StateHandlers with plain Wappa Scores; does not name nonexistent symphonai-add-* skills.",
       "assertions": [
-        "names symphonai-add-state-handler",
-        "does not reimplement Symphonai StateHandlers with plain Wappa scores"
+        "names develop-symphonai",
+        "does not reimplement Symphonai StateHandlers with plain Wappa scores",
+        "does not name symphonai-add-score or symphonai-add-state-handler"
       ]
     },
     {
@@ -28,6 +29,26 @@
         "payload includes the step",
         "mismatch re-prompts instead of applying",
         "cancel deletes state"
+      ]
+    },
+    {
+      "id": "intake-list-limits",
+      "prompt": "My intake form asks the user to pick one of 14 services with long names like 'Comprehensive commercial property inspection'. Build that step for WhatsApp and Instagram.",
+      "expected_output": "Keeps ≤ 10 rows in total and row titles ≤ 20 characters (splits into two steps or a category step first, or moves detail to descriptions); explains that Wappa raises ValidationError when the value is built and does not truncate titles silently or catch and ignore the error.",
+      "assertions": [
+        "no list over 10 rows",
+        "row titles within 20 characters",
+        "explains the limit error instead of truncating silently"
+      ]
+    },
+    {
+      "id": "score-result-storage",
+      "prompt": "After the form's confirmation message, I need to know later whether it was delivered and read.",
+      "expected_output": "Stores MessageResult.message_id (and wappa_parts IDs on Instagram) in host persistence with the submission; correlates in process_status; never retries an indeterminate send automatically.",
+      "assertions": [
+        "stores MessageResult.message_id",
+        "correlates in process_status",
+        "does not auto-retry an indeterminate outcome"
       ]
     }
   ]

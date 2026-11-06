@@ -1,0 +1,4 @@
+interface:
+  display_name: "Develop Wappa"
+  short_description: "Change Wappa itself: Platforms, Messengers, live gates, skills"
+  default_prompt: "Use $wappa-develop to make this change to the Wappa library following its change chains, gates and docs."

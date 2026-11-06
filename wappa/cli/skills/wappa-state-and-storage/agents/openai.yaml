@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wappa State and Storage"
+  short_description: "Caches, Redis and Postgres scoped per Inbox and User"
+  default_prompt: "Use $wappa-state-and-storage to decide where my Wappa app keeps state and records, and to set up Redis or Postgres."

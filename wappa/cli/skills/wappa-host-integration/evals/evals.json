@@ -1,0 +1,54 @@
+{
+  "skill_name": "wappa-host-integration",
+  "evals": [
+    {
+      "id": "add-inbox-at-runtime",
+      "prompt": "A customer just gave us a new WhatsApp number's token. Add it to the running Wappa app without restarting.",
+      "expected_output": "Explicit routing with an IInboxDirectorySource; builds the record with app.state.inbox_runtime.credential_service.create_active_record(inbox_ref=InboxRef.whatsapp(pnid), account_ref=PlatformAccountRef.whatsapp(waba), access_token=SecretStr(...)); stores dump_record_for_storage(record) in the Host transaction; then awaits directory.refresh_inbox(inbox_ref); subscribes the WABA (or uses WhatsAppConnector.activate); never stores the token in a cache or plaintext.",
+      "assertions": [
+        "commits the record before calling refresh_inbox",
+        "uses InboxCredentialService to build the record, not hand-encryption",
+        "uses InboxRef / PlatformAccountRef, not bare ids"
+      ]
+    },
+    {
+      "id": "external-webhook-with-context",
+      "prompt": "When our CRM marks a deal won, message the customer on whichever Platform they talk to us on.",
+      "expected_output": "WebhookPlugin with an IWebhookProcessor that verifies the signature (HMACSignatureVerifier or the provider's scheme) and returns an ExternalEvent; an IExternalWebhookContextResolver mapping the CRM contact to the stored InboxRef and user_id; process_external_event checks self.messenger before sending with a DirectMessage built from stored DeliveryAddresses; idempotent on the provider's event id.",
+      "assertions": [
+        "authenticates the provider request in parse_event",
+        "uses a context resolver to bind the Inbox, not webhook_id",
+        "checks self.messenger is bound before sending",
+        "handles provider retries idempotently"
+      ]
+    },
+    {
+      "id": "window-guard-middleware",
+      "prompt": "Block free-form WhatsApp sends to users who haven't written in 24 hours, for both bot replies and our operator API.",
+      "expected_output": "A MessengerMiddleware (handle(invocation, call_next)) registered with WappaBuilder.add_messenger_middleware; reads invocation.method_name and invocation.target; lets template methods through; returns a rejected MessageResult instead of calling call_next; notes Wappa has no built-in window guard and API sends run the same middleware.",
+      "assertions": [
+        "implements MessengerMiddleware.handle with call_next",
+        "registers through WappaBuilder.add_messenger_middleware",
+        "does not block Template sends"
+      ]
+    },
+    {
+      "id": "upgrade-033-to-034",
+      "prompt": "Upgrade our Wappa 0.33 app to 0.34.",
+      "expected_output": "Reads CHANGELOG and the migration guide first; lists and applies the breaks (DirectMessage targets, self.whatsapp.templates, messenger.media, new lanes, MessageResult import and message_outcome, InteractiveHeader, create_messaging_router, InboxRef arguments); runs wappa migrate cache-namespaces dry-run then --apply with workers stopped; adds no compatibility shims.",
+      "assertions": [
+        "runs wappa migrate cache-namespaces with a dry run first",
+        "replaces recipient= with DirectMessage targets",
+        "does not add aliases or shims for removed names"
+      ]
+    },
+    {
+      "id": "negative-message-logic",
+      "prompt": "How do I send a carousel of products to a WhatsApp user from my handler?",
+      "expected_output": "Routes to the wappa-apps skill (messaging) rather than answering from this skill's integration references.",
+      "assertions": [
+        "names wappa-apps"
+      ]
+    }
+  ]
+}

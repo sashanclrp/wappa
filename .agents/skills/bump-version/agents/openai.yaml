@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Wappa"
+  short_description: "Bump, changelog, skills check, build and tag a Wappa release"
+  default_prompt: "Use $bump-version to cut the next Wappa release."

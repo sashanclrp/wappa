@@ -1,0 +1,8 @@
+{
+  "skill_name": "bump-version",
+  "evals": [
+    {"id": "no-qualifier-asks", "prompt": "/bump-version", "expected_output": "Asks once whether to run code-simplifier before doing anything else.", "assertions": ["asks about code-simplifier before editing files"]},
+    {"id": "breaking-release-skills-check", "prompt": "/bump-version skip code-simplifier — we renamed several public APIs this session.", "expected_output": "Proposes the bump with reasoning and waits; writes the CHANGELOG from git log and the diff with every break listed; runs tests/test_shipped_skills.py and checks the shipped skills against the breaks before building; builds; commits [REL] and tags locally without pushing or publishing.", "assertions": ["checks the shipped skills before uv build", "does not push or run uv publish", "lists every break in the CHANGELOG"]},
+    {"id": "build-failure-stops", "prompt": "/bump-version skip code-simplifier (the build will fail)", "expected_output": "Stops at the failed uv build, reports the error, and creates no commit or tag.", "assertions": ["no commit or tag after a failed build"]}
+  ]
+}

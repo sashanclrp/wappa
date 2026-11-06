@@ -10,4 +10,5 @@ Before a non-trivial change, read what it touches. Read a large doc by its headi
 - **Contract**: `docs/public-contract.md` before changing anything a Host can import, call, configure, subscribe to, or scaffold.
 - **Code**: `CODING_STANDARDS.md` before writing code or tests, updating docs, or committing.
 - **Design**: the `grill-with-docs` skill for a design discussion, domain naming, or an ADR.
+- **Changing Wappa**: the `wappa-develop` skill for the change chain of a Messenger method, lane, route, media rule or new Platform, live verification, and keeping the shipped Host skills (`wappa/cli/skills/`) true in the same change.
 - **Live debugging**: the read-only tools in `scripts/` before reading logs, Meta state or Redis by hand: `devlog.sh` (the server log through `logs/current.log`, which you only read, never edit), `meta_inspect.py` (app subscriptions and tokens), `redis_inspect.py` (one Inbox's keys), `env_keys.sh` (which `.env` keys are set). `logs/dev.pid` names the running server and its port.

@@ -48,6 +48,7 @@ Update the documentation graph in the same change as the code it describes:
 | `docs/public-contract.md` | A surface Host Applications import, call, configure, subscribe to, or scaffold changes. |
 | `docs/adr/` | A decision is hard to reverse, surprising without context, and the result of a real trade-off. Each decision cluster has one ADR stating its full current decision: a change to a cluster updates that ADR in the same change, and a new cluster gets a new ADR. |
 | `CHANGELOG.md` | Every user-visible change, under the version that ships it, with every break listed. |
+| `wappa/cli/skills/` | A Host-visible behavior changes: a public API, limit, media rule, lane, Platform or known gap. The shipped skills must never teach a removed name (`tests/test_shipped_skills.py`). |
 
 ## Commits and pull requests
 

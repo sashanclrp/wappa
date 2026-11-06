@@ -1,0 +1,149 @@
+{
+  "skill_name": "wappa-apps",
+  "evals": [
+    {
+      "id": "fresh-text-app",
+      "prompt": "Create a plain Wappa app that echoes Instagram DMs for one professional account I already have a Unified Login token for.",
+      "expected_output": "Explicit routing with an IInboxDirectorySource and a Wappa-encrypted Instagram record; handler sends with target=DirectMessage(inbox_ref=self.inbox_ref, addresses=webhook.user.delivery_addresses()); callback /webhook/inboxes/instagram; no recipient= keyword; no IG_* variable treated as a Wappa setting.",
+      "assertions": [
+        "uses from wappa.messaging import DirectMessage",
+        "never calls send_text(recipient=...)",
+        "uses InboxRoutingMode.EXPLICIT and an IInboxDirectorySource",
+        "names /webhook/inboxes/instagram as the callback"
+      ]
+    },
+    {
+      "id": "meta-setup-missing-configuration",
+      "prompt": "Meta says 'Select a configuration in Step 1 before generating an access token' when I click Generate token. Also my webhook GET verified, so DMs should work now, right?",
+      "expected_output": "Explains creating/selecting a compatible Unified Login configuration first; separates GET verification, app-level field selection, account subscription (subscribed_apps) and signed POST delivery; says GET 200 does not prove delivery; gives the account subscription step.",
+      "assertions": [
+        "resolves the configuration error by selecting a configuration",
+        "states GET verification is not proof of subscription or delivery",
+        "mentions account-level subscribed_apps separately from dashboard fields"
+      ]
+    },
+    {
+      "id": "private-reply-not-dm",
+      "prompt": "When someone comments 'price' on my reel, DM them the price list, and also send them a PDF.",
+      "expected_output": "Uses process_comment, filters is_own_comment, sends send_text(target=PrivateReply(comment_ref=webhook.comment_ref)) — text only, one per comment within the provider window; does not build a DirectMessage from the comment author; explains the PDF must wait until the user answers, then send_document with a DirectMessage.",
+      "assertions": [
+        "uses PrivateReply(comment_ref=...)",
+        "does not create DirectMessage from comment author id",
+        "does not send a PDF as the private reply"
+      ]
+    },
+    {
+      "id": "reactions-excluded",
+      "prompt": "Add a handler that reacts with a heart to every Instagram message using Wappa.",
+      "expected_output": "States sending a reaction is a known gap (no send_reaction yet) and does not invent the method; explains inbound reactions arrive in process_message as BaseReactionMessage (target_message_id, emoji, is_removal).",
+      "assertions": [
+        "does not call a nonexistent reaction method",
+        "names inbound reactions as BaseReactionMessage in process_message"
+      ]
+    },
+    {
+      "id": "whatsapp-template",
+      "prompt": "Send an approved WhatsApp Template 'order_confirmed' to a customer with Wappa.",
+      "expected_output": "Loads references/whatsapp.md, not the Instagram files; sends with self.whatsapp.templates (guarded by if self.whatsapp) and a DirectMessage target, or OutboundRuntime.templates outside a dispatch; explains Templates are the only way to open a conversation outside the 24-hour window.",
+      "assertions": [
+        "uses self.whatsapp.templates or OutboundRuntime.templates",
+        "does not load Instagram setup or call Instagram-only operations",
+        "mentions the 24-hour window"
+      ]
+    },
+    {
+      "id": "compositional-intake",
+      "prompt": "Build a complete Instagram lead-intake flow: name, service via quick replies, budget via buttons, email validation, confirmation card, Redis state.",
+      "expected_output": "Routes flow logic to wappa-conversational-scores and state to wappa-state-and-storage; uses send_list_message (quick replies), send_button_message with ReplyButton and an image-header send_button_message for the confirmation card, all with step-tagged ids; reads every selection in process_message via get_interactive_selection(); state via cache_factory.create_state_cache() with TTL; no hand-built Redis keys.",
+      "assertions": [
+        "reads quick replies and postbacks alike in process_message via get_interactive_selection()",
+        "does not call removed Instagram-only methods (send_quick_replies, send_buttons, send_card)",
+        "uses create_state_cache, not raw Redis keys",
+        "payloads carry the step for stale detection"
+      ]
+    },
+    {
+      "id": "comments-and-dms-lanes",
+      "prompt": "Build a bot that replies to Instagram comments and DMs.",
+      "expected_output": "Comment replies in process_comment via self.instagram.comments (public reply_comment) or send_text with PrivateReply; DM replies in process_message via self.messenger with a DirectMessage; no PlatformType branch for shared actions; no capability lookup.",
+      "assertions": [
+        "comment logic lives in process_comment",
+        "DM replies use self.messenger in process_message",
+        "uses self.instagram.comments for the public reply",
+        "no capability lookup call",
+        "no branch on PlatformType for a shared action"
+      ]
+    },
+    {
+      "id": "video-header-both-platforms",
+      "prompt": "Send a button message with a video header to WhatsApp and Instagram users.",
+      "expected_output": "One send_button_message(..., header=InteractiveHeader.of_video(url=...)) call on self.messenger with a DirectMessage target; no Platform branch; MP4 H.264 recommended.",
+      "assertions": [
+        "uses InteractiveHeader.of_video",
+        "a single send_button_message call with no Platform branch"
+      ]
+    },
+    {
+      "id": "whatsapp-only-location-request",
+      "prompt": "Ask WhatsApp users for their location; Instagram users should just type their city.",
+      "expected_output": "Guards with `if self.whatsapp:` and calls self.whatsapp.send_location_request(...); otherwise sends a text prompt through self.messenger; never a capability lookup.",
+      "assertions": [
+        "uses self.whatsapp.send_location_request guarded by if self.whatsapp",
+        "no capability lookup call"
+      ]
+    },
+    {
+      "id": "greet-by-name",
+      "prompt": "Greet the user by name on both WhatsApp and Instagram.",
+      "expected_output": "Calls await self.messenger.resolve_platform_user_profile(webhook.user), checks profile.found, falls back to a neutral greeting; reads fields directly, no getattr(..., None); suggests storing the name in the Host's User record.",
+      "assertions": [
+        "uses resolve_platform_user_profile(webhook.user)",
+        "no getattr(..., None) on webhook.user or the profile",
+        "handles a not-found profile without raising"
+      ]
+    },
+    {
+      "id": "long-text-wappa-parts",
+      "prompt": "Send our 3000-character refund policy as a DM on Instagram and WhatsApp.",
+      "expected_output": "One send_text call (≤ 4096 chars); Wappa splits on Instagram; reads result.success and platform_response['wappa_parts']['message_ids'] for every part's ID; on partial failure does not resend the whole text.",
+      "assertions": [
+        "does not chunk the text itself",
+        "reads wappa_parts from platform_response",
+        "does not resend the whole message on a partial failure"
+      ]
+    },
+    {
+      "id": "media-format-choice",
+      "prompt": "Our assets are WebM videos, WebP images and OGG voice notes. What do I send to WhatsApp and Instagram with Wappa?",
+      "expected_output": "States Wappa does not convert media; recommends Host-prepared renditions: MP4 H.264+AAC video, JPEG/PNG images, M4A audio, OGG/Opus voice note for WhatsApp plus M4A for Instagram; notes WebP works on Instagram by URL only and WhatsApp refuses WebM; Wappa refuses unfit files before any call with ValueError; the Host decides which file goes where (renditions list optional). Leads with the unified kit (one file per use, renditions list for voice note and sticker) so the Host code has no Platform branch.",
+      "assertions": [
+        "says Wappa does not convert media",
+        "recommends MP4 H.264 for video on both Platforms",
+        "gives a two-rendition answer for voice notes (OGG/Opus + M4A)",
+        "does not suggest catching and ignoring the ValueError",
+        "the proposed send code has no Platform branch"
+      ]
+    },
+    {
+      "id": "negative-scores-handoff",
+      "prompt": "Add a five-question onboarding form with resume and cancel to my Wappa bot.",
+      "expected_output": "Hands the flow design to wappa-conversational-scores (and state to wappa-state-and-storage) instead of writing the whole flow from this skill; still uses send_list_message/send_button_message within limits.",
+      "assertions": [
+        "names wappa-conversational-scores",
+        "does not hand-build Redis keys"
+      ]
+    },
+    {
+      "id": "connect-both-platforms",
+      "prompt": "Let my customers connect their own WhatsApp number and Instagram account to my SaaS from a settings page.",
+      "expected_output": "One set of Host routes over IInboxConnector keyed by Platform: WhatsAppConnector (Embedded Signup config_id, JS SDK popup code, redirect_uri=None) and InstagramConnector (Unified Login config_id, redirect_uri); begin(host_subject=authenticated operator) → complete(state, code…) → activate(grant, inbox_ref, credentials=runtime.credential_service) → Host commit → directory.refresh_inbox; a durable atomic IConnectionIntentStore (not InMemory in production); explains WhatsApp disconnect is per WABA and Instagram sends no deauthorize.",
+      "assertions": [
+        "uses WhatsAppConnector and InstagramConnector behind one code path",
+        "binds begin to the authenticated operator (host_subject)",
+        "commits the record before refresh_inbox",
+        "does not use InMemoryConnectionIntentStore for production",
+        "notes WhatsApp disconnect affects the whole WABA"
+      ]
+    }
+  ]
+}

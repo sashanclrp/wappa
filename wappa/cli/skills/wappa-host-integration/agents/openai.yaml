@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wappa Host Integration"
+  short_description: "Multi-Inbox, plugins, external webhooks, crons and upgrades"
+  default_prompt: "Use $wappa-host-integration to embed Wappa in my backend with many Inboxes, plugins and scheduled work."

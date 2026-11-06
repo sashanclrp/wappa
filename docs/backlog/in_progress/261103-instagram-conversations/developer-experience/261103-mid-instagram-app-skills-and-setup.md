@@ -10,7 +10,16 @@ last_reviewed: 2026-11-06
 
 ## Code reality (2026-11-06)
 
-Three skills are authored and have recorded lint/lane checks and deterministic tests. Fresh-agent evaluation is recorded for Claude Opus 5.5 in Claude Code only. Other supported harness/model checks, picker evidence where available, built-wheel distribution and final B/C teaching parity remain subject to the exit criteria.
+The refresh is authored and restructured (2026-11-06, user decision: "skills that disappear or get merged in favour of references are valid; 10x the skills for Host developers and for Wappa maintainers"). Four shipped Host skills replace the three planned ones:
+
+| Shipped skill | Replaces | Owns |
+| --- | --- | --- |
+| `wappa-apps` | `wappa-instagram-apps` (and its `skill-routing.md`) | The Platform-neutral core (items 1-11, 13-15): lanes, Platform Messengers, targets, results and `wappa_parts`, limits, rate limits, users. References per topic and Platform: `messaging.md`, `media-formats.md` (the unified kit: one file set, no Platform branch), `whatsapp.md`, `instagram.md`, `connecting-accounts.md` (Embedded Signup and Unified Login as one flow), `meta-app-setup.md` (both Platforms), `testing-and-troubleshooting.md`. A future Platform adds one reference. |
+| `wappa-conversational-scores` | itself | Items 1-6 and 10 in Scores; Symphonai routes to `develop-symphonai` (the `symphonai-add-*` skills never existed). |
+| `wappa-state-and-storage` | `wappa-runtime-state` | Item 12, plus RedisPlugin, Pub/Sub, expiry triggers, namespace migration, `PostgresDatabasePlugin`, and where message IDs and profile facts live. |
+| `wappa-host-integration` | new | Multi-Inbox, `OutboundRuntime`, plugins and Messenger middleware, SSE, External Webhook Sources, crons, the API lane, upgrading (0.33 → 0.34 checklist). It moves the Wappa-generic facts out of Symphonai's `develop-wappa`. |
+
+The maintainer skill `wappa-develop` (`.agents/skills/`, not shipped) routes to the change chains in the context `ARCHITECTURE.md` files and adds adding a Platform, live verification and shipped-skill upkeep; `bump-version` now checks the shipped skills before building. `tests/test_shipped_skills.py` (was `test_instagram_skills.py`) checks taught imports and Messenger methods, frontmatter, reference links and sibling names. All six skills lint at 0 errors and 0 warnings (`--professional`, `--lanes`). The refresh evals below are in the skills' `evals.json`. Fresh-agent evaluation of the new set, other harnesses and Gate C teaching parity remain open.
 
 See the [series plan](../plan.md), [capability matrix](../references/capability-matrix.md) and [live evidence](../tests/live-test-plan.md). Historical test results do not replace the remaining live gates.
 
@@ -42,9 +51,10 @@ Sequencing: the skills are defined from this checklist now and built only after 
 
 | Skill | Refresh |
 | --- | --- |
-| `wappa-instagram-apps` | Items 1-11, 14 and 15 for Instagram and WhatsApp side by side: Platform Messengers, lanes, comment and mention lanes with `self.instagram`, emulations and `wappa_parts`, headers, cards with `poster_url`, profile resolution, media library |
+| `wappa-apps` | Items 1-11, 13, 14 and 15 for WhatsApp and Instagram side by side (see "Code reality" for the reference layout) |
 | `wappa-conversational-scores` | Items 1-6 and 10 inside Scores: Scores receive the prebuilt Messengers, use `InteractiveHeader` / list values within the shared limits, and handle selections identically on both Platforms |
-| `wappa-runtime-state` | Item 12, plus storing message IDs and profile facts per User and Inbox |
+| `wappa-state-and-storage` | Item 12, plus storing message IDs and profile facts per User and Inbox, Redis and Postgres |
+| `wappa-host-integration` | Item 4's runtime lanes, multi-Inbox and upgrades |
 
 ### Evals for the refresh (write before editing)
 
