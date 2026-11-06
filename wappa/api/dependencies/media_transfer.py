@@ -1,35 +1,25 @@
 """Media upload over HTTP for every Platform (ADR-0021).
 
-WhatsApp keeps its Media API handler, which honours an explicit ``media_type``
-from the multipart form. Other Platforms upload through their Messenger's
-``IMediaLibrary`` behind the same ``upload_media_from_bytes`` call, so the
-route stays one route. A Platform without a media library answers 501.
+Every Platform uploads through its Messenger's ``IMediaLibrary``; the
+multipart ``media_type`` reaches it as ``mime_type`` (WhatsApp honours it).
+A Platform without a media library answers 501.
 """
 
 from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from typing import Protocol
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends
 
 from wappa.api.dependencies.inbox_context import (
     InboxExecutionContext,
     get_inbox_execution_context,
+    requires_capability,
 )
 from wappa.domain.interfaces.media_library import IMediaLibrary, MediaFamily
 from wappa.domain.models.media_result import MediaUploadResult
-from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
-    WhatsAppMediaHandler,
-)
 from wappa.schemas.core.types import PlatformType
-
-
-class MediaUploader(Protocol):
-    async def upload_media_from_bytes(
-        self, file_data: bytes, media_type: str, filename: str
-    ) -> MediaUploadResult: ...
 
 
 def media_family(media_type: str) -> MediaFamily | None:
@@ -62,7 +52,7 @@ class LibraryMediaUploader:
             path = Path(folder) / name
             path.write_bytes(file_data)
             try:
-                result = await self._library.upload(path, family)
+                result = await self._library.upload(path, family, mime_type=media_type)
             except ValueError as exc:  # local Platform rule (format, size, name)
                 return self._failed(str(exc), "MEDIA_REJECTED")
         return MediaUploadResult(
@@ -87,29 +77,15 @@ class LibraryMediaUploader:
 
 
 async def get_media_uploader(
-    request: Request,
+    library: IMediaLibrary = Depends(requires_capability(IMediaLibrary)),
     context: InboxExecutionContext = Depends(get_inbox_execution_context),
-) -> MediaUploader:
-    """The selected Inbox's uploader: WhatsApp Media API, or ``IMediaLibrary``."""
-    if context.inbox_ref.platform is PlatformType.WHATSAPP:
-        return WhatsAppMediaHandler(
-            client=context.whatsapp_client(),
-            inbox_id=context.inbox_id,
-            media_download_client=context.media_download_client_provider(),
-        )
-    messenger = await context.messenger(request.app)
-    library = messenger.capability(IMediaLibrary)
-    if library is None:
-        raise HTTPException(
-            status_code=501,
-            detail=f"{context.inbox_ref.platform.value} does not provide IMediaLibrary",
-        )
+) -> LibraryMediaUploader:
+    """The selected Inbox's ``IMediaLibrary`` uploader, or 501."""
     return LibraryMediaUploader(library, context.inbox_ref.platform, context.inbox_id)
 
 
 __all__ = [
     "LibraryMediaUploader",
-    "MediaUploader",
     "get_media_uploader",
     "media_family",
 ]

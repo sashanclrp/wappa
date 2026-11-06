@@ -20,7 +20,9 @@ from wappa.api.dependencies.inbox_context import (
 )
 from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_media_handler
 from wappa.core.config.settings import settings
-from wappa.domain.interfaces.media_interface import IMediaHandler
+from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
+    WhatsAppMediaHandler,
+)
 
 router = APIRouter(
     prefix="",
@@ -35,7 +37,7 @@ router = APIRouter(
 )
 async def whatsapp_health_check(
     context: InboxExecutionContext = Depends(get_inbox_execution_context),
-    media_handler: IMediaHandler = Depends(get_whatsapp_media_handler),
+    media_handler: WhatsAppMediaHandler = Depends(get_whatsapp_media_handler),
 ) -> dict:
     """Consolidated health check for all WhatsApp services.
 

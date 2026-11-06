@@ -12,7 +12,7 @@ over HTTPS, with bounded redirects, time and size.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
@@ -20,7 +20,6 @@ from urllib.parse import urljoin, urlsplit
 import httpx
 
 from wappa.domain.interfaces.conversation_capabilities import (
-    IAttachmentMediaReader,
     MediaBytes,
     ReadOutcome,
     ReadResult,
@@ -105,8 +104,13 @@ def is_allowed_cdn_host(host: str | None) -> bool:
     return any(host == s or host.endswith("." + s) for s in ALLOWED_CDN_SUFFIXES)
 
 
-class InstagramAttachmentReader(IAttachmentMediaReader):
-    """Download provider-exposed attachment bytes without credentials."""
+class InstagramAttachmentReader:
+    """Download provider-exposed attachment bytes without credentials.
+
+    Private to ``InstagramMediaLibrary.download``: never sends Platform
+    credentials, only fetches https Meta CDN hosts, and bounds redirects, time
+    and size.
+    """
 
     def __init__(
         self,
@@ -223,25 +227,5 @@ class InstagramAttachmentReader(IAttachmentMediaReader):
                 error="attachment download interrupted",
                 error_code="TRANSPORT",
             )
-        finally:
-            await response.aclose()
-
-    async def stream(
-        self, url: str, *, max_bytes: int | None = None, chunk_size: int = 65536
-    ) -> AsyncIterator[bytes]:
-        """Yield bounded chunks; raises ``ValueError`` for rejected sources."""
-        limit = max_bytes or self._default_max
-        response, problem = await self._open(url)
-        if response is None:
-            raise ValueError(problem or "attachment source rejected")
-        try:
-            if not response.is_success:
-                raise ValueError(f"attachment source returned {response.status_code}")
-            size = 0
-            async for chunk in response.aiter_bytes(chunk_size):
-                size += len(chunk)
-                if size > limit:
-                    raise ValueError(f"attachment exceeds {limit} bytes")
-                yield chunk
         finally:
             await response.aclose()

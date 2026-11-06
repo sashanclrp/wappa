@@ -172,7 +172,7 @@ Host's process_message():
 │  WhatsAppMessenger (IMessenger) │
 │                                 │
 │  Delegates to typed handlers:   │
-│  - IMediaHandler                │
+│  - WhatsAppMediaHandler         │
 │  - IInteractiveHandler          │
 │  - ITemplateHandler             │
 │  - ISpecializedHandler          │
@@ -312,7 +312,7 @@ Event lanes beyond message/status/error/system (message updates, comments, menti
 | `wappa/messaging/instagram/messenger.py` | `IMessenger` facade: maps the shared contract (`mark_as_read`, button/list/CTA messages, carousels, captions as follow-up text, location/contact as text, sticker as image) onto Instagram APIs, PrivateReply, local limit checks, capability lookup. |
 | `wappa/messaging/instagram/media_library.py` | `IMediaLibrary`: reusable `message_attachments` upload (attachment_id) and CDN download through the attachment reader. |
 | `wappa/messaging/instagram/content.py` | `ICommentControls` (including public `reply_comment`) and `IConversationContentReader` (Focused Capabilities). |
-| `wappa/messaging/instagram/media.py` | Media rules and the credential-free, host-restricted `IAttachmentMediaReader`. |
+| `wappa/messaging/instagram/media.py` | Media rules and the credential-free, host-restricted `InstagramAttachmentReader`, private to `InstagramMediaLibrary.download`. |
 | `wappa/connections/contract.py` | `IInboxConnector` (ADR-0017): begin / complete / activate / disconnect, grant, readiness and activation results. |
 | `wappa/connections/meta_login.py` | Meta Business Login core shared by both Meta connectors: state binding, code exchange, `debug_token`, `signed_request`. |
 | `wappa/connections/instagram.py` | `InstagramConnector` (Unified Login discovery, field subscriptions); the Host owns routes, intent storage and commit. |

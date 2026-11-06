@@ -3,7 +3,10 @@
 - ``upload``: ``POST /{ig}/message_attachments`` with ``is_reusable`` →
   ``attachment_id`` (send it with ``send_image(attachment_id, ...)`` etc.).
 - ``download``: the attachment URL Instagram delivered, fetched without
-  credentials from allowed Meta CDN hosts.
+  credentials from allowed Meta CDN hosts, bounded by ``max_bytes``.
+
+``mime_type`` on ``upload`` is ignored: Instagram's rules key off the file
+suffix.
 """
 
 from __future__ import annotations
@@ -31,7 +34,10 @@ class InstagramMediaLibrary(IMediaLibrary):
         self._graph = graph
         self._reader = reader
 
-    async def upload(self, source: Path, family: MediaFamily) -> UploadResult:
+    async def upload(
+        self, source: Path, family: MediaFamily, *, mime_type: str | None = None
+    ) -> UploadResult:
+        _ = mime_type  # Instagram's rules key off the file suffix
         rule = validate_local_file(source, family.value)
         message = {
             "attachment": {"type": rule.wire_type, "payload": {"is_reusable": True}}
@@ -65,8 +71,10 @@ class InstagramMediaLibrary(IMediaLibrary):
             platform_response=response.body or None,
         )
 
-    async def download(self, media_id: str) -> ReadResult[MediaBytes]:
-        return await self._reader.get_bytes(media_id)
+    async def download(
+        self, media_id: str, *, max_bytes: int | None = None
+    ) -> ReadResult[MediaBytes]:
+        return await self._reader.get_bytes(media_id, max_bytes=max_bytes)
 
 
 __all__ = ["InstagramMediaLibrary"]

@@ -1,7 +1,9 @@
 """WhatsApp Media Library over the Cloud API Media endpoints.
 
-``upload`` returns a Media ID (send it with ``send_image(media_id, ...)``);
-``download`` resolves an inbound Media ID and returns its bytes.
+``upload`` returns a Media ID (send it with ``send_image(media_id, ...)``) and
+passes ``mime_type`` to the Media API; ``download`` resolves an inbound Media
+ID and returns its bytes, bounded by ``max_bytes`` and the WhatsApp per-type
+limit.
 """
 
 from __future__ import annotations
@@ -33,9 +35,11 @@ class WhatsAppMediaLibrary(IMediaLibrary):
         self._handler = media_handler
         self._inbox_id = inbox_id
 
-    async def upload(self, source: Path, family: MediaFamily) -> UploadResult:
-        _ = family  # WhatsApp infers the media type from the file
-        result = await self._handler.upload_media(source)
+    async def upload(
+        self, source: Path, family: MediaFamily, *, mime_type: str | None = None
+    ) -> UploadResult:
+        _ = family  # WhatsApp takes the MIME type, inferred from the file if None
+        result = await self._handler.upload_media(source, media_type=mime_type)
         if result.success and result.media_id:
             return UploadResult(
                 outcome=OperationOutcome.ACCEPTED,
@@ -51,8 +55,10 @@ class WhatsAppMediaLibrary(IMediaLibrary):
             error_code=result.error_code,
         )
 
-    async def download(self, media_id: str) -> ReadResult[MediaBytes]:
-        result = await self._handler.get_media_as_bytes(media_id)
+    async def download(
+        self, media_id: str, *, max_bytes: int | None = None
+    ) -> ReadResult[MediaBytes]:
+        result = await self._handler.get_media_as_bytes(media_id, max_bytes=max_bytes)
         if result.success and result.file_data is not None:
             return ReadResult(
                 outcome=ReadOutcome.FOUND,
@@ -63,11 +69,35 @@ class WhatsAppMediaLibrary(IMediaLibrary):
                     source_host="graph.facebook.com",
                 ),
             )
+        if result.error_code == "FILE_SIZE_EXCEEDED":
+            return ReadResult(
+                outcome=ReadOutcome.REJECTED, error=result.error, error_code="SIZE"
+            )
         return ReadResult(
-            outcome=ReadOutcome.UNAVAILABLE,
+            outcome=_failure_outcome(result.error_code),
             error=result.error or "WhatsApp media download failed",
             error_code=result.error_code,
         )
+
+
+# A Media ID Graph rejects (400/404), an info answer without a URL, or a CDN 404
+# is gone for good; callers must not retry it as an outage. A 401/403 from Graph
+# or the CDN is ACCESS_DENIED. Timeouts, 5xx and transport errors (including
+# MEDIA_INFO_FAILED) stay UNAVAILABLE.
+_NOT_FOUND_CODES = frozenset(
+    {"INVALID_RESPONSE", "MEDIA_URL_MISSING", "HTTP_400", "HTTP_404"}
+)
+_ACCESS_DENIED_CODES = frozenset({"HTTP_401", "HTTP_403"})
+
+
+def _failure_outcome(error_code: str | None) -> ReadOutcome:
+    if error_code in _NOT_FOUND_CODES:
+        return ReadOutcome.NOT_FOUND
+    if error_code in _ACCESS_DENIED_CODES:
+        return ReadOutcome.ACCESS_DENIED
+    if error_code is not None and error_code.startswith("HTTP_4"):
+        return ReadOutcome.REJECTED
+    return ReadOutcome.UNAVAILABLE
 
 
 __all__ = ["WhatsAppMediaLibrary"]

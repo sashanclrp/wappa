@@ -10,7 +10,6 @@ from typing import Any, BinaryIO
 import httpx
 
 from wappa.core.logging.logger import get_logger
-from wappa.domain.interfaces.media_interface import IMediaHandler
 from wappa.domain.models.media_result import (
     MediaDeleteResult,
     MediaDownloadResult,
@@ -22,8 +21,13 @@ from wappa.messaging.whatsapp.models.media_models import MediaType
 from wappa.schemas.core.types import PlatformType
 
 
-class WhatsAppMediaHandler(IMediaHandler):
-    """WhatsApp implementation of the media handler interface."""
+class WhatsAppMediaHandler:
+    """WhatsApp Media API: upload, info, download, stream, delete and limits.
+
+    WhatsApp-only extension surface (``WhatsAppMessenger.media_handler``).
+    The shared HandlingMedia seam is ``IMediaLibrary``; ``WhatsAppMediaLibrary``
+    wraps this class.
+    """
 
     def __init__(
         self,
@@ -357,6 +361,16 @@ class WhatsAppMediaHandler(IMediaHandler):
                 inbox_id=self._inbox_id,
             )
 
+        except httpx.HTTPStatusError as e:
+            # Keep Graph's status so a caller can tell an unknown Media ID
+            # (400/404) or a refused token (401/403) from an outage (5xx).
+            self.logger.warning(f"Media info for ID {media_id} failed: {e}")
+            return MediaInfoResult(
+                success=False,
+                error=str(e),
+                error_code=f"HTTP_{e.response.status_code}",
+                inbox_id=self._inbox_id,
+            )
         except Exception as e:
             self.logger.exception(f"Error getting info for media ID {media_id}: {e}")
             return MediaInfoResult(
@@ -374,14 +388,16 @@ class WhatsAppMediaHandler(IMediaHandler):
         use_tempfile: bool = False,
         temp_suffix: str | None = None,
         auto_cleanup: bool = True,
+        max_bytes: int | None = None,
     ) -> MediaDownloadResult:
+        """Download media by ID; ``max_bytes`` lowers the per-type size limit."""
         try:
             media_info_result = await self.get_media_info(media_id)
             if not media_info_result.success:
                 return MediaDownloadResult(
                     success=False,
                     error=f"Failed to get media URL for ID {media_id}: {media_info_result.error}",
-                    error_code="MEDIA_INFO_FAILED",
+                    error_code=_info_failure_code(media_info_result.error_code),
                     inbox_id=self._inbox_id,
                 )
 
@@ -418,8 +434,10 @@ class WhatsAppMediaHandler(IMediaHandler):
                 except ValueError:
                     content_length = 0
 
-                if not self.validate_file_size(content_length, response_content_type):
-                    max_size = self._get_max_size_for_mime_type(response_content_type)
+                max_size = self._get_max_size_for_mime_type(response_content_type)
+                if max_bytes is not None:
+                    max_size = min(max_size, max_bytes)
+                if content_length > max_size:
                     return MediaDownloadResult(
                         success=False,
                         error=f"Media file size ({content_length} bytes) exceeds max allowed ({max_size} bytes) for type {response_content_type}",
@@ -429,7 +447,6 @@ class WhatsAppMediaHandler(IMediaHandler):
 
                 data = bytearray()
                 downloaded_size = 0
-                max_size = self._get_max_size_for_mime_type(response_content_type)
 
                 async for chunk in response.aiter_bytes(8192):
                     if chunk:
@@ -538,10 +555,15 @@ class WhatsAppMediaHandler(IMediaHandler):
         finally:
             result._cleanup_temp_file()
 
-    async def get_media_as_bytes(self, media_id: str) -> MediaDownloadResult:
+    async def get_media_as_bytes(
+        self, media_id: str, *, max_bytes: int | None = None
+    ) -> MediaDownloadResult:
         """Download media as bytes without writing to the file system."""
         return await self.download_media(
-            media_id=media_id, destination_path=None, use_tempfile=False
+            media_id=media_id,
+            destination_path=None,
+            use_tempfile=False,
+            max_bytes=max_bytes,
         )
 
     async def stream_media(
@@ -654,3 +676,13 @@ class WhatsAppMediaHandler(IMediaHandler):
             "video/3gpp": ".3gp",
             "video/mp4": ".mp4",
         }
+
+
+def _info_failure_code(info_error_code: str | None) -> str:
+    """Keep a media-info failure's cause: Graph's ``HTTP_<status>`` or a URL-less
+    answer pass through; a timeout or transport error is ``MEDIA_INFO_FAILED``."""
+    if info_error_code is not None and (
+        info_error_code.startswith("HTTP_") or info_error_code == "INVALID_RESPONSE"
+    ):
+        return info_error_code
+    return "MEDIA_INFO_FAILED"

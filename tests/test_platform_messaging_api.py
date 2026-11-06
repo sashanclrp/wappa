@@ -9,6 +9,7 @@ cannot perform answers 501.
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -277,6 +278,7 @@ def test_openapi_documents_the_platform_path_parameter() -> None:
 from wappa.domain.interfaces.conversation_capabilities import (  # noqa: E402
     ICommentControls,
     IConversationContentReader,
+    MediaBytes,
     PostContent,
     ReadOutcome,
     ReadResult,
@@ -285,12 +287,14 @@ from wappa.domain.interfaces.media_library import (  # noqa: E402
     IMediaLibrary,
     UploadResult,
 )
+from wappa.domain.models.media_result import MediaDownloadResult  # noqa: E402
 from wappa.domain.results import (  # noqa: E402
     CommentControlOperation,
     CommentResult,
     ControlResult,
     OperationOutcome,
 )
+from wappa.messaging.whatsapp.media_library import WhatsAppMediaLibrary  # noqa: E402
 
 
 class _Controls:
@@ -336,16 +340,45 @@ class _Reader:
 
 
 class _Library:
-    def __init__(self) -> None:
-        self.uploaded: list[tuple[str, str, bytes]] = []
+    def __init__(
+        self, platform: PlatformType = PlatformType.INSTAGRAM, inbox_id: str = IG_INBOX
+    ) -> None:
+        self.platform = platform
+        self.inbox_id = inbox_id
+        self.uploaded: list[tuple[str, str, bytes, str | None]] = []
+        self.downloads: list[tuple[str, int | None]] = []
 
-    async def upload(self, source: Any, family: Any) -> UploadResult:
-        self.uploaded.append((source.name, family.value, source.read_bytes()))
+    async def upload(
+        self, source: Any, family: Any, *, mime_type: str | None = None
+    ) -> UploadResult:
+        self.uploaded.append(
+            (source.name, family.value, source.read_bytes(), mime_type)
+        )
         return UploadResult(
             outcome=OperationOutcome.ACCEPTED,
-            platform=PlatformType.INSTAGRAM,
-            inbox_id=IG_INBOX,
+            platform=self.platform,
+            inbox_id=self.inbox_id,
             media_id="att-1",
+        )
+
+    async def download(
+        self, media_id: str, *, max_bytes: int | None = None
+    ) -> ReadResult[MediaBytes]:
+        self.downloads.append((media_id, max_bytes))
+        if "expired" in media_id:
+            return ReadResult(outcome=ReadOutcome.NOT_FOUND, error="expired")
+        if "big" in media_id:
+            return ReadResult(
+                outcome=ReadOutcome.REJECTED, error="too big", error_code="SIZE"
+            )
+        return ReadResult(
+            outcome=ReadOutcome.FOUND,
+            value=MediaBytes(
+                content=b"png-bytes",
+                content_type="image/png",
+                size=9,
+                source_host="lookaside.fbsbx.com",
+            ),
         )
 
 
@@ -457,7 +490,86 @@ def test_media_upload_uses_the_instagram_media_library() -> None:
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["media_id"] == "att-1" and body["platform"] == "instagram"
-    assert caps[IMediaLibrary].uploaded == [("menu.png", "image", b"png-bytes")]
+    assert caps[IMediaLibrary].uploaded == [
+        ("menu.png", "image", b"png-bytes", "image/png")
+    ]
+
+
+def test_whatsapp_media_upload_goes_through_the_media_library() -> None:
+    """No Platform branch: WhatsApp uploads through IMediaLibrary too."""
+    app, _, runtime = _app()
+    wa = InboxRef.whatsapp(WA_INBOX)
+    library = _Library(PlatformType.WHATSAPP, WA_INBOX)
+    runtime.messengers[wa] = _Messenger(wa)
+    runtime.messengers[wa].capability = {IMediaLibrary: library}.get  # type: ignore[attr-defined]
+
+    response = TestClient(app).post(
+        "/api/whatsapp/media/upload",
+        files={"file": ("voice.ogg", b"ogg-bytes", "application/octet-stream")},
+        data={"media_type": "audio/ogg"},
+        headers={INBOX_ID_HEADER: WA_INBOX},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["platform"] == "whatsapp"
+    assert library.uploaded == [("voice.ogg", "audio", b"ogg-bytes", "audio/ogg")]
+
+
+def test_media_download_serves_the_instagram_attachment() -> None:
+    app, _, runtime = _app()
+    caps = _with_instagram_capabilities(runtime)
+    client = TestClient(app)
+    url = "https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1&signature=x"
+    encoded = url.replace(":", "%3A").replace("?", "%3F").replace("&", "%26")
+
+    found = client.get(f"/api/instagram/media/download/{encoded}", headers=IG_HEADERS)
+    expired = client.get("/api/instagram/media/download/expired", headers=IG_HEADERS)
+    big = client.get("/api/instagram/media/download/big", headers=IG_HEADERS)
+
+    assert found.status_code == 200, found.text
+    assert found.content == b"png-bytes"
+    assert found.headers["content-type"] == "image/png"
+    assert caps[IMediaLibrary].downloads[0] == (url, None)
+    assert expired.status_code == 404 and big.status_code == 413
+
+
+def test_whatsapp_download_of_a_dead_media_id_answers_404() -> None:
+    app, _, runtime = _app()
+    wa = InboxRef.whatsapp(WA_INBOX)
+    handler = MagicMock()
+    handler.get_media_as_bytes = AsyncMock(
+        return_value=MediaDownloadResult(
+            success=False, error="unknown media", error_code="HTTP_400"
+        )
+    )
+    library = WhatsAppMediaLibrary(handler, WA_INBOX)
+    runtime.messengers[wa] = _Messenger(wa)
+    runtime.messengers[wa].capability = {IMediaLibrary: library}.get  # type: ignore[attr-defined]
+
+    response = TestClient(app).get(
+        "/api/whatsapp/media/download/dead", headers={INBOX_ID_HEADER: WA_INBOX}
+    )
+
+    assert response.status_code == 404
+
+
+def test_media_routes_are_501_without_a_media_library() -> None:
+    app, _, runtime = _app()
+    wa = InboxRef.whatsapp(WA_INBOX)
+    runtime.messengers[wa] = _Messenger(wa)
+    runtime.messengers[wa].capability = lambda kind: None  # type: ignore[attr-defined]
+    client = TestClient(app)
+    headers = {INBOX_ID_HEADER: WA_INBOX}
+
+    download = client.get("/api/whatsapp/media/download/123", headers=headers)
+    upload = client.post(
+        "/api/whatsapp/media/upload",
+        files={"file": ("a.png", b"x", "image/png")},
+        headers=headers,
+    )
+
+    assert download.status_code == upload.status_code == 501
+    assert download.json()["detail"] == "whatsapp does not provide IMediaLibrary"
 
 
 @pytest.mark.parametrize(

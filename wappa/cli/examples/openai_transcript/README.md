@@ -1,11 +1,11 @@
 # OpenAI Transcription Example
 
-Transcribes WhatsApp voice notes with OpenAI Whisper and replies with the text. It is the smallest example that downloads media, so it is the one to copy when your handler needs the bytes of an inbound file rather than just its ID.
+Transcribes voice notes (WhatsApp or Instagram) with OpenAI and replies with the text. It is the smallest example that downloads media, so it is the one to copy when your handler needs the bytes of an inbound file rather than just its ID.
 
 ## What it demonstrates
 
-- Downloading inbound media through `messenger.media_handler.download_media_tempfile(media_id)`, an async context manager that cleans the temporary file up for you
-- Narrowing a webhook to a concrete message type (`WhatsAppAudioMessage`) before touching Platform-specific fields
+- Downloading inbound media through the shared `IMediaLibrary` capability: `messenger.require_capability(IMediaLibrary).download(webhook.message.media_id)` returns a `ReadResult[MediaBytes]` on every Platform, with the bytes in memory
+- Narrowing a webhook to the neutral `BaseAudioMessage` type before reading `media_id`
 - Calling a third-party async API (`AsyncOpenAI`) from inside an event handler
 - `mark_as_read()` as an immediate acknowledgement while slower work continues
 
@@ -44,7 +44,7 @@ Point the Meta callback at `https://<your-host>/webhook/inboxes/whatsapp` — th
 | Path | Role |
 |---|---|
 | `app/main.py` | Builds the `Wappa` app and registers the handler |
-| `app/master_event.py` | `TranscriptEventHandler` — downloads the audio, transcribes it, replies |
+| `app/master_event.py` | `TranscriptEventHandler` — downloads the audio through `IMediaLibrary`, transcribes it, replies |
 | `app/openai_utils/audio_processing.py` | `AudioProcessingService` wrapper around the Whisper call |
 
 ## Notes

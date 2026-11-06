@@ -143,10 +143,7 @@ reply loops.
 
 ## Focused capabilities
 
-`IMessenger.capability(kind)` / `require_capability(kind)` return optional, Inbox-bound capabilities: `IMediaLibrary` (WhatsApp and Instagram, above), `ITemplateMessaging` (WhatsApp Templates), and for Instagram-only actions `ICommentControls` (`reply_comment`, hide/unhide/delete, enable/disable comments on media), `IConversationContentReader` (post,
-comment, comments/replies pages) and `IAttachmentMediaReader` (bounded,
-credential-free CDN downloads; prefer `IMediaLibrary.download`). Custom `IMessenger` implementations inherit a
-`None` default; `MessengerPipeline` delegates to the raw Messenger.
+`IMessenger.capability(kind)` / `require_capability(kind)` return optional, Inbox-bound capabilities: `IMediaLibrary` (WhatsApp and Instagram, above), `ITemplateMessaging` (WhatsApp Templates), and for Instagram-only actions `ICommentControls` (`reply_comment`, hide/unhide/delete, enable/disable comments on media), `IConversationContentReader` (post, comment, comments/replies pages). Bounded, credential-free CDN downloads are `IMediaLibrary.download(media_id, max_bytes=...)`; the Instagram-only `IAttachmentMediaReader` capability was removed in 0.34. Custom `IMessenger` implementations inherit a `None` default; `MessengerPipeline` delegates to the raw Messenger.
 
 ## Trusted credential access (Symphonai migration)
 

@@ -17,14 +17,18 @@ Router configuration:
 - Full URL: /api/whatsapp/media/
 """
 
-from collections.abc import Iterator
-
 from fastapi import Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
-from wappa.api.dependencies.inbox_context import get_inbox_messenger
-from wappa.api.dependencies.media_transfer import MediaUploader, get_media_uploader
+from wappa.api.dependencies.inbox_context import (
+    get_inbox_messenger,
+    requires_capability,
+)
+from wappa.api.dependencies.media_transfer import (
+    LibraryMediaUploader,
+    get_media_uploader,
+)
 from wappa.api.dependencies.whatsapp_dependencies import (
     get_whatsapp_media_handler,
     get_whatsapp_media_payloads,
@@ -32,7 +36,8 @@ from wappa.api.dependencies.whatsapp_dependencies import (
 from wappa.api.routes.whatsapp.route_families import RouteFamily
 from wappa.api.utils import direct_target, dispatch_message_event, map_send_errors
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
-from wappa.domain.interfaces.media_interface import IMediaHandler
+from wappa.domain.interfaces.conversation_capabilities import ReadOutcome
+from wappa.domain.interfaces.media_library import IMediaLibrary
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.models.media_result import (
     MediaDeleteResult,
@@ -40,6 +45,9 @@ from wappa.domain.models.media_result import (
     MediaUploadResult,
 )
 from wappa.domain.results import MessageResult
+from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
+    WhatsAppMediaHandler,
+)
 from wappa.messaging.whatsapp.models.media_models import (
     AudioMessage,
     DocumentMessage,
@@ -75,9 +83,9 @@ router = _family.router()  # reads: download, info, limits
     response_model=MediaUploadResult,
     summary="Upload Media",
     description=(
-        "Upload a media file and get a media ID for sending. WhatsApp: Media API "
-        "(`media_type` honoured). Instagram: `message_attachments` via the "
-        "Inbox's IMediaLibrary (image png/jpeg/gif, audio, video, pdf). A "
+        "Upload a media file through the Inbox's IMediaLibrary and get a media "
+        "ID for sending. WhatsApp: Media API (`media_type` honoured). Instagram: "
+        "`message_attachments` (image png/jpeg/gif, audio, video, pdf). A "
         "Platform without a media library answers 501."
     ),
 )
@@ -87,7 +95,7 @@ async def upload_media(
     media_type: str | None = Form(
         None, description="MIME type (auto-detected if not provided)"
     ),
-    media_handler: MediaUploader = Depends(get_media_uploader),
+    media_handler: LibraryMediaUploader = Depends(get_media_uploader),
 ) -> MediaUploadResult:
     """Upload media for the selected Inbox (any Platform with a media library).
 
@@ -254,7 +262,8 @@ async def send_sticker_message(
     description="Retrieve media information including URL, MIME type, and file size",
 )
 async def get_media_info(
-    media_id: str, media_handler: IMediaHandler = Depends(get_whatsapp_media_handler)
+    media_id: str,
+    media_handler: WhatsAppMediaHandler = Depends(get_whatsapp_media_handler),
 ) -> MediaInfoResult:
     """Get media information by ID.
 
@@ -280,77 +289,51 @@ async def get_media_info(
         ) from e
 
 
+_DOWNLOAD_STATUS = {
+    ReadOutcome.NOT_FOUND: 404,
+    ReadOutcome.ACCESS_DENIED: 403,
+    ReadOutcome.REJECTED: 400,
+    ReadOutcome.UNAVAILABLE: 503,
+}
+_EXTENSIONS = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "video/mp4": ".mp4",
+    "audio/mpeg": ".mp3",
+    "application/pdf": ".pdf",
+}
+
+
 @router.get(
-    "/download/{media_id}",
+    "/download/{media_id:path}",
     summary="Download Media",
     description=(
-        "Download WhatsApp media by ID (Media API). Instagram attachment URLs are "
-        "public CDN links: fetch them directly. Other Platforms answer 501."
+        "Download inbound media through the Inbox's IMediaLibrary. Pass the "
+        "webhook's `media_id` unchanged, URL-encoded: a Media ID on WhatsApp, "
+        "the attachment URL on Instagram (fetched without credentials from Meta "
+        "CDN hosts). A Platform without a media library answers 501."
     ),
 )
 async def download_media(
-    media_id: str, media_handler: IMediaHandler = Depends(get_whatsapp_media_handler)
-) -> StreamingResponse:
-    """Download media by ID as streaming response.
-
-    Returns media file as streaming download with appropriate headers.
-    """
-    try:
-        # Get media info first for headers
-        info_result = await media_handler.get_media_info(media_id)
-        if not info_result.success:
-            if "not found" in (info_result.error or "").lower():
-                raise HTTPException(status_code=404, detail=info_result.error)
-            else:
-                raise HTTPException(status_code=400, detail=info_result.error)
-
-        # Download media
-        download_result = await media_handler.download_media(media_id)
-        if not download_result.success:
-            raise HTTPException(status_code=400, detail=download_result.error)
-
-        # Create streaming response
-        if download_result.file_data is None:
-            raise HTTPException(
-                status_code=500, detail="Media download returned no data"
-            )
-        file_data = download_result.file_data
-
-        def generate_content() -> Iterator[bytes]:
-            yield file_data
-
-        # Determine filename
-        filename = f"media_{media_id}"
-        if download_result.mime_type:
-            # Simple extension mapping
-            ext_map = {
-                "image/jpeg": ".jpg",
-                "image/png": ".png",
-                "video/mp4": ".mp4",
-                "audio/mpeg": ".mp3",
-                "application/pdf": ".pdf",
-            }
-            if download_result.mime_type in ext_map:
-                filename += ext_map[download_result.mime_type]
-
-        return StreamingResponse(
-            generate_content(),
-            media_type=download_result.mime_type or "application/octet-stream",
-            headers={
-                "Content-Disposition": f"attachment; filename={filename}",
-                "Content-Length": str(download_result.file_size)
-                if download_result.file_size
-                else "",
-            },
-        )
-
-    except HTTPException:
-        raise
-    except Exception as e:
+    media_id: str,
+    library: IMediaLibrary = Depends(requires_capability(IMediaLibrary)),
+) -> Response:
+    """Download media by ID; ``Content-Type`` comes from ``MediaBytes``."""
+    result = await library.download(media_id)
+    if not result.found or result.value is None:
+        status = 413 if result.error_code == "SIZE" else None
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to download media_id '{media_id}': {type(e).__name__}: {e}",
-        ) from e
+            status_code=status or _DOWNLOAD_STATUS.get(result.outcome, 502),
+            detail=result.error or result.outcome.value,
+        )
+    media = result.value
+    stem = "media" if "://" in media_id else f"media_{media_id}"
+    filename = stem + _EXTENSIONS.get(media.content_type or "", "")
+    return Response(
+        content=media.content,
+        media_type=media.content_type or "application/octet-stream",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @management_router.delete(
@@ -360,7 +343,8 @@ async def download_media(
     description="Delete media from WhatsApp servers",
 )
 async def delete_media(
-    media_id: str, media_handler: IMediaHandler = Depends(get_whatsapp_media_handler)
+    media_id: str,
+    media_handler: WhatsAppMediaHandler = Depends(get_whatsapp_media_handler),
 ) -> MediaDeleteResult:
     """Delete media by ID.
 

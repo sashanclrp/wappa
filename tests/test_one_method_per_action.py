@@ -50,8 +50,10 @@ class _Media:
     def __init__(self, result: MediaDownloadResult) -> None:
         self.result = result
 
-    async def get_media_as_bytes(self, media_id: str) -> MediaDownloadResult:
-        assert media_id == "wa-media-1"
+    async def get_media_as_bytes(
+        self, media_id: str, *, max_bytes: int | None = None
+    ) -> MediaDownloadResult:
+        assert media_id == "wa-media-1" and max_bytes is None
         return self.result
 
 
@@ -190,7 +192,7 @@ class _Uploads:
     def __init__(self) -> None:
         self.paths: list = []
 
-    async def upload_media(self, path):
+    async def upload_media(self, path, media_type=None):
         from wappa.domain.models.media_result import MediaUploadResult
 
         self.paths.append(path)

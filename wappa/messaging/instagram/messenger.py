@@ -47,7 +47,6 @@ from wappa.domain.interactive import (
     UrlButton,
 )
 from wappa.domain.interfaces.conversation_capabilities import (
-    IAttachmentMediaReader,
     ICommentControls,
     IConversationContentReader,
 )
@@ -209,15 +208,16 @@ class InstagramMessenger(IMessenger):
             graph_api_version=graph_api_version,
             graph_base_url=graph_base_url,
         )
-        self._attachments = InstagramAttachmentReader(
-            media_download_client_provider or session_provider
+        self._media = InstagramMediaLibrary(
+            self._graph,
+            InstagramAttachmentReader(
+                media_download_client_provider or session_provider
+            ),
         )
-        self._media = InstagramMediaLibrary(self._graph, self._attachments)
         # Instagram-only actions (ADR-0016 exceptions), capability-gated.
         self._capabilities = {
             ICommentControls: InstagramCommentControls(self._graph),
             IConversationContentReader: InstagramContentReader(self._graph),
-            IAttachmentMediaReader: self._attachments,
             IMediaLibrary: self._media,
             IConversationHistoryReader: InstagramHistoryReader(self._graph),
         }

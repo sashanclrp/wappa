@@ -38,7 +38,6 @@ from wappa.domain.interactive import (
 from wappa.domain.interfaces.conversation_capabilities import (
     CommentContent,
     ContentPage,
-    IAttachmentMediaReader,
     ICommentControls,
     IConversationContentReader,
     MediaBytes,
@@ -144,7 +143,6 @@ __all__ = [
     # Optional focused capabilities (IMessenger.capability(kind))
     "ICommentControls",
     "IConversationContentReader",
-    "IAttachmentMediaReader",
     "ITemplateMessaging",
     "IConversationHistoryReader",
     "HistoryPage",

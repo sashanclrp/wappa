@@ -45,6 +45,7 @@ from wappa.messaging import (
     UnsupportedOperationError,
 )
 from wappa.messaging.instagram.media import InstagramAttachmentReader
+from wappa.messaging.instagram.media_library import InstagramMediaLibrary
 from wappa.messaging.instagram.messenger import InstagramMessenger
 from wappa.platforms import BUILTIN_FIELDS, build_platforms
 from wappa.processors.instagram_processor import InstagramWebhookProcessor
@@ -1110,14 +1111,15 @@ async def test_attachment_reader_is_bounded_and_credential_free():
         third_party = await reader.get_bytes("https://evil.example/a.png")
         redirected = await reader.get_bytes(CDN + "&redirect=1")
         expired = await reader.get_bytes(CDN + "&expired=1")
-        big = await reader.get_bytes(CDN + "&big=1", max_bytes=1024)
-        chunks = [c async for c in reader.stream(CDN)]
+        library = InstagramMediaLibrary(None, reader)  # type: ignore[arg-type]
+        big = await library.download(CDN + "&big=1", max_bytes=1024)
+        default = await library.download(CDN + "&big=1")
     assert ok.found and ok.value.content_type == "image/png" and ok.value.size == 9
     assert third_party.outcome is ReadOutcome.REJECTED
     assert redirected.outcome is ReadOutcome.REJECTED
     assert expired.outcome is ReadOutcome.NOT_FOUND
     assert big.outcome is ReadOutcome.REJECTED and big.error_code == "SIZE"
-    assert b"".join(chunks) == b"\x89PNG data"
+    assert default.found and default.value.size == 2048
     assert all("authorization" not in r.headers for r in seen)
     assert all(r.url.host != "evil.example" for r in seen)
 

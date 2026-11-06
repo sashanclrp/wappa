@@ -34,7 +34,7 @@
   Applications and forbidden from the Template transport request.
 - Whether a classified send is *permitted*. `classify_outbound_payload` names
   transport shape; admission is a Host Application decision.
-- `IMediaHandler` and `IMessenger` abstract contracts — defined in `wappa/domain/interfaces/`.
+- `IMessenger` and `IMediaLibrary` abstract contracts — defined in `wappa/domain/interfaces/`. `IMediaLibrary` is the only media interface.
 
 ## Module Structure
 
@@ -45,7 +45,7 @@ messaging/
   instagram/
     messenger.py                # InstagramMessenger: IMessenger impl, _OPERATIONS, capability lookup
     graph.py                    # Inbox-bound Graph HTTP + outcome classification
-    media.py                    # Instagram media rules + credential-free IAttachmentMediaReader
+    media.py                    # Instagram media rules + credential-free InstagramAttachmentReader (private)
     media_library.py            # IMediaLibrary: message_attachments upload, CDN download
     content.py                  # ICommentControls + IConversationContentReader
     history.py                  # IConversationHistoryReader (conversation message reads)
@@ -54,7 +54,7 @@ messaging/
     client/
       whatsapp_client.py          # HTTP session wrapper; WhatsAppUrlBuilder, WhatsAppManagementUrlBuilder
     handlers/
-      whatsapp_media_handler.py   # IMediaHandler impl: upload/download/stream/delete
+      whatsapp_media_handler.py   # WhatsApp Media API: upload/download/stream/delete
       whatsapp_interactive_handler.py  # Menus, CTA URLs, contact-info requests
       whatsapp_template_handler.py     # Text, media-header, location-header templates
       whatsapp_specialized_handler.py  # Contact cards, locations, location requests
@@ -95,7 +95,7 @@ One action touches this chain, in order. Each hop is a real edit or a deliberate
 | `IMessenger` (`wappa/domain/interfaces/messaging_interface.py`) | Abstract outbound messaging contract all platforms must implement. |
 | `WhatsAppMessenger` | Facade implementing `IMessenger`. Delegates each message family to the appropriate handler; owns media-source resolution logic. |
 | `WhatsAppClient` | Single httpx session per inbox. Holds `phone_number_id` (= `inbox_id`). Used by all handlers and the template info service. |
-| `WhatsAppMediaHandler` | Implements `IMediaHandler`. Handles all media upload paths and download paths; enforces WhatsApp MIME and size limits. |
+| `WhatsAppMediaHandler` | Concrete WhatsApp Media API client (no ABC) behind `WhatsAppMediaLibrary`, also reached as `WhatsAppMessenger.media_handler` for WhatsApp-only extras (info, delete, URL upload, tempfile, stream, limits). Enforces WhatsApp MIME and size limits. |
 | `WhatsAppInteractiveHandler` | Builds and validates interactive payloads; enforces WhatsApp character-count and structural limits inline before dispatch. |
 | `WhatsAppTemplateHandler` | Builds template component trees; resolves marketing vs. standard send URL via `_resolve_template_send_url`. |
 | `WhatsAppSpecializedHandler` | Sends contact cards, location pins, and location-request messages. |

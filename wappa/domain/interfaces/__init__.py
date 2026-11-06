@@ -11,7 +11,6 @@ from .external_webhook_context import (
     ResolvedExternalWebhookContext,
 )
 from .identity_resolver import IIdentityResolver, PassthroughIdentityResolver
-from .media_interface import IMediaHandler
 from .messaging_interface import IMessenger
 from .pubsub_interface import IPubSubPublisher, PubSubEventType
 from .session_provider import (
@@ -23,7 +22,6 @@ from .webhook_processor import IWebhookProcessor
 
 __all__ = [
     "IMessenger",
-    "IMediaHandler",
     # Identity resolution
     "IIdentityResolver",
     "PassthroughIdentityResolver",

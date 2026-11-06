@@ -31,7 +31,7 @@ Wappa's value is that a Host writes a conversation once and runs it on any conne
 | --- | --- | --- | --- |
 | Core (every Platform, adapted) | `IMessenger`: `send_text`, `send_image` / `send_video` / `send_audio` / `send_document`, `send_sticker`, `send_button_message`, `send_list_message`, `send_cta_message`, `send_carousel`, `send_location`, `send_contact`, `mark_as_read` | native | adapted (see rule 1) |
 | Core, WhatsApp-only today | `send_location_request`, `send_contact_request` | native | raises `UnsupportedOperationError`: a text prompt would not return the location or phone, so the meaning cannot be kept. Telegram has native equivalents. Hosts gate on `supported_operations`. |
-| Shared capability | `IMediaLibrary`: `upload(path, family) → media_id`, `download(media_id)` | Media API | `message_attachments` (reusable) + CDN reader |
+| Shared capability | `IMediaLibrary`: `upload(path, family, *, mime_type=None) → media_id`, `download(media_id, *, max_bytes=None)` (keywords added 2026-11, architecture hardening H-18) | Media API | `message_attachments` (reusable) + CDN reader |
 | Platform capability | `ITemplateMessaging`: text / media / location Templates | yes | — |
 | Platform capability | `ICommentControls`, `IConversationContentReader` | — | yes |
 | Inbound (one shape) | `InboundMessageWebhook` (text, media, selections), `StatusWebhook`, `SystemWebhook`, `CustomWebhook` | yes | yes |

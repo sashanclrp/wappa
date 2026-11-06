@@ -10,7 +10,6 @@ them — Wappa ships the mechanism only.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import AsyncIterator
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
@@ -157,28 +156,9 @@ class IConversationContentReader(ABC):
     ) -> ReadResult[ContentPage[CommentContent]]: ...
 
 
-class IAttachmentMediaReader(ABC):
-    """Bounded download of provider-exposed attachment/media URLs.
-
-    Implementations never attach Platform credentials to third-party hosts,
-    bound redirects/time/size, and return explicit unavailable outcomes.
-    """
-
-    @abstractmethod
-    async def get_bytes(
-        self, url: str, *, max_bytes: int | None = None
-    ) -> ReadResult[MediaBytes]: ...
-
-    @abstractmethod
-    def stream(
-        self, url: str, *, max_bytes: int | None = None, chunk_size: int = 65536
-    ) -> AsyncIterator[bytes]: ...
-
-
 __all__ = [
     "CommentContent",
     "ContentPage",
-    "IAttachmentMediaReader",
     "ICommentControls",
     "IConversationContentReader",
     "MediaBytes",
