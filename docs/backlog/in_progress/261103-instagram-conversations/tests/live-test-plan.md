@@ -144,9 +144,12 @@ Not covered: Instagram operator media (WhatsApp media IDs have no IG equivalent)
 
 ## Developer skills evidence
 
-- Lint: `lint_skill.py` normal and `--professional` report 0 errors and 0 warnings for all three skills. `--lanes` reports 0/0 for this repo and for a disposable `wappa init` output.
-- Deterministic tests: `tests/test_instagram_skills.py`. Every taught import exists, no code block uses `recipient=`, the isolation example runs, and emission never overwrites.
-- Fresh-agent evaluation (Claude Opus 5.5, Claude Code subagent, 2026-11-03). The agent ran the private-reply, stale-action/cancel and colliding-IDs/token eval prompts, and every assertion passed. It used `PrivateReply` and deferred the PDF until the User answered, used step-tagged payloads with cancel, and used scoped caches while refusing to cache the token. No other model or harness was evaluated, and the skill picker was not visually checked.
+Current set (2026-11-06, commit 49ca1f0): shipped `wappa-apps`, `wappa-conversational-scores`, `wappa-state-and-storage`, `wappa-host-integration`; maintainer `wappa-develop` and `bump-version`.
+
+- Lint: `lint_skill.py --professional` reports 0 errors and 0 warnings for all six skills; `--lanes .` reports 0/0.
+- Deterministic tests: `tests/test_shipped_skills.py` (was `test_instagram_skills.py`). Every taught import and `self.messenger` / `self.whatsapp` / `self.instagram` method exists, no code block uses `recipient=`, frontmatter names match folders, every reference is linked and every named sibling skill ships, the isolation example runs, and emission never overwrites. `tests/test_doc_claims.py` compiles every Python block and resolves every backticked path in the skills.
+- Fresh-agent evaluation (Claude Opus 5.5, Claude Code subagents, 2026-11-06), each restricted to the skill folders: (1) comments plus DMs with a video-header button menu on both Platforms, the WebM/WebP/OGG asset question, and a long text with name greeting; (2) a 14-service lead intake with Redis state, Postgres leads and confirmation-ID tracking; (3) a multi-tenant SaaS: connecting accounts, a CRM webhook, bearer auth, live dashboard events and a 24-hour window guard. Every core assertion held: no Platform branch for shared actions, comment logic in `process_comment`, `InteractiveHeader.of_video`, the unified media kit with renditions for voice notes, one `send_text` for the long policy, lists split to fit 10 rows / 20 characters, commit-then-`refresh_inbox`, a context resolver for the CRM, and Messenger middleware for the window. Their reported gaps were fixed in the same commit (the `wappa_parts` dict shape, `StatusWebhook` fields and Instagram's read watermark, an app skeleton, extra limits, the revoke order and token, registering Messenger middleware from a plugin). The agents' code was not executed; other models and harnesses were not evaluated, and the skill picker was not visually checked.
+- Open: the cron and expiry sections follow the committed `CronPlugin` / `ExpiryPlugin`; the uncommitted scheduling rework (ADR-0030) must update them in the same change.
 
 ## Results log
 
