@@ -103,7 +103,7 @@ In the runtime lanes, check that `self.messenger` (and `self.whatsapp` / `self.i
 
 Comment actions belong in `process_comment` / `process_mention`, conversation actions in `process_message`, edits in `process_message_update`, business echoes in `process_outbound_echo`; inside a lane that only one Platform emits (comments today), the Platform Messenger is always present. `IMessenger.resolve_platform_user_profile(webhook.user)` works in every lane: WhatsApp resolves from webhook evidence, Instagram adds a Graph lookup.
 
-**Order before Gate C.** Architecture hardening and ADR compliance fixes → Platform Messengers on the handler → Gate A re-run on the migrated lab (both Platforms) and the Media Adaptation phase 0 format matrix → **I08 skill refresh** to this Host shape → I07 Symphonai migration → Gate C.
+**Order before Gate C.** Architecture hardening and ADR compliance fixes → Platform Messengers on the handler → Gate A re-run on the migrated lab (both Platforms) and the Media Adaptation phase 0 format matrix → **I08 skill refresh** to this Host shape → I07 Symphonai migration → Gate C. Symphonai's APScheduler jobs should fire Wappa handlers through the [scheduler-agnostic cron lane](../../drafts/261106-mid-scheduler-agnostic-cron-lane.md) once it lands, instead of building Wappa context themselves.
 
 ## Code reality
 
