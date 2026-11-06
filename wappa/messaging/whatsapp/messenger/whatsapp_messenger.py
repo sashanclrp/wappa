@@ -698,8 +698,9 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
     ) -> MessageResult:
         """Interactive media carousel (2–10 cards, outside Templates).
 
-        Each card needs a ``header`` (image or video, by ``media_id`` or
-        ``url``); ``title`` + ``subtitle`` become the card body. Buttons are one
+        Each card needs a ``header`` (image or video, by public ``url`` only:
+        Meta documents carousel card headers as a ``link``, no Media ID);
+        ``title`` + ``subtitle`` become the card body. Buttons are one
         ``UrlButton`` or 1–2 ``ReplyButton`` and must match in kind and count
         across cards (Meta rule). A reply-button tap arrives as an interactive
         ``button_reply`` with the button ``id``.
