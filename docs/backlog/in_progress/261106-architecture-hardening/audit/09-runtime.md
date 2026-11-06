@@ -1,5 +1,8 @@
 # Multi-Inbox / multi-Platform runtime and composition root
 
+Status reviewed 2026-11-06: historical pre-hardening audit. Findings and file:line references below describe the audited baseline. Use the [plan status table](../plan.md#code-reality-2026-11-06) for implemented and remaining work; do not rebuild a resolved finding from this snapshot.
+
+
 ## Summary
 
 Verifier pass over the auditor's 9 findings for area 09. Multi-Inbox holds up. `InboxRef.cache_namespace` is Platform-qualified, the callback is one payload-routed route, routing proves membership before dispatch, and credentials are a discriminated union. Multi-Platform is not yet provable. The live runtime repeats the Platform set `{WHATSAPP, INSTAGRAM}` as an allow-list or an "Instagram, else WhatsApp" branch in about 9 places across 6 shared files, and `ARCHITECTURE.md:286-312` writes those edits up as the recipe for adding a Platform.
@@ -26,7 +29,7 @@ Deletion test: Deleting the scattered allow-lists today breaks each caller, so t
 
 Proposed fix: Add one composition-root module (for example `wappa/platforms.py`) holding `PLATFORMS: dict[PlatformType, PlatformEntry]`, with two entries. `PlatformEntry` is a frozen dataclass of lazily imported callables, not a new abstract hierarchy: `create_processor`, `route_payload`, `build_messenger`, `active_record` and `inactive_record` (the record classes), and `builtin_fields`. The controller, `ProcessorFactory`, `MessengerFactory`, `InboxCredentialService` and `field_registry` look entries up with `PLATFORMS[platform]`, and an unknown key fails loudly. The supported sets and `RoutePlatform`'s members come from `PLATFORMS.keys()`. The isinstance checks in `services.py:139` and `:298` become checks on the record's `status` discriminator, or a check against a `tuple` of record classes built from the table. Rewrite `ARCHITECTURE.md:301-311` to say "add one `PLATFORMS` entry plus the adapters". Connectors stay Host-composed (`IInboxConnector` instances are built by the Host, not looked up), so they do not go in the table.
 
-ADR conflict: none. ADR-0010 and ADR-0021 require a payload-routed callback and a `/api/{platform}` family, and say nothing about where the per-Platform choice lives. ADR-0011 expects the credential union to grow by one member per Platform, and table-driven record selection is consistent with that.
+ADR conflict: none. ADR-0023 and ADR-0024 require a payload-routed callback and a `/api/{platform}` family, and say nothing about where the per-Platform choice lives. ADR-0022 expects the credential union to grow by one member per Platform, and table-driven record selection is consistent with that.
 
 ### 09-2 WhatsApp-only shortcuts in the shared HTTP dependencies bypass capabilities that already exist
 
@@ -44,7 +47,7 @@ Deletion test: If the WhatsApp branch in `get_media_uploader` is deleted, `Libra
 
 Proposed fix: Delete the WhatsApp branch in `get_media_uploader`. If WhatsApp needs the explicit MIME type, let `WhatsAppMediaLibrary.upload` pass it through from `family`/the file, inside the adapter. Move WhatsApp client construction into `wappa/api/dependencies/whatsapp_dependencies.py`. This needs one neutral accessor on the context for the resolved credentials, so the private `_credentials` is not reached from outside. Replace the `whatsapp_only(...)` gate in `template_transport()` with the existing `requires_capability(ITemplateMessaging)` pattern. Keep `whatsapp_only` only for the routes that really have no capability (health, validators, limits). Do not add new capability interfaces.
 
-ADR conflict: none. This is what ADR-0009 (route capability groups) and ADR-0021 ask for, and the code's own comment says "Prefer requires_capability" (`inbox_context.py:97-98`).
+ADR conflict: none. This is what ADR-0024 (route capability groups) and ADR-0024 ask for, and the code's own comment says "Prefer requires_capability" (`inbox_context.py:97-98`).
 
 ### 09-3 Dead Platform scaffolding: Telegram/Teams branches, an unused capability table, and an unused schema-factory/detector stack
 
@@ -96,9 +99,9 @@ ADR conflict: none.
 - `wappa/core/inbound/webhook_routing.py` and `wappa/core/inbound/instagram_routing.py`: per-Platform payload routers. They are adapter modules and become the `route_payload` entries in the 09-1 table.
 - `wappa/processors/whatsapp_processor.py`, `wappa/processors/instagram_processor.py`, `wappa/messaging/whatsapp/**`, `wappa/messaging/instagram/**`: each adapter naming its own Platform is expected.
 - `wappa/connections/whatsapp.py:73`, `wappa/connections/instagram.py:226` implementing `IInboxConnector` (`wappa/connections/contract.py:175`): two adapters, a real seam. The Host composes connectors, so the runtime needs no connector registry.
-- `wappa/domain/inbox/credentials.py` `Literal[PlatformType.X]` discriminators: the documented growth of the union by one member per Platform (ADR-0011).
+- `wappa/domain/inbox/credentials.py` `Literal[PlatformType.X]` discriminators: the documented growth of the union by one member per Platform (ADR-0022).
 - `wappa/messaging/whatsapp/messenger/whatsapp_messenger.py:82-88` `capability(...)`: capability lookup with `ITemplateMessaging` (WhatsApp-only) and `IMediaLibrary` (both Platforms). This is the right pattern for Platform-only extensions.
-- `wappa/api/routes/whatsapp_combined.py:128-168`: all route families are mounted under `/api/{platform}` as capability groups (ADR-0009, ADR-0021). The WhatsApp-named module names are historical, not branches.
+- `wappa/api/routes/whatsapp_combined.py:128-168`: all route families are mounted under `/api/{platform}` as capability groups (ADR-0024). The WhatsApp-named module names are historical, not branches.
 - `wappa/core/inbound/runtime.py:309` `processor_factory.get_processor(platform)`: a keyed lookup, not a branch.
 - `wappa/core/plugins/wappa_core_plugin.py:244-245`: the legacy-mode filter to WhatsApp reflects the real legacy single-Inbox rule.
 - `wappa/core/inbound/runtime.py:390-420`: the WhatsApp-only `bsuid`/`phone` fields of SSE identity (see 09-5).
@@ -109,8 +112,8 @@ ADR conflict: none.
 This is not a new abstract hierarchy. Four of the five target interfaces already exist and have two adapters each. The missing piece is one composition-root table that the shared runtime looks up instead of branching.
 
 - **PlatformWebhooks**: `BaseWebhookProcessor` (`wappa/processors/base_processor.py:70`), plus `set_field_registry` declared on it (09-4), plus the per-Platform `route_payload(payload, resolver) -> tuple[RoutedWebhookDelivery, ...]` functions that already exist in `wappa/core/inbound/*_routing.py`. Two adapters, so a real seam.
-- **SendingMessages**: `IMessenger`, one method per action (ADR-0016). Two adapters. No change.
-- **HandlingMedia**: `IMediaLibrary` with `upload(path, family)` and `download(media_id)` (`wappa/domain/interfaces/media_library.py:38-45`), reached through `messenger.capability(IMediaLibrary)`. Both Platforms implement it, so the remaining work is to delete the WhatsApp shortcut (09-2), not to design a new seam. Whether to promote it from capability to core `IMessenger` method is a separate ADR-0016 question, and lookup cost alone does not justify it.
+- **SendingMessages**: `IMessenger`, one method per action (ADR-0025). Two adapters. No change.
+- **HandlingMedia**: `IMediaLibrary` with `upload(path, family)` and `download(media_id)` (`wappa/domain/interfaces/media_library.py:38-45`), reached through `messenger.capability(IMediaLibrary)`. Both Platforms implement it, so the remaining work is to delete the WhatsApp shortcut (09-2), not to design a new seam. Whether to promote it from capability to core `IMessenger` method is a separate ADR-0025 question, and lookup cost alone does not justify it.
 - **ProfileReading**: does not exist. Do not add it now. With at most one Platform able to fill it, it would be a hypothetical seam. When a second Platform can read a User's profile, add it as an `IMessenger` capability, the same way `IConversationContentReader` is added, with one read method returning `ReadResult[UserProfile]`.
 - **InboxConnection**: `IInboxConnector` (`wappa/connections/contract.py:175`), two adapters, composed by the Host. It is not part of the runtime table.
 - **Platform-only extensions**: `ITemplateMessaging` (WhatsApp, which exists), `ICommentControls` (Instagram, which exists), and Flows and Calls behind the same `capability(kind)` lookup. Shared HTTP dependencies gate them with `requires_capability(kind)`, never with `whatsapp_only(...)` (09-2).

@@ -109,7 +109,7 @@ That omits every route which sends, deletes, or rewrites state, and keeps
 reads, lookups, media upload, Template info, webhooks, health, and every
 `wappa.messaging` service. Add `include_media_upload_api=False` to close the
 last platform-reaching route. See
-[ADR-0009](../../../../docs/adr/0009-route-capability-groups.md).
+[ADR-0024](../../../../docs/adr/0024-outbound-http-routes-and-transports.md).
 
 Supported `CacheType` values are defined in `wappa.core.types`:
 

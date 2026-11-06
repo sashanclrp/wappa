@@ -1,11 +1,18 @@
 ---
-status: text_baseline_remaining_pending
+status: implemented_pending_live_gates
 urgency: high
 owner: Instagram messaging, processors and media adapters
 depends_on: I01
+last_reviewed: 2026-11-06
 ---
 
 # Message families, lifecycle and media
+
+## Code reality (2026-11-06)
+
+November 5 live evidence covers DM media sends, uploaded images, inbound image/audio/video bytes, read/typing, reactions and edits. Story/share/referral/deletion variants, selected failures and concurrent User/Inbox isolation still need recorded acceptance.
+
+See the [series plan](../plan.md), [capability matrix](../references/capability-matrix.md) and [live evidence](../tests/live-test-plan.md). Historical test results do not replace the remaining live gates.
 
 ## Context
 

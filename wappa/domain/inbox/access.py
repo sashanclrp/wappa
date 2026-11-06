@@ -1,6 +1,6 @@
 """Supported trusted-adapter access to an Inbox's *current* credentials.
 
-ADR-0015: a trusted backend extension (publishing, analytics, …) may receive
+ADR-0025: a trusted backend extension (publishing, analytics, …) may receive
 the active bearer for one Inbox through this narrow seam instead of importing
 Wappa's internal resolver or decrypting records itself.
 

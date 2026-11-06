@@ -1,4 +1,4 @@
-"""The Platform Registry is the one installed-Platform set (ADR draft 0022).
+"""The Platform Registry is the one installed-Platform set (ADR-0023).
 
 Every shared reader (webhook controller, field registry, Messenger factory,
 credential service, HTTP route platform) answers from ``PLATFORMS`` or the
@@ -13,9 +13,10 @@ from typing import Any
 
 import httpx
 import pytest
+from fastapi import FastAPI
 from pydantic import BaseModel, SecretStr
 
-from wappa.api.dependencies.inbox_context import RoutePlatform
+from wappa.api.routes.messaging_router import create_messaging_router
 from wappa.core.events.field_registry import FieldHandlerRegistry
 from wappa.core.inbound.runtime import InboundRuntime
 from wappa.core.security import CredentialCodec
@@ -41,7 +42,16 @@ def test_registry_installs_whatsapp_and_instagram_only() -> None:
     assert set(PLATFORMS) == INSTALLED
     assert set(BUILTIN_FIELDS) == INSTALLED
     assert set(RECORD_TYPES) == INSTALLED
-    assert {PlatformType(member.value) for member in RoutePlatform} == INSTALLED
+    app = FastAPI()
+    app.include_router(create_messaging_router())
+    (param,) = (
+        p
+        for p in app.openapi()["paths"]["/api/{platform}/messages/send-text"]["post"][
+            "parameters"
+        ]
+        if p["name"] == "platform"
+    )
+    assert {PlatformType(value) for value in param["schema"]["enum"]} == INSTALLED
     for platform, entry in PLATFORMS.items():
         assert entry.webhooks.platform is platform
         assert entry.webhooks.builtin_fields == BUILTIN_FIELDS[platform]

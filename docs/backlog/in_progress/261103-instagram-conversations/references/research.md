@@ -18,7 +18,7 @@ have been tested. A real Instagram text exchange, outbound echo event, and READ
 status were verified at 11:24 America/Bogota on 2026-11-03. Self-service OAuth
 onboarding and Symphonai integration remain pending.
 See [setup.md](setup.md#local-implementation-ready-for-callback-verification) and
-[ADR-0014](../../../../adr/0014-instagram-text-and-explicit-messenger-targets.md).
+[ADR-0025](../../../../adr/0025-messenger-contract.md).
 Capability inventories below retain the research-stage snapshot; they are not
 an assertion that every originally missing foundation remains unimplemented.
 
@@ -352,7 +352,7 @@ The user supplied a Creator prerequisite: call Conversations API before receivin
 
 ### Current registration constraints
 
-InboxCredentialService and CredentialRecord currently support WhatsApp only. Meta GET callback verification, account authorization/subscription, and POST event intake are separate operations. See [ADR-0011](../../../../adr/0011-encrypted-inbox-directory.md) for the existing source-driven Directory contract. The proposed connection flow is in [roadmap.md](design-roadmap.md).
+InboxCredentialService and CredentialRecord currently support WhatsApp only. Meta GET callback verification, account authorization/subscription, and POST event intake are separate operations. See [ADR-0022](../../../../adr/0022-inbox-identity-and-directory.md) for the existing source-driven Directory contract. The proposed connection flow is in [roadmap.md](design-roadmap.md).
 
 ## 11. Evidence and source index
 
@@ -366,7 +366,7 @@ Repository findings are from the working tree inspected on 2026-11-03, not a tag
 - [Universal webhooks](../../../../../wappa/webhooks/core/webhook_interfaces/universal_webhooks.py), [User/Inbox components](../../../../../wappa/webhooks/core/webhook_interfaces/base_components.py), [WA message schemas](../../../../../wappa/webhooks/whatsapp/message_types), [field registry](../../../../../wappa/core/events/field_registry.py).
 - [Handler hooks](../../../../../wappa/core/events/event_handler.py), [processor factory/detection](../../../../../wappa/processors/factory.py), [Inbound Runtime](../../../../../wappa/core/inbound/runtime.py), [WA routing](../../../../../wappa/core/inbound/webhook_routing.py).
 - [Credential records](../../../../../wappa/domain/inbox/credentials.py), [credential ports](../../../../../wappa/domain/inbox/ports.py), [callback routes](../../../../../wappa/api/routes/webhooks.py), [WA route composition](../../../../../wappa/api/routes/whatsapp_combined.py).
-- [ADR-0001: Inbox identity](../../../../adr/0001-inbox-id-runtime-scope.md), [ADR-0002: runtime/processor boundary](../../../../adr/0002-inbound-runtime-dispatch-context-clean-break.md), [ADR-0010: payload routing](../../../../adr/0010-payload-routed-whatsapp-webhook.md), [ADR-0011: Inbox Directory](../../../../adr/0011-encrypted-inbox-directory.md).
+- [ADR-0022: Inbox identity](../../../../adr/0022-inbox-identity-and-directory.md), [ADR-0023: runtime/processor boundary](../../../../adr/0023-inbound-webhooks.md), [ADR-0023: payload routing](../../../../adr/0023-inbound-webhooks.md), [ADR-0022: Inbox Directory](../../../../adr/0022-inbox-identity-and-directory.md).
 
 ### Primary Meta sources
 

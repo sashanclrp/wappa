@@ -252,7 +252,7 @@ integer revision when that distinction matters.
 
 The persistence context uses `inbox_id` as the cache namespace boundary for
 Inbox-owned families and `context_id` for Table Cache. Legacy `tenant_id`
-names were removed by ADR 0001 and the v0.13 clean-break release. Current
+names were removed by ADR-0022 and the v0.13 clean-break release. Current
 persistence code should use:
 
 - `ICacheFactory.__init__(inbox_id, user_id)`

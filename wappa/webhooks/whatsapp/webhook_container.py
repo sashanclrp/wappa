@@ -206,7 +206,7 @@ class AccountWebhookValue(BaseModel):
     phone-scoped :class:`WebhookValue` shape, so they get their own typed model
     instead of being forced through the permissive ``CustomWebhookValue`` path.
 
-    Unknown keys are kept and reported as schema drift (ADR-0010), like every
+    Unknown keys are kept and reported as schema drift (ADR-0023), like every
     other Meta input model.
     """
 
@@ -317,7 +317,7 @@ class WebhookChange(BaseModel):
 
         # A field Wappa does not model and no app parser covers is kept as an
         # untyped value: the processor delivers it as UNSUPPORTED_EVENT and
-        # logs schema drift instead of rejecting the callback (ADR-0010).
+        # logs schema drift instead of rejecting the callback (ADR-0023).
         if isinstance(raw_value, dict):
             return {**data, "value": CustomWebhookValue.model_validate(raw_value)}
         return data

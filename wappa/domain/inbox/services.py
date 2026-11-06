@@ -170,7 +170,7 @@ class InboxDirectory(IInboxCredentialResolver):
                 await outcome
 
     async def reset_cache(self) -> int:
-        """Forget every cached directory row (ADR-0011, startup freshness).
+        """Forget every cached directory row (ADR-0022, startup freshness).
 
         The Host's source stays the authority: Inboxes reload lazily on their
         next message, so a record changed in the source while Wappa was down

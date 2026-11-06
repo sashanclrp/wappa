@@ -69,7 +69,7 @@ def _destination_user(invocation: SendInvocation, request_user: str | None) -> s
 
     A send to the webhook's own User keeps its canonical ``user_id`` key (the
     BSUID even when the phone delivered it); a send to anyone else is keyed
-    by that destination's address (ADR-0019).
+    by that destination's address (ADR-0022).
     """
     target = invocation.target
     if isinstance(target, DirectMessage):

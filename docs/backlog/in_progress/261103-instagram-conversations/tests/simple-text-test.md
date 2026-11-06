@@ -8,7 +8,7 @@ in this document. Test labels A/B replace the real sender identities.
 
 Related: [setup walkthrough](../references/setup.md), [decisions](../references/decisions.md),
 [roadmap](../references/design-roadmap.md), [research](../references/research.md),
-[ADR-0014](../../../../adr/0014-instagram-text-and-explicit-messenger-targets.md).
+[ADR-0025](../../../../adr/0025-messenger-contract.md).
 
 ## 1. Goals and scope
 

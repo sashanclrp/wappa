@@ -2,8 +2,8 @@
 
 Every installed Platform supplies one ``PlatformWebhooks`` adapter through
 ``wappa.platforms``. The webhook controller authenticates the request bytes
-(ADR-0010) and calls ``route``; the Inbound Runtime runs admission and echo
-proof, then calls ``translate`` (ADR-0002). Message-type tables stay private
+(ADR-0023) and calls ``route``; the Inbound Runtime runs admission and echo
+proof, then calls ``translate`` (ADR-0023). Message-type tables stay private
 to each adapter.
 """
 

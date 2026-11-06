@@ -105,7 +105,7 @@ async def test_instagram_echo_starts_unknown_until_the_runtime_proves_it():
     assert echo.get_text() == "hi" and echo.user.user_id == "IGSID1"
 
 
-# ── fixed filter (ADR-0018) ──────────────────────────────────────────────
+# ── fixed filter (ADR-0023) ──────────────────────────────────────────────
 
 from datetime import UTC, datetime  # noqa: E402
 from types import SimpleNamespace  # noqa: E402

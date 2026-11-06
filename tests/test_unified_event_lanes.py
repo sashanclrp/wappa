@@ -1,4 +1,4 @@
-"""ADR-0016 unification: history backfill, connection changes, typed payloads."""
+"""ADR-0025 unification: history backfill, connection changes, typed payloads."""
 
 from __future__ import annotations
 

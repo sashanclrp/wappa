@@ -6,7 +6,7 @@ Native wire formats (``POST /{ig-account-id}/messages``):
 - private reply: ``{"recipient": {"comment_id"}, "message": {"text"}}``
 - media: ``message.attachment = {"type": image|audio|video|file,
   "payload": {"url"}}`` or ``{"attachment_id"}`` after upload
-Contract mappings (ADR-0016: one Messenger method per action):
+Contract mappings (ADR-0025: one Messenger method per action):
 
 - ``send_text`` → text over 1000 UTF-8 bytes is split into several messages,
   on a word boundary when possible
@@ -244,7 +244,7 @@ class InstagramMessenger(IMessenger):
             raise ValueError("InstagramMessenger requires an Instagram Inbox")
         self._inbox_ref = inbox_ref
         # Instagram echoes Wappa's own sends; recording them lets the Inbound
-        # Runtime drop those echoes (ADR-0018).
+        # Runtime drop those echoes (ADR-0023).
         self._sent_registry = sent_registry
         self._graph = InstagramGraphClient(
             inbox_ref=inbox_ref,
@@ -259,7 +259,7 @@ class InstagramMessenger(IMessenger):
                 media_download_client_provider or session_provider
             ),
         )
-        # Instagram-only actions (ADR-0016 exceptions), capability-gated.
+        # Instagram-only actions (ADR-0025 exceptions), capability-gated.
         self._capabilities = {
             ICommentControls: InstagramCommentControls(self._graph),
             IConversationContentReader: InstagramContentReader(self._graph),
@@ -539,7 +539,7 @@ class InstagramMessenger(IMessenger):
             "document", document_source, target, caption, reply_to_message_id
         )
 
-    # ── specialized sends, adapted (ADR-0016) ──────────────────────────
+    # ── specialized sends, adapted (ADR-0025) ──────────────────────────
 
     async def send_sticker(
         self,
@@ -595,7 +595,7 @@ class InstagramMessenger(IMessenger):
             "\n\n".join(blocks), target, reply_to_message_id=reply_to_message_id
         )
 
-    # ── interactive (WhatsApp-shaped contract, ADR-0016) ────────────────
+    # ── interactive (WhatsApp-shaped contract, ADR-0025) ────────────────
 
     def _direct(self, target: DirectMessage, operation: str) -> DirectMessage:
         direct = require_direct_message(target, f"Instagram {operation}")

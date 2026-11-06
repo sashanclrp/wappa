@@ -432,7 +432,7 @@ class InstagramButtonReplyMessage(_InstagramMessageBase, BaseInteractiveMessage)
     """A postback button tap, normalized like a WhatsApp ``button_reply``.
 
     Instagram delivers it on ``messaging_postbacks`` with no visible message;
-    Wappa presents it as an interactive message (ADR-0016) so Hosts read one
+    Wappa presents it as an interactive message (ADR-0025) so Hosts read one
     selection shape on every Platform.
     """
 
@@ -687,7 +687,7 @@ ATTACHMENT_CLASSES: dict[str, type[_InstagramAttachmentMixin]] = {
 
 
 class InstagramReactionMessage(_InstagramMessageBase, BaseReactionMessage):
-    """A User reacted to (or removed a reaction from) a message, ADR-0016 shape.
+    """A User reacted to (or removed a reaction from) a message, ADR-0025 shape.
 
     Instagram gives a reaction no message ID of its own, so ``id`` is
     ``reaction:<target mid>:<timestamp ms>``.

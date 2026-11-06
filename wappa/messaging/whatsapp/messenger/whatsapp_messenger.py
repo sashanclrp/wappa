@@ -182,7 +182,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
             return template_type_enum, None
         return template_type_enum, media_type_enum
 
-    # Delivery Addresses (ADR-0019)
+    # Delivery Addresses (ADR-0022)
 
     async def _deliver(
         self,

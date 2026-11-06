@@ -1,4 +1,4 @@
-"""WhatsApp Template sends as a focused capability (ADR-0016).
+"""WhatsApp Template sends as a focused capability (ADR-0025).
 
 Templates are a WhatsApp business-initiated message family with no equivalent
 on other Platforms, so they are not ``IMessenger`` methods. Reach them with

@@ -1,11 +1,18 @@
 ---
-status: design_specified_authoring_pending
+status: authored_tested_pending_final_distribution_gates
 urgency: mid
 owner: Wappa developer experience; Symphonai skill maintainers for host adapters
 depends_on: implemented contracts from I01-I07, released together with their teaching paths
+last_reviewed: 2026-11-06
 ---
 
 # Developer skills, Meta setup reference and distribution
+
+## Code reality (2026-11-06)
+
+Three skills are authored and have recorded lint/lane checks and deterministic tests. Fresh-agent evaluation is recorded for Claude Opus 5.5 in Claude Code only. Other supported harness/model checks, picker evidence where available, built-wheel distribution and final B/C teaching parity remain subject to the exit criteria.
+
+See the [series plan](../plan.md), [capability matrix](../references/capability-matrix.md) and [live evidence](../tests/live-test-plan.md). Historical test results do not replace the remaining live gates.
 
 ## Context
 

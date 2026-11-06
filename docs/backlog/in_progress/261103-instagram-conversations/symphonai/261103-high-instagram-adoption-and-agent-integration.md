@@ -1,11 +1,18 @@
 ---
-status: pending
+status: implemented_pending_live_gate_c
 urgency: high
 owner: Symphonai Wappa adapter, conversation runtime and consumer integration
 depends_on: gates A and B; I01 supported public contracts
+last_reviewed: 2026-11-06
 ---
 
 # Symphonai Instagram adoption and agent integration
+
+## Code reality (2026-11-06)
+
+Symphonai adoption code exists, including InboxCredentialAccess, targets and operator text. Its dependency is wappa==0.33.0 with a temporary editable local source. Gate C agent conversation, concurrent isolation, takeover and credential lifecycle acceptance has no recorded live result.
+
+See the [series plan](../plan.md), [capability matrix](../references/capability-matrix.md) and [live evidence](../tests/live-test-plan.md). Historical test results do not replace the remaining live gates.
 
 ## Context
 

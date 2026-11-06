@@ -79,7 +79,7 @@ curl -s "https://<tunnel>/webhook/inboxes/whatsapp?hub.mode=subscribe&hub.verify
 
 With the MCP, passing `fields` **replaces** the whole field list; read the current list from `whatsapp_biz_onboarding_status` first and include it.
 
-Wappa routes each field to one lane (ADR-0016): `messages` → message/status/update lanes; `smb_message_echoes` → `OutboundEchoWebhook` (origin `BUSINESS_APP`); `history` → `HistorySyncWebhook`; `smb_app_state_sync` → `SystemWebhook` with `ContactSync`; `account_update` offboard/reconnect → `InboxConnectionWebhook`.
+Wappa routes each field to one lane (ADR-0025): `messages` → message/status/update lanes; `smb_message_echoes` → `OutboundEchoWebhook` (origin `BUSINESS_APP`); `history` → `HistorySyncWebhook`; `smb_app_state_sync` → `SystemWebhook` with `ContactSync`; `account_update` offboard/reconnect → `InboxConnectionWebhook`.
 
 ### A4. Subscribe the WABA to the app (account level)
 
@@ -106,7 +106,7 @@ Done through the WhatsApp Business MCP on business **Mimeia**, app `Wappa | CRM`
 - The demo WABA **BigView** is subscribed to this app, so its events now reach the tunnel too (accepted by the user: demo traffic).
 - Test number `+1 555-188-9071` (`phone_number_id` 1014417365082534) on *Test WhatsApp Business Account* (Messaging account ID 1831186907601026). `.env` values set; Step 1 token is a USER token with `whatsapp_business_management` + `whatsapp_business_messaging`, valid 24 h.
 - `POST /{waba}/subscribed_apps` returned success; the account now lists `Wappa | CRM` next to Meta's viewer app.
-- First inbound `/help` reached Wappa and resolved the Inbox; the reply to the BSUID was rejected with `131030` (test allow-lists hold phones; the webhook also carried the allowed `wa_id`). Fixed in Wappa by ADR-0019: replies carry every Delivery Address and WhatsApp sends to the phone first, falling back on address rejections only.
+- First inbound `/help` reached Wappa and resolved the Inbox; the reply to the BSUID was rejected with `131030` (test allow-lists hold phones; the webhook also carried the allowed `wa_id`). Fixed in Wappa by ADR-0022: replies carry every Delivery Address and WhatsApp sends to the phone first, falling back on address rejections only.
 - Pending: `/help` round trip after the fix, then P-01..P-09.
 
 ## Path B — Embedded Signup (self-service, no `.env`)

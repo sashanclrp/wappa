@@ -7,7 +7,7 @@ expose a raw endpoint.
 
 The load-bearing test is `test_embedded_profile_exposes_no_unauthenticated_...`:
 "mutation" has to mean every route that sends, deletes, or rewrites state, not
-just the ones that send a message. See ADR-0009.
+just the ones that send a message. See ADR-0024.
 """
 
 from __future__ import annotations

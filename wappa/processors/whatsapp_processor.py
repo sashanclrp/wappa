@@ -158,7 +158,7 @@ class WhatsAppWebhookProcessor:
         reply_type = interactive.get("type")
         if reply_type not in KNOWN_INTERACTIVE_REPLY_TYPES:
             # A reply type Wappa does not model: deliver it as Unsupported with
-            # a 200 instead of a 400 that Meta retries and drops (ADR-0010).
+            # a 200 instead of a 400 that Meta retries and drops (ADR-0023).
             report_unmodelled(
                 [f"InteractiveContent.type={reply_type}"],
                 platform="whatsapp",
@@ -398,7 +398,7 @@ class WhatsAppWebhookProcessor:
         message: BaseMessage,
         inbox_base: "InboxBase",
     ) -> "MessageUpdateWebhook":
-        """Consumer ``edit`` / ``revoke`` → ``MessageUpdateWebhook`` (ADR-0016).
+        """Consumer ``edit`` / ``revoke`` → ``MessageUpdateWebhook`` (ADR-0025).
 
         The same lane Instagram edits and unsends use. An edit's replacement
         content is parsed with the inbound message models.
@@ -837,7 +837,7 @@ class WhatsAppWebhookProcessor:
         raw_status = raw_statuses[0]
         if raw_status.get("status") not in KNOWN_WHATSAPP_STATUSES:
             # A status value Meta added later: 200 + drift report, never a 400
-            # that Meta retries and drops (ADR-0010).
+            # that Meta retries and drops (ADR-0023).
             return self._create_unmodelled_status_webhook(
                 webhook, inbox_base, raw_status
             )
@@ -945,8 +945,8 @@ class WhatsAppWebhookProcessor:
         """A Meta field Wappa does not model and no parser was registered for.
 
         Delivered as ``UNSUPPORTED_EVENT`` with the native value as evidence,
-        exactly like Instagram's unknown change fields (ADR-0016), and logged
-        as schema drift. Meta gets a 200, so it does not retry (ADR-0010).
+        exactly like Instagram's unknown change fields (ADR-0025), and logged
+        as schema drift. Meta gets a 200, so it does not retry (ADR-0023).
         """
         from wappa.webhooks.core.webhook_interfaces import (
             SystemEventDetail,

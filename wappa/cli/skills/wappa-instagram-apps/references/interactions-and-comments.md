@@ -1,6 +1,6 @@
 ---
 checked_on: 2026-11-05
-checked_against: Meta Instagram quick-replies, button-template, generic-template, private-replies and comment-moderation pages (Graph v26.0) and Wappa's tests/test_instagram_conversations.py and ADR-0016
+checked_against: Meta Instagram quick-replies, button-template, generic-template, private-replies and comment-moderation pages (Graph v26.0) and Wappa's tests/test_instagram_conversations.py and ADR-0025
 revision: 3
 ---
 
@@ -17,7 +17,7 @@ revision: 3
 
 ## Interactive Messages
 
-One Messenger method per action, identical on WhatsApp and Instagram (ADR-0016). Write the call once; the adapter maps it. Never branch on Platform name; check `m.supported_operations` once if the app also runs elsewhere.
+One Messenger method per action, identical on WhatsApp and Instagram (ADR-0025). Write the call once; the adapter maps it. Never branch on Platform name; check `m.supported_operations` once if the app also runs elsewhere.
 
 ```python
 from wappa.messaging import (

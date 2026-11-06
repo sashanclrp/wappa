@@ -1,4 +1,4 @@
-"""Inbox Connectors: connect Platform accounts as Wappa Inboxes (ADR-0017).
+"""Inbox Connectors: connect Platform accounts as Wappa Inboxes (ADR-0026).
 
 ``IInboxConnector`` is the one contract; ``WhatsAppConnector`` (Embedded
 Signup) and ``InstagramConnector`` (Unified Login) implement it on the shared

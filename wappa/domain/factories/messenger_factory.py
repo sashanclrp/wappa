@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import weakref
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING
 
 from wappa.core.config.settings import settings
@@ -19,12 +19,17 @@ from wappa.domain.interfaces.session_provider import HTTPSessionClosedError
 if TYPE_CHECKING:
     import httpx
 
+    from wappa.platforms import PlatformEntry
+    from wappa.schemas.core.types import PlatformType
+
 
 class MessengerFactory:
     """Build and cache one Messenger per qualified Inbox.
 
     Credentials come from the internal ``IInboxCredentialResolver`` or from a
-    ``ResolvedInboxCredentials`` value the caller already holds. Directory
+    ``ResolvedInboxCredentials`` value the caller already holds. ``platforms``
+    is the app's Platform Registry table (``app.state.platforms``); without
+    one the installed ``PLATFORMS`` apply. Directory
     failures propagate as their typed categories; they are never reported as
     an unknown Inbox or an unclassified runtime error.
     """
@@ -38,8 +43,10 @@ class MessengerFactory:
         graph_base_url: str | None = None,
         max_cached_messengers: int = 128,
         sent_registry: ISentMessageRegistry | None = None,
+        platforms: Mapping[PlatformType, PlatformEntry] | None = None,
     ) -> None:
         self._session_provider = session_provider
+        self._platforms = platforms
         self._sent_registry = sent_registry
         self._credential_resolver = credential_resolver
         self._media_download_client_provider = media_download_client_provider
@@ -95,7 +102,7 @@ class MessengerFactory:
         # whose package imports the runtime that builds this factory.
         from wappa.platforms import PLATFORMS, MessengerDeps
 
-        entry = PLATFORMS.get(inbox_ref.platform)
+        entry = (self._platforms or PLATFORMS).get(inbox_ref.platform)
         if entry is None:
             raise ValueError(f"Unsupported platform: {inbox_ref.platform.value}")
 

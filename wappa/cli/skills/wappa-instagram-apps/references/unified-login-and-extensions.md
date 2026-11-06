@@ -16,7 +16,7 @@ revision: 2
 
 ## Self-service connection
 
-Connecting an account is the `IInboxConnector` contract (ADR-0017), the same on every Platform: `InstagramConnector` (Unified Login) and `WhatsAppConnector` (Embedded Signup) implement it. The Host owns the routes, the authenticated operator, intent storage, the Owner/Channel mapping and transactions.
+Connecting an account is the `IInboxConnector` contract (ADR-0026), the same on every Platform: `InstagramConnector` (Unified Login) and `WhatsAppConnector` (Embedded Signup) implement it. The Host owns the routes, the authenticated operator, intent storage, the Owner/Channel mapping and transactions.
 
 ```python
 from wappa.connections import InstagramConnector, MetaLoginConfig

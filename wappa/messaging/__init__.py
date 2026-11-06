@@ -129,7 +129,7 @@ __all__ = [
     "PostRef",
     "TargetInboxMismatchError",
     "UnsupportedOperationError",
-    # Interactive Messages (one shape on every Platform, ADR-0016)
+    # Interactive Messages (one shape on every Platform, ADR-0025)
     "ReplyButton",
     "UrlButton",
     "CardButton",

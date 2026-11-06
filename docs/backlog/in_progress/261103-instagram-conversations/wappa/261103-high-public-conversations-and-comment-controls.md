@@ -1,11 +1,18 @@
 ---
-status: pending
+status: implemented_pending_live_gates
 urgency: high
 owner: Instagram public-conversation adapters
 depends_on: I01, I02 text and outcomes
+last_reviewed: 2026-11-06
 ---
 
 # Public conversations and comment-control primitives
+
+## Code reality (2026-11-06)
+
+Public reply, comment-triggered private reply and a comment mention passed live on November 5. Hide/unhide/delete, commenting enable/disable, Live source constraints, media mentions and the eligible DM follow-up need remaining live evidence.
+
+See the [series plan](../plan.md), [capability matrix](../references/capability-matrix.md) and [live evidence](../tests/live-test-plan.md). Historical test results do not replace the remaining live gates.
 
 ## Context
 

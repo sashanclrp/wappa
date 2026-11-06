@@ -1,7 +1,7 @@
 ---
 status: in_progress
 author: sasha
-last_reviewed: 2026-11-03
+last_reviewed: 2026-11-06
 decision_record: docs/sasha/grilling-sessions/261103-instagram-scope-and-extensions.md
 ---
 
@@ -56,40 +56,37 @@ Hide/delete/enable-comment primitives belong to Wappa even though moderation
 policy does not. Publishing/insights implementations, reactions and cross-app
 handover remain outside this series.
 
-## Implementation status (2026-11-03)
+## Implementation status (2026-11-06)
 
-The Wappa side of I01–I06 is implemented in the working tree. Per-capability evidence is in the [capability matrix](references/capability-matrix.md) and the runbook is the [live test plan](tests/live-test-plan.md). I07 adoption is implemented on Symphonai branch `feat/instagram-wappa-adoption` with a temporary local Wappa source. I08 skills ship under `wappa/cli/skills/`. The table below is the original pre-implementation snapshot.
+I01–I06 runtime capabilities and I08 skills are implemented. November 5 live runs cover the DM/media/interaction paths, form validation and branching, public/private replies, comment mentions, post/comment reads and core Unified Login. Gate A is partial, core Gate B passed with the documented not-applicable cases, and Gate C remains unverified. The [live test plan](tests/live-test-plan.md) records observed results; the [capability matrix](references/capability-matrix.md) distinguishes unrun checks.
 
 ## Code reality
 
-Verified by inspection on 2026-11-03:
-
-| Existing artifact | What it establishes | What remains |
+| Artifact | Current evidence | Remaining gate |
 | --- | --- | --- |
-| `wappa/messaging/instagram/messenger.py`, `processors/instagram_processor.py`, `core/inbound/instagram_routing.py` | Text send/intake, READ, echo and unsupported messaging variants. | Other message families, public-event admission and selected operations. |
-| `domain/messaging_targets.py`, `domain/inbox/credentials.py` | DirectMessage and explicit encrypted Instagram credential variants. | PrivateReply, public comment resources and supported extension credential access. |
-| `../wappa_examples/simple_echo_example` | Consumer CLI/server setup and controlled live text path. | Media, interactions, OAuth and broader live validation. |
-| [Recorded text tests](tests/simple-text-test.md) | Live hello, echo, READ and sequential two-User routing. | Concurrent/stateful and multiple-Inbox checks; no claim of complete isolation. |
-| Symphonai `services/wappa/runtime_inbox.py` | Trusted adapters already extract current bearer values using Wappa's internal resolver. | Supported public seam and migration of WhatsApp-specific identity/source filters for Instagram. |
-| Symphonai `develop-wappa`, `symphonai-add-score`, `symphonai-add-state-handler` skills/references | Existing integration, Score and guided-flow teaching paths. | Generic Wappa app guidance, Instagram routing, current target migration and developer skill distribution. |
+| Instagram Messenger, processor, media and comment/content capabilities | Implemented; DM/media, interactive and selected public/content paths exercised live on November 5 | Remaining selected families/controls, failures and concurrent User/Inbox state isolation |
+| Neutral targets/results and InboxCredentialAccess | Implemented; neutral MessageResult ownership completed during architecture hardening | Final docs/import verification |
+| Instagram conversation example and form Score | Live happy path, Other branch and invalid-email handling | Complete resume/cancel/repeated-action and concurrent isolation evidence |
+| InstagramConnector on MetaBusinessLogin | Core Gate B passed; reconnect rotates records | Creator account, independent-customer access and real revocation limitations |
+| Symphonai integration | Adoption code present; temporary editable Wappa source remains | Released dependency and live Gate C acceptance |
+| Packaged Wappa skills | Authored; lint/lane/deterministic checks and one harness/model evaluation recorded | Final distribution, declared harness/model coverage and B/C parity |
 
-No runtime work, actual skill authoring, deployment or release is performed by
-creating this series. The PRDs below specify those later deliverables.
+Provider delivery deduplication is outside this series. Inbox identity, User identity, Delivery Addresses and echo suppression do not satisfy the separate [provider delivery identity draft](../../drafts/provider-delivery-identity.md).
 
 ## PRD inventory and ownership
 
 | ID | PRD | Owner | Status | Dependencies | Gate |
 | --- | --- | --- | --- | --- | --- |
-| I01 | [Contracts, DDD and extension foundations](wappa/261103-high-contracts-ddd-and-extension-foundations.md) | Wappa domain/inbound/runtime | implemented + offline-tested; `MessageResult` class move to neutral module pending | Existing explicit Directory | A foundation |
-| I02 | [Message families, lifecycle and media](wappa/261103-high-message-families-lifecycle-and-media.md) | Instagram messaging/webhooks | implemented + offline-tested; live per-family checks pending (A-03…A-09) | I01 | A |
-| I03 | [Interactions and conversational example](wappa/261103-high-interactions-and-conversational-example.md) | Wappa messaging + consumer example | implemented (`instagram_conversations_example`, form Score) + offline-tested; live A-10…A-13 pending | I01, I02 relevant sends | A |
-| I04 | [Public conversations and comment controls](wappa/261103-high-public-conversations-and-comment-controls.md) | Instagram public-conversation adapters | implemented + offline-tested; live pending (Advanced Access) | I01, I02 text/result contracts | A |
-| I05 | [Conversation content retrieval](wappa/261103-high-conversation-content-retrieval.md) | Instagram content/media adapters | implemented; post/comment reads **live-verified 2026-11-03** | I01, I02 media primitives, I04 references | A |
-| I06 | [Unified Login and connection lifecycle](wappa/261103-high-unified-login-and-connection-lifecycle.md) | Wappa connection package + test consumer | primitives + example routes implemented + offline-tested; live B pending | Shared I01 foundation; full live gate after A | B |
-| I07 | [Symphonai adoption and agent integration](symphonai/261103-high-instagram-adoption-and-agent-integration.md) | Symphonai backend/consumer | adoption implemented on Symphonai branch `feat/instagram-wappa-adoption` (targets, Instagram channels, credential seam, operator text); live C pending | A, B and supported I01 seams | C |
-| I08 | [Developer skills, setup and distribution](developer-experience/261103-mid-instagram-app-skills-and-setup.md) | Wappa DX; Symphonai skill adapters where applicable | three skills authored, linted 0/0, emitted by `wappa init`, tested; fresh-agent eval recorded in tests/live-test-plan.md | Per-capability implemented contracts; final verification after B/C | All |
+| I01 | [Contracts, DDD and extension foundations](wappa/261103-high-contracts-ddd-and-extension-foundations.md) | Wappa domain/inbound/runtime | implemented; neutral MessageResult move complete; final verification pending | Existing explicit Directory | A foundation |
+| I02 | [Message families, lifecycle and media](wappa/261103-high-message-families-lifecycle-and-media.md) | Instagram messaging/webhooks | implemented; November 5 DM/media/edit/reaction live evidence; remaining families/isolation open | I01 | A |
+| I03 | [Interactions and conversational example](wappa/261103-high-interactions-and-conversational-example.md) | Wappa messaging + consumer example | implemented; form/interaction live evidence; resume/cancel/concurrent isolation open | I01, I02 relevant sends | A |
+| I04 | [Public conversations and comment controls](wappa/261103-high-public-conversations-and-comment-controls.md) | Instagram public-conversation adapters | implemented; public/private reply and comment mention live; controls/Live cases open | I01, I02 text/result contracts | A |
+| I05 | [Conversation content retrieval](wappa/261103-high-conversation-content-retrieval.md) | Instagram content/media adapters | implemented; post/comments/mentioned-comment reads live; remaining acceptance open | I01, I02 media primitives, I04 references | A |
+| I06 | [Unified Login and connection lifecycle](wappa/261103-high-unified-login-and-connection-lifecycle.md) | Wappa connection package + test consumer | core Gate B passed November 5; Creator/access/revocation limitations remain | Shared I01 foundation; full live gate after A | B |
+| I07 | [Symphonai adoption and agent integration](symphonai/261103-high-instagram-adoption-and-agent-integration.md) | Symphonai backend/consumer | adoption code present; temporary editable source; live Gate C pending | A, B and supported I01 seams | C |
+| I08 | [Developer skills, setup and distribution](developer-experience/261103-mid-instagram-app-skills-and-setup.md) | Wappa DX; Symphonai skill adapters where applicable | skills authored/tested; one harness/model eval; final distribution and B/C parity pending | Per-capability implemented contracts; final verification after B/C | All |
 
-`partial baseline` means inspect and reuse existing code; it is not acceptance.
+Implemented slices remain in this series until every series gate closes; implementation alone is not live acceptance.
 Each PRD carries scope, approach, DDD obligations, open verification and exit
 criteria. Update statuses from observed evidence, not a completed checklist of
 similar names.
@@ -137,9 +134,9 @@ Ground every slice in [root language](../../../../CONTEXT.md),
 [context map](../../../../CONTEXT-MAP.md),
 [architecture](../../../../ARCHITECTURE.md),
 [public contract](../../../public-contract.md) and ADRs
-[0011](../../../adr/0011-encrypted-inbox-directory.md),
-[0014](../../../adr/0014-instagram-text-and-explicit-messenger-targets.md) and
-[0015](../../../adr/0015-conversation-primitives-and-trusted-platform-extensions.md).
+[0011](../../../adr/0022-inbox-identity-and-directory.md),
+[0014](../../../adr/0025-messenger-contract.md) and
+[0015](../../../adr/0025-messenger-contract.md).
 
 | Documentation surface | Required improvement / evidence |
 | --- | --- |

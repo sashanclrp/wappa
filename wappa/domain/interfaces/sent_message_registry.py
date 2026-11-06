@@ -3,7 +3,7 @@
 ``OutboundEchoWebhook`` carries only messages sent *outside* Wappa (a person
 answering from the Instagram app or the WhatsApp Business app). Instagram
 echoes every outbound message, Wappa's own API sends included, so Wappa must
-recognise its own sends and drop their echoes (ADR-0018). When the echo names
+recognise its own sends and drop their echoes (ADR-0023). When the echo names
 the sending app (``app_id``) that evidence decides; otherwise this registry
 does.
 

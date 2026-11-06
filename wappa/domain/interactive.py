@@ -1,4 +1,4 @@
-"""Platform-neutral Interactive Message values (ADR-0016).
+"""Platform-neutral Interactive Message values (ADR-0025).
 
 ``ReplyButton`` is the one "choose this option" value on every Platform. A tap
 returns as an ``InboundMessageWebhook`` whose ``get_interactive_selection()`` is

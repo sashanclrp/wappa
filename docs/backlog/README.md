@@ -42,6 +42,9 @@ A series directory moves as a unit. It reaches `in_progress/` when its first PRD
 
 ## Rules
 
+- When an active PRD absorbs a draft's entire scope, preserve its requirements and exit criteria in the active PRD, update references, then delete the duplicate draft. A mention or a partial overlap does not absorb the remaining scope.
+- Remove cancelled or Host-owned work from Wappa's backlog after recording the scope decision in the relevant plan or contract. Do not describe it as implemented in Wappa.
+
 - Standalone files use `YYMMDD-{urgency}-{backlog-title}.md`; series directories use `YYMMDD-{feature}/` with urgency carried on the individual PRD filenames.
   - `-low` — no user impact, purely internal quality/debt
   - `-mid` — affects DX or future velocity but not live behaviour

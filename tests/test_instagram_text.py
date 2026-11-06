@@ -196,7 +196,7 @@ async def test_real_http_callback_routes_each_user_and_does_not_reply_to_echo_or
             )
             assert handler.seen[0].recipient_id == "12345"
             assert handler.seen[0].recipient_phone_id == ""
-            # Fixed filter (ADR-0018): the echo of Wappa's own send is dropped;
+            # Fixed filter (ADR-0023): the echo of Wappa's own send is dropped;
             # the message sent from the Instagram app arrives typed.
             assert [e.message_id for e in handler.echoes] == ["echo.mid"]
             assert handler.echoes[0].origin is EchoOrigin.BUSINESS_APP

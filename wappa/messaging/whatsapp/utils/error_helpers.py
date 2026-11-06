@@ -18,7 +18,7 @@ BSUID_ERROR_TAG = "BSUID_RECIPIENT_NOT_SUPPORTED"
 
 # Meta rejected the Delivery Address itself, synchronously and before any
 # delivery, so trying the User's next known address can neither duplicate a
-# message nor be pointless (ADR-0019):
+# message nor be pointless (ADR-0022):
 # - 131030: recipient not in a test number's allow-list (allow-lists hold phones).
 # - BSUID_ERROR_TAG (Meta 131062): this message type cannot go to a BSUID.
 # Window (131047), rate limit (131056), content (131051), undeliverable
@@ -42,7 +42,7 @@ def is_bsuid_unsupported_error(error: Exception | dict) -> bool:
         )
     # Only Meta's structured error code counts. Matching the number in free
     # text could tag a timeout as an address rejection and trigger a
-    # fallback send (ADR-0019).
+    # fallback send (ADR-0022).
     return False
 
 

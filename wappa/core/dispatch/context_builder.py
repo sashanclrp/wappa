@@ -119,6 +119,7 @@ class DispatchContextBuilder:
         )
         self._messenger_factory = MessengerFactory(
             sent_registry=self.sent_message_registry,
+            platforms=capabilities.platforms,
             session_provider=capabilities.session_provider,
             media_download_client_provider=capabilities.media_download_client_provider,
             credential_resolver=capabilities.credential_resolver,

@@ -1,8 +1,11 @@
 # HTTP APIs
 
+Status reviewed 2026-11-06: historical pre-hardening audit. Findings and file:line references below describe the audited baseline. Use the [plan status table](../plan.md#code-reality-2026-11-06) for implemented and remaining work; do not rebuild a resolved finding from this snapshot.
+
+
 ## Summary
 
-Verified against the code on main (beffdff). Every send route is already Platform-neutral. Each one takes `IMessenger` from `get_inbox_messenger`, and one router serves `/api/{platform}` as ADR-0021 decides. Five problems hold up after re-reading the code.
+Verified against the code on main (beffdff). Every send route is already Platform-neutral. Each one takes `IMessenger` from `get_inbox_messenger`, and one router serves `/api/{platform}` as ADR-0024 decides. Five problems hold up after re-reading the code.
 
 1. WhatsApp-only gating happens as a side effect of building a `WhatsAppClient`, so routes that build no client (limits, validators, interactive limits) answer 200 with WhatsApp data under `/api/instagram`.
 2. The HTTP media routes bypass `IMediaLibrary`, although both WhatsApp and Instagram already implement its upload and download. A Platform `if` and a direct `WhatsAppMediaHandler` import remain in a shared dependency.
@@ -12,13 +15,13 @@ Verified against the code on main (beffdff). Every send route is already Platfor
 
 Smaller items: WhatsApp naming on neutral modules, dead dependency providers, and an unreachable `platform="whatsapp"` default on the event decorator.
 
-I rejected the auditor's `include_outbound_transport` finding, because ADR-0009 decides that behaviour as a safety default and it is not a compatibility shim. I merged the `InboxExecutionContext` finding into the gating finding, because they describe the same mechanism. I rejected its `RoutePlatform` sub-claim.
+I rejected the auditor's `include_outbound_transport` finding, because ADR-0024 decides that behaviour as a safety default and it is not a compatibility shim. I merged the `InboxExecutionContext` finding into the gating finding, because they describe the same mechanism. I rejected its `RoutePlatform` sub-claim.
 
 ## Confirmed findings
 
 ### 08-01 WhatsApp-only gating hangs on client construction, so limits and validators leak under every Platform
 
-- **Files:** `wappa/api/routes/whatsapp/whatsapp_messages.py:204-228`, `wappa/api/routes/whatsapp/whatsapp_interactive.py:290-295`, `wappa/api/routes/whatsapp/whatsapp_media.py:533-545`, `wappa/api/routes/whatsapp/whatsapp_specialized.py:248-292`, `wappa/api/dependencies/inbox_context.py:94-108`, `wappa/api/dependencies/inbox_context.py:138-176`, `wappa/api/routes/whatsapp_combined.py:7-9`, `wappa/api/ARCHITECTURE.md:35`, `docs/adr/0021-platform-messaging-http-api.md:16`
+- **Files:** `wappa/api/routes/whatsapp/whatsapp_messages.py:204-228`, `wappa/api/routes/whatsapp/whatsapp_interactive.py:290-295`, `wappa/api/routes/whatsapp/whatsapp_media.py:533-545`, `wappa/api/routes/whatsapp/whatsapp_specialized.py:248-292`, `wappa/api/dependencies/inbox_context.py:94-108`, `wappa/api/dependencies/inbox_context.py:138-176`, `wappa/api/routes/whatsapp_combined.py:7-9`, `wappa/api/ARCHITECTURE.md:35`, `docs/adr/0024-outbound-http-routes-and-transports.md:16`
 - **Principle:** platform-leak (with stale-doc)
 - **Severity:** medium
 - **Breaking + public surfaces:** yes, a behaviour break. `GET /api/instagram/messages/limits`, `GET /api/instagram/interactive/limits` and `GET /api/instagram/media/limits` change from 200 to 501, and so do `POST /api/instagram/specialized/validate-contact` and `POST /api/instagram/specialized/validate-coordinates`.
@@ -28,10 +31,10 @@ I rejected the auditor's `include_outbound_transport` finding, because ADR-0009 
   - `get_media_limits` depends only on `get_whatsapp_media_factory` (`whatsapp_media.py:539`).
   - `validate_contact_data` and `validate_coordinates` depend on no Inbox at all (`whatsapp_specialized.py:248`, `:281`).
 
-  These routes mount for every Platform (`whatsapp_combined.py:140-145`), so `/api/instagram/.../limits` returns WhatsApp limits with 200. ADR-0021 decision 4 and `ARCHITECTURE.md:35` say limits and validators answer 501, and the `whatsapp_only` docstring (`inbox_context.py:97-98`) lists limits as gated. The module docstring of `whatsapp_combined.py:7-9` contradicts both and says these routes answer 404. `/health`, Template info and Media API reads are gated, but only because their providers build `get_whatsapp_client`.
+  These routes mount for every Platform (`whatsapp_combined.py:140-145`), so `/api/instagram/.../limits` returns WhatsApp limits with 200. ADR-0024 decision 4 and `ARCHITECTURE.md:35` say limits and validators answer 501, and the `whatsapp_only` docstring (`inbox_context.py:97-98`) lists limits as gated. The module docstring of `whatsapp_combined.py:7-9` contradicts both and says these routes answer 404. `/health`, Template info and Media API reads are gated, but only because their providers build `get_whatsapp_client`.
 - **Deletion test:** No module goes away. The gate is implicit, so every new WhatsApp-only route must remember to reach a client, which happens N times. A single gate at the router level stops that from repeating.
 - **Proposed fix:** Mount every WhatsApp-only route from one WhatsApp extension router. That router includes the limits routes, the validators, Template info, media info and delete, and `/health`, with `dependencies=[Depends(whatsapp_extension)]`, which calls `whatsapp_only` once, in the same way `route_platform` sits on the parent router. Template mutation routes should take `requires_capability(ITemplateMessaging)`, a capability that already exists (`whatsapp_messenger.py:84`), instead of `template_transport()` calling `whatsapp_only`. Do not invent capability interfaces for static limits or validators: they have one adapter, so the seam would be hypothetical. Fix the `whatsapp_combined.py` docstring from 404 to 501. Add one test that asserts 501 for each WhatsApp-only route under `/api/instagram`.
-- **ADR conflict:** None. The fix makes the code match ADR-0021 decision 4.
+- **ADR conflict:** None. The fix makes the code match ADR-0024 decision 4.
 
 ### 08-06 HTTP media routes bypass IMediaLibrary although both Platforms implement it
 
@@ -46,7 +49,7 @@ I rejected the auditor's `include_outbound_transport` finding, because ADR-0009 
   - The auditor's fix ("have WhatsApp's Messenger expose IMediaLibrary") is already done in the code.
 - **Deletion test:** Delete the WhatsApp branch and `LibraryMediaUploader` becomes the only uploader. The `MediaUploader` Protocol, which has two adapters chosen by an `if`, collapses into `requires_capability(IMediaLibrary)`. The complexity disappears and does not come back anywhere else.
 - **Proposed fix:** Upload and download take `requires_capability(IMediaLibrary)`. Delete the branch, the `WhatsAppMediaHandler` import and the `MediaUploader` Protocol from `media_transfer.py`. If an explicit `media_type` matters on WhatsApp, pass the `MediaFamily` that `media_family()` already derives; `WhatsAppMediaLibrary.upload` currently ignores `family` (`whatsapp/media_library.py:37`). Keep the Media API info and delete routes on the WhatsApp extension router (08-01). This is the HandlingMedia core interface from the target shape; the media-area audit owns the interface itself.
-- **ADR conflict:** None. ADR-0021 decision 4 already lists `IMediaLibrary` as a gating capability.
+- **ADR conflict:** None. ADR-0024 decision 4 already lists `IMediaLibrary` as a gating capability.
 
 ### 08-04 Send handlers repeat target building and exception mapping, and map a failed result differently
 
@@ -124,7 +127,7 @@ I rejected the auditor's `include_outbound_transport` finding, because ADR-0009 
 - **Breaking + public surfaces:** if `/health` is slimmed, the response shape of `GET /api/{platform}/health` changes, and only WhatsApp serves that route.
 - **Evidence:**
   - `get_message_builder` (`whatsapp_dependencies.py:125-133`) has no caller in `wappa/`, `tests/` or `docs/`. The auditor missed it.
-  - `get_whatsapp_interactive_handler`, `get_whatsapp_template_handler`, `get_whatsapp_specialized_handler` and `get_whatsapp_messenger` exist only to feed `/health` (`whatsapp_health.py:37`). That route builds a full `WhatsAppMessenger` by hand, outside `OutboundRuntime`, which is the path ADR-0021 decision 3 removed for routes. It then reads only `messenger.platform` and `inbox_id`, and returns hard-coded `"healthy"` strings and type lists (`whatsapp_health.py:51-84`).
+  - `get_whatsapp_interactive_handler`, `get_whatsapp_template_handler`, `get_whatsapp_specialized_handler` and `get_whatsapp_messenger` exist only to feed `/health` (`whatsapp_health.py:37`). That route builds a full `WhatsAppMessenger` by hand, outside `OutboundRuntime`, which is the path ADR-0024 decision 3 removed for routes. It then reads only `messenger.platform` and `inbox_id`, and returns hard-coded `"healthy"` strings and type lists (`whatsapp_health.py:51-84`).
   - Correction to the auditor: `whatsapp_media_dependencies.py` does not duplicate `get_whatsapp_media_factory`. It is the only definition, imported by `whatsapp_dependencies.py:17` and `whatsapp_media.py:31`. The module is shallow: 6 lines of logic plus three comments about removed code.
 - **Deletion test:** Delete `get_message_builder`, the three handler providers, `get_whatsapp_messenger` and `whatsapp_media_dependencies.py` (folding its one function into `whatsapp_dependencies.py`). Nothing else changes, so the complexity simply disappears.
 - **Proposed fix:** Delete the items above. Make `/health` depend on `get_inbox_execution_context` (gated by the WhatsApp extension router, 08-01), and report the platform, `inbox_id` and `api_version`. Drop the invented per-service map, or derive it from the media factory constants.
@@ -143,7 +146,7 @@ I rejected the auditor's `include_outbound_transport` finding, because ADR-0009 
 
 ## Rejected findings
 
-- **08-08 `include_outbound_transport` as an overloaded profile switch and compatibility shim.** Rejected. ADR-0009 decides this behaviour deliberately: passing `include_outbound_transport=False` without a profile means a Host owns the boundary, so the other unauthenticated mutations default off with it. That is a fail-closed safety default, not an alias kept for compatibility (`whatsapp_combined.py:61-77`, `tests/test_outbound_route_composition.py:241-244`). Removing it would make a Host that ejects sends silently keep state-handler and media-delete mutations. The seven-parameter fan-out through `Wappa` → `WappaCorePlugin` → `create_messaging_router` (`wappa_core_plugin.py:70-79`) is cosmetic: it is explicit, typed and pinned by tests. The one real defect, the docstring that omits `comment_controls`, is folded into 08-02.
+- **08-08 `include_outbound_transport` as an overloaded profile switch and compatibility shim.** Rejected. ADR-0024 decides this behaviour deliberately: passing `include_outbound_transport=False` without a profile means a Host owns the boundary, so the other unauthenticated mutations default off with it. That is a fail-closed safety default, not an alias kept for compatibility (`whatsapp_combined.py:61-77`, `tests/test_outbound_route_composition.py:241-244`). Removing it would make a Host that ejects sends silently keep state-handler and media-delete mutations. The seven-parameter fan-out through `Wappa` → `WappaCorePlugin` → `create_messaging_router` (`wappa_core_plugin.py:70-79`) is cosmetic: it is explicit, typed and pinned by tests. The one real defect, the docstring that omits `comment_controls`, is folded into 08-02.
 - **08-10 `InboxExecutionContext` carries WhatsApp helpers.** Merged into 08-01. The defect is that the gate is attached to client construction, not that the helpers exist. Building a `WhatsAppClient` from resolved credentials on the request context is the composition point for WhatsApp extension routes. The proposal to define new capability interfaces for limits, media info and similar features is rejected as a hypothetical seam, because they have one adapter and static data. Templates already have `ITemplateMessaging`.
 - **08-10 sub-claim: `RoutePlatform` duplicates `PlatformType`.** Rejected. `PlatformType` also lists `TELEGRAM` and `TEAMS` (`wappa/schemas/core/types.py:15-18`), which have no adapters. `RoutePlatform` is the deliberate narrowing to served Platforms, validated once at the router (`inbox_context.py:60-72`). Deriving it from a registry is worth doing only once a registry exists (08-07).
 - **08-05 sub-claim: `whatsapp_media_dependencies.py` duplicates `get_whatsapp_media_factory`.** Rejected as stated: it holds the only definition. The finding survives as a shallow-module deletion.
@@ -152,17 +155,17 @@ I rejected the auditor's `include_outbound_transport` finding, because ADR-0009 
 
 - `wappa/api/routes/whatsapp_combined.py:127-168` mounts groups by capability flag, never by Platform. This is the composition root, and it has no Platform branch.
 - `requires_capability(kind)` (`wappa/api/dependencies/inbox_context.py:318-341`) and the comment routes in `wappa/api/routes/conversations.py` follow the right model for Platform-only capabilities: Comments answer 501 when `ICommentControls` is missing, with no branch in route code.
-- The send routes depend on `IMessenger` through `get_inbox_messenger` (`inbox_context.py:310-315`), which builds the Messenger through `OutboundRuntime` so app middleware runs. One router serves both Platforms, as ADR-0021 decision 1 requires.
+- The send routes depend on `IMessenger` through `get_inbox_messenger` (`inbox_context.py:310-315`), which builds the Messenger through `OutboundRuntime` so app middleware runs. One router serves both Platforms, as ADR-0024 decision 1 requires.
 - `RouteFamily` (`wappa/api/routes/whatsapp/route_families.py:100-117`) is small, and about 20 routers use it. It decides the capability group at the decorator. It passes the deletion test; only its location and name are wrong (08-02).
 - `RoutePlatform` and the `route_platform` path validation at the router level (`inbox_context.py:60-91`) reject an unknown `{platform}` in one place.
 - The `PlatformType` iteration in the status and platform listings (`wappa/api/routes/webhooks.py:165-204`) is enumeration, not a branch.
-- `whatsapp_only()` as one centralized helper is an acceptable interim, as ADR-0021 decision 4 states. The defect is where it is called from (08-01), not that it exists.
+- `whatsapp_only()` as one centralized helper is an acceptable interim, as ADR-0024 decision 4 states. The defect is where it is called from (08-01), not that it exists.
 
 ## Interface proposal
 
 The HTTP area adds no new interface. It is an edge that consumes the core interfaces through one gating mechanism, `requires_capability(kind)`, plus one router-level gate for the WhatsApp extension:
 
-- **SendingMessages (`IMessenger`, ADR-0016):** each send route makes exactly one `messenger.send_x(...)` call. The target comes from `direct_target(messenger, request)`, and one shared mapper turns exceptions and failed results into statuses (08-04). There is no per-Platform router.
+- **SendingMessages (`IMessenger`, ADR-0025):** each send route makes exactly one `messenger.send_x(...)` call. The target comes from `direct_target(messenger, request)`, and one shared mapper turns exceptions and failed results into statuses (08-04). There is no per-Platform router.
 - **HandlingMedia (`IMediaLibrary`, already implemented by both Platforms):** `POST /media/upload` and `GET /media/download/{id}` take `requires_capability(IMediaLibrary)`, with no Platform branch and no `WhatsAppMediaHandler` import in shared code (08-06).
 - **PlatformWebhooks:** the webhook controller looks up the payload router, the callback authenticator and the extra callback routes in the Platform adapter registry. The webhooks area owns the registry (08-07).
 - **WhatsApp capability extension:** Template mutations take `requires_capability(ITemplateMessaging)`, which already exists. The WhatsApp-only reads (Template info, Media API info and delete, limits, validators, `/health`) are mounted from one WhatsApp extension router that carries `whatsapp_only` once as a router dependency (08-01). Static limits and validators get no new interface, because they have one adapter. Flows and Calls join that router, or get a capability interface once they have a Messenger method.

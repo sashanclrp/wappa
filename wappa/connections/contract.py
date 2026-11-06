@@ -1,7 +1,7 @@
 """Inbox Connector: one contract for connecting accounts on every Platform.
 
 Connecting an account so it becomes an Inbox is the same action on every
-Platform (ADR-0017), and a separate responsibility from messaging: it runs
+Platform (ADR-0026), and a separate responsibility from messaging: it runs
 before a Messenger exists and produces the Wappa-encrypted credential record
 that a Messenger later uses.
 

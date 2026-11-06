@@ -1,11 +1,18 @@
 ---
-status: pending
+status: implemented_pending_live_gates
 urgency: high
 owner: Wappa interaction transport and consumer example
 depends_on: I01, relevant I02 message families
+last_reviewed: 2026-11-06
 ---
 
 # Interactions and a host-owned Conversational Flow
+
+## Code reality (2026-11-06)
+
+Form happy path, Other branch, invalid-email validation, buttons, quick replies, cards and carousel taps have live evidence. Resume/cancel and repeated/stale action scenarios need complete evidence; concurrent Users and the same User across Inboxes remain open.
+
+See the [series plan](../plan.md), [capability matrix](../references/capability-matrix.md) and [live evidence](../tests/live-test-plan.md). Historical test results do not replace the remaining live gates.
 
 ## Context
 

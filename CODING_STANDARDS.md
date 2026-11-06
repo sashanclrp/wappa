@@ -46,7 +46,7 @@ Update the documentation graph in the same change as the code it describes:
 | `CONTEXT.md` (or a context's own, via `CONTEXT-MAP.md`) | A domain term is added, renamed, or resolved. Glossary only; implementation plans go in `docs/implementation-plans/`. |
 | `ARCHITECTURE.md` and the nearest context `ARCHITECTURE.md` | A module responsibility, seam, adapter, interface, or folder rule changes. |
 | `docs/public-contract.md` | A surface Host Applications import, call, configure, subscribe to, or scaffold changes. |
-| `docs/adr/` | A decision is hard to reverse, surprising without context, and the result of a real trade-off. Supersede an ADR with a banner; never rewrite it. |
+| `docs/adr/` | A decision is hard to reverse, surprising without context, and the result of a real trade-off. Each decision cluster has one ADR stating its full current decision: a change to a cluster updates that ADR in the same change, and a new cluster gets a new ADR. |
 | `CHANGELOG.md` | Every user-visible change, under the version that ships it, with every break listed. |
 
 ## Commits and pull requests

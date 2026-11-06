@@ -1,11 +1,16 @@
 ---
 status: draft
-origin: ADR-0016 contract map (2026-11-05)
+origin: ADR-0025 contract map (2026-11-05)
+last_reviewed: 2026-11-06
 ---
 
 # Commerce: product messages homologated across Platforms
 
-Wappa has no commerce support yet. Sending products is an action several Platforms share, so by [ADR-0016](../../adr/0016-one-messenger-method-per-action.md) it gets one Platform-neutral shape, adapted per Platform. It is not a WhatsApp-only feature.
+## Code reality (2026-11-06)
+
+No shared commerce sending capability has landed. Existing carousel/card sends and inbound order models do not satisfy the product/catalog send contract or its live acceptance gates. Architecture hardening does not absorb this scope.
+
+Wappa has no commerce support yet. Sending products is an action several Platforms share, so by [ADR-0025](../../adr/0025-messenger-contract.md) it gets one Platform-neutral shape, adapted per Platform. It is not a WhatsApp-only feature.
 
 ## Native options
 

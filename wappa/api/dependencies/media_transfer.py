@@ -1,4 +1,4 @@
-"""Media upload over HTTP for every Platform (ADR-0021).
+"""Media upload over HTTP for every Platform (ADR-0024).
 
 Every Platform uploads through its Messenger's ``IMediaLibrary``; the
 multipart ``media_type`` reaches it as ``mime_type`` (WhatsApp honours it).

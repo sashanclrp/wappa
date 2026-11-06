@@ -1,4 +1,4 @@
-"""Meta payload schema drift: tolerate on input, report loudly (ADR-0010).
+"""Meta payload schema drift: tolerate on input, report loudly (ADR-0023).
 
 Models that parse Meta's webhook payloads accept fields they do not model
 (``extra="allow"``), so an additive Meta change never turns into a 400 that

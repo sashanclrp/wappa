@@ -44,7 +44,7 @@ from wappa.messaging.whatsapp.models.media_models import (
 )
 
 # One prefix, four capability groups. `DELETE /media/{id}` destroys a platform
-# asset, so it is gated apart from the reads it sits next to — see ADR-0009.
+# asset, so it is gated apart from the reads it sits next to — see ADR-0024.
 _family = RouteFamily(
     prefix="/media",
     tags=["Media"],

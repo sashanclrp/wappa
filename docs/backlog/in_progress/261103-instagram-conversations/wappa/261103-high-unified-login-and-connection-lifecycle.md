@@ -1,11 +1,18 @@
 ---
-status: pending
+status: implemented_core_gate_b_passed_remaining_access_checks
 urgency: high
 owner: Wappa connection primitives and controlled consumer backend
 depends_on: I01; complete live acceptance after gate A
+last_reviewed: 2026-11-06
 ---
 
 # Unified Login and connection lifecycle
+
+## Code reality (2026-11-06)
+
+Core Gate B passed on November 5: connection, real DM routing, replay rejection, cancellation and reconnect. Permission deselection and per-user deauthorize are not applicable to this Unified Login grant. Creator B-08 is unrun; independent-customer access and real credential revocation remain separate limitations. The unsupported Instagram deauthorize route was removed in 6cc8cf1.
+
+See the [series plan](../plan.md), [capability matrix](../references/capability-matrix.md) and [live evidence](../tests/live-test-plan.md). Historical test results do not replace the remaining live gates.
 
 ## Context
 

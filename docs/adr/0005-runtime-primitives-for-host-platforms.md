@@ -1,13 +1,13 @@
 # ADR-0005: Runtime Primitives for Host Platforms
 
-> ADR-0012 supersedes the assumption that an External Webhook Source must use
+> ADR-0023 supersedes the assumption that an External Webhook Source must use
 > Inbox identity for routing and dispatch. The signature verifier and External
 > Event Registry decisions in this ADR remain accepted.
 
 **Status:** Accepted  
 **Date:** 2026-07-25  
 **Supersedes:** None  
-**Extends:** ADR-0001 (Inbox ID Runtime Scope)
+**Extends:** ADR-0022 (Inbox identity and the Inbox Directory)
 
 ## Context
 

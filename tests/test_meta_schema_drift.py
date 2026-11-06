@@ -1,4 +1,4 @@
-"""Meta payloads parse tolerantly; schema drift is reported (ADR-0010)."""
+"""Meta payloads parse tolerantly; schema drift is reported (ADR-0023)."""
 
 import logging
 

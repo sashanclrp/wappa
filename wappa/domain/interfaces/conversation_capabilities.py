@@ -110,7 +110,7 @@ class MediaBytes(BaseModel):
 class ICommentControls(ABC):
     """Public comment actions: reply, hide/unhide/delete, media commenting.
 
-    A Platform-only capability (ADR-0016): WhatsApp has no comments. Private
+    A Platform-only capability (ADR-0025): WhatsApp has no comments. Private
     replies to a commenter use the shared ``send_text(PrivateReply(...))``.
     """
 

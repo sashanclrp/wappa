@@ -1,11 +1,18 @@
 ---
-status: partial_baseline_remaining_pending
+status: implemented_pending_final_verification
 urgency: high
 owner: Wappa domain, inbound runtime and public contract
 decided_by: docs/sasha/grilling-sessions/261103-instagram-scope-and-extensions.md
+last_reviewed: 2026-11-06
 ---
 
 # Contracts, DDD and extension foundations
+
+## Code reality (2026-11-06)
+
+Contracts, targets, credential access and typed lanes are implemented. MessageResult now lives in wappa/domain/results.py, so the earlier neutral-ownership blocker is closed. Final series docs and verification still apply.
+
+See the [series plan](../plan.md), [capability matrix](../references/capability-matrix.md) and [live evidence](../tests/live-test-plan.md). Historical test results do not replace the remaining live gates.
 
 ## Context
 
@@ -60,7 +67,7 @@ field/Platform/Inbox evidence without becoming generic untrusted broadcasts or
 External Webhook Source events. Reuse one Instagram callback and explicit scope.
 
 Update root/local glossary/architecture, context map, public imports and contract,
-ADR-0015 implementation status and migration docs in the same changes. Audit
+ADR-0025 implementation status and migration docs in the same changes. Audit
 SSE, pipeline, background/expiry factories, generated examples and REST adapters
 for target/result/event assumptions. A comment ID is never a DM message ID.
 

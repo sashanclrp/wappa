@@ -94,7 +94,7 @@ class FlowReply(BaseModel):
 
     @model_validator(mode="after")
     def _decode_response(self) -> Self:
-        # Inbound is tolerant (ADR-0010): undecodable answers leave
+        # Inbound is tolerant (ADR-0023): undecodable answers leave
         # ``response`` empty rather than failing the webhook.
         try:
             decoded = json.loads(self.response_json)

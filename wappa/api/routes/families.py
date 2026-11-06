@@ -8,7 +8,7 @@ stays visible right where the routes are declared.
 
 "Mutation" is not only "sends a message". A route that deletes a media asset,
 or that overwrites the conversational state of an arbitrary recipient, is just
-as destructive and just as unauthenticated — see ADR-0009.
+as destructive and just as unauthenticated — see ADR-0024.
 """
 
 from __future__ import annotations

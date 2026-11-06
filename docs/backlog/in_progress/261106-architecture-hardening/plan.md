@@ -1,6 +1,7 @@
 ---
 status: in_progress
 created: 2026-11-05
+last_reviewed: 2026-11-06
 scope: finish hardening Wappa architecture (multi-Inbox, multi-Platform)
 sources: audit/01-inbound-webhooks.md … audit/10-ddd-docs.md (verified, adversarially checked)
 ---
@@ -11,21 +12,72 @@ Multi-Inbox already holds: `InboxRef.cache_namespace` is Platform-qualified, one
 
 Cross-area conflicts were resolved by opening the code. Five rulings shape the plan. (1) The adapter registry from 01-2 and the `PLATFORMS` table from 09-1 are one thing: a single composition-root table, `wappa/platforms.py`, whose entries hold the `PlatformWebhooks` adapter and the Messenger builder. (2) The Instagram deauthorize route is deleted (06-7), not moved into the runtime (05-1): `docs/public-contract.md:316` and `wappa/messaging/ARCHITECTURE.md:230` both show it can only fire for Instagram Login grants, which this adapter does not create. (3) `IAttachmentMediaReader` is folded into `IMediaLibrary.download(max_bytes=)` (03-3) rather than kept as a capability (06-8): it is the third media seam the target shape asks to remove. (4) `supported_operations` keeps its explicit lists with a parity test (06-10 over 02-3), because derivation cannot express `send_text:private_reply`. (5) `PlatformType.TELEGRAM`/`TEAMS` stay as reserved vocabulary (09-3 partly rejected): once the registry decides what is installed, the enum is only vocabulary, and the third-Platform proof test needs an uninstalled member to register against.
 
+## Code reality (2026-11-06)
+
+The audit below describes the pre-hardening baseline. Its file paths and defect descriptions are historical inputs, not a claim that those defects remain. ADR references in the audits and in this plan were repointed to the consolidated ADRs; their `NNNN:line` citations point at the deleted pre-consolidation files. Implementation has landed through commits fbc7648, ab14f1b, db3fda8, 013f6e1, bb906ca, 1ae841a and 6cc8cf1. The WhatsApp-first commits further widened the shared messaging shapes. The review checkpoint is no longer a blocker to those landed slices.
+
+The remaining work is H-26, final documentation/ADR work under H-32, H-33 and final series verification. The ADR drafts are reconciled: on the user's decision (overriding the append-only note in Rejected and deferred) each decision cluster has one consolidated ADR stating its full current decision, ADR-0022 to ADR-0027, plus ADR-0028 WhatsApp First, and the absorbed ADRs and `adr-drafts/` were deleted. A targeted run on November 6 passed 139 tests covering documentation claims, the backlog index, registry, Instagram conversations/connectors, Messenger parity and WhatsApp media library. This was not a full-suite, wheel or live rerun.
+
+| Item | Current status | Evidence or remaining work |
+| --- | --- | --- |
+| H-01 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-02 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-03 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-04 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-05 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-06 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-07 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-08 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-09 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-10 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-11 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-12 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-13 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-14 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-15 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-16 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-17 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-18 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-19 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-20 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-21 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-22 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-23 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-24 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-25 | implemented | Landed in the November 6 hardening commits; final series verification remains. |
+| H-26 | replaced | Ruling (user, 2026-11-06): replaced by the shared `resolve_platform_user_profile` contract on `IMessenger` (see the next group); no `IUserProfileReader` capability. |
+| H-27 | done | Inbox-profile proposal now names IInboxProfileReader and typed optional fields; implementation remains a separate draft. |
+| H-28 | implemented | 6cc8cf1: unsupported deauthorize route removed, connector records typed, shared Graph/login functions, connector backlog refreshed. |
+| H-29 | implemented | 6cc8cf1: unsupported deauthorize route removed, connector records typed, shared Graph/login functions, connector backlog refreshed. |
+| H-30 | implemented | 6cc8cf1: unsupported deauthorize route removed, connector records typed, shared Graph/login functions, connector backlog refreshed. |
+| H-31 | implemented | 6cc8cf1: unsupported deauthorize route removed, connector records typed, shared Graph/login functions, connector backlog refreshed. |
+| H-32 | done | ADRs consolidated per cluster (ADR-0022 to ADR-0028), CONTEXT-MAP rows added, root sediment removed, root ARCHITECTURE.md new-Platform recipe rewritten. |
+| H-33 | done | `tests/test_third_platform_contract.py` and `tests/test_two_platform_inboxes.py`; `MessengerFactory` and `/api/{platform}` validation now read the app's Platform Registry table. |
+
+### Scope decisions (2026-11-06)
+
+- The completed v0.27 series was deleted at the user's request after confirmation that the published-package gate is ready. It no longer blocks this plan.
+- Template catalog management and lifecycle handling remain Host-owned. Symphonai has create/delete catalog operations in `backend/symphonai/services/wappa/template_catalog/application.py` and the extension handler in `backend/symphonai/engine/system/meta_template_status_webhook.py`. Its generic update coverage was not established by this review; that does not create a Wappa implementation obligation.
+- Outbound reactions were deprioritized by the user and their standalone draft was removed. Inbound reactions remain implemented.
+- Inbox business-profile configuration and Platform conversation entry points have no equivalent Symphonai implementation in the inspected tree. Their drafts remain. H-26 User profile reading and H-27 proposal naming do not absorb Inbox profile implementation.
+- H-25 owns the completed inbound Flow slice. The Flows draft retains outbound and unresolved phase-2 scope. Merely naming future Calling/Commerce/Media Adaptation capabilities here does not absorb those drafts.
+- Provider delivery identity remains separate. Echo filtering and Inbox/User/address routing do not implement webhook redelivery identity or deduplication.
+
 ## Target architecture
 
 ### The five core interfaces
 
-Four of the five exist today with two real adapters each; the work is trimming them to what callers use and removing the side doors around them. ProfileReading is the exception: WhatsApp Cloud API has no User lookup, so a mandatory interface would have one real adapter and one pass-through. It is shipped as a Platform capability with the stated promotion rule (04-3). This deviates from "every Platform implements" on purpose and ADR draft 0025 says so.
+Four of the five exist today with two real adapters each; the work is trimming them to what callers use and removing the side doors around them. ProfileReading is the exception: WhatsApp Cloud API has no User lookup, so a mandatory interface would have one real adapter and one pass-through. The plan shipped it as a Platform capability (04-3); the H-26 ruling replaced that with one core method on every Platform, `resolve_platform_user_profile`, which maps webhook evidence on WhatsApp and adds a Graph lookup on Instagram (ADR-0025 rule 10).
 
 | # | Interface | Module | Members (signatures) | Adapters |
 | --- | --- | --- | --- | --- |
 | 1 | `PlatformWebhooks` (Protocol) | `wappa/core/inbound/platform_webhooks.py` (new; also holds `RoutedWebhookDelivery`, `PayloadRoutingError` moved from `webhook_routing.py`) | `platform: PlatformType`; `builtin_fields: frozenset[str]`; `async route(payload: dict, resolver: IInboxCredentialResolver) -> tuple[RoutedWebhookDelivery, ...]` (may do credential I/O, raises `PayloadRoutingError` / the 503 family); `async translate(payload: dict, *, inbox_id: str) -> UniversalWebhook` (pure, no I/O) | WhatsApp (`processors/whatsapp_processor.py` + `core/inbound/webhook_routing.py`), Instagram (`processors/instagram_processor.py` + `core/inbound/instagram_routing.py`) |
-| 2 | `IMessenger` (SendingMessages, ADR-0016) | `wappa/domain/interfaces/messaging_interface.py` | `platform`, `inbox_id`, `supported_operations`, `capability(kind)`, `require_capability(kind)`, `send_text`, `send_image`/`send_video`/`send_audio`/`send_document`, `send_sticker`, `send_button_message(..., header: ButtonHeader | None)`, `send_list_message(..., header: ButtonHeader | None, sections: list[ListSection])`, `send_cta_message`, `send_carousel`, `send_location`, `send_contact`, `send_location_request`, `send_contact_request`, `mark_as_read(message_id: str, target: DirectMessage, *, typing: bool = False) -> MessageResult` | `WhatsAppMessenger`, `InstagramMessenger` |
+| 2 | `IMessenger` (SendingMessages, ADR-0025) | `wappa/domain/interfaces/messaging_interface.py` | `platform`, `inbox_id`, `supported_operations`, `capability(kind)`, `require_capability(kind)`, `send_text`, `send_image`/`send_video`/`send_audio`/`send_document`, `send_sticker`, `send_button_message(..., header: ButtonHeader | None)`, `send_list_message(..., header: ButtonHeader | None, sections: list[ListSection])`, `send_cta_message`, `send_carousel`, `send_location`, `send_contact`, `send_location_request`, `send_contact_request`, `mark_as_read(message_id: str, target: DirectMessage, *, typing: bool = False) -> MessageResult` | `WhatsAppMessenger`, `InstagramMessenger` |
 | 3 | `IMediaLibrary` (HandlingMedia, one seam) | `wappa/domain/interfaces/media_library.py` | `async upload(source: Path, family: MediaFamily, *, mime_type: str | None = None) -> UploadResult`; `async download(media_id: str, *, max_bytes: int | None = None) -> ReadResult[MediaBytes]` | `WhatsAppMediaLibrary`, `InstagramMediaLibrary` (private `InstagramAttachmentReader` behind it) |
 | 4 | `IUserProfileReader` (ProfileReading, Platform capability) | `wappa/domain/interfaces/user_profile_reader.py` (new) | `async get_user_profile(user_id: str) -> ReadResult[UserProfile]`; `UserProfile(user_id, display_name, username, picture_url, raw=exclude)` frozen, `extra="forbid"` | Instagram (`messaging/instagram/profile.py`, Graph `GET /{igsid}`); WhatsApp registers none, its supply is webhook `UserBase.profile_name`. Promote to Shared when a second Platform has a real lookup |
-| 5 | `IInboxConnector` (InboxConnection, ADR-0017) | `wappa/connections/contract.py` | `platform`; `begin(host_subject, *, metadata) -> AuthorizationRequest`; `complete(*, state, host_subject, code, error, error_reason) -> ConnectionGrant`; `activate(grant, inbox_ref, *, credentials: InboxCredentialService, previous: CredentialRecord | None = None) -> ActivationResult` (raises `ValueError` on a Platform mismatch); `disconnect(inbox_ref, account_ref, token) -> bool`; `ActivationResult.record: ActiveInboxCredentialRecord` | `WhatsAppConnector`, `InstagramConnector` on `MetaBusinessLogin` |
+| 5 | `IInboxConnector` (InboxConnection, ADR-0026) | `wappa/connections/contract.py` | `platform`; `begin(host_subject, *, metadata) -> AuthorizationRequest`; `complete(*, state, host_subject, code, error, error_reason) -> ConnectionGrant`; `activate(grant, inbox_ref, *, credentials: InboxCredentialService, previous: CredentialRecord | None = None) -> ActivationResult` (raises `ValueError` on a Platform mismatch); `disconnect(inbox_ref, account_ref, token) -> bool`; `ActivationResult.record: ActiveInboxCredentialRecord` | `WhatsAppConnector`, `InstagramConnector` on `MetaBusinessLogin` |
 
-`PlatformWebhooks` deliberately omits four things. An SSE identity hook is not needed, because identity is read from neutral evidence fields (01-3). A display name is cosmetic and lives on the registry entry. A per-Platform authenticator is a one-adapter seam while both Platforms are Meta callbacks sharing one App Secret (01-8, ADR-0010); add `authenticate` only with a non-Meta Platform. Message-type handler tables stay private to each adapter. `route` and `translate` stay separate because ADR-0002 runs admission and echo proof between them.
+`PlatformWebhooks` deliberately omits four things. An SSE identity hook is not needed, because identity is read from neutral evidence fields (01-3). A display name is cosmetic and lives on the registry entry. A per-Platform authenticator is a one-adapter seam while both Platforms are Meta callbacks sharing one App Secret (01-8, ADR-0023); add `authenticate` only with a non-Meta Platform. Message-type handler tables stay private to each adapter. `route` and `translate` stay separate because ADR-0023 runs admission and echo proof between them.
 
 ### Composition root
 
@@ -37,7 +89,7 @@ The credential-record union stays a static Pydantic discriminated union in `wapp
 
 | Value | Today | After |
 | --- | --- | --- |
-| `MessageResult` | `wappa/messaging/whatsapp/models/basic_models.py:101`, `platform` defaults to WHATSAPP, imported at runtime by `wappa/domain/results.py:22` | Defined in `wappa/domain/results.py`; `platform` required; `platform_response` the single native-evidence field; `from_api_response` moves to the WhatsApp adapter. BSUID/phone recipient fields stay only if ADR-0019 Delivery Address evidence needs them on the neutral type (check during H-01) |
+| `MessageResult` | `wappa/messaging/whatsapp/models/basic_models.py:101`, `platform` defaults to WHATSAPP, imported at runtime by `wappa/domain/results.py:22` | Defined in `wappa/domain/results.py`; `platform` required; `platform_response` the single native-evidence field; `from_api_response` moves to the WhatsApp adapter. BSUID/phone recipient fields stay only if ADR-0022 Delivery Address evidence needs them on the neutral type (check during H-01) |
 | `InteractiveHeader` / `HeaderType` | `wappa/messaging/whatsapp/models/interactive_models.py` | Replaced by `ButtonHeader` (text, or image by `url` or `media_id`) in `wappa/domain/interactive.py`; used by both button and list messages; video/document headers stay WhatsApp adapter validation, not neutral type |
 | `ListSection` / `ListRow` | `wappa/messaging/whatsapp/models/interactive_models.py` | `wappa/domain/interactive.py`; WhatsApp wire models become private to the adapter |
 | `RoutedWebhookDelivery`, `PayloadRoutingError` | `wappa/core/inbound/webhook_routing.py` (WhatsApp module) | `wappa/core/inbound/platform_webhooks.py` |
@@ -53,7 +105,7 @@ There is exactly one mechanism for a Platform-only capability: a focused, action
 | Templates | `ITemplateMessaging` (`send_text_template`, `send_media_template`, `send_location_template`) + `OutboundRuntime.templates(inbox_ref)` transport | yes | — | Template button reply on `InboundMessageWebhook` |
 | Flows | `IFlowMessaging.send_flow(target, flow, body, cta, *, header=None, footer=None, screen=None, data=None) -> MessageResult` (when the Flows PRD lands) | yes | — | typed `nfm_reply` `FlowReply` on `InboundMessageWebhook` |
 | Calls | `ICallControls` (`pre_accept`, `accept`, `reject`, `terminate`, `start_call`, `request_call_permission` → `OperationOutcome`) (when the Calling PRD lands) | yes | — | `CallWebhook` → `process_call` (exists) |
-| Comments | `ICommentControls`, `IConversationContentReader` (exist); private replies are a `send_text` target (`PrivateReply`, ADR-0014/0021) | — | yes | comment/mention Universal Webhooks (exist) |
+| Comments | `ICommentControls`, `IConversationContentReader` (exist); private replies are a `send_text` target (`PrivateReply`, ADR-0025, ADR-0024) | — | yes | comment/mention Universal Webhooks (exist) |
 | User profile | `IUserProfileReader` (interface 4) | — | yes | — |
 | History | `IConversationHistoryReader` (exists) | — | yes | `HistorySyncWebhook` |
 
@@ -74,7 +126,7 @@ Nothing new is added with one adapter except interface 4 (as a capability, by th
 
 ## New Platform proof
 
-### Files a third Platform touches TODAY
+### Files a third Platform touched before hardening
 
 Taken from `ARCHITECTURE.md:300-311` and verified in audits 01, 05, 08, 09. Everything in the right column of the TODAY table that is not an adapter folder is a backlog item.
 
@@ -98,7 +150,7 @@ Taken from `ARCHITECTURE.md:300-311` and verified in audits 01, 05, 08, 09. Ever
 | `wappa/api/dependencies/media_transfer.py:94` | WhatsApp media branch (a new Platform with a different upload rule would add another) | H-18 |
 | `wappa/domain/interfaces/messaging_interface.py:21-26` | must import WhatsApp `MessageResult`/`InteractiveHeader`/`ListSection` to implement `IMessenger` | H-01, H-02 |
 
-### Files a third Platform touches AFTER the backlog
+### Target files a third Platform touches after hardening
 
 - Its adapter folders: `wappa/webhooks/<platform>/`, `wappa/processors/<platform>_processor.py` (+ `core/inbound/<platform>_routing.py` or folded in), `wappa/messaging/<platform>/`, optional `wappa/connections/<platform>.py`, optional capability adapters registered in its Messenger's `_capabilities`.
 - The composition root: one `PlatformEntry` in `wappa/platforms.py`.
@@ -193,7 +245,7 @@ Benefits: `services.py` no longer changes per Platform.
 Files: `wappa/core/inbound/runtime.py:390-413`, `wappa/core/sse/context.py:135-172`.
 Problem: `_derive_sse_identity` gates on WHATSAPP and guesses phone vs BSUID from identifier shape although the adapters already fill explicit evidence fields.
 Solution: `derive_identifiers(user)` for webhooks with a user, `(bsuid, phone_number)` for `CallWebhook`, `(recipient_bsuid, recipient_phone_id)` for `StatusWebhook`, `(None, None)` otherwise; drop the Platform check and `classify_meta_identifier` here; make the `sse_event_scope(platform=...)` default required.
-Benefits: one Platform branch removed from the runtime; aligned with ADR-0019 explicit evidence.
+Benefits: one Platform branch removed from the runtime; aligned with ADR-0022 explicit evidence.
 
 ### Seam 3: SendingMessages
 
@@ -233,7 +285,7 @@ Benefits: a new-Platform contributor can see which routes are shared.
 Files: `wappa/domain/interfaces/media_library.py:38-45`, `wappa/messaging/whatsapp/media_library.py:31-60`, `wappa/messaging/instagram/media_library.py:68-69`, `wappa/api/dependencies/media_transfer.py`, `wappa/api/routes/whatsapp/whatsapp_media.py:426-451`.
 Problem: the shared upload dependency branches on WHATSAPP only because `upload` cannot carry an explicit MIME; download has no size bound; the download route bypasses the seam and tells Instagram Hosts to fetch CDN URLs directly.
 Solution: `upload(source, family, *, mime_type=None)`, `download(media_id, *, max_bytes=None)` enforced by both adapters; `get_media_uploader = requires_capability(IMediaLibrary)`; delete the branch, the `WhatsAppMediaHandler` import and the `MediaUploader` Protocol; the download route returns `MediaBytes.content_type`; add a WhatsApp library-path route test.
-Benefits: one media seam at the HTTP edge with no Platform branch (ADR-0021 decision 4 honoured).
+Benefits: one media seam at the HTTP edge with no Platform branch (ADR-0024 decision 4 honoured).
 
 **H-19 Delete the `IMediaHandler` ABC** (03-2, 06-8). Size S. Deletion. Breaking: yes (`wappa.domain.interfaces.IMediaHandler`).
 Files: `wappa/domain/interfaces/media_interface.py`, `wappa/domain/interfaces/__init__.py:14`, `wappa/api/routes/whatsapp/whatsapp_media.py:400,435,506`, `wappa/api/routes/whatsapp/whatsapp_health.py:38`, `docs/public-contract.md:1050`, `wappa/messaging/ARCHITECTURE.md:37,57,98`.
@@ -282,7 +334,8 @@ Benefits: Flow completions reach Hosts typed.
 ### Seam 6: ProfileReading
 
 **H-26 `IUserProfileReader` capability with the Instagram adapter** (04-1, 04-3). Depends on H-13. Size M. Breaking: no (additive).
-Files: new `wappa/domain/interfaces/user_profile_reader.py`, new `wappa/messaging/instagram/profile.py`, `wappa/messaging/instagram/messenger.py:222-228`, `wappa/messaging/__init__.py`, `docs/public-contract.md`, ADR-0016 contract map.
+Ruling (user, 2026-11-06): replaced by the shared `resolve_platform_user_profile` contract (see the next group). The text below is the original proposal.
+Files: new `wappa/domain/interfaces/user_profile_reader.py`, new `wappa/messaging/instagram/profile.py`, `wappa/messaging/instagram/messenger.py:222-228`, `wappa/messaging/__init__.py`, `docs/public-contract.md`, ADR-0025 contract map.
 Problem: Instagram DM Users arrive as `UserBase(platform_user_id)` only and `get_display_name()` returns the raw IGSID; Hosts cannot call Graph themselves without the Inbox token (credential-authority rule).
 Solution: the interface in Target architecture; Graph `GET /{igsid}?fields=name,username,profile_pic` with `history.py`'s failure classification; never called from intake or dispatch; caching is Host policy; optional `GET /conversations/{user_id}/profile` with `requires_capability`.
 Benefits: Instagram Hosts can greet Users by name through the one extension mechanism.
@@ -295,7 +348,7 @@ Solution: rename to `IInboxProfileReader`, typed optional fields instead of `ext
 ### Seam 7: InboxConnection
 
 **H-28 Delete the Instagram deauthorize route** (06-7; supersedes the move proposed in 05-1). Size S. Deletion. Breaking: yes (`POST /webhook/inboxes/instagram/deauthorize`, `wappa.connections.deauthorization_event`).
-Files: `wappa/api/routes/webhooks.py:103-143`, `wappa/connections/instagram.py:368-410`, `wappa/connections/__init__.py:24-33`, `docs/public-contract.md:314-316`, `wappa/messaging/ARCHITECTURE.md` lane table, `wappa-instagram-apps` skill, ADR-0016 contract map row.
+Files: `wappa/api/routes/webhooks.py:103-143`, `wappa/connections/instagram.py:368-410`, `wappa/connections/__init__.py:24-33`, `docs/public-contract.md:314-316`, `wappa/messaging/ARCHITECTURE.md` lane table, `wappa-instagram-apps` skill, ADR-0025 contract map row.
 Problem: the route builds its own Dispatch Context, bypasses the Inbox Directory and makes `wappa.connections` import the webhooks layer, for a callback Meta never sends for the Unified Login grants Wappa's connector creates.
 Solution: clean cut; the `InboxConnectionWebhook` lane stays real through WhatsApp `account_offboarded`/`account_reconnected`. If Instagram Login is ever supported, reintroduce the parser under `wappa/webhooks/instagram/` and dispatch through the inbound runtime.
 Benefits: one side door and one layering inversion gone.
@@ -314,7 +367,7 @@ Benefits: outcome semantics change in one place; a third Meta connector does not
 
 **H-31 Refresh the connector backlog draft** (05-6). Size S. Breaking: no.
 Files: `docs/backlog/in_progress/261105-mid-inbox-connector-contract.md`.
-Solution: keep only open Wappa items (live Gate B, an Embedded Signup run, credential-step result type, optional `/register`), point to ADR-0017 for the shape, move the Symphonai step to the Symphonai backlog.
+Solution: keep only open Wappa items (live Gate B, an Embedded Signup run, credential-step result type, optional `/register`), point to ADR-0026 for the shape, move the Symphonai step to the Symphonai backlog.
 
 ### Seam 8: docs and proof
 
@@ -371,7 +424,7 @@ Clean cut: no aliases, re-exports or deprecation shims (memory rule). Every row 
 | `/api/instagram/*/limits`, `/api/instagram/specialized/validate-*` | 200 becomes 501 | WhatsApp extension router | H-24 |
 | `GET /api/{platform}/health` | response slimmed | platform, inbox_id, api_version | H-24 |
 | `FlowReply`, `MessageType` for `nfm_reply` | new | — | H-25 |
-| `IUserProfileReader`, `UserProfile` | new | `wappa.domain.interfaces.user_profile_reader`, exported from `wappa.messaging` | H-26 |
+| `IMessenger.resolve_platform_user_profile`, `PlatformUserProfile` | new (H-26 ruling replaced `IUserProfileReader`) | one core method on every Platform | H-26 |
 | `POST /webhook/inboxes/instagram/deauthorize`, `wappa.connections.deauthorization_event` | removed | WhatsApp `account_offboarded` lane unchanged | H-28 |
 | `ActivationResult.record`, `IInboxConnector.activate(previous=)`, `build_record` | typed | `ActiveInboxCredentialRecord`, `CredentialRecord | None` | H-29 |
 | `InstagramSubscriptions` constructor | changed | takes the shared Graph transport | H-30 |
@@ -379,13 +432,13 @@ Clean cut: no aliases, re-exports or deprecation shims (memory rule). Every row 
 ## Docs deltas
 
 - `CONTEXT.md:204`: map tenant/tenant_id to `inbox_id` only when it means the Platform-facing identity; business tenancy is a Host concern with no Wappa term; drop the `owner_id` clause (10-01). Add terms: Platform Registry (`PLATFORMS`, the installed-Platform set), Platform Capability (an interface reached through `IMessenger.capability`, one mechanism), User Profile (`IUserProfileReader`, Platform capability) (H-08, H-26).
-- `CONTEXT-MAP.md`: add rows for API (`wappa/api/ARCHITECTURE.md`), External Webhooks (`wappa/core/external_webhooks/ARCHITECTURE.md`) and Connections (ADR-0017, terms in root `CONTEXT.md:106`); no new per-context glossaries (10-05).
+- `CONTEXT-MAP.md`: add rows for API (`wappa/api/ARCHITECTURE.md`), External Webhooks (`wappa/core/external_webhooks/ARCHITECTURE.md`) and Connections (ADR-0026, terms in root `CONTEXT.md:106`); no new per-context glossaries (10-05).
 - Root `ARCHITECTURE.md:290-311`: item 2 lists Instagram adapter paths too; item 4 says `PlatformType` is vocabulary and `PLATFORMS` is installation; item 6 "Adding a new platform" becomes the AFTER list in New Platform proof (adapter folders, one `PlatformEntry`, one enum member, one record pair). Until H-08..H-11 land, item 4 must state the current branches as known debt rather than claim a registry (10-06). Add a Connections row to the deeper-docs table (`:339-349`). Cut Key Architectural Decisions (`:351-363`) to a one-line pointer to `docs/adr/` and move the logging paragraph under a fitting heading (10-07).
 - `wappa/webhooks/ARCHITECTURE.md` and `wappa/webhooks/CONTEXT.md`: remove `SchemaFactory`/registry rows; document the `PlatformWebhooks` protocol and the WhatsApp handler table for "Adding a message family" (H-06, H-08).
 - `wappa/messaging/ARCHITECTURE.md`: neutral types now in `wappa/domain` (`:64-66`); media section names only `IMediaLibrary` (`:37,48,57,98`); capability map table per Target architecture; drop the Instagram deauthorize lane cell (H-01, H-02, H-19, H-20, H-28).
 - `wappa/api/ARCHITECTURE.md`: list `ITemplateMessaging` among capability-gated routes (`:34`); describe the shared messaging router vs the WhatsApp extension router and its single gate (`:25,35`) (10-13, H-17, H-24).
 - `docs/public-contract.md`: every row of Proposed public interface changes, including `:44,45,56,60,62,71,280,314-316,1050`.
-- ADR banners (one line each, append-only log kept): ADR-0007 (`create_whatsapp_router` replaced by `create_messaging_router` at `/api/{platform}`, ADR-0021; flags carry over), ADR-0014 (amended by ADR-0019; MessageResult housing completed by draft 0023), ADR-0021 (dated note: Templates are the `ITemplateMessaging` capability; amended by drafts 0024/0025), ADR-0016 (contract map amended by drafts 0023-0026), ADR-0010 (adapter registration amended by draft 0022), ADR-0017 (amended by draft 0026) (10-02, 10-13).
+- ADRs (user decision, 2026-11-06, replacing the banner plan): one consolidated ADR per cluster states the cluster's full current decision: ADR-0022 identity and Inbox Directory, ADR-0023 inbound webhooks, ADR-0024 outbound HTTP routes and transports, ADR-0025 Messenger contract, ADR-0026 Inbox connection, ADR-0027 runtime lifecycle; ADR-0028 WhatsApp First is new. ADR-0005, ADR-0008 and ADR-0013 stay standalone. The absorbed ADRs and `adr-drafts/` are deleted and every reference repointed (10-02, 10-13).
 - Root sediment: `git rm TEMPLATE_API_GUIDE.md` (wrong, unlinked; 10-10); `git rm META_PRODUCTION.md` (stray personal Postman link; 10-09); `META-CHANGELOGS.md` stays (10-11 rejected).
 
 Single home for each business rule after the hardening:
@@ -394,14 +447,14 @@ Single home for each business rule after the hardening:
 | --- | --- |
 | Which Platforms are installed | `wappa/platforms.py` `PLATFORMS` |
 | Platform vocabulary | `wappa/schemas/core/types.py` `PlatformType` |
-| Callback authentication before parse | ADR-0010 + `webhook_controller.py` (`MetaCallbackAuthenticator`) |
+| Callback authentication before parse | ADR-0023 + `webhook_controller.py` (`MetaCallbackAuthenticator`) |
 | Payload → Inbox routing, per Platform | each `PlatformWebhooks.route` adapter |
 | Credential record shape and Platform → record class | `wappa/domain/inbox/credentials.py` (`RECORD_TYPES`) |
 | Credential authority (Hosts never hold Inbox tokens) | root `ARCHITECTURE.md` + `CONTEXT.md` |
-| One method per cross-Platform action | ADR-0016 |
-| Platform-only capability mechanism and capability map | ADR draft 0025 + `wappa/messaging/ARCHITECTURE.md` table |
-| Media upload/download semantics | `IMediaLibrary` docstrings + ADR draft 0024 |
-| HTTP gating (capability → 501; WhatsApp extension router) | ADR-0021 + draft 0025 |
+| One method per cross-Platform action | ADR-0025 |
+| Platform-only capability mechanism and capability map | ADR-0025 + `wappa/messaging/ARCHITECTURE.md` table |
+| Media upload/download semantics | `IMediaLibrary` docstrings + ADR-0025 |
+| HTTP gating (capability → 501; WhatsApp extension router) | ADR-0024 + ADR-0025 |
 | Graph API version and base URL | `MetaApplicationConfig` |
 
 ## Rejected and deferred
@@ -410,14 +463,14 @@ Rejected findings (from the verified audits, plus the cross-area rulings above):
 
 - 01-2-auditor: merged into 01-1 (dead parts) and 01-2 (live branches).
 - 01-7: wrong; the `user_id` fallback belongs to `CallWebhook`, which has `bsuid`/`phone_number`.
-- 01-8: correct ADR-0010 design; a per-Platform authenticator is a one-adapter seam while both Platforms are Meta.
+- 01-8: correct ADR-0023 design; a per-Platform authenticator is a one-adapter seam while both Platforms are Meta.
 - 01-9: out of area; handled as H-28.
 - 02-8: no ISP split of `IMessenger`; confirms the design.
 - 02-3 (derivation of `supported_operations`): replaced by a parity test (H-14); derivation cannot express qualifier tokens (06-10).
 - 02-3 sub-claim (callers hit errors after checking): wrong; a missing entry correctly means unsupported.
 - 02-4 sub-claim (callable cast): typing-only, cosmetic.
 - 03-4: cosmetic; stateless per-call `WhatsAppMediaLibrary` is free.
-- 03-6: merged into H-18; bytes source, neutral `limits()` and "never raise" rejected (hypothetical or contradict ADR-0021 decision 4).
+- 03-6: merged into H-18; bytes source, neutral `limits()` and "never raise" rejected (hypothetical or contradict ADR-0024 decision 4).
 - 03-7: observation, not a defect.
 - 03-8: evidence wrong; the variants have a scaffold caller and a released Host feature.
 - 03-9: docs accurate today; updates are in H-19/H-20.
@@ -428,16 +481,16 @@ Rejected findings (from the verified audits, plus the cross-area rulings above):
 - 05-2 sub-claim (silent else-branch): refuted, `_require_platform` runs first.
 - 05-4 sub-claim (MetaInboxConnector template base): over-engineering.
 - 05-7 (Wappa-owned connector registry): connectors are Host-composed; a registry would be a hypothetical seam.
-- 06-2-auditor (move PrivateReply to `ICommentControls`): conflicts with ADR-0014/0021, loses middleware and echo coverage.
+- 06-2-auditor (move PrivateReply to `ICommentControls`): conflicts with ADR-0025, ADR-0024, loses middleware and echo coverage.
 - 06-9 split half (split `conversation_capabilities.py`): cosmetic.
 - 06-10 (derived `supported_operations`): over-engineering; parity test instead.
 - 06-8 extras (`IAttachmentMediaReader` as a legitimate capability): overruled by 03-3 / H-20 to remove the third media seam.
 - 07-1 (pipeline registry for sending capabilities): one capability today; trigger recorded in H-25 / Target architecture.
-- 07-3 (collapse three Template methods): contract churn ADR-0016 does not ask for.
+- 07-3 (collapse three Template methods): contract churn ADR-0025 does not ask for.
 - 07-5, 07-7: duplicates merged into 07-4 and 07-6.
 - 07-8 (Calls SSE branch): not Calls-specific; covered by H-12.
 - 07-9 (capability if-chain, ITemplateMessaging MRO): leave the MRO; lookup unified by H-13.
-- 08-08 (`include_outbound_transport` as a shim): ADR-0009 fail-closed default.
+- 08-08 (`include_outbound_transport` as a shim): ADR-0024 fail-closed default.
 - 08-10: merged into 08-01 (H-24).
 - 08-10b (`RoutePlatform` duplicates `PlatformType`): it is a deliberate narrowing; now derived from `PLATFORMS` (H-08).
 - 08-05b (duplicate `get_whatsapp_media_factory`): factually wrong.
@@ -447,7 +500,7 @@ Rejected findings (from the verified audits, plus the cross-area rulings above):
 - 09-7: deauthorize handled by H-28; `MediaResult` defaults cosmetic; `register_webhook_field` default kept; `generate_whatsapp_*` moved to H-06.
 - 09-8: cosmetic; labels come from `PlatformEntry.display_name` after H-08.
 - 09-9: dead code, deleted in H-06.
-- 10-03, 10-04, 10-12 (consolidate ADRs 0001/0002, split 0015, merge 0005/0012/0018/0002/0010): the ADR log is append-only and existing banners are accurate. The ADR drafts in `adr-drafts/` therefore record the new hardening decisions per cluster and amend (not rewrite) the absorbed ADRs.
+- 10-03, 10-04, 10-12: the verifier rejected consolidation as rewriting an append-only log. The user overrode that on 2026-11-06: the clusters were consolidated (see Docs deltas), and ADR-0005 stays standalone as the verifier argued.
 - 10-08: unsupported; layering across docs is deliberate.
 - 10-11: cosmetic; `META-CHANGELOGS.md` is linked and accurate.
 
@@ -457,10 +510,10 @@ Deferred (not in this hardening):
 - `IFlowMessaging` outbound and `SendInvocation.capability` (Flows PRD); `ICallControls` (Calling PRD).
 - `IMediaLibrary.stream()` until a Host needs it and both adapters implement it.
 - `IInboxProfileReader` build (H-27 only renames the draft).
-- `send_reaction` core method (existing backlog draft).
-- Credential-step `begin` result type and any Wappa-owned connector registry (ADR-0017 consequences; wait for a non-Meta connector).
+- `send_reaction` core method, deprioritized by the user on 2026-11-06; no standalone implementation draft.
+- Credential-step `begin` result type and any Wappa-owned connector registry (ADR-0026 consequences; wait for a non-Meta connector).
 - `authenticate` on `PlatformWebhooks` and a non-Meta callback authenticator (wait for a non-Meta Platform).
 - A pluggable credential-record union (static union kept; revisit only if a Platform must ship outside the package).
 - Removing the public `register_webhook_field(platform=WHATSAPP)` default (optional clean cut, not planned).
 
-Unaudited areas: none; all ten areas returned verified results. Not covered by any area and therefore unaudited at seam level: cache backends and SSE hub internals beyond identity (ADR-0013, ADR-0020), external webhooks (ADR-0012), CLI scaffolding beyond the two examples cited, and the HTTP client lifecycle (ADR-0003/0004).
+Unaudited areas: none; all ten areas returned verified results. Not covered by any area and therefore unaudited at seam level: cache backends and SSE hub internals beyond identity (ADR-0013, ADR-0022), external webhooks (ADR-0023), CLI scaffolding beyond the two examples cited, and the HTTP client lifecycle (ADR-0027).

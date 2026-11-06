@@ -1,7 +1,7 @@
 """Composition of Wappa's Messaging HTTP API under ``/api/{platform}``.
 
 The Platform in the path plus ``X-Wappa-Inbox-ID`` select the Inbox. Shared
-routes call that Inbox's own Messenger (one method per action, ADR-0016) or
+routes call that Inbox's own Messenger (one method per action, ADR-0025) or
 gate on a Focused Capability (``requires_capability``), so the same route
 serves every Platform and answers 501 where the Platform cannot perform it.
 Routes that exist only on WhatsApp (text and media limits, validators,
@@ -20,8 +20,8 @@ them, not by which module they live in:
 - **comment controls** — replies to, hides or deletes public comments
 - everything else — reads: limits, lookups, downloads, health
 
-Each group is chosen explicitly. See ADR-0007 for the outbound split and
-ADR-0009 for why "mutation" had to mean more than "send".
+Each group is chosen explicitly. See ADR-0024 for the outbound split and
+ADR-0024 for why "mutation" had to mean more than "send".
 """
 
 from fastapi import APIRouter, Depends

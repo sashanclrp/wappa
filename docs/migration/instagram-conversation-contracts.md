@@ -62,9 +62,9 @@ result = await controls.reply_comment(webhook.comment_ref, "Thanks!")
 
 `send_text` now accepts `MessageTarget = DirectMessage | PrivateReply`. Every other send rejects `PrivateReply` with `UnsupportedOperationError`, and WhatsApp rejects it too. `PrivateReply` cannot combine with `reply_to_message_id`. Middleware: `SendInvocation.target` is the union; `SendInvocation.recipient` is `target.address` (`comment:<id>` for a private reply, because the User is not yet addressable). `ICommentControls.reply_comment` bypasses message middleware (a public comment is not a private message).
 
-## One Messenger method per action (ADR-0016)
+## One Messenger method per action (ADR-0025)
 
-Every action that exists on both Platforms has one `IMessenger` method; the Instagram adapter maps it onto native Instagram APIs. Host code does not branch on Platform name; check `messenger.supported_operations` once. See [ADR-0016](../adr/0016-one-messenger-method-per-action.md) and the mapping table in the [public contract](../public-contract.md).
+Every action that exists on both Platforms has one `IMessenger` method; the Instagram adapter maps it onto native Instagram APIs. Host code does not branch on Platform name; check `messenger.supported_operations` once. See [ADR-0025](../adr/0025-messenger-contract.md) and the mapping table in the [public contract](../public-contract.md).
 
 | Action | Method | Instagram mapping |
 | --- | --- | --- |
@@ -78,7 +78,7 @@ Every action that exists on both Platforms has one `IMessenger` method; the Inst
 | send a sticker | `send_sticker(source, target)` | sent as an image (png/jpeg/gif; `.webp` rejected before I/O) |
 | send media with a caption | `send_image/video/document(..., caption=...)` | media, then the caption as a follow-up text; `filename`/`transcript` ignored |
 
-`send_location_request` and `send_contact_request` stay WhatsApp-only: Instagram raises `UnsupportedOperationError` because a text prompt cannot return the data, so gate on `supported_operations`. Reactions have no send method yet (`send_reaction` is a recorded gap: [backlog draft](../backlog/drafts/261105-mid-send-reaction-core-method.md)).
+`send_location_request` and `send_contact_request` stay WhatsApp-only: Instagram raises `UnsupportedOperationError` because a text prompt cannot return the data, so gate on `supported_operations`. Reactions have no send method yet (`send_reaction` is a recorded gap: deprioritized by the user on 2026-11-06).
 
 `mark_as_read` gained an optional `target`. WhatsApp marks the message read (and now really sends the typing indicator); existing WhatsApp calls without `target` are unchanged. Custom `IMessenger` implementations and test fakes that override `mark_as_read` must accept the new keyword. Earlier unreleased drafts exposed `mark_seen`, `set_typing`, `send_quick_replies`, `send_buttons`, `send_card`, `IMessenger.reply_comment`, `QuickReply`, `PostbackButton`, `SenderActionResult`, `IMessenger.download_media` and an `InteractionWebhook`/`process_interaction` lane; none of them exist in the released contract.
 
@@ -180,4 +180,4 @@ delivery is scheduled.
 
 ## Connecting accounts (Inbox Connector)
 
-`wappa.connections` provides one contract for every Platform, `IInboxConnector` (ADR-0017), implemented by `InstagramConnector` (Unified Login) and `WhatsAppConnector` (Embedded Signup) on a shared Meta Business Login core: `begin` (one-use state bound to the Host operator), `complete` (code exchange, discovery, scope readiness per `DiscoveredInbox`), `activate` (webhook subscription plus the Wappa-encrypted record) and `disconnect`. The Host owns routes, intent storage, persistence commit and `refresh_inbox` afterwards. The earlier unreleased `InstagramUnifiedLogin`, `UnifiedLoginConfig` and `build_instagram_record` are replaced by this contract.
+`wappa.connections` provides one contract for every Platform, `IInboxConnector` (ADR-0026), implemented by `InstagramConnector` (Unified Login) and `WhatsAppConnector` (Embedded Signup) on a shared Meta Business Login core: `begin` (one-use state bound to the Host operator), `complete` (code exchange, discovery, scope readiness per `DiscoveredInbox`), `activate` (webhook subscription plus the Wappa-encrypted record) and `disconnect`. The Host owns routes, intent storage, persistence commit and `refresh_inbox` afterwards. The earlier unreleased `InstagramUnifiedLogin`, `UnifiedLoginConfig` and `build_instagram_record` are replaced by this contract.

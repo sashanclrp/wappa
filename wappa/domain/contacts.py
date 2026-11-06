@@ -1,4 +1,4 @@
-"""Platform-neutral contact card (ADR-0016).
+"""Platform-neutral contact card (ADR-0025).
 
 One typed value for ``IMessenger.send_contact`` on every Platform: WhatsApp
 sends one or several cards as a native contacts message; Instagram renders

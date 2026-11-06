@@ -13,7 +13,6 @@ from fastapi import Depends, HTTPException
 
 from wappa.api.dependencies.inbox_context import (
     InboxExecutionContext,
-    RoutePlatform,
     get_inbox_execution_context,
     route_platform,
 )
@@ -28,7 +27,7 @@ from wappa.schemas.core.types import PlatformType
 
 
 async def whatsapp_only(
-    platform: Annotated[RoutePlatform, Depends(route_platform)],
+    platform: Annotated[PlatformType, Depends(route_platform)],
 ) -> None:
     """Router dependency of the WhatsApp extension router: 501 off WhatsApp.
 
@@ -36,7 +35,7 @@ async def whatsapp_only(
     Platform, so a static route answers 501 under ``/api/instagram`` without
     resolving an Inbox. Shared routes gate on ``requires_capability`` instead.
     """
-    if platform.value != PlatformType.WHATSAPP.value:
+    if platform is not PlatformType.WHATSAPP:
         raise HTTPException(
             status_code=501,
             detail=f"{platform.value} does not provide this route (WhatsApp-only)",

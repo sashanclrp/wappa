@@ -1,4 +1,4 @@
-"""Inbox Connectors (ADR-0017) and the trusted credential-access seam (offline)."""
+"""Inbox Connectors (ADR-0026) and the trusted credential-access seam (offline)."""
 
 import base64
 import hashlib

@@ -1,11 +1,11 @@
 ---
-status: in_progress (contract shipped per ADR-0017 and hardened per ADR draft 0026; open Wappa items below)
-origin: ADR-0016 contract map (2026-11-05); refreshed 2026-11-06 (architecture hardening H-31)
+status: in_progress (contract shipped per ADR-0026 and hardened per ADR-0026; open Wappa items below)
+origin: ADR-0025 contract map (2026-11-05); refreshed 2026-11-06 (architecture hardening H-31)
 ---
 
 # Inbox Connector: open Wappa items
 
-The contract shape lives in [ADR-0017](../../adr/0017-inbox-connector-contract.md) and the public contract (`wappa.connections`): `begin(host_subject)`, `complete(state, host_subject, code, …)`, `activate(grant, inbox_ref, *, credentials, previous)` and `disconnect(inbox_ref, account_ref, token)`, implemented by `InstagramConnector` (Unified Login) and `WhatsAppConnector` (Embedded Signup) on the shared `MetaBusinessLogin` core. This draft tracks only what Wappa still owes.
+The contract shape lives in [ADR-0026](../../adr/0026-inbox-connection.md) and the public contract (`wappa.connections`): `begin(host_subject)`, `complete(state, host_subject, code, …)`, `activate(grant, inbox_ref, *, credentials, previous)` and `disconnect(inbox_ref, account_ref, token)`, implemented by `InstagramConnector` (Unified Login) and `WhatsAppConnector` (Embedded Signup) on the shared `MetaBusinessLogin` core. This draft tracks only what Wappa still owes.
 
 ## Open
 

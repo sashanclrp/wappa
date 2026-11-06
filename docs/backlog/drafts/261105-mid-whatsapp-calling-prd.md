@@ -1,9 +1,14 @@
 ---
 status: draft
-origin: ADR-0016 contract map (2026-11-05): WhatsApp-only capability
+origin: ADR-0025 contract map (2026-11-05): WhatsApp-only capability
+last_reviewed: 2026-11-06
 ---
 
 # PRD (draft): WhatsApp Business Calling in Wappa
+
+## Code reality (2026-11-06)
+
+CallWebhook and call-permission reply parsing exist. Call controls, calling settings and the live call/permission gates remain unimplemented. The architecture plan names this capability as future work; it does not absorb this PRD.
 
 ## Problem
 
@@ -11,7 +16,7 @@ The WhatsApp Business Calling API lets Users call the business, and the business
 
 ## Scope
 
-1. **`ICallControls` capability (WhatsApp-only per ADR-0016):**
+1. **`ICallControls` capability (WhatsApp-only per ADR-0025):**
    - `pre_accept(call_id, sdp_answer)`, `accept(call_id, sdp_answer)`, `reject(call_id)`, `terminate(call_id)`.
    - `start_call(target, sdp_offer)` for business-initiated calls.
    - `request_call_permission(target, body)`, which is also how a User grants permission.

@@ -20,7 +20,7 @@ execution_note: >
 
 # Tech Request: Deep Inbound Runtime and Dispatch Context
 
-> Historical implementation record. Its URL-routing statements are superseded by [ADR-0010](../adr/0010-payload-routed-whatsapp-webhook.md). The Inbound Runtime and Dispatch Context work remains current.
+> Historical implementation record. Its URL-routing statements are superseded by [ADR-0023](../adr/0023-inbound-webhooks.md). The Inbound Runtime and Dispatch Context work remains current.
 
 ## Why This Matters
 

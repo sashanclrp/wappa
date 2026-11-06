@@ -22,7 +22,7 @@ _TEST_ENV_DEFAULTS = {
     "WP_BID": "200000000000002",
     "WP_WEBHOOK_VERIFY_TOKEN": "test-verify-token",
     "META_APP_SECRET": "test-app-secret",
-    # Meta payload drift fails tests instead of being logged (ADR-0010):
+    # Meta payload drift fails tests instead of being logged (ADR-0023):
     # fixtures must model every field Meta sends.
     "WAPPA_STRICT_META_SCHEMA": "1",
 }

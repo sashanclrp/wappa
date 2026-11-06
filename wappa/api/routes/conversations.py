@@ -1,6 +1,6 @@
 """Conversation routes that exist where the Inbox's Platform provides them.
 
-Mounted under ``/api/{platform}`` with every other messaging route (ADR-0021).
+Mounted under ``/api/{platform}`` with every other messaging route (ADR-0024).
 Each route asks the selected Inbox's Messenger for a capability and answers
 501 when the Platform has none, so nothing here branches on Platform name:
 
@@ -13,7 +13,7 @@ Each route asks the selected Inbox's Messenger for a capability and answers
 - Private reply: a DM answering a comment, the shared ``send_text`` with a
   ``PrivateReply`` target (501 where the Platform has no comments).
 
-Capability groups (ADR-0009): comment mutations are their own group
+Capability groups (ADR-0024): comment mutations are their own group
 (``comment_controls``), the private reply belongs to outbound transport, and
 reads are always mounted.
 """

@@ -34,7 +34,7 @@ class MessageResult(BaseModel):
     ``platform`` is required: an adapter always states which Platform it
     sent on. ``platform_response`` is the single native-evidence field and is
     excluded from serialization. The recipient evidence fields carry the
-    Delivery Address evidence of ADR-0019; Platforms without BSUIDs or phone
+    Delivery Address evidence of ADR-0022; Platforms without BSUIDs or phone
     numbers leave them ``None``.
     """
 
@@ -61,7 +61,7 @@ class MessageResult(BaseModel):
         default=(),
         description=(
             "Every Delivery Address tried, in order, when the adapter fell back "
-            "(ADR-0019); empty when the first address decided the outcome"
+            "(ADR-0022); empty when the first address decided the outcome"
         ),
     )
     error: str | None = None

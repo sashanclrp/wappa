@@ -2,6 +2,10 @@
 
 Runbook for the live checks. Record results in the matrix ([capability-matrix.md](../references/capability-matrix.md)) and below, keeping the same evidence rules as [simple-text-test.md](simple-text-test.md): callback acknowledgement, provider acceptance, echo/read and what the recipient actually saw are different facts. Never paste tokens, codes or personal IDs.
 
+## Current status (2026-11-06)
+
+Gate A has substantial November 5 live evidence, with remaining source/control/failure and concurrent isolation checks open. Core Gate B passed; Creator B-08 was not run, and independent-customer access and actual revocation remain limitations. Gate C has implementation notes but no recorded live results. The deauthorize experiments below are historical; architecture hardening removed that unsupported route for Unified Login. No historical pass is a live rerun of the November 6 refactors.
+
 ## 0. Prepare (once)
 
 First, check each Instagram account under test: "Allow access to messages" must be on (Settings → Messages and story replies → Message controls → Connected tools), the account must be professional (Business or Creator), and while the app is in development mode the account must have an accepted tester role. Without these, Instagram delivers DMs to the inbox but to no app, and no webhook arrives.
@@ -29,7 +33,7 @@ Status on 2026-11-03: account access was verified and `--subscribe` was run. A r
 | A-04 | `/image-upload` | upload path accepted, or an explicit provider code is recorded (verifies `message_attachments` for IG IDs) |
 | A-05 | send a photo, voice note, video and PDF | "Downloaded N bytes (mime)" + echo of the same media |
 | A-06 | share a post/Reel; reply to a story; mention the account in a story | share/story types and IDs reported; post read when an ID is supplied |
-| A-07 | `/buttons` (tap Ping), `/cta`, `/card`, `/carousel` (tap Choose) | each tap arrives in `process_message` with `get_interactive_selection()` (ADR-0016) |
+| A-07 | `/buttons` (tap Ping), `/cta`, `/card`, `/carousel` (tap Choose) | each tap arrives in `process_message` with `get_interactive_selection()` (ADR-0025) |
 | A-08 | `/read` | thread marked seen, then typing dots for about 3 s (`mark_as_read(typing=True)`) |
 | A-09 | edit a sent message; unsend a message | `✏️ edited` / `deleted` logs (edit depends on A-00 field outcome) |
 | A-10 | **Form Score:** `/form` → name → service (quick reply) → budget (button) → email (try an invalid one first) → confirm card | validation re-prompts, branch on "Other", submission recorded |
@@ -43,7 +47,7 @@ Status on 2026-11-03: account access was verified and `--subscribe` was run. A r
 | A-18 | Live broadcast: comment, `#dm` during Live | Live source; public reply/hide expected to be refused by Meta (documented) |
 | A-19 | `/post <media_id>`, `/comments <media_id>` | post/children/caption; paginated comments |
 
-## Parity: one method, WhatsApp and Instagram (ADR-0016)
+## Parity: one method, WhatsApp and Instagram (ADR-0025)
 
 Run each command on both Platforms against the same server and code. Expect the same flow, with each Platform's native rendering. WhatsApp number setup (test number via `.env`, or Embedded Signup): [whatsapp-setup.md](../references/whatsapp-setup.md).
 
@@ -87,9 +91,9 @@ Added 2026-11-05 after a live `list_reply` without `description` was answered 40
 
 Not reachable from a test number: Coexistence echoes and history (P-10 WhatsApp), Flow replies (`nfm_reply`, covered by unit tests), calls.
 
-### Templates through the capability (ADR-0016)
+### Templates through the capability (ADR-0025)
 
-Sent with `messenger.capability(ITemplateMessaging)` to the `DirectMessage` target (phone first, ADR-0019). Meta sample Templates, `en_US`.
+Sent with `messenger.capability(ITemplateMessaging)` to the `DirectMessage` target (phone first, ADR-0022). Meta sample Templates, `en_US`.
 
 | ID | Do | Expect |
 | --- | --- | --- |
@@ -158,7 +162,7 @@ Reading the logs: see `../wappa_examples/instagram_conversations_example/README.
 | 2026-11-05 | setup (app fields) | fixed | The app-level Instagram webhook had only `messages, messaging_seen`, so postbacks were dropped. After the user enabled the remaining fields in the dashboard, postbacks were delivered. Account-level and app-level subscriptions are separate gates |
 | 2026-11-05 | A-07 (postback) / A-10 | pass (happy path) | 04:42:17 budget postback, then `InteractionWebhook` and the email prompt. 04:42:27 email text, then the summary card (accepted). 04:42:40 confirm postback, then the confirmation text. The email was masked in the logs. Not yet exercised: the invalid-email re-prompt and the "Other" branch |
 | 2026-11-05 | A-10 ("Other" branch, Redis) | pass | With `CACHE_BACKEND=redis`: service "other", then the details step, then budget "medium", email and confirm (09:47–09:49 UTC). State is in DB1 `instagram__<inbox>:state:form_intake:<user>` (hash, `step=done`, TTL 1800 s). The submission is in DB2 `instagram__<inbox>:df:form_submissions:pkid:<user>` (hash, about 24 h). Keys are Platform- and Inbox-qualified. Free text after `done` falls through to the other handlers |
-| 2026-11-05 | W-01 (fix) / W-03 / P-01 (WhatsApp) | pass (happy path) | After the restart at 12:57 (directory cache cleared): list tap `form:service:branding` with no `description` handled at 12:59:01, then budget buttons, email, the image-header summary card, and confirm at 12:59:20. Every send went `to` the phone (ADR-0019). Submission in DB2 `whatsapp__1014417365082534:df:form_submissions:pkid:CO.…` and state in DB1 `whatsapp__1014417365082534:state:form_intake:CO.…`. No 4xx, `ValidationError` or `META_SCHEMA_DRIFT` since the restart. Not yet exercised: the "Other" branch and the invalid-email re-prompt |
+| 2026-11-05 | W-01 (fix) / W-03 / P-01 (WhatsApp) | pass (happy path) | After the restart at 12:57 (directory cache cleared): list tap `form:service:branding` with no `description` handled at 12:59:01, then budget buttons, email, the image-header summary card, and confirm at 12:59:20. Every send went `to` the phone (ADR-0022). Submission in DB2 `whatsapp__1014417365082534:df:form_submissions:pkid:CO.…` and state in DB1 `whatsapp__1014417365082534:state:form_intake:CO.…`. No 4xx, `ValidationError` or `META_SCHEMA_DRIFT` since the restart. Not yet exercised: the "Other" branch and the invalid-email re-prompt |
 | 2026-11-05 | W-04 / P-04 `/carousel` (WhatsApp) | fail → fixed → pass (13:04:55 and 13:17:31 accepted) | 13:01:50: Meta 400, code 100, "`interactive.action.cards.N` missing `type`". Quick-reply cards carried no `type`; Meta's examples set `"type": "cta_url"` on every card. Fixed in `_wa_cards` with a test. Rerun after a restart |
 | 2026-11-05 | W-03 ("Other" + invalid email, WhatsApp) | pass | 13:00:28–13:01:08: "Other", then free-text details, budget, an invalid email ("Abc") re-prompted, then valid email and confirm |
 | 2026-11-05 | W-01 / W-02 / W-04 `/quick` `/buttons` `/card` | pass | 13:01:12–13:01:43: `lab:color:blue` (list without description), `lab:ping`, `lab:plan:pro` |
@@ -223,4 +227,4 @@ Reading the logs: see `../wappa_examples/instagram_conversations_example/README.
 | 2026-11-05 | B-05 untick messaging permission | not applicable to Unified Login | the Facebook Login for Business configuration fixes the permission set: the dialog only offers business portfolio, Instagram account and optional ad account, then a review screen with no per-permission toggle. The missing-scope path (`missing instagram_manage_messages — not connected`) stays covered offline by the connector readiness tests |
 | 2026-11-05 | B-08 Creator account | not run | no Creator account available; candyfliphard and candyflipfest are Business accounts connected through the business portfolio |
 | 2026-11-05 | B-06 connect again | pass | candyflipfest v74 → v75 → v76 → v77 and sashanclrp v1 → v2 across reconnects (record rotated) |
-| 2026-11-05 | B-07 / P-14 revocation | not applicable to Unified Login | Unified Login issues business-owned `SYSTEM_USER` tokens (no expiry); removing the person's Business integration revokes nothing and Meta sends no deauthorize. The deauthorize lane (signed_request → `InboxConnectionWebhook(DISCONNECTED)` → host deactivates) is covered offline (`tests/test_adr0016_unified_lanes.py`, lab `tests/test_deauthorize_lane.py`) and applies to Instagram-login grants. Follow-up: detect revoked credentials on use (190/10/200) and emit the same DISCONNECTED event |
+| 2026-11-05 | B-07 / P-14 revocation | not applicable to Unified Login | Unified Login issues business-owned `SYSTEM_USER` tokens (no expiry); removing the person's Business integration revokes nothing and Meta sends no deauthorize. The deauthorize lane (signed_request → `InboxConnectionWebhook(DISCONNECTED)` → host deactivates) is covered offline (`tests/test_unified_event_lanes.py`, lab `tests/test_deauthorize_lane.py`) and applies to Instagram-login grants. Follow-up: detect revoked credentials on use (190/10/200) and emit the same DISCONNECTED event |

@@ -469,7 +469,7 @@ class DeliveryRequest(RecipientRequest):
         description=(
             "Other addresses of the same User, tried after `recipient` when the "
             "Platform rejects the address itself (WhatsApp: pass the BSUID and "
-            "the phone; ADR-0019). Ignored where a User has one address"
+            "the phone; ADR-0022). Ignored where a User has one address"
         ),
     )
 

@@ -17,8 +17,8 @@ slice while its scope is being reconsidered here.
 Read alongside the [glossary](../../../CONTEXT.md),
 [architecture](../../../ARCHITECTURE.md),
 [public contract](../../public-contract.md),
-[ADR-0011](../../adr/0011-encrypted-inbox-directory.md), and
-[ADR-0014](../../adr/0014-instagram-text-and-explicit-messenger-targets.md).
+[ADR-0022](../../adr/0022-inbox-identity-and-directory.md), and
+[ADR-0025](../../adr/0025-messenger-contract.md).
 The original draft separates [research](../../backlog/in_progress/261103-instagram-conversations/references/research.md),
 [decisions](../../backlog/in_progress/261103-instagram-conversations/references/decisions.md),
 [roadmap](../../backlog/in_progress/261103-instagram-conversations/references/design-roadmap.md),
@@ -183,7 +183,7 @@ state. Content reads and moderation controls fit the mechanism side. Content
 calendars, moderation rules, AI and analytics fit the consumer side.
 
 Product scope is complete. The [PRD](../../backlog/in_progress/261103-instagram-conversations/references/scope.md)
-is the current selection; [ADR-0015](../../adr/0015-conversation-primitives-and-trusted-platform-extensions.md)
+is the current selection; [ADR-0025](../../adr/0025-messenger-contract.md)
 records the boundary trade-off. Implementation must resolve endpoint-specific
 limits, exact exported types and subscription discrepancies without treating
 those technical checks as completed provider support. No new implementation or

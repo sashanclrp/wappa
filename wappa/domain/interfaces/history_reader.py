@@ -1,6 +1,6 @@
 """Conversation history reads: the pull half of one backfill contract.
 
-ADR-0016: history backfill has one typed shape, ``HistoryThread`` of
+ADR-0025: history backfill has one typed shape, ``HistoryThread`` of
 ``HistoryMessage``. Platforms that push history (WhatsApp Coexistence) deliver
 it as ``HistorySyncWebhook``; Platforms that only allow reads (Instagram)
 expose this capability. Hosts store both the same way.

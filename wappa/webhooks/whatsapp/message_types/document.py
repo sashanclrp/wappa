@@ -60,7 +60,7 @@ class DocumentContent(BaseModel):
     @field_validator("filename")
     @classmethod
     def validate_filename(cls, v: str | None) -> str | None:
-        """Keep the name Meta delivered (inbound is never rejected, ADR-0010)."""
+        """Keep the name Meta delivered (inbound is never rejected, ADR-0023)."""
         return v.strip() or None if v is not None else None
 
     @field_validator("mime_type")

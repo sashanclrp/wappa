@@ -4,7 +4,7 @@ Each JSON file under ``tests/fixtures/meta_payloads/<platform>/`` goes
 through the same steps as an authenticated callback: Platform routing
 (``PlatformWebhooks.route``), then ``PlatformWebhooks.translate`` that
 builds the Universal Webhook. Strict schema mode
-(``WAPPA_STRICT_META_SCHEMA=1``, ADR-0010) turns any field Wappa does not
+(``WAPPA_STRICT_META_SCHEMA=1``, ADR-0023) turns any field Wappa does not
 model into a failure, so drift found live becomes a fixture that fails CI
 until it is modelled. Add fixtures with ``scripts/promote_payload.py``.
 """

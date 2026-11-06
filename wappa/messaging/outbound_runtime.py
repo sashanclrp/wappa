@@ -8,7 +8,7 @@ transport all start here.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, cast
 
 from wappa.core.messaging.pipeline import MessengerPipeline, MiddlewareEntry
@@ -25,6 +25,8 @@ if TYPE_CHECKING:
 
     from wappa.domain.factories import MessengerFactory
     from wappa.domain.interfaces.messaging_interface import IMessenger
+    from wappa.platforms import PlatformEntry
+    from wappa.schemas.core.types import PlatformType
 
 
 class OutboundRuntime:
@@ -39,6 +41,7 @@ class OutboundRuntime:
         messenger_middleware: Sequence[MiddlewareEntry] = (),
         graph_api_version: str | None = None,
         graph_base_url: str | None = None,
+        platforms: Mapping[PlatformType, PlatformEntry] | None = None,
     ) -> None:
         # Local import prevents the public ``wappa.messaging`` package from
         # cycling while MessengerFactory imports its WhatsApp adapter modules.
@@ -50,6 +53,7 @@ class OutboundRuntime:
             media_download_client_provider=media_download_client_provider,
             graph_api_version=graph_api_version,
             graph_base_url=graph_base_url,
+            platforms=platforms,
         )
         self._messenger_middleware = tuple(messenger_middleware)
 
@@ -86,6 +90,7 @@ class OutboundRuntime:
                 if getattr(app.state, "meta_application_config", None) is not None
                 else None
             ),
+            platforms=getattr(app.state, "platforms", None),
         )
         app.state.outbound_runtime = runtime
         return runtime

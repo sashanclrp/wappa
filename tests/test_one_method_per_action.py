@@ -1,4 +1,4 @@
-"""ADR-0016: one Messenger method per action on every Platform."""
+"""ADR-0025: one Messenger method per action on every Platform."""
 
 from pathlib import Path
 

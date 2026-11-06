@@ -503,7 +503,7 @@ class BaseLocationMessage(BaseMessage):
 
 
 class BaseReactionMessage(BaseMessage):
-    """A User reacted to an earlier message, or removed a reaction (ADR-0016).
+    """A User reacted to an earlier message, or removed a reaction (ADR-0025).
 
     One inbound shape on every Platform: WhatsApp ``reaction`` messages and
     Instagram ``message_reactions`` both arrive as ``InboundMessageWebhook``

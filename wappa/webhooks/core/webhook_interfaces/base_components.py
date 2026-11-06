@@ -127,7 +127,7 @@ class UserBase(BaseModel):
         return ""
 
     def delivery_addresses(self) -> DeliveryAddresses:
-        """Every address this webhook proved for the User (ADR-0019).
+        """Every address this webhook proved for the User (ADR-0022).
 
         WhatsApp: BSUID and phone (``wa_id``); the Parent BSUID is identity
         evidence, not a fallback. Instagram: the scoped ID. The WhatsApp
@@ -239,7 +239,7 @@ class EntryPointKind(StrEnum):
 
 
 class EntryReferral(BaseModel):
-    """Entry-point attribution, one model on every Platform (ADR-0016).
+    """Entry-point attribution, one model on every Platform (ADR-0025).
 
     Answers "what brought this User here": WhatsApp Click-to-WhatsApp ``referral``
     and Instagram ad / link ``referral`` fill the same fields; a field the
@@ -456,7 +456,7 @@ class SystemEventDetail(BaseModel):
         default=None,
         description=(
             "Native evidence for UNSUPPORTED_EVENT only: an event Wappa has no "
-            "contract for yet. Every supported event is typed (ADR-0016)."
+            "contract for yet. Every supported event is typed (ADR-0025)."
         ),
     )
 

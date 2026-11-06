@@ -59,7 +59,7 @@ async def handle(self, event) -> bool:
 
 ## Prompts per step
 
-One method per step on every Platform (ADR-0016); the adapter maps it.
+One method per step on every Platform (ADR-0025); the adapter maps it.
 
 | Step | Method | Instagram renders | WhatsApp renders |
 | --- | --- | --- | --- |

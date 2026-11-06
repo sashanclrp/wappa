@@ -30,7 +30,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **Delivery Addresses** | Every known Delivery Address of one User (`DeliveryAddresses`): WhatsApp phone and/or BSUID, Instagram scoped ID. It states what is known, never a strategy: the Platform adapter orders the addresses and moves to the next one only when the Platform rejects the address itself. Webhooks build it with `user.delivery_addresses()`. |
 | **IGSID** | Instagram-scoped User identifier interpreted within the receiving professional account. |
 | **Delivery Address** | The one normalized platform address selected for an outbound call. A phone number and a BSUID are alternative Delivery Addresses; neither is Wappa's canonical User identity. A username is identity evidence, not a Delivery Address. |
-| **Messaging HTTP API** | Wappa's optional HTTP routes at `/api/{platform}` (ADR-0021). The path names the Platform and `X-Wappa-Inbox-ID` the Inbox; send routes call that Inbox's own Messenger. Routes gate on the Inbox's capabilities; any Platform gap answers 501. |
+| **Messaging HTTP API** | Wappa's optional HTTP routes at `/api/{platform}` (ADR-0024). The path names the Platform and `X-Wappa-Inbox-ID` the Inbox; send routes call that Inbox's own Messenger. Routes gate on the Inbox's capabilities; any Platform gap answers 501. |
 
 ## Host Integration
 
@@ -96,7 +96,8 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **Message Card** | One card of a Message Carousel: a media header (image or video), title, optional subtitle and default URL, and buttons. It is one visual unit: its media is never sent apart from the card. |
 | **Message Carousel** | A horizontally scrollable sequence of Message Cards. |
 | **Sender Action** | Instagram's native non-message signal (seen, typing); Wappa exposes it only through `mark_as_read`. |
-| **Messenger Action** | Something a Host asks a Messenger to do; an action available on more than one Platform has exactly one Messenger method (ADR-0016). |
+| **Messenger Action** | Something a Host asks a Messenger to do; an action available on more than one Platform has exactly one Messenger method (ADR-0025). |
+| **WhatsApp First** | The rule that shapes every Platform-neutral contract: it mirrors the WhatsApp Cloud API's seams and full feature set, every limit on a structured value is the most restrictive across the installed Platforms and is enforced when the value is built, and other Platforms emulate, rejecting only what cannot be emulated ([ADR-0028](docs/adr/0028-whatsapp-first.md)). |
 | **Focused Capability** | An optional Inbox-bound mechanism reached through `IMessenger.capability(kind)` for a separate responsibility (Media Library, Template Messaging) or a Platform-only action (Comment Controls and public comment replies, content reads) rather than a Messenger method. |
 | **Media Library** | The Focused Capability `IMediaLibrary` that stores a local file or bytes as reusable Platform media, describes and deletes it, and reads inbound media bytes for one Inbox: `upload` returns a Media ID (a WhatsApp Media ID or an Instagram attachment_id) that the same Inbox's Messenger can send, `download` takes an inbound message's `media_id` unchanged, bounded by an optional `max_bytes`, and `info`/`delete` follow the WhatsApp Media API (Instagram has neither). It is the one HandlingMedia seam: WhatsApp's Media API handler and Instagram's CDN reader are adapter internals behind it. |
 | **Outbound Echo** | A message the business sent to a User outside Wappa (a person answering from the Platform's own app, or another tool), delivered as `OutboundEchoWebhook` on every Platform. Echoes of Wappa's own sends are never delivered. |
@@ -104,7 +105,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **Entry Referral** | Entry-point attribution: what brought a User into a conversation (an ad, a post, a link), one `EntryReferral` model on every Platform. |
 | **History Backfill** | Past messages with a User as typed `HistoryThread`s, pushed by the Platform (`HistorySyncWebhook`) or read on request (`IConversationHistoryReader`). |
 | **Inbox Connection Change** | An Inbox stopping or resuming delivery on the Platform side (offboarding, app removal), delivered as `InboxConnectionWebhook`. |
-| **Inbox Connector** | The `IInboxConnector` contract (ADR-0017) that turns a Platform account into Inboxes: `begin` authorization, `complete` discovery with readiness, `activate` webhook subscription plus the Wappa-encrypted record, and `disconnect`. The same contract on every Platform; it runs before a Messenger exists and is not a Messenger capability. |
+| **Inbox Connector** | The `IInboxConnector` contract (ADR-0026) that turns a Platform account into Inboxes: `begin` authorization, `complete` discovery with readiness, `activate` webhook subscription plus the Wappa-encrypted record, and `disconnect`. The same contract on every Platform; it runs before a Messenger exists and is not a Messenger capability. |
 | **Template Messaging** | The WhatsApp-only Focused Capability `ITemplateMessaging` that sends text, media-header and location-header WhatsApp Templates. Distinct from Template Transport, the smaller Host-facing request/result seam built on it. |
 | **Trusted Inbox Credential** | The current active credential and version of one Inbox, resolved per operation for a Host-authorized backend adapter; never a cacheable snapshot. |
 | **Connection Intent** | A one-use, expiring login attempt bound to the Host's authenticated operator, consumed before any provider code exchange. |
@@ -202,7 +203,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 
 | Forbidden Term | Use Instead |
 |----------------|-------------|
-| `tenant`, `tenant_id` | `inbox_id` (if it means the platform-facing identity) or `owner_id` (if it means a business grouping supplied by the host) |
+| `tenant`, `tenant_id` | `inbox_id` if it means the Platform-facing identity; business tenancy is the Host's concern and has no Wappa term |
 | `multi-tenant` | "multi-inbox" if describing Wappa's ability to handle multiple inboxes; avoid entirely if describing business tenancy (not Wappa's concern) |
 | `provider` (as a code identifier) | `platform` — the canonical term in Wappa for external messaging services |
 | `Request Context` (for event dispatch) | `Dispatch Context` |

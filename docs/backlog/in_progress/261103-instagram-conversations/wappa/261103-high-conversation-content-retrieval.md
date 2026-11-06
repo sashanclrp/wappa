@@ -1,11 +1,18 @@
 ---
-status: pending
+status: implemented_pending_final_live_verification
 urgency: high
 owner: Instagram content adapters
 depends_on: I01, I02 media primitives, I04 qualified public references
+last_reviewed: 2026-11-06
 ---
 
 # Explicit conversation-content retrieval
+
+## Code reality (2026-11-06)
+
+Post and carousel-child reads, paginated comments and not-found outcomes were observed on November 3; post/comments and mentioned-comment reads were exercised again on November 5. Complete replies, media-byte failure and cross-Inbox acceptance evidence before closing the series.
+
+See the [series plan](../plan.md), [capability matrix](../references/capability-matrix.md) and [live evidence](../tests/live-test-plan.md). Historical test results do not replace the remaining live gates.
 
 ## Context
 

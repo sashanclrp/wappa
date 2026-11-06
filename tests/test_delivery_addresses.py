@@ -1,4 +1,4 @@
-"""ADR-0019: one explicit target carrying every known Delivery Address.
+"""ADR-0022: one explicit target carrying every known Delivery Address.
 
 The WhatsApp adapter orders the addresses (phone, then BSUID) and moves to the
 next one only when Meta rejects the address itself.

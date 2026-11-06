@@ -14,7 +14,7 @@ have been tested. A real Instagram text exchange, outbound echo event, and READ
 status were verified at 11:24 America/Bogota on 2026-11-03. Self-service OAuth
 onboarding and Symphonai integration remain pending.
 See [setup.md](setup.md#local-implementation-ready-for-callback-verification) and
-[ADR-0014](../../../../adr/0014-instagram-text-and-explicit-messenger-targets.md).
+[ADR-0025](../../../../adr/0025-messenger-contract.md).
 Capability inventories below retain the research-stage snapshot; they are not
 an assertion that every originally missing foundation remains unimplemented.
 
@@ -116,7 +116,7 @@ Testing starts at step 0 and accompanies every step. Unit/HTTP tests stay offlin
 
 Use separate Platform callback URLs through the existing `/webhook/inboxes/{platform}` contract: WhatsApp and Instagram now in scope, Facebook Messenger later when its adapter exists. The dashboard walkthrough superseded the shared `meta-messenger` proposal. Verify generated URLs, GET/POST behavior, signature-first admission, payload/Platform mismatch rejection, and setup instructions. Complete the Meta app setup walkthrough before implementing Wappa callback/text support and the consumer example at `../wappa_examples/simple_echo_example` (relative to the Wappa repository root).
 
-Reuse the Inbox Directory/source seam from ADR-0011. InboxCredentialService and the CredentialRecord union now support WhatsApp and Instagram; retain their Platform-discriminated variants and validation. Symphonai's durable source and credential-access adapter still require Instagram migration. Do not manufacture a WA record or an artificial WABA relationship.
+Reuse the Inbox Directory/source seam from ADR-0022. InboxCredentialService and the CredentialRecord union now support WhatsApp and Instagram; retain their Platform-discriminated variants and validation. Symphonai's durable source and credential-access adapter still require Instagram migration. Do not manufacture a WA record or an artificial WABA relationship.
 
 Separate three operations: Meta's GET callback verification (application endpoint), account authorization/subscription (connection setup), and resolving an already-known Inbox from an incoming POST (runtime intake). An incoming message must not authorize or create an Inbox.
 

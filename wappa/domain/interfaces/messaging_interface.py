@@ -35,7 +35,7 @@ TemplateAuthenticationMethodValue = str | None
 
 
 class IMessenger(ABC):
-    """Inbox-bound facade: one method per action on every Platform (ADR-0016).
+    """Inbox-bound facade: one method per action on every Platform (ADR-0025).
 
     Each Platform adapter maps these methods onto its native API. Operations a
     Platform lacks raise ``UnsupportedOperationError``; check

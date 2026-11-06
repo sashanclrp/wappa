@@ -12,10 +12,10 @@ message.is_deleted          MessageUpdateWebhook(deleted)
 message_edit                MessageUpdateWebhook(edited)
 read                        StatusWebhook(READ)
 postback                    InboundMessageWebhook (button selection), like
-                            a WhatsApp button_reply (ADR-0016)
+                            a WhatsApp button_reply (ADR-0025)
 referral (standalone)       SystemWebhook(REFERRAL)
 echo / is_self              OutboundEchoWebhook → process_outbound_echo; the
-                            runtime drops Wappa's own sends (ADR-0018)
+                            runtime drops Wappa's own sends (ADR-0023)
 reaction / unreact          InboundMessageWebhook(REACTION), like WhatsApp
 unsupported, …              SystemWebhook(UNSUPPORTED_EVENT); no automation
 comments / live_comments    IncomingCommentWebhook → process_comment

@@ -16,7 +16,7 @@ A full rename refactor was executed (`tenant_id` → `inbox_id`) across Wappa. T
 - `CONTEXT-MAP.md` — maps all bounded contexts and their relationships
 - `CONTEXT.md` — shared kernel glossary with canonical terms
 - `ARCHITECTURE.md` — root message flow, design patterns, layer dependencies
-- `docs/adr/0001-inbox-id-runtime-scope.md` — the decision record
+- `docs/adr/0022-inbox-identity-and-directory.md` — the decision record
 
 What's missing: each bounded context needs its own `CONTEXT.md` (local glossary) and `ARCHITECTURE.md` (internal structure, responsibilities, interfaces). These docs serve as the reference for agents and developers working inside each context — both during the rename and for all future work.
 

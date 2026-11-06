@@ -8,7 +8,7 @@ Each model keeps one meaning:
 - :class:`HistorySyncWebhook` — past conversations pushed by the Platform.
 - :class:`InboxConnectionWebhook` — an Inbox stopped or resumed delivery.
 - :class:`OutboundEchoWebhook` — a message the business itself sent, echoed back
-  by the Platform (ADR-0016: one lane for WhatsApp Coexistence and Instagram).
+  by the Platform (ADR-0025: one lane for WhatsApp Coexistence and Instagram).
 
 Absent Platform evidence stays absent; nothing here fabricates a DM User,
 a Comment for a media-only mention, or a message ID for a comment.
@@ -41,7 +41,7 @@ class MessageUpdateKind(StrEnum):
 class MessageUpdateWebhook(BaseModel):
     """A User changed an earlier message; never a new message or a status.
 
-    One lane on every Platform (ADR-0016): WhatsApp ``edit`` / ``revoke`` and
+    One lane on every Platform (ADR-0025): WhatsApp ``edit`` / ``revoke`` and
     Instagram ``message_edit`` / unsend. For edits, ``message`` is the typed
     replacement (same models as inbound messages) and ``text`` its text.
     """
@@ -201,8 +201,8 @@ class EchoOrigin(StrEnum):
 class OutboundEchoWebhook(BaseModel):
     """A message the business sent to ``user`` outside Wappa, echoed back.
 
-    One lane for every Platform (ADR-0016), with a fixed Wappa filter
-    (ADR-0018): echoes of messages sent through a Wappa Messenger are never
+    One lane for every Platform (ADR-0025), with a fixed Wappa filter
+    (ADR-0023): echoes of messages sent through a Wappa Messenger are never
     delivered, so this hook sees only what a person sent from the Platform's
     own app (the Instagram app, the WhatsApp Business app) or another tool.
     Hosts store what arrives; they never filter Wappa's own sends.
@@ -273,7 +273,7 @@ class HistoryDirection(StrEnum):
 
 
 class HistoryMessage(BaseModel):
-    """One past message, typed like a live message (ADR-0016)."""
+    """One past message, typed like a live message (ADR-0025)."""
 
     model_config = _MODEL_CONFIG
     message_id: str
@@ -298,7 +298,7 @@ class HistoryThread(BaseModel):
 
 
 class HistorySyncWebhook(BaseModel):
-    """Past conversations the Platform pushed (ADR-0016 history backfill).
+    """Past conversations the Platform pushed (ADR-0025 history backfill).
 
     The push half of one backfill contract: WhatsApp Coexistence ``history``
     chunks arrive here. Platforms that only offer pulls (Instagram) expose
@@ -345,7 +345,7 @@ class InboxConnectionState(StrEnum):
 
 
 class InboxConnectionWebhook(BaseModel):
-    """An Inbox's connection to Wappa changed (ADR-0016, ADR-0017).
+    """An Inbox's connection to Wappa changed (ADR-0025, ADR-0026).
 
     WhatsApp Coexistence ``account_offboarded`` / ``account_reconnected``
     arrive here, so a Host deactivates or restores the Inbox the same way.

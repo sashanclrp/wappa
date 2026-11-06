@@ -151,7 +151,7 @@ class UserActionEntry(BaseModel):
     sub-objects (e.g. device/agent descriptors). ``extra="allow"`` is therefore
     deliberate: an unknown action type must not turn into a sustained 400 that
     makes Meta throttle or disable the whole webhook. Drift on any
-    level is logged by ``report_schema_drift`` (ADR-0010).
+    level is logged by ``report_schema_drift`` (ADR-0023).
     """
 
     model_config = ConfigDict(extra="allow", str_strip_whitespace=True)

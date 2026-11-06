@@ -14,9 +14,8 @@ shared by every dependency in the route through FastAPI's dependency cache.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from enum import StrEnum
 from typing import TYPE_CHECKING, Annotated, Any, Final
 
 from fastapi import Depends, Header, HTTPException, Path, Request
@@ -56,20 +55,34 @@ INBOX_HEADER_DESCRIPTION: Final[str] = (
 )
 
 
-# The installed Platforms served by ``/api/{platform}``, derived from the
-# Platform Registry so a new Platform needs no edit here.
-RoutePlatform = StrEnum(  # type: ignore[misc]  # members come from PLATFORMS
-    "RoutePlatform", {platform.name: platform.value for platform in PLATFORMS}
-)
+def _installed_platforms(request: Request) -> Mapping[PlatformType, object]:
+    """The app's Platform Registry table (``PLATFORMS`` when built by hand)."""
+    return getattr(request.app.state, "platforms", None) or PLATFORMS
 
 
 async def route_platform(
+    request: Request,
     platform: Annotated[
-        RoutePlatform,
-        Path(description="Platform of the Inbox: whatsapp or instagram"),
+        str,
+        Path(
+            description="Platform of the Inbox: an installed Platform",
+            # Documents the installed set; validation reads the app's table.
+            json_schema_extra={"enum": sorted(item.value for item in PLATFORMS)},
+        ),
     ],
-) -> RoutePlatform:
+) -> PlatformType:
     """Router-level dependency: validates and documents ``{platform}``."""
+    return _installed_platform(request, platform)
+
+
+def _installed_platform(request: Request, raw: str) -> PlatformType:
+    """``raw`` as an installed Platform of this app, else 404."""
+    try:
+        platform = PlatformType(raw)
+    except ValueError:
+        platform = None
+    if platform is None or platform not in _installed_platforms(request):
+        raise HTTPException(status_code=404, detail=f"Unsupported Platform: {raw}")
     return platform
 
 
@@ -83,12 +96,7 @@ def _request_platform(request: Request) -> PlatformType:
                 "under /api/{platform}"
             ),
         )
-    try:
-        return PlatformType(RoutePlatform(raw).value)
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=404, detail=f"Unsupported Platform: {raw}"
-        ) from exc
+    return _installed_platform(request, raw)
 
 
 @dataclass(frozen=True)
@@ -295,7 +303,7 @@ def requires_capability[C](kind: Callable[..., C]) -> Any:
     """Dependency: the selected Inbox's ``kind`` capability, or 501.
 
     Routes gate on what the Inbox's Messenger can do, never on the Platform
-    name (ADR-0016, ADR-0021), so a Platform that gains the capability serves
+    name (ADR-0025, ADR-0024), so a Platform that gains the capability serves
     the route without changes.
     """
 
@@ -323,7 +331,6 @@ __all__ = [
     "INBOX_ID_HEADER",
     "InboxIdHeader",
     "InboxExecutionContext",
-    "RoutePlatform",
     "get_inbox_execution_context",
     "get_inbox_messenger",
     "requires_capability",

@@ -1,4 +1,4 @@
-"""Media Library: store, inspect and fetch media files for an Inbox (ADR-0016).
+"""Media Library: store, inspect and fetch media files for an Inbox (ADR-0025).
 
 A separate responsibility from sending messages, shaped like the WhatsApp
 Cloud API Media endpoints. Every Platform that keeps reusable media

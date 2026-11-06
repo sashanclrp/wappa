@@ -1,6 +1,6 @@
 # API Context — Architecture
 
-Wappa's HTTP edge: the Meta webhook callback and the optional Messaging HTTP API. Route modules adapt HTTP to Wappa modules; Platform parsing, credential lookup, cache namespaces and dispatch policy live behind them. Decisions: [ADR-0007](../../docs/adr/0007-embedded-outbound-route-control.md), [ADR-0009](../../docs/adr/0009-route-capability-groups.md), [ADR-0016](../../docs/adr/0016-one-messenger-method-per-action.md), [ADR-0021](../../docs/adr/0021-platform-messaging-http-api.md). Contract: `docs/public-contract.md` ("Inbox Execution Context", "HTTP route composition").
+Wappa's HTTP edge: the Meta webhook callback and the optional Messaging HTTP API. Route modules adapt HTTP to Wappa modules; Platform parsing, credential lookup, cache namespaces and dispatch policy live behind them. Decisions: [ADR-0024](../../docs/adr/0024-outbound-http-routes-and-transports.md) and [ADR-0025](../../docs/adr/0025-messenger-contract.md). Contract: `docs/public-contract.md` ("Inbox Execution Context", "HTTP route composition").
 
 ## Router tree
 
@@ -31,15 +31,15 @@ Only the WhatsApp extension router lives in `wappa/api/routes/whatsapp/`: `limit
 
 ## Inbox selection
 
-`wappa/api/dependencies/inbox_context.py` owns it. The router-level `route_platform` dependency validates `{platform}` (`RoutePlatform`, derived from the installed Platforms in `wappa.platforms.PLATFORMS`: `whatsapp`, `instagram`). `select_inbox_ref` builds `InboxRef(path platform, X-Wappa-Inbox-ID)`; without the header it falls back to the legacy default Inbox only when that Inbox is on the path's Platform, else 400. `get_inbox_execution_context` resolves the active record once per request (unknown → 404, directory failures → 503) and returns the shared `InboxExecutionContext`. Send routes take `get_inbox_messenger`, which builds the Inbox's own Messenger through `OutboundRuntime`, so app Messenger middleware runs on API sends. Host authentication runs first; the header selects scope and grants nothing.
+`wappa/api/dependencies/inbox_context.py` owns it. The router-level `route_platform` dependency validates `{platform}` against the app's Platform Registry table (`app.state.platforms`, else `wappa.platforms.PLATFORMS`) and answers 404 for anything else; OpenAPI documents the installed set (`whatsapp`, `instagram`). `select_inbox_ref` builds `InboxRef(path platform, X-Wappa-Inbox-ID)`; without the header it falls back to the legacy default Inbox only when that Inbox is on the path's Platform, else 400. `get_inbox_execution_context` resolves the active record once per request (unknown → 404, directory failures → 503) and returns the shared `InboxExecutionContext`. Send routes take `get_inbox_messenger`, which builds the Inbox's own Messenger through `OutboundRuntime`, so app Messenger middleware runs on API sends. Host authentication runs first; the header selects scope and grants nothing.
 
-## Capability gates and status mapping (ADR-0021)
+## Capability gates and status mapping (ADR-0024)
 
 - `requires_capability(kind)` asks the Inbox's Messenger for a Focused Capability (`ICommentControls`, `IConversationContentReader`, `IConversationHistoryReader`, `IMediaLibrary` for media upload, download, info and delete, with no Platform branch) and answers 501 `"<platform> does not provide <kind>"` when it is missing.
 - `ITemplateMessaging` gates the Template send routes the same way (`requires_capability(ITemplateMessaging)` on the router); `InboxTemplateTransport.send` also checks it before any I/O and returns REJECTED `capability_unsupported`. Routes with no capability interface (text and media limits, validators, Template info, `/health`) are WhatsApp extension routes behind the single `whatsapp_only` gate, which answers the same 501. A capability method the Platform has no endpoint for (Instagram `IMediaLibrary.info`/`delete`) raises `UnsupportedOperationError`, which `map_send_errors` turns into the same 501.
 - Send routes own no status mapping. Each builds its target with `direct_target(messenger, request)` and is decorated with `map_send_errors(operation)` (`wappa/api/utils/error_helpers.py`), the one mapper: `UnsupportedOperationError` → 501, `ValueError` (a local rule violation, raised before I/O) → 400, any other exception → 500, and a failed `MessageResult` (or `MediaUploadResult`) → the status its `error_code` maps to in `ERROR_CODE_MAPPING` (default 400) through `raise_for_failed_result`. Pydantic validation stays 422.
 
-## Capability groups and profiles (ADR-0007, ADR-0009)
+## Capability groups and profiles (ADR-0024)
 
 `MessagingRouteCapabilities` (in `wappa/api/routes/families.py`) has six groups: `outbound_transport`, `template_transport`, `media_management`, `media_upload`, `state_handler_api`, `comment_controls`. `MessagingRouteProfile.STANDALONE` mounts all but `template_transport`; `EMBEDDED` keeps only `media_upload` plus the reads. `resolve_capabilities` applies explicit overrides over the profile; passing `include_outbound_transport=False` without a profile implies `EMBEDDED`. Hosts set them through the `Wappa(route_profile=..., include_*_api=...)` constructor. Groups apply to every Platform at once.
 
@@ -63,7 +63,7 @@ Only the WhatsApp extension router lives in `wappa/api/routes/whatsapp/`: `limit
 
 ## Adding a route
 
-1. Pick its capability group; mint its router from the module's `RouteFamily` and include it in the matching branch of `create_messaging_router`. A route that exists only on WhatsApp and has no capability interface goes on the WhatsApp extension router in `wappa/api/routes/whatsapp/` instead, behind its existing gate. A new group needs a `MessagingRouteCapabilities` field, both profiles, `resolve_capabilities`, the `create_messaging_router` and `Wappa` parameters, and an ADR-0009 review.
+1. Pick its capability group; mint its router from the module's `RouteFamily` and include it in the matching branch of `create_messaging_router`. A route that exists only on WhatsApp and has no capability interface goes on the WhatsApp extension router in `wappa/api/routes/whatsapp/` instead, behind its existing gate. A new group needs a `MessagingRouteCapabilities` field, both profiles, `resolve_capabilities`, the `create_messaging_router` and `Wappa` parameters, and an ADR-0024 review.
 2. Depend on `get_inbox_messenger`, `requires_capability(kind)` or `get_inbox_execution_context`; never build a Messenger or client by hand.
 3. Use a `DeliveryRequest` subclass for sends and build the target with `direct_target(messenger, request)`; the handler body is the one Messenger call.
 4. Decorate send routes with `@map_send_errors("<operation>")` above `@dispatch_message_event()`, and teach `classify_outbound_payload` any new request model.

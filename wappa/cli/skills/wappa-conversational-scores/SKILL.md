@@ -40,7 +40,7 @@ Rules:
 - **Handlers route, Scores decide.** Order Scores from most specific to the fallback; the first that returns `True` stops the chain.
 - **One selection read on every Platform.** WhatsApp button and list replies and Instagram quick replies and postbacks all arrive in `process_message`; `webhook.get_interactive_selection()` returns the chosen `ReplyButton.id` / `ListRow.id`. A completed WhatsApp Flow arrives there too: `get_interactive_selection()` returns its `flow_token` and `webhook.message.interactive.nfm_reply.response` holds the decoded answers. There is no separate interaction hook.
 - **Send with the injected target.** Use `ctx.target`. Never send to an ID from another Inbox, or to a commenter's ID.
-- **One method per prompt, not per Platform.** `send_button_message` (≤ 3 options), `send_list_message` (more options; quick replies on Instagram) and `send_carousel` work everywhere; the adapter maps them (ADR-0016). Never branch on Platform name; check `messenger.supported_operations` once only for WhatsApp-only extras (`send_contact_request`, `send_location_request`).
+- **One method per prompt, not per Platform.** `send_button_message` (≤ 3 options), `send_list_message` (more options; quick replies on Instagram) and `send_carousel` work everywhere; the adapter maps them (ADR-0025). Never branch on Platform name; check `messenger.supported_operations` once only for WhatsApp-only extras (`send_contact_request`, `send_location_request`).
 
 ## Guided flow (intake) recipe
 

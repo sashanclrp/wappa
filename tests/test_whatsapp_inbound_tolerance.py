@@ -1,4 +1,4 @@
-"""Inbound WhatsApp models accept what Meta delivers (ADR-0010).
+"""Inbound WhatsApp models accept what Meta delivers (ADR-0023).
 
 Send-side limits (button title 20, row title 24, caption 1024...) belong to the
 outbound models. Enforcing them on inbound webhooks turned valid deliveries into

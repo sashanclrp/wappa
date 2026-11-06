@@ -1,5 +1,8 @@
 # Media upload and download (core interface 3)
 
+Status reviewed 2026-11-06: historical pre-hardening audit. Findings and file:line references below describe the audited baseline. Use the [plan status table](../plan.md#code-reality-2026-11-06) for implemented and remaining work; do not rebuild a resolved finding from this snapshot.
+
+
 ## Summary
 
 `IMediaLibrary` (`wappa/domain/interfaces/media_library.py:38-45`) is already the HandlingMedia seam. It has two adapters that really differ: the WhatsApp Media API (`wappa/messaging/whatsapp/media_library.py:31`) and Instagram `message_attachments` with a CDN reader (`wappa/messaging/instagram/media_library.py:27`). Both Platforms really upload and download, so neither adapter needs a `NotSupported` path.
@@ -11,7 +14,7 @@ The defects sit around that seam:
 - The neutral `download` has no size bound. Each Platform therefore grew its own side door for bounded or large reads: `IAttachmentMediaReader` on Instagram and `media_handler.*` on WhatsApp.
 - The scaffolded transcription example teaches Hosts to download through the WhatsApp-only side door.
 
-The verifier kept five findings (four from the auditor, one reframed, plus one new) and rejected five as cosmetic, already sanctioned by an ADR, contrary to the evidence, or over-engineering. The auditor's interface proposal was cut down. It no longer takes `bytes | Path`, adds no neutral `limits()`, defines no `IWhatsAppMediaAdmin` ABC, and does not override the ADR-0021 `ValueError`-means-400 rule.
+The verifier kept five findings (four from the auditor, one reframed, plus one new) and rejected five as cosmetic, already sanctioned by an ADR, contrary to the evidence, or over-engineering. The auditor's interface proposal was cut down. It no longer takes `bytes | Path`, adds no neutral `limits()`, defines no `IWhatsAppMediaAdmin` ABC, and does not override the ADR-0024 `ValueError`-means-400 rule.
 
 ## Confirmed findings
 
@@ -30,7 +33,7 @@ The verifier kept five findings (four from the auditor, one reframed, plus one n
   4. `LibraryMediaUploader` stays; the temp-file write (`:61-63`) is cheap and keeps the seam `Path`-only.
   5. Replace the `MediaUploader` Protocol with the concrete `LibraryMediaUploader`.
   6. Add a route test for WhatsApp through the library path, which is the less-tested path today.
-- ADR conflict: none. ADR-0021 decision 4 (`docs/adr/0021-platform-messaging-http-api.md:16`) says routes gate on the `IMediaLibrary` capability. The fork contradicts it, and the fix brings the code in line.
+- ADR conflict: none. ADR-0024 decision 4 (`docs/adr/0024-outbound-http-routes-and-transports.md:16`) says routes gate on the `IMediaLibrary` capability. The fork contradicts it, and the fix brings the code in line.
 
 ### 03-2 IMediaHandler is a hypothetical seam: 17 abstract members, one adapter, published as a domain interface
 
@@ -48,7 +51,7 @@ The verifier kept five findings (four from the auditor, one reframed, plus one n
   5. If a non-cast path is wanted, register the concrete class as a capability key in `WhatsAppMessenger.capability` (`whatsapp_messenger.py:82-88`). That makes it an explicit capability with no new interface.
   6. Move the `MediaInfoResult`/`MediaDeleteResult`-shaped models only if they become WhatsApp-only.
   7. Under clean-cut releases, list the removal in CHANGELOG, update `docs/public-contract.md:1050`, and update `wappa/messaging/ARCHITECTURE.md:37`, `:57`, `:98`.
-- ADR conflict: none. The ADR-0016 contract map (`docs/adr/0016-one-messenger-method-per-action.md:34`) names only `IMediaLibrary` as the shared media capability. CHANGELOG `:1172` once called `IMediaHandler` "the platform-agnostic media interface", and that description is now false.
+- ADR conflict: none. The ADR-0025 contract map (`docs/adr/0025-messenger-contract.md:34`) names only `IMediaLibrary` as the shared media capability. CHANGELOG `:1172` once called `IMediaHandler` "the platform-agnostic media interface", and that description is now false.
 
 ### 03-3 The neutral download has no size bound, so each Platform grew a Platform-specific side door (IAttachmentMediaReader on Instagram, media_handler on WhatsApp)
 
@@ -69,21 +72,21 @@ The verifier kept five findings (four from the auditor, one reframed, plus one n
   3. Keep `InstagramAttachmentReader` as a private helper.
   4. Decide `stream()` on its merits. If Hosts need it, add `stream(media_id, *, max_bytes)` to the neutral seam only together with a WhatsApp adapter (both Platforms can stream). Otherwise drop it.
   5. Update `docs/public-contract.md:60`, `:62`, the skill (`SKILL.md:41`, `text-and-media.md:83`), `docs/migration/instagram-conversation-contracts.md:147` and `wappa/messaging/ARCHITECTURE.md:48`.
-- ADR conflict: amends the ADR-0016 contract-map row for `IMediaLibrary` (`0016-one-messenger-method-per-action.md:34`). Record the new keyword there.
+- ADR conflict: amends the ADR-0025 contract-map row for `IMediaLibrary` (`0025-messenger-contract.md:34`). Record the new keyword there.
 
 ### 03-5 The media download route bypasses IMediaLibrary although both Platforms implement download
 
-- Files: `wappa/api/routes/whatsapp/whatsapp_media.py:425-451`, `wappa/api/dependencies/whatsapp_dependencies.py:53-62`, `docs/adr/0021-platform-messaging-http-api.md:16`
+- Files: `wappa/api/routes/whatsapp/whatsapp_media.py:425-451`, `wappa/api/dependencies/whatsapp_dependencies.py:53-62`, `docs/adr/0024-outbound-http-routes-and-transports.md:16`
 - Principle: platform-leak
 - Severity: low
 - Breaking: no (WhatsApp URL and behaviour unchanged; Instagram gains a 200 where it answered 501). Public surfaces: `GET /api/{platform}/media/download/{media_id}`.
-- Evidence: `download_media` takes `IMediaHandler = Depends(get_whatsapp_media_handler)` (`whatsapp_media.py:435`), so the route answers 501 on Instagram. Its description tells Instagram Hosts to "fetch them directly" (`:428-431`), which skips the credential-free host allowlist that `InstagramAttachmentReader` enforces. `IMediaLibrary.download` exists on both Platforms (`media_library.py:44-45`). ADR-0021 decision 4 says "a Platform that gains a capability serves the route unchanged". The upload route was moved onto the capability for that reason, and the download route was not. The route also makes an extra `get_media_info` call for headers (`:441`), which `MediaBytes.content_type` already carries (`whatsapp/media_library.py:59-63`).
+- Evidence: `download_media` takes `IMediaHandler = Depends(get_whatsapp_media_handler)` (`whatsapp_media.py:435`), so the route answers 501 on Instagram. Its description tells Instagram Hosts to "fetch them directly" (`:428-431`), which skips the credential-free host allowlist that `InstagramAttachmentReader` enforces. `IMediaLibrary.download` exists on both Platforms (`media_library.py:44-45`). ADR-0024 decision 4 says "a Platform that gains a capability serves the route unchanged". The upload route was moved onto the capability for that reason, and the download route was not. The route also makes an extra `get_media_info` call for headers (`:441`), which `MediaBytes.content_type` already carries (`whatsapp/media_library.py:59-63`).
 - Deletion test: not a deletion case. It is a missing symmetry, which the existing neutral seam can serve with no new abstraction.
 - Proposed fix:
   1. Gate the download route on `requires_capability(IMediaLibrary)` and serve `MediaBytes` with its `content_type`.
-  2. Keep `GET /media/{id}` (info), `DELETE /media/{id}` and limits as WhatsApp-only routes on the concrete handler. ADR-0021 decision 4 explicitly lists "the WhatsApp Media API, limits" as WhatsApp-only.
+  2. Keep `GET /media/{id}` (info), `DELETE /media/{id}` and limits as WhatsApp-only routes on the concrete handler. ADR-0024 decision 4 explicitly lists "the WhatsApp Media API, limits" as WhatsApp-only.
   3. Drop the "fetch directly" advice.
-- ADR conflict: none for download. ADR-0021 sanctions the WhatsApp-only status of info, delete and limits, so those are not findings.
+- ADR conflict: none for download. ADR-0024 sanctions the WhatsApp-only status of info, delete and limits, so those are not findings.
 
 ### 03-10 (new) The scaffolded transcription example teaches Hosts the WhatsApp-only side door for a neutral action
 
@@ -102,7 +105,7 @@ The verifier kept five findings (four from the auditor, one reframed, plus one n
 - 03-6 "IMediaLibrary signature cannot carry what WhatsApp needs". Merged and partly rejected. The `mime_type` keyword is the fix for 03-1 and `max_bytes` is the fix for 03-3. Three parts are rejected:
   - `source: Path | bytes`: a second input mode on the seam to save one temp-file write in a single caller (`media_transfer.py:61-63`).
   - A neutral `limits(family)`: its only consumer is the WhatsApp-only limits route, so it would be a hypothetical seam.
-  - "Local-rule failures return REJECTED, never raise": ADR-0021 decision 4 (`0021-platform-messaging-http-api.md:16`) makes `ValueError` the documented local-rule signal that answers 400, and Instagram's `validate_local_file` (`instagram/media.py:68-84`) follows it.
+  - "Local-rule failures return REJECTED, never raise": ADR-0024 decision 4 (`0024-outbound-http-routes-and-transports.md:16`) makes `ValueError` the documented local-rule signal that answers 400, and Instagram's `validate_local_file` (`instagram/media.py:68-84`) follows it.
 - 03-7 "Instagram and WhatsApp both fit one HandlingMedia without NotSupported". Rejected because it is a design observation, not a defect. It is correct, and it is folded into the Summary and the Interface proposal.
 - 03-8 "WhatsAppMediaHandler has five upload/download variants with no production caller". Rejected because the evidence does not hold and there is no architectural payoff:
   - `download_media_tempfile` has a scaffolded Host caller (`openai_transcript/app/master_event.py:34`).
@@ -117,12 +120,12 @@ The verifier kept five findings (four from the auditor, one reframed, plus one n
 - `IMediaLibrary` with `WhatsAppMediaLibrary` and `InstagramMediaLibrary` is two adapters with real variation (Media API upload/ID-resolve vs `message_attachments` plus a host-restricted CDN fetch). This is the one real seam in the area and the right HandlingMedia shape.
 - `wappa/messaging/instagram/media.py` (`MEDIA_RULES`, `validate_local_file`, `ALLOWED_CDN_SUFFIXES`, `InstagramAttachmentReader`'s allowlist and redirect bounds) holds Platform rules inside the Instagram adapter package, which is the correct location. Only the public ABC registration is a finding (03-3).
 - `wappa/api/dependencies/media_transfer.py:35-86` (`media_family`, `LibraryMediaUploader`) is a Platform-free translation from HTTP bytes and MIME to the seam. Keep it once 03-1 removes the branch.
-- The WhatsApp-only info, delete, limits and health routes are behind `whatsapp_client()` → `whatsapp_only` 501 (`wappa/api/ARCHITECTURE.md:35`), and ADR-0021 decision 4 sanctions them. They are legitimate Platform-only surfaces once they are typed against the concrete handler instead of the ABC (03-2).
+- The WhatsApp-only info, delete, limits and health routes are behind `whatsapp_client()` → `whatsapp_only` 501 (`wappa/api/ARCHITECTURE.md:35`), and ADR-0024 decision 4 sanctions them. They are legitimate Platform-only surfaces once they are typed against the concrete handler instead of the ABC (03-2).
 - `WhatsAppMessenger.media_handler` as a concrete attribute (`whatsapp_messenger.py:62`, `:71`) is fine as the WhatsApp extension surface inside the WhatsApp adapter. It is not declared on `IMessenger`, so it does not leak into the neutral contract. The only problem is the example teaching it for a neutral action (03-10).
 
 ## Interface proposal
 
-HandlingMedia is `IMediaLibrary`, amended in place. No rename is required: the name already says "media library" and a rename would churn every Host for no behaviour. It is reached through `messenger.capability(IMediaLibrary)` / `require_capability(IMediaLibrary)`. Following ADR-0016, it has one method per action, and SRP is kept separate from sending:
+HandlingMedia is `IMediaLibrary`, amended in place. No rename is required: the name already says "media library" and a rename would churn every Host for no behaviour. It is reached through `messenger.capability(IMediaLibrary)` / `require_capability(IMediaLibrary)`. Following ADR-0025, it has one method per action, and SRP is kept separate from sending:
 
 ```python
 class IMediaLibrary(ABC):
@@ -132,7 +135,7 @@ class IMediaLibrary(ABC):
 
 - `upload` returns an opaque reusable `media_id`, which is a WhatsApp Media ID or an Instagram attachment_id. That ID goes to `send_image` / `send_video` / `send_audio` / `send_document` on the same Inbox.
   - `mime_type` is honoured where the Platform takes one (WhatsApp) and ignored otherwise.
-  - Local-rule violations raise `ValueError` (400 per ADR-0021). Platform refusals return `REJECTED`.
+  - Local-rule violations raise `ValueError` (400 per ADR-0024). Platform refusals return `REJECTED`.
 - `download` takes `media_id` exactly as `webhook.message.media_id` (a WhatsApp Media ID, or the Instagram CDN URL). `max_bytes` bounds the read, and the Platform default applies when it is `None`. An oversize read returns `REJECTED`/`SIZE`.
 - Adapters:
   - `WhatsAppMediaLibrary` resolves the ID, then fetches with the credential-free download client.
@@ -146,4 +149,4 @@ class IMediaLibrary(ABC):
 - HTTP layer:
   - `get_media_uploader` is `capability(IMediaLibrary)` or 501 for every Platform, with no `PlatformType.WHATSAPP` branch and no `WhatsAppMediaHandler` import (03-1).
   - The download route is gated on `IMediaLibrary` too (03-5).
-  - Info, delete and limits stay WhatsApp-only under ADR-0021 decision 4.
+  - Info, delete and limits stay WhatsApp-only under ADR-0024 decision 4.

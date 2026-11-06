@@ -9,8 +9,8 @@ records the user's grouped answers and Symphonai investigation.
 
 Related documents: [research](research.md), [roadmap](design-roadmap.md),
 [setup](setup.md), [tests](../tests/simple-text-test.md),
-[ADR-0014](../../../../adr/0014-instagram-text-and-explicit-messenger-targets.md),
-[ADR-0015](../../../../adr/0015-conversation-primitives-and-trusted-platform-extensions.md).
+[ADR-0025](../../../../adr/0025-messenger-contract.md),
+[ADR-0025](../../../../adr/0025-messenger-contract.md).
 Earlier research-stage TBD worksheets and public-reply alternatives are
 superseded by the decisions below; research inventories are not implementation
 status or permission to build every provider feature.

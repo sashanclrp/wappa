@@ -259,7 +259,7 @@ class InboundRuntime:
     async def _is_wappa_send(
         self, echo: OutboundEchoWebhook, dispatch_context: DispatchContext
     ) -> bool:
-        """Fixed echo filter (ADR-0018): drop echoes of Wappa's own sends.
+        """Fixed echo filter (ADR-0023): drop echoes of Wappa's own sends.
 
         Only an ``UNKNOWN`` origin needs proof (Instagram echoes every send and,
         verified live 2026-11-05, carries no app_id or other sender evidence).
@@ -390,7 +390,7 @@ class InboundRuntime:
     ) -> tuple[str, str | None, str | None]:
         """Read SSE identity from the evidence fields each adapter fills.
 
-        Never from a Platform check or an identifier's shape (ADR-0019).
+        Never from a Platform check or an identifier's shape (ADR-0022).
         """
         if isinstance(webhook, CallWebhook):
             return fallback_user_id, webhook.bsuid, webhook.phone_number

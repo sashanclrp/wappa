@@ -65,7 +65,7 @@ app.run()
 - **BSUID-Aware Fallback** - The WhatsApp adapter tries the phone number first, then the BSUID, and moves to the next address only when Meta rejects the address itself (`131030`, or `131062` when a message type cannot go to a BSUID). Authentication Templates go to phone numbers only.
 - **No Blind Retries** - Window, rate-limit, content and timeout errors are returned as-is, never retried on another address. `MessageResult.attempted_recipients` lists the addresses tried after a fallback.
 
-See `docs/public-contract.md` and ADR-0019 for the full contract.
+See `docs/public-contract.md` and ADR-0022 for the full contract.
 
 ### 🛠️ **Developer Experience**
 ```bash
@@ -461,7 +461,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ### Instagram text (Unified Login)
 
-Wappa has an Instagram adapter for DMs, comments and mentions. Use explicit Inbox routing and an encrypted Instagram credential record through IInboxDirectorySource. The callback is `/webhook/inboxes/instagram`; Meta signature authentication remains mandatory. Recipient-based Messenger sends use Inbox-qualified DirectMessage targets, including on WhatsApp. The same Messenger methods (`send_button_message`, `send_list_message`, `send_carousel`, `send_location`, `send_contact`, `mark_as_read`, ...) work on both Platforms, and a User's choice always arrives in `process_message` via `get_interactive_selection()` ([ADR-0016](docs/adr/0016-one-messenger-method-per-action.md)). Media upload and download go through the shared `IMediaLibrary` capability; comment actions (`ICommentControls`) and WhatsApp Templates (`ITemplateMessaging`) are capability-gated too.
+Wappa has an Instagram adapter for DMs, comments and mentions. Use explicit Inbox routing and an encrypted Instagram credential record through IInboxDirectorySource. The callback is `/webhook/inboxes/instagram`; Meta signature authentication remains mandatory. Recipient-based Messenger sends use Inbox-qualified DirectMessage targets, including on WhatsApp. The same Messenger methods (`send_button_message`, `send_list_message`, `send_carousel`, `send_location`, `send_contact`, `mark_as_read`, ...) work on both Platforms, and a User's choice always arrives in `process_message` via `get_interactive_selection()` ([ADR-0025](docs/adr/0025-messenger-contract.md)). Media upload and download go through the shared `IMediaLibrary` capability; comment actions (`ICommentControls`) and WhatsApp Templates (`ITemplateMessaging`) are capability-gated too.
 
 See the [setup walkthrough](docs/backlog/in_progress/261103-instagram-conversations/references/setup.md) and
 [public contract](docs/public-contract.md#instagram-conversations-contract)

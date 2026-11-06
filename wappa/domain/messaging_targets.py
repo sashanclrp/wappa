@@ -28,7 +28,7 @@ class TargetInboxMismatchError(ValueError):
 
 
 class DeliveryAddresses(BaseModel):
-    """Every known Delivery Address of one User (ADR-0019).
+    """Every known Delivery Address of one User (ADR-0022).
 
     Callers only state what they know (WhatsApp: BSUID and/or phone; Instagram:
     the scoped ID). The Platform adapter decides the order and when to move on
