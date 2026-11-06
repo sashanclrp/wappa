@@ -1,10 +1,13 @@
 """Instagram media constraints and a credential-free attachment downloader.
 
 Outbound limits come from the Instagram messaging guide (Graph v26.0,
-fetched 2026-11-03, rechecked 2026-11-06): image png/jpeg(/gif) ≤ 8 MB; audio
+fetched 2026-11-03, rechecked 2026-11-06): image png/jpeg/gif ≤ 8 MB; audio
 aac/m4a/wav/mp4, video mp4/ogg/avi/mov/webm and file pdf ≤ 25 MB. The guide
 states no URL scheme and no file-name rule, so an http(s) URL passes through
-(as on WhatsApp) and an upload name is transliterated to ASCII.
+(as on WhatsApp) and an upload name is transliterated to ASCII. The live
+format matrix (2026-11-06) adds static WebP (renders, link and upload) and
+shows that an animated WebP renders only its first frame (GIF animates), so
+an uploaded animated WebP is refused with that hint.
 
 Inbound attachment URLs are signed Meta CDN URLs
 (``lookaside.fbsbx.com/ig_messaging_cdn/...``) that may expire within minutes.
@@ -28,6 +31,7 @@ from wappa.domain.interfaces.conversation_capabilities import (
     ReadOutcome,
     ReadResult,
 )
+from wappa.domain.media_probe import probe
 
 MB = 1024 * 1024
 
@@ -42,7 +46,9 @@ class MediaRule:
 
 
 MEDIA_RULES: dict[str, MediaRule] = {
-    "image": MediaRule("image", frozenset({".png", ".jpg", ".jpeg", ".gif"}), 8 * MB),
+    "image": MediaRule(
+        "image", frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp"}), 8 * MB
+    ),
     "audio": MediaRule("audio", frozenset({".aac", ".m4a", ".wav", ".mp4"}), 25 * MB),
     "video": MediaRule(
         "video", frozenset({".mp4", ".ogg", ".avi", ".mov", ".webm"}), 25 * MB
@@ -55,6 +61,7 @@ _MIME_BY_SUFFIX = {
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
     ".gif": "image/gif",
+    ".webp": "image/webp",
     ".aac": "audio/aac",
     ".m4a": "audio/mp4",
     ".wav": "audio/wav",
@@ -133,6 +140,17 @@ def validate_upload(name: str, size: int, family: str) -> MediaRule:
             f"{MEDIA_ADAPTATION_DRAFT})"
         )
     return rule
+
+
+def check_image_content(data: bytes) -> None:
+    """Refuse an animated WebP: Instagram shows only its first frame."""
+    found = probe(data)
+    if found.mime == "image/webp" and found.animated:
+        raise ValueError(
+            "Instagram shows only the first frame of an animated WebP; send the "
+            "animation as a GIF (it animates on Instagram) or a static image "
+            f"(conversion is the Media Adaptation backlog draft, {MEDIA_ADAPTATION_DRAFT})"
+        )
 
 
 def validate_local_file(

@@ -74,7 +74,7 @@ Every action that exists on both Platforms has one `IMessenger` method; the Inst
 | 2–10 cards | `send_carousel(cards: Sequence[MessageCard], target, body, reply_to_message_id=None)` | `body` as text, then a generic template; a video card shows its `poster_url` |
 | share a location | `send_location(latitude, longitude, target, name=None, address=None)` | text: name, address and a `📍` maps link |
 | share contacts | `send_contact(contacts, target)` | one text block per card (name, organization, phones, emails, urls) |
-| send a sticker | `send_sticker(source, target)` | sent as an image (png/jpeg/gif; `.webp` rejected before I/O) |
+| send a sticker | `send_sticker(source, target)` | sent as an image (png/jpeg/gif preferred among renditions, else a static WebP; an uploaded animated WebP is refused) |
 | send media with a caption | `send_image/video/document(..., caption=...)` | media (http(s) URL, attachment_id or local `Path`), then the caption as a follow-up text, one result; a document, audio or video URL in a format Instagram cannot attach is sent as a text with the file name and the link; `filename` names a `Path` upload (transliterated to ASCII) or that link text; `transcript` is middleware-only metadata on every Platform |
 
 Location and phone-number requests are WhatsApp-only (`self.whatsapp.send_location_request` / `send_contact_request`): Instagram does not provide them because a text prompt cannot return the data, so gate on `self.whatsapp is not None`. Reactions have no send method yet (`send_reaction` is a recorded gap: deprioritized by the user on 2026-11-06).

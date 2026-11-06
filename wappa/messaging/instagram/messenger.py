@@ -711,15 +711,17 @@ class InstagramMessengerAdapter(IMessenger):
     ) -> MessageResult:
         """Instagram has no custom stickers: the sticker is sent as an image.
 
-        Instagram images are png/jpeg/gif while WhatsApp stickers are WebP:
-        pass both renditions (``[sticker.webp, sticker.png]``) and each
-        Platform picks the one it accepts.
+        A static WebP sticker shows as an image; an animated one would show
+        only its first frame. Pass renditions (``[sticker.webp, sticker.gif]``)
+        and Instagram takes a png/jpeg/gif one when given (a GIF animates),
+        else the WebP; WhatsApp takes the WebP.
         """
-        source = pick_rendition(
-            sticker_source,
-            MEDIA_RULES["image"].extensions,
-            what="Instagram sticker (sent as an image)",
-        )
+        what = "Instagram sticker (sent as an image)"
+        images = MEDIA_RULES["image"].extensions
+        try:
+            source = pick_rendition(sticker_source, images - {".webp"}, what=what)
+        except ValueError:
+            source = pick_rendition(sticker_source, images, what=what)
         return await self._send_media("image", source, target, reply_to_message_id)
 
     async def send_location(

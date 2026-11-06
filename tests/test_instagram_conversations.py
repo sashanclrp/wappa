@@ -1265,7 +1265,7 @@ async def test_location_contact_and_sticker_are_adapted_requests_are_not():
             ["https://example.com/s.webp", "https://example.com/s.png"], DM
         )
         with pytest.raises(ValueError, match="png"):
-            await messenger.send_sticker("https://example.com/s.webp", DM)
+            await messenger.send_sticker("https://example.com/s.heic", DM)
         assert messenger.capability(IUserDataRequests) is None
         with pytest.raises(UnsupportedOperationError, match="IUserDataRequests"):
             messenger.require_capability(IUserDataRequests)

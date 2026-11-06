@@ -1,7 +1,7 @@
 """Pick the media rendition a Platform accepts.
 
 Platforms disagree on formats for the same action: WhatsApp stickers must be
-WebP, while Instagram (which sends a sticker as an image) takes png/jpeg/gif
+WebP, while Instagram (which sends a sticker as an image) takes png/jpeg/gif or a static WebP
 only. A Host passes every rendition it has; each Platform adapter picks the
 first one its Platform accepts. Wappa never converts media.
 """

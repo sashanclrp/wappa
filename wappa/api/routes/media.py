@@ -76,7 +76,7 @@ router = _family.router()  # reads: download, info
     description=(
         "Upload a media file through the Inbox's IMediaLibrary and get a media "
         "ID for sending. WhatsApp: Media API (`media_type` honoured). Instagram: "
-        "`message_attachments` (image png/jpeg/gif, audio, video, pdf). A "
+        "`message_attachments` (image png/jpeg/gif/static webp, audio, video, pdf). A "
         "Platform without a media library answers 501."
     ),
 )
@@ -226,7 +226,7 @@ async def send_document_message(
     description=(
         "Send a sticker. WhatsApp: WebP only (image/webp; 512x512, up to "
         "100 KB static or 500 KB animated). Instagram has no stickers and sends "
-        "it as a png/jpeg/gif image. `media_source` is a URL, a file path or an "
+        "it as a png/jpeg/gif/webp image. `media_source` is a URL, a file path or an "
         "uploaded media ID; an extension the Platform does not take is "
         "rejected with 400 before the Platform is called."
     ),

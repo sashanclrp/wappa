@@ -39,6 +39,7 @@ from .client import InstagramClient
 from .media import (
     InstagramAttachmentReader,
     ascii_name,
+    check_image_content,
     mime_for,
     upload_name,
     validate_local_file,
@@ -69,6 +70,10 @@ class InstagramMediaLibrary(IMediaLibrary):
         else:
             name = upload_name(filename, mime_type, path=source)
             rule = validate_local_file(source, kind, name=name)
+        if rule.wire_type == "image":
+            check_image_content(
+                source if isinstance(source, bytes) else source.read_bytes()
+            )
         name = ascii_name(name)
         message = {
             "attachment": {"type": rule.wire_type, "payload": {"is_reusable": True}}

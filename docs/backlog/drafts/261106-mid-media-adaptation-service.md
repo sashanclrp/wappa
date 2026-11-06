@@ -100,24 +100,24 @@ Adaptations, all driven by `MediaRule.target`:
 
 ### Optimal target per scenario (from the live matrix, 2026-11-06)
 
-The engine converts to the cheapest format that was **verified live** for that Platform and use, and never to a format that only Meta's docs list. "Verified" means accepted, delivered, and rendered correctly on the phone. Instagram cells marked *pending* wait for the Instagram run (the first one hit the app rate limit, see `references/rate-limits.md` in the Instagram PRD).
+The engine converts to the cheapest format that was **verified live** for that Platform and use, and never to a format that only Meta's docs list. "Verified" means accepted, delivered, and rendered correctly on the phone. Instagram cells marked *pending* wait for the rest of the Instagram run: the development app's budget allows about 10-20 calls per burst before code 4, so the run goes in small slices (`/formats <family> link|upload <names>`, see `references/rate-limits.md` in the Instagram PRD).
 
 | Use | Input that fails | WhatsApp target (verified) | Instagram target |
 | --- | --- | --- | --- |
-| image | GIF (static) | PNG (lossless; JPEG when there is no alpha and the file is a photo) | as-is: GIF static was accepted |
-| image | GIF animated, animated WebP | first frame as PNG for an image; or MP4 H.264 when the Host asked for motion (send as video) | upload accepted, link rejected (400): *pending* rendering |
-| image | HEIC / HEIF, AVIF | JPEG | JPEG (HEIC rejected, 400) |
-| image | static WebP | as-is (works) | as-is by link (accepted, read); upload refused by Wappa's rule: *pending* rendering |
+| image | GIF (static) | PNG (lossless; JPEG when there is no alpha and the file is a photo) | as-is: GIF static renders |
+| image | GIF animated, animated WebP | first frame as PNG for an image; or MP4 H.264 when the Host asked for motion (send as video) | GIF animated: as-is, **animates** (link and upload); animated WebP: shows only its first frame, so convert to GIF |
+| image | HEIC / HEIF, AVIF | JPEG | HEIC by link renders (Meta converts it; the first run's 400 was the rate limit); uploads refused by Wappa until proven: JPEG |
+| image | static WebP | as-is (works) | as-is (renders by link; Wappa now accepts it by upload too) |
 | image | over 5 MB (WhatsApp) / 8 MB (Instagram), edge over 4096 px | downscale, then JPEG quality ladder | same, 8 MB cap |
-| video | HEVC in MP4, MOV, MKV, WebM VP8/VP9 | MP4, H.264 Main (Baseline for old Android), AAC, faststart, one audio stream | MP4 H.264 (the only format accepted so far; MOV and WebM *pending*, first run rate-limited) |
+| video | HEVC in MP4, MOV, MKV, WebM VP8/VP9 | MP4, H.264 Main (Baseline for old Android), AAC, faststart, one audio stream | MP4 H.264 Baseline and High play by link and upload; MOV and WebM VP8 uploads answer HTTP 500; HEVC, MOV, 3GP, WebM, MKV links *pending* |
 | video | 3GP H.264 | as-is (works once sent as `video/3gpp`) | MP4 (3GP link rejected) |
 | video | over 16 MB (WhatsApp) / 25 MB (Instagram) | bitrate ladder from duration; refuse below the floor | same, 25 MB |
 | audio | WAV, WebM Opus, OGG Vorbis | MP3 or M4A (AAC); OGG/Opus also works | M4A (AAC) |
 | voice | MP3, M4A, AAC, WAV, WebM, OGG Vorbis | OGG/Opus mono, 48 kHz: the **only** format that renders a waveform (MP3/M4A/AAC deliver as a voice bubble without one) | M4A (AAC); Instagram has no voice flag |
-| sticker | PNG, JPEG, GIF | WebP 512x512 (fit with transparent padding), ≤ 100 KB static | PNG (sent as an image) |
-| sticker | WebP not 512x512 (256x256 failed: "expected dimension: 512x512") | resize and pad to 512x512 WebP | PNG |
-| sticker | animated GIF / APNG / short video | animated WebP 512x512 ≤ 500 KB (frame-rate and palette ladder) | GIF (*pending*) |
-| card_image / card_video | any of the image or video failures above | same target as image or video; check every card, one bad card fails the whole carousel | image or poster frame (JPEG) |
+| sticker | PNG, JPEG, GIF | WebP 512x512 (fit with transparent padding), ≤ 100 KB static | as-is (sent as an image; PNG renders by link and upload) |
+| sticker | WebP not 512x512 (256x256 failed: "expected dimension: 512x512") | resize and pad to 512x512 WebP | as-is: any static WebP renders (no size rule) |
+| sticker | animated GIF / APNG / short video, animated WebP | animated WebP 512x512 ≤ 500 KB (frame-rate and palette ladder) | GIF (animates as an image); an animated WebP shows only its first frame |
+| card_image / card_video | any of the image or video failures above | same target as image or video; check every card, one bad card fails the whole carousel | JPEG, PNG, PNG with alpha, static and animated WebP card images all render (animated WebP as its first frame); GIF and video cards *pending*; video card shows its poster frame |
 | document | — | as-is (PDF, DOCX, XLSX, TXT all delivered) | PDF only; another type is shared as a link text |
 
 Rules the engine must follow, all from the matrix:
@@ -317,6 +317,25 @@ Findings for the spec and the engine:
 - By Media ID nothing has a suffix. Wappa now checks the stored MIME type (`GET /{media_id}`) for voice notes (`audio/ogg`) and stickers (`image/webp`) before sending (677f34a, 13cec65); other families still pass through.
 - Python maps `.3gp` to `audio/3gpp`; WhatsApp needs `video/3gpp` for a video. Fixed in the Media Library (ef05128) and in the lab's asset server.
 - A carousel should be checked card by card before sending, since one bad card loses the whole message.
+
+#### Instagram results (2026-11-06, test account, partial: app rate limit)
+
+API = Meta's response; Instagram sends no `failed` status (every accepted send came back `read`), so the phone is the only verdict. Rendering checked by the tester.
+
+| Use | Works | Fails or degrades | Notes |
+| --- | --- | --- | --- |
+| image | JPEG, PNG, static GIF, static WebP, HEIC by link; animated GIF **animates** (link and upload) | animated WebP shows only its first frame; PNG with alpha: transparent area filled **white by link**, kept (chat background shows through) **by upload** | Wappa refused WebP and HEIC uploads before I/O in this run; it now accepts static WebP uploads and refuses animated WebP uploads (read from the bytes) |
+| video | MP4 H.264 Baseline and High, link and upload | MOV and WebM VP8 uploads: HTTP **500** from `message_attachments` (Wappa reports `indeterminate` and now logs Meta's fields for a 5xx) | links for HEVC, MOV, 3GP, WebM VP8/VP9 and MKV *pending* |
+| sticker (sent as image) | PNG 512 (link and upload; same alpha behaviour as images), static WebP 512 and 256 | animated WebP 512 shows its first frame | Instagram has no sticker size rule |
+| card_image | JPEG, PNG, PNG with alpha, static WebP, animated WebP (first frame) | — | GIF and video cards *pending* |
+| audio, voice, document | — | — | *pending* |
+
+Findings:
+
+- Instagram's verdict is the phone, not a status: accepted sends are `read`, never `failed`, so a format Instagram degrades (animated WebP, alpha) looks like a success to the Host. Only the spec table, enforced before I/O, protects the Host.
+- Animation: GIF is Instagram's animation format; WhatsApp's is animated WebP (stickers) or MP4 (video). The engine converts between them per Platform.
+- Transparency depends on the lane on Instagram (white matte by link, transparent by upload), so the engine flattens onto a Host-chosen background when the look must be predictable.
+- An Instagram upload that answers HTTP 500 is a format refusal in practice (MOV, WebM), not an outage: the spec keeps MP4 as the only video upload format until a rerun with Meta's logged fields says otherwise.
 
 ## Exit criteria
 

@@ -180,3 +180,18 @@ async def test_carousel_checks_every_card_before_sending():
     with pytest.raises(ValueError, match="image accepts"):
         await wa.send_carousel(cards, WA_DM, "Pick one")
     assert client.posted == []
+
+
+def test_instagram_takes_static_webp_and_refuses_animated_webp_uploads():
+    """Live matrix 2026-11-06: static WebP renders on Instagram; animated
+    WebP shows only its first frame (GIF animates)."""
+    from wappa.messaging.instagram.media import (
+        MEDIA_RULES,
+        check_image_content,
+    )
+
+    assert ".webp" in MEDIA_RULES["image"].extensions
+    check_image_content(_webp_vp8x(512, 512, animated=False))
+    check_image_content(GIF)  # GIFs animate on Instagram
+    with pytest.raises(ValueError, match="first frame"):
+        check_image_content(_webp_vp8x(512, 512, animated=True))
