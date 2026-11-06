@@ -5,7 +5,6 @@ from pydantic import ValidationError
 
 from wappa.processors.base_processor import (
     BaseWebhookProcessor,
-    ProcessorCapabilities,
     ProcessorError,
 )
 from wappa.schemas.core.recipient import looks_like_bsuid, looks_like_phone_number
@@ -46,6 +45,28 @@ if TYPE_CHECKING:
     from wappa.webhooks.whatsapp.webhook_container import WhatsAppWebhook
 
 
+_SUPPORTED_MESSAGE_TYPES = frozenset(
+    {
+        MessageType.TEXT,
+        MessageType.INTERACTIVE,
+        MessageType.BUTTON,
+        MessageType.IMAGE,
+        MessageType.AUDIO,
+        MessageType.VIDEO,
+        MessageType.DOCUMENT,
+        MessageType.CONTACT,
+        MessageType.LOCATION,
+        MessageType.ORDER,
+        MessageType.STICKER,
+        MessageType.REACTION,
+        MessageType.SYSTEM,
+        MessageType.EDIT,
+        MessageType.REVOKE,
+        MessageType.UNSUPPORTED,
+    }
+)
+
+
 class WhatsAppWebhookProcessor(BaseWebhookProcessor):
     """WhatsApp Business Platform webhook processor."""
 
@@ -54,45 +75,12 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
         self._field_registry: FieldHandlerRegistry | None = None
 
-        # Define WhatsApp-specific capabilities
-        self._capabilities = ProcessorCapabilities(
-            platform=PlatformType.WHATSAPP,
-            supported_message_types={
-                MessageType.TEXT,
-                MessageType.INTERACTIVE,
-                MessageType.IMAGE,
-                MessageType.AUDIO,
-                MessageType.VIDEO,
-                MessageType.DOCUMENT,
-                MessageType.CONTACT,
-                MessageType.LOCATION,
-                MessageType.STICKER,
-                MessageType.REACTION,
-                MessageType.SYSTEM,
-                MessageType.EDIT,
-                MessageType.REVOKE,
-                # WhatsApp-specific types mapped to closest standard types
-                MessageType("button"),  # Interactive button responses
-                MessageType("order"),  # Product orders
-                MessageType("unsupported"),  # Unsupported message types
-            },
-            supports_status_updates=True,
-            supports_signature_validation=True,
-            supports_error_webhooks=True,
-            max_payload_size=1024 * 1024,  # 1MB typical WhatsApp webhook limit
-            rate_limit_per_minute=1000,  # WhatsApp API rate limits
-        )
-
         # Register message type handlers
         self._register_message_handlers()
 
     @property
     def platform(self) -> PlatformType:
         return PlatformType.WHATSAPP
-
-    @property
-    def capabilities(self) -> ProcessorCapabilities:
-        return self._capabilities
 
     def set_field_registry(self, registry: "FieldHandlerRegistry | None") -> None:
         """Attach (or clear) the app-supplied custom webhook field registry."""
@@ -137,7 +125,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             raise ValueError(error_msg) from e
 
     def get_supported_message_types(self) -> set[MessageType]:
-        return self._capabilities.supported_message_types
+        return set(_SUPPORTED_MESSAGE_TYPES)
 
     def create_message_from_data(
         self,

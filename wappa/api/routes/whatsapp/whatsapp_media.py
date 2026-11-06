@@ -27,14 +27,11 @@ from wappa.api.dependencies.inbox_context import get_inbox_messenger
 from wappa.api.dependencies.media_transfer import MediaUploader, get_media_uploader
 from wappa.api.dependencies.whatsapp_dependencies import (
     get_whatsapp_media_handler,
-)
-from wappa.api.dependencies.whatsapp_media_dependencies import (
-    get_whatsapp_media_factory,
+    get_whatsapp_media_payloads,
 )
 from wappa.api.routes.whatsapp.route_families import RouteFamily
 from wappa.api.utils import dispatch_message_event
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
-from wappa.domain.factories.media_factory import MediaFactory
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.media_interface import IMediaHandler
 from wappa.domain.interfaces.messaging_interface import IMessenger
@@ -56,6 +53,7 @@ from wappa.messaging.whatsapp.models.media_models import (
     StickerMessage,
     VideoMessage,
 )
+from wappa.messaging.whatsapp.payload_builders import WhatsAppMediaPayloadBuilder
 
 # One prefix, four capability groups. `DELETE /media/{id}` destroys a platform
 # asset, so it is gated apart from the reads it sits next to — see ADR-0009.
@@ -536,10 +534,10 @@ async def delete_media(
     description="Get platform-specific media limits and supported types",
 )
 async def get_media_limits(
-    media_factory: MediaFactory = Depends(get_whatsapp_media_factory),
+    payloads: WhatsAppMediaPayloadBuilder = Depends(get_whatsapp_media_payloads),
 ) -> dict:
     """Get WhatsApp media limits and constraints.
 
     Returns supported MIME types, file size limits, and platform constraints.
     """
-    return media_factory.get_media_limits()
+    return payloads.get_media_limits()

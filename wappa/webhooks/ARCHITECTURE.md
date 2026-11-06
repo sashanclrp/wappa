@@ -33,8 +33,6 @@
 
 ```
 wappa/webhooks/
-├── factory.py                  # SchemaFactory singleton + MessageSchemaRegistry + WebhookSchemaRegistry
-│
 ├── core/
 │   ├── schema_drift.py         # report_schema_drift, MetaSchemaDriftError (drift log + strict mode)
 │   ├── base_webhook.py         # BaseWebhook, BaseContact, BaseWebhookMetadata, BaseWebhookError (ABCs)
@@ -91,8 +89,6 @@ wappa/webhooks/
 | `InboundMessageWebhook` | Canonical Universal Webhook Schema for user→business messages. Carries `InboxBase`, `UserBase`, and a `BaseMessage` subclass. |
 | `CallWebhook` | Universal form for WhatsApp Calling events; dispatches to `WappaEventHandler.process_call()`. |
 | `StatusWebhook` | Universal outbound model for delivery status events. `user_id` field is populated by the processors layer (BSUID > phone fallback). |
-| `SchemaFactory` | Singleton (`schema_factory`). Entry point for creating platform-specific containers (`create_webhook_instance`) and per-type messages (`create_message_instance`). Delegates universal webhook assembly to `wappa/processors/`. |
-| `MessageSchemaRegistry` | Holds `{PlatformType: {MessageType: BaseMessage subclass}}`. Pre-loaded with Wappa's WhatsApp message types at startup. |
 
 ## Relationship to `wappa/schemas`
 
@@ -103,7 +99,6 @@ Inbound schemas belong here:
 
 - Platform Schema: `wappa/webhooks/<platform>/...`
 - Universal Webhook Schema / Universal Model: `wappa/webhooks/core/webhook_interfaces/`
-- Webhook schema factory and registries: `wappa/webhooks/factory.py`
 
 Do not add inbound webhook models, WhatsApp payload schemas, or Universal Model
 forms under `wappa/schemas`.
@@ -113,9 +108,7 @@ forms under `wappa/schemas`.
 - **Abstract Base + Concrete Adapter**: `BaseWebhook` / `BaseContact` / `BaseWebhookMetadata`
   define the interface; `WhatsAppWebhook` / `WhatsAppContactAdapter` / `WhatsAppWebhookMetadata`
   implement it. New platforms add a new concrete triple without touching core.
-- **Registry + Factory**: `MessageSchemaRegistry` and `WebhookSchemaRegistry` decouple schema
-  lookup from instantiation. `SchemaFactory` is the single entry point; callers never
-  import message-type classes directly.
+- **Processor handler table**: each processor owns the map from a Platform message type to its schema class (WhatsApp's `_register_message_handlers` in `wappa/processors/whatsapp_processor.py`); there is no shared schema registry.
 - **Strict / Permissive Split**: Built-in Meta fields validate against strict models;
   app-registered custom fields use `CustomWebhookValue` (extra fields allowed). The gate lives
   in `WebhookChange._route_field` using Pydantic's `ValidationInfo` context. There are two
@@ -170,9 +163,9 @@ UserBase carries `platform_user_id` for native non-WhatsApp identity; it cannot 
 
 A message family is a new `MessageType` inside `InboundMessageWebhook`; an event lane is a new Universal Webhook with its own handler hook. Most additions are a family: user choices, reactions and edits all reuse existing lanes. Walk the chain in order and verify each hop before the next.
 
-1. Shared base and enum: an abstract base in `wappa/webhooks/core/base_message.py` (as `BaseReactionMessage`) and a member of `MessageType` in `wappa/schemas/core/types.py`. Add it to `PLATFORM_CAPABILITIES` in the same file for each Platform that supports it.
-2. Each Platform's model: WhatsApp under `wappa/webhooks/whatsapp/message_types/` registered in `MessageSchemaRegistry` (`wappa/webhooks/factory.py`); Instagram in `wappa/webhooks/instagram/models.py`.
-3. The processor lane table: WhatsApp's `_register_message_handlers` and `ProcessorCapabilities` in `wappa/processors/whatsapp_processor.py`; Instagram's docstring table and its event branches in `wappa/processors/instagram_processor.py`. Processors stay pure.
+1. Shared base and enum: an abstract base in `wappa/webhooks/core/base_message.py` (as `BaseReactionMessage`) and a member of `MessageType` in `wappa/schemas/core/types.py`.
+2. Each Platform's model: WhatsApp under `wappa/webhooks/whatsapp/message_types/`; Instagram in `wappa/webhooks/instagram/models.py`.
+3. The processor lane table: WhatsApp's handler table (`_register_message_handlers` and `_SUPPORTED_MESSAGE_TYPES`) in `wappa/processors/whatsapp_processor.py`; Instagram's docstring table and its event branches in `wappa/processors/instagram_processor.py`. Processors stay pure.
 4. A new lane only: the Universal Webhook in `wappa/webhooks/core/webhook_interfaces/conversation_webhooks.py` (or `wappa/webhooks/core/webhook_interfaces/universal_webhooks.py`), added to the `UniversalWebhook` union and exported from `wappa/webhooks/core/webhook_interfaces/__init__.py` and `wappa/webhooks/__init__.py`.
 5. A new lane only: a `match` case in `WappaEventDispatcher.dispatch_universal_webhook` (`wappa/core/events/event_dispatcher.py`, plus its `_WEBHOOK_EMOJI` entry), a `handle_*` / `process_*` hook pair on `WappaEventHandler` in `wappa/core/events/event_handler.py` (optional, no-op default), and the User the handler is scoped to in `_resolve_handler_user_id` (`wappa/core/inbound/runtime.py`).
 6. Tests (`tests/test_instagram_conversations.py`, `tests/test_adr0016_unified_lanes.py`, `tests/test_webhook_schema_ownership.py`, or the WhatsApp contract test for that family) and `docs/public-contract.md` ("Event lanes", "Universal Webhooks"), then `CHANGELOG.md`.

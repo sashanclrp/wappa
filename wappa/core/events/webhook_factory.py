@@ -87,24 +87,6 @@ class WebhookURLFactory:
 
         return f"{self.base_url}/webhook/inboxes/{platform_name}"
 
-    def generate_whatsapp_webhook_url(self) -> str:
-        """
-        Generate a WhatsApp-specific webhook URL.
-
-        Returns:
-            Canonical WhatsApp webhook URL for GET verification and POST delivery
-        """
-        return self.generate_webhook_url(PlatformType.WHATSAPP)
-
-    def generate_whatsapp_verify_url(self) -> str:
-        """
-        Generate a WhatsApp webhook verification URL.
-
-        Returns:
-            WhatsApp webhook verification URL
-        """
-        return self.generate_webhook_url(PlatformType.WHATSAPP)
-
     def get_supported_platforms(self) -> dict[str, dict[str, str]]:
         """
         Get all supported platforms and their webhook URL patterns.

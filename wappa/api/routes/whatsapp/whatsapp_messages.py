@@ -16,13 +16,12 @@ from fastapi import Depends, HTTPException, Request
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.inbox_context import get_inbox_messenger
 from wappa.api.dependencies.whatsapp_dependencies import (
-    get_whatsapp_message_factory,
+    get_whatsapp_message_payloads,
 )
 from wappa.api.routes.whatsapp.route_families import RouteFamily
 from wappa.api.utils import dispatch_message_event
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.logger import get_logger
-from wappa.domain.factories.message_factory import MessageFactory
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.messaging_targets import (
@@ -35,6 +34,7 @@ from wappa.messaging.whatsapp.models.basic_models import (
     BasicTextMessage,
     ReadStatusMessage,
 )
+from wappa.messaging.whatsapp.payload_builders import WhatsAppMessagePayloadBuilder
 
 # Outbound mutations (`send_router`) are omissible; message limits are not.
 _family = RouteFamily(
@@ -203,7 +203,7 @@ async def mark_message_as_read(
     description="Get WhatsApp text message limits. Other limits at separate endpoints.",
 )
 async def get_message_limits(
-    factory: MessageFactory = Depends(get_whatsapp_message_factory),
+    payloads: WhatsAppMessagePayloadBuilder = Depends(get_whatsapp_message_payloads),
 ) -> dict:
     """Get WhatsApp text message limits.
 
@@ -216,9 +216,9 @@ async def get_message_limits(
     - /api/whatsapp/templates/limits for template limits
 
     Args:
-        factory: WhatsApp message factory (injected)
+        payloads: WhatsApp text payload builder (injected)
 
     Returns:
         Dictionary containing text message limits (max_text_length, etc.)
     """
-    return factory.get_message_limits()
+    return payloads.get_message_limits()

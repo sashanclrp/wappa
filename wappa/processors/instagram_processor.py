@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any
 
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.messaging_targets import CommentRef, PostRef
-from wappa.processors.base_processor import BaseWebhookProcessor, ProcessorCapabilities
+from wappa.processors.base_processor import BaseWebhookProcessor
 from wappa.schemas.core.types import MessageStatus, MessageType, PlatformType
 from wappa.webhooks.core.base_message import BaseMessage
 from wappa.webhooks.core.base_status import BaseMessageStatus
@@ -140,12 +140,6 @@ class InstagramWebhookProcessor(BaseWebhookProcessor):
     @property
     def platform(self) -> PlatformType:
         return PlatformType.INSTAGRAM
-
-    @property
-    def capabilities(self) -> ProcessorCapabilities:
-        return ProcessorCapabilities(
-            self.platform, set(_SUPPORTED_TYPES), supports_error_webhooks=False
-        )
 
     def get_supported_message_types(self) -> set[MessageType]:
         return set(_SUPPORTED_TYPES)

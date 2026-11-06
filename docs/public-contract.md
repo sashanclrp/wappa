@@ -338,6 +338,8 @@ removed. No compatibility import path is provided.
 - `wappa.schemas.core.recipient.RecipientRequest`
 - `wappa.schemas.core.recipient.apply_recipient_to_payload`
 
+`wappa.schemas.core.types` holds vocabulary only (`PlatformType`, `MessageType` and sibling enums). It has no per-Platform capability table: `PLATFORM_CAPABILITIES` and its helpers were removed in 0.34. Which Platforms are installed is decided by the processor factory, not by `PlatformType`; `TELEGRAM` and `TEAMS` are reserved members with no adapter.
+
 Webhook processors are translation-only adapters. They return Universal Models and do not mutate ContextVars, construct messengers, construct cache factories, open DB sessions, clone handlers, or dispatch events. Those responsibilities belong to the Inbound Runtime and its Dispatch Context.
 
 ## External Webhook Sources
@@ -686,6 +688,7 @@ address rewrite, or retry. Host Applications still own durable identity policy.
 - The interface stays as a single seam until the split threshold documented in `wappa/messaging/ARCHITECTURE.md` is met.
 - If a split is justified in the future, it will be a clean breaking change with no compatibility aliases.
 - Internal handler composition (per message family) is not part of the public contract.
+- WhatsApp payload construction (`wappa.messaging.whatsapp.payload_builders`) is adapter-private. `WhatsAppMessenger` builds its own payload builders; it takes no factory arguments.
 
 ## Inbox-scoped Template transport
 

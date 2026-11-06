@@ -14,13 +14,13 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
 
-from wappa.api.dependencies.whatsapp_dependencies import (
-    get_whatsapp_media_handler,
-    get_whatsapp_messenger,
+from wappa.api.dependencies.inbox_context import (
+    InboxExecutionContext,
+    get_inbox_execution_context,
 )
+from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_media_handler
 from wappa.core.config.settings import settings
 from wappa.domain.interfaces.media_interface import IMediaHandler
-from wappa.domain.interfaces.messaging_interface import IMessenger
 
 router = APIRouter(
     prefix="",
@@ -34,7 +34,7 @@ router = APIRouter(
     description="Comprehensive health check for all WhatsApp messaging services",
 )
 async def whatsapp_health_check(
-    messenger: IMessenger = Depends(get_whatsapp_messenger),
+    context: InboxExecutionContext = Depends(get_inbox_execution_context),
     media_handler: IMediaHandler = Depends(get_whatsapp_media_handler),
 ) -> dict:
     """Consolidated health check for all WhatsApp services.
@@ -43,7 +43,7 @@ async def whatsapp_health_check(
     and specialized messaging services into a single response.
 
     Args:
-        messenger: WhatsApp messenger implementation (provides access to all handlers)
+        context: the selected Inbox Execution Context
         media_handler: WhatsApp media handler (provides media-specific information)
 
     Returns:
@@ -51,8 +51,8 @@ async def whatsapp_health_check(
     """
     return {
         "status": "healthy",
-        "platform": messenger.platform.value,
-        "inbox_id": messenger.inbox_id,
+        "platform": context.inbox_ref.platform.value,
+        "inbox_id": context.inbox_id,
         "api_version": settings.api_version,
         "timestamp": datetime.now(UTC).isoformat(),
         "services": {

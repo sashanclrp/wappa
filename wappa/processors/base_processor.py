@@ -18,55 +18,6 @@ from wappa.webhooks.core.base_webhook import BaseWebhook
 from wappa.webhooks.core.webhook_interfaces.universal_webhooks import UniversalWebhook
 
 
-class ProcessorCapabilities:
-    """
-    Represents the capabilities of a platform processor.
-
-    This allows the system to understand what each processor can handle
-    and route webhooks appropriately.
-    """
-
-    def __init__(
-        self,
-        platform: PlatformType,
-        supported_message_types: set[MessageType],
-        supports_status_updates: bool = True,
-        # Whether the Platform signs its callbacks at all. Wappa verifies
-        # WhatsApp signatures in wappa.core.inbound.MetaCallbackAuthenticator,
-        # before the payload reaches a Processor — Processors are pure
-        # translators and never authenticate.
-        supports_signature_validation: bool = True,
-        supports_error_webhooks: bool = True,
-        max_payload_size: int | None = None,
-        rate_limit_per_minute: int | None = None,
-    ):
-        self.platform = platform
-        self.supported_message_types = supported_message_types
-        self.supports_status_updates = supports_status_updates
-        self.supports_signature_validation = supports_signature_validation
-        self.supports_error_webhooks = supports_error_webhooks
-        self.max_payload_size = max_payload_size
-        self.rate_limit_per_minute = rate_limit_per_minute
-
-    def can_handle_message_type(self, message_type: MessageType) -> bool:
-        """Check if processor can handle a specific message type."""
-        return message_type in self.supported_message_types
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert capabilities to dictionary."""
-        return {
-            "platform": self.platform.value,
-            "supported_message_types": [
-                mt.value for mt in self.supported_message_types
-            ],
-            "supports_status_updates": self.supports_status_updates,
-            "supports_signature_validation": self.supports_signature_validation,
-            "supports_error_webhooks": self.supports_error_webhooks,
-            "max_payload_size": self.max_payload_size,
-            "rate_limit_per_minute": self.rate_limit_per_minute,
-        }
-
-
 class BaseWebhookProcessor(ABC):
     """
     Platform-agnostic webhook processor base class.
@@ -90,12 +41,6 @@ class BaseWebhookProcessor(ABC):
     @abstractmethod
     def platform(self) -> PlatformType:
         """Get the platform this processor handles."""
-        pass
-
-    @property
-    @abstractmethod
-    def capabilities(self) -> ProcessorCapabilities:
-        """Get the capabilities of this processor."""
         pass
 
     @abstractmethod
@@ -195,7 +140,6 @@ class BaseWebhookProcessor(ABC):
         """
         return {
             "platform": self.platform.value,
-            "capabilities": self.capabilities.to_dict(),
             "processed_count": self._processed_count,
             "error_count": self._error_count,
             "error_rate": self._error_count / max(self._processed_count, 1),

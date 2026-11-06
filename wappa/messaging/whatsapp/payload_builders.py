@@ -1,79 +1,83 @@
-# Platform-specific media message payload factory.
+"""WhatsApp Cloud API payload builders for text, read status and media.
 
-from abc import ABC, abstractmethod
+Private to the WhatsApp adapter: ``WhatsAppMessenger`` builds its send
+payloads here and the WhatsApp limits routes read the limits. Interactive,
+Template and specialized payloads are built in ``handlers/``.
+"""
+
 from typing import Any
 
 from wappa.schemas.core.recipient import apply_recipient_to_payload
-from wappa.schemas.core.types import PlatformType
 
 
-class MediaFactory(ABC):
-    @property
-    @abstractmethod
-    def platform(self) -> PlatformType: ...
+class WhatsAppMessagePayloadBuilder:
+    """Text and read-status Cloud API payloads, plus text limits."""
 
-    @abstractmethod
-    def create_image_message(
+    def create_text_message(
         self,
-        media_reference: str,
-        recipient: str,
-        caption: str | None = None,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]: ...
-
-    @abstractmethod
-    def create_video_message(
-        self,
-        media_reference: str,
-        recipient: str,
-        caption: str | None = None,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]: ...
-
-    @abstractmethod
-    def create_audio_message(
-        self,
-        media_reference: str,
+        text: str,
         recipient: str,
         reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]: ...
+        disable_preview: bool = False,
+    ) -> dict[str, Any]:
+        has_url = "http://" in text or "https://" in text
+        payload: dict[str, Any] = {
+            "messaging_product": "whatsapp",
+            "type": "text",
+            "text": {"body": text, "preview_url": has_url and not disable_preview},
+        }
+        apply_recipient_to_payload(payload, recipient)
 
-    @abstractmethod
-    def create_document_message(
-        self,
-        media_reference: str,
-        recipient: str,
-        filename: str | None = None,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]: ...
+        if reply_to_message_id:
+            payload["context"] = {"message_id": reply_to_message_id}
 
-    @abstractmethod
-    def create_sticker_message(
-        self,
-        media_reference: str,
-        recipient: str,
-        reply_to_message_id: str | None = None,
-        is_url: bool = False,
-    ) -> dict[str, Any]: ...
+        return payload
 
-    @abstractmethod
-    def validate_media_message(self, message_payload: dict[str, Any]) -> bool: ...
+    def create_read_status_message(
+        self, message_id: str, typing: bool = False
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "messaging_product": "whatsapp",
+            "status": "read",
+            "message_id": message_id,
+        }
+        if typing:
+            payload["typing_indicator"] = {"type": "text"}
+        return payload
 
-    @abstractmethod
-    def get_media_limits(self) -> dict[str, Any]: ...
+    def validate_message(self, message_payload: dict[str, Any]) -> bool:
+        try:
+            if message_payload.get("messaging_product") != "whatsapp":
+                return False
+            if "to" not in message_payload and "recipient" not in message_payload:
+                return False
+
+            if message_payload.get("type") == "text":
+                text = message_payload.get("text") or {}
+                body = text.get("body")
+                if not body or len(body) > 4096:
+                    return False
+
+            return not (
+                message_payload.get("status") == "read"
+                and "message_id" not in message_payload
+            )
+        except (KeyError, TypeError):
+            return False
+
+    def get_message_limits(self) -> dict[str, Any]:
+        return {
+            "max_text_length": 4096,
+            "max_preview_url_text_length": 4096,
+            "max_recipient_phone_length": 20,
+        }
 
 
-class WhatsAppMediaFactory(MediaFactory):
+class WhatsAppMediaPayloadBuilder:
+    """Media message Cloud API payloads, plus media limits."""
+
     _VALID_MEDIA_TYPES = {"image", "video", "audio", "document", "sticker"}
     _NO_CAPTION_TYPES = {"audio", "sticker"}
-
-    @property
-    def platform(self) -> PlatformType:
-        return PlatformType.WHATSAPP
 
     def _build_media_payload(
         self,

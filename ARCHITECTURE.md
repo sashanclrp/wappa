@@ -303,8 +303,7 @@ Wappa is multi-platform by design. Platform types remain stable while adapter ca
      - Inbound adapter: `wappa/webhooks/instagram/models.py`, `wappa/processors/instagram_processor.py`, `wappa/core/inbound/instagram_routing.py`.
      - Outbound adapter: `wappa/messaging/instagram/messenger.py` plus its capabilities `wappa/messaging/instagram/graph.py`, `wappa/messaging/instagram/media.py`, `wappa/messaging/instagram/media_library.py`, `wappa/messaging/instagram/content.py` and `wappa/messaging/instagram/history.py`.
      - Callback: the Platform branch in `wappa/api/controllers/webhook_controller.py` (allowed set and payload router choice).
-     - Processor registration: `wappa/processors/factory.py` (Platform detection and processor construction).
-     - Schema registration: `wappa/webhooks/factory.py` (`MessageSchemaRegistry` and `WebhookSchemaRegistry` entries).
+     - Processor registration: `wappa/processors/factory.py` (processor construction).
      - Messenger construction: the Platform branch in `wappa/domain/factories/messenger_factory.py`.
      - Credentials: the Platform's active/inactive records in `wappa/domain/inbox/credentials.py`, and record selection in `wappa/domain/inbox/services.py`.
      - Messaging HTTP API: a `RoutePlatform` member in `wappa/api/dependencies/inbox_context.py`.

@@ -127,35 +127,6 @@ rewrites a recipient's cached state. Media upload/download/lookup, limits,
 validation, Template info, webhooks, health, and every `wappa.messaging`
 service stay exactly as they are. Standalone applications need no change.
 
-### 🏭 **Factory Pattern for Cross-Platform Messages** (v0.3.0)
-Text/read-status payloads and media payloads have separate owners:
-`WhatsAppMessageFactory` and `WhatsAppMediaFactory`. `WhatsAppMessenger`
-consumes both through dependency injection, keeping pure payload construction
-separate from I/O without duplicating media construction rules.
-
-```python
-# Defaults keep the library ergonomic:
-messenger = WhatsAppMessenger(
-    client=client,
-    media_handler=media_handler,
-    interactive_handler=interactive_handler,
-    template_handler=template_handler,
-    specialized_handler=specialized_handler,
-    inbox_id=inbox_id,
-)
-
-# Or inject custom factories for advanced use cases (testing, multi-inbox extensions):
-messenger = WhatsAppMessenger(
-    client=client,
-    # ... handlers ...
-    inbox_id=inbox_id,
-    message_factory=MyCustomMessageFactory(),
-    media_factory=MyCustomMediaFactory(),
-)
-```
-
-**Why only text/media have factories?** Interactive messages, templates, and specialized types (contact, location) are platform-specific — Telegram has inline keyboards instead of WhatsApp buttons/lists and templates are WA-only. The Messenger contract still keeps one method per action: the Instagram adapter maps lists onto quick replies, buttons onto button templates, and location/contact onto text (ADR-0016). Factories are reserved for concepts that truly cross platforms. Platform-specific types are owned by their corresponding handlers.
-
 ## 📦 Installation
 
 ### Using uv (Recommended)

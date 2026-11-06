@@ -6,8 +6,6 @@ from typing import Any, cast
 
 from wappa.core.logging.logger import get_logger
 from wappa.domain.contacts import ContactCard
-from wappa.domain.factories.media_factory import WhatsAppMediaFactory
-from wappa.domain.factories.message_factory import WhatsAppMessageFactory
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interactive import (
     ButtonHeader,
@@ -46,6 +44,10 @@ from wappa.messaging.whatsapp.models.template_models import (
     WhatsAppTemplateMediaType,
     WhatsAppTemplateType,
 )
+from wappa.messaging.whatsapp.payload_builders import (
+    WhatsAppMediaPayloadBuilder,
+    WhatsAppMessagePayloadBuilder,
+)
 from wappa.messaging.whatsapp.utils.error_helpers import (
     ADDRESS_REJECTION_CODES,
     BSUID_ERROR_TAG,
@@ -67,8 +69,6 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         template_handler: WhatsAppTemplateHandler,
         specialized_handler: WhatsAppSpecializedHandler,
         inbox_id: str,
-        message_factory: WhatsAppMessageFactory | None = None,
-        media_factory: WhatsAppMediaFactory | None = None,
     ):
         self.client = client
         self.media_handler = media_handler
@@ -76,10 +76,8 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         self.template_handler = template_handler
         self.specialized_handler = specialized_handler
         self._inbox_id = inbox_id
-        # Factories default to new instances so the constructor stays ergonomic
-        # for library users while still allowing DI in FastAPI routes.
-        self._message_factory = message_factory or WhatsAppMessageFactory()
-        self._media_factory = media_factory or WhatsAppMediaFactory()
+        self._message_payloads = WhatsAppMessagePayloadBuilder()
+        self._media_payloads = WhatsAppMediaPayloadBuilder()
         self.logger = get_logger(__name__)
 
     def capability[C](self, kind: Callable[..., C]) -> C | None:
@@ -255,7 +253,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         disable_preview: bool,
     ) -> MessageResult:
         try:
-            payload = self._message_factory.create_text_message(
+            payload = self._message_payloads.create_text_message(
                 text=text,
                 recipient=recipient,
                 reply_to_message_id=reply_to_message_id,
@@ -298,7 +296,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         try:
             # Cloud API: typing_indicator rides on the read receipt itself and
             # needs only the inbound message ID.
-            read_payload = self._message_factory.create_read_status_message(
+            read_payload = self._message_payloads.create_read_status_message(
                 message_id=message_id, typing=typing
             )
 
@@ -533,7 +531,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
 
             match media_type:
                 case MediaType.IMAGE:
-                    payload = self._media_factory.create_image_message(
+                    payload = self._media_payloads.create_image_message(
                         media_reference=media_reference,
                         recipient=recipient,
                         caption=caption,
@@ -541,7 +539,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
                         is_url=is_url,
                     )
                 case MediaType.VIDEO:
-                    payload = self._media_factory.create_video_message(
+                    payload = self._media_payloads.create_video_message(
                         media_reference=media_reference,
                         recipient=recipient,
                         caption=caption,
@@ -549,14 +547,14 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
                         is_url=is_url,
                     )
                 case MediaType.AUDIO:
-                    payload = self._media_factory.create_audio_message(
+                    payload = self._media_payloads.create_audio_message(
                         media_reference=media_reference,
                         recipient=recipient,
                         reply_to_message_id=reply_to_message_id,
                         is_url=is_url,
                     )
                 case MediaType.DOCUMENT:
-                    payload = self._media_factory.create_document_message(
+                    payload = self._media_payloads.create_document_message(
                         media_reference=media_reference,
                         recipient=recipient,
                         filename=filename,
@@ -564,7 +562,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
                         is_url=is_url,
                     )
                 case MediaType.STICKER:
-                    payload = self._media_factory.create_sticker_message(
+                    payload = self._media_payloads.create_sticker_message(
                         media_reference=media_reference,
                         recipient=recipient,
                         reply_to_message_id=reply_to_message_id,

@@ -30,6 +30,3 @@ Terms specific to this bounded context. Shared kernel terms (`inbox_id`, `user_i
 | Built-in field | A Meta `change.field` value Wappa handles natively: messages, identity and preference changes, group and username events, Calling, account events, and Coexistence synchronization fields. |
 | Custom field | A Meta `change.field` value the host application registers via `WappaBuilder.register_webhook_field`. |
 | Schema drift | A Meta payload property or `change.field` Wappa does not model. Tolerated, logged as `META_SCHEMA_DRIFT`, and answered 200; see root `CONTEXT.md`. |
-| `SchemaFactory` | Singleton that selects and instantiates the right `BaseWebhook` or `BaseMessage` subclass for a given platform. Delegates universal webhook creation to the processors layer. |
-| `MessageSchemaRegistry` | Lookup table mapping `(PlatformType, MessageType)` → `BaseMessage` subclass. |
-| `WebhookSchemaRegistry` | Lookup table mapping `PlatformType` → `BaseWebhook` subclass. |
