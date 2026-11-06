@@ -400,16 +400,18 @@ class MessageHandlers:
                 self.logger.error(f"Failed to send metadata: {metadata_result.error}")
                 return {"success": False, "error": "Failed to send metadata"}
 
-            # Echo the contacts (send the first contact)
+            # Echo every shared contact back in one message
             contact_to_send = contacts[0] if contacts else None
             contact_sent = False
 
             if contact_to_send:
-                # Convert contact to the format expected by messenger
-                contact_dict = self._convert_contact_to_dict(contact_to_send)
+                cards = [
+                    ContactCard.model_validate(self._convert_contact_to_dict(c))
+                    for c in contacts
+                ]
 
                 contact_result = await self.messenger.send_contact(
-                    contact=ContactCard.model_validate(contact_dict),
+                    contacts=cards,
                     target=DirectMessage(
                         inbox_ref=InboxRef(
                             platform=self.messenger.platform,

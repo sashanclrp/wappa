@@ -9,6 +9,7 @@ from pydantic import SecretStr
 from wappa.domain.inbox import InboxRef
 from wappa.domain.models.media_result import MediaDownloadResult
 from wappa.messaging import (
+    CardMedia,
     DeliveryAddresses,
     DirectMessage,
     ICommentControls,
@@ -71,7 +72,9 @@ def _wa(media: object = None) -> tuple[WhatsAppMessenger, _Client]:
 
 
 def _card(n: int, *buttons) -> MessageCard:
-    return MessageCard(title=f"T{n}", subtitle="sub", image_url=IMG, buttons=buttons)
+    return MessageCard(
+        header=CardMedia.image(url=IMG), title=f"T{n}", subtitle="sub", buttons=buttons
+    )
 
 
 def test_platform_only_primitives_are_not_on_the_contract():
@@ -147,7 +150,7 @@ async def test_whatsapp_carousel_url_cards_and_local_rules():
         await wa.send_carousel(
             [_card(1, url), _card(2, ReplyButton(id="a", title="A"))], WA_DM, "b"
         )
-    with pytest.raises(ValueError, match="image_url"):
+    with pytest.raises(ValueError, match="header image or video"):
         await wa.send_carousel([MessageCard(title="x", buttons=(url,))] * 2, WA_DM, "b")
     assert len(client.posted) == 1
 
@@ -192,7 +195,7 @@ class _Uploads:
     def __init__(self) -> None:
         self.paths: list = []
 
-    async def upload_media(self, path, media_type=None):
+    async def upload_media(self, path, media_type=None, filename=None):
         from wappa.domain.models.media_result import MediaUploadResult
 
         self.paths.append(path)

@@ -57,7 +57,7 @@ The same calls work on both Platforms; Instagram adapts them instead of raising:
 | Operation | Instagram renders |
 | --- | --- |
 | `send_location(latitude, longitude, target, name=..., address=...)` | text: name, address and a `📍` Google Maps link |
-| `send_contact(contact, target)` | text card (👤 name, organization, 📞 phones, ✉️ emails, 🔗 urls); `contact` uses WhatsApp's contact-card shape |
+| `send_contact(contacts, target)` | one text block per card (👤 name, organization, 📞 phones, ✉️ emails, 🔗 urls), split over 1000 UTF-8 bytes; `contacts` is one `ContactCard` or a list, in WhatsApp's contact-card shape (only `name.formatted_name` required) |
 | `send_sticker(source, target)` | an image; png/jpeg/gif only, a `.webp` file is rejected before I/O |
 
 `send_location_request` and `send_contact_request` stay WhatsApp-only: Instagram raises `UnsupportedOperationError`, because a text prompt cannot return the location or phone. Check `self.messenger.supported_operations` first and ask the User to type the answer otherwise.
@@ -80,7 +80,7 @@ if got.found:
     data, mime = got.value.content, got.value.content_type
 ```
 
-`upload` returns an `UploadResult` (`success`, `media_id`, `outcome`, `error_code`): a Media ID on WhatsApp, a reusable `message_attachments` attachment_id on Instagram. `download` is the same call on both Platforms: pass `webhook.message.media_id` unchanged (a Media ID on WhatsApp, the CDN attachment URL on Instagram). On Instagram it sends no credentials and only fetches https Meta CDN hosts (`fbsbx.com`, `fbcdn.net`, `cdninstagram.com`), following at most 3 redirects, each to an allowed host. Outcomes: `found`, `not_found` (expired/deleted, which happens within minutes), `rejected` (host, size), `unavailable` (timeout). Download promptly. Store bytes only where your policy allows; story mentions are never stored. For a custom size limit pass `max_bytes` (`library.download(media_id, max_bytes=5_000_000)`, default 25 MB on Instagram); an oversize read is `rejected` with `error_code="SIZE"`. `upload` also takes an optional `mime_type`, which Instagram ignores (its rules key off the file suffix).
+`upload` returns an `UploadResult` (`success`, `media_id`, `outcome`, `error_code`): a Media ID on WhatsApp, a reusable `message_attachments` attachment_id on Instagram. `download` is the same call on both Platforms: pass `webhook.message.media_id` unchanged (a Media ID on WhatsApp, the CDN attachment URL on Instagram). On Instagram it sends no credentials and only fetches https Meta CDN hosts (`fbsbx.com`, `fbcdn.net`, `cdninstagram.com`), following at most 3 redirects, each to an allowed host. Outcomes: `found`, `not_found` (expired/deleted, which happens within minutes), `rejected` (host, size), `unavailable` (timeout). Download promptly. Store bytes only where your policy allows; story mentions are never stored. For a custom size limit pass `max_bytes` (`library.download(media_id, max_bytes=5_000_000)`, default 25 MB on Instagram); an oversize read is `rejected` with `error_code="SIZE"`. `upload` takes a `Path` or raw `bytes`; name a `bytes` upload with `filename` (Instagram's rules key off the suffix, so bytes need a `filename` or a known `mime_type`), and `mime_type` is otherwise ignored on Instagram. `MediaFamily.STICKER` uploads as an image on Instagram. `info(media_id)` and `delete(media_id)` follow the WhatsApp Media API; Instagram has neither endpoint and raises `UnsupportedOperationError`.
 
 ## Sender actions
 

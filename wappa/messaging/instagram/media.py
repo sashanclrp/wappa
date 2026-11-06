@@ -67,27 +67,46 @@ ALLOWED_CDN_SUFFIXES: tuple[str, ...] = (
 )
 
 
-def mime_for(path: Path) -> str:
-    return _MIME_BY_SUFFIX.get(path.suffix.lower(), "application/octet-stream")
+def mime_for(name: str) -> str:
+    return _MIME_BY_SUFFIX.get(Path(name).suffix.lower(), "application/octet-stream")
 
 
-def validate_local_file(path: Path, family: str) -> MediaRule:
+def upload_name(filename: str | None, mime_type: str | None) -> str:
+    """The file name an upload of raw bytes goes out with.
+
+    Instagram's rules key off the suffix, so bytes need a ``filename`` or a
+    ``mime_type`` Instagram knows (``upload`` plus its suffix).
+    """
+    if filename:
+        return Path(filename).name
+    suffix = next((k for k, v in _MIME_BY_SUFFIX.items() if v == mime_type), None)
+    if suffix is None:
+        raise ValueError("Instagram byte uploads need a filename or a known mime_type")
+    return f"upload{suffix}"
+
+
+def validate_upload(name: str, size: int, family: str) -> MediaRule:
     rule = MEDIA_RULES[family]
-    if path.suffix.lower() not in rule.extensions:
+    suffix = Path(name).suffix
+    if suffix.lower() not in rule.extensions:
         raise ValueError(
             f"Instagram {family} supports {sorted(rule.extensions)}, not "
-            f"{path.suffix or 'no extension'}"
+            f"{suffix or 'no extension'}"
         )
-    if not path.is_file():
-        raise ValueError(f"Instagram {family} file does not exist: {path.name}")
-    size = path.stat().st_size
     if size > rule.max_bytes:
         raise ValueError(
             f"Instagram {family} is {size} bytes; limit is {rule.max_bytes}"
         )
-    if not path.name.isascii():
+    if not name.isascii():
         raise ValueError("Instagram attachment file names must be ASCII")
     return rule
+
+
+def validate_local_file(path: Path, family: str) -> MediaRule:
+    if not path.is_file():
+        validate_upload(path.name, 0, family)  # a wrong format reports first
+        raise ValueError(f"Instagram {family} file does not exist: {path.name}")
+    return validate_upload(path.name, path.stat().st_size, family)
 
 
 def validate_media_url(url: str) -> str:

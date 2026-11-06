@@ -5,6 +5,7 @@ Provides REST API endpoints for WhatsApp interactive operations:
 - POST /api/whatsapp/interactive/send-buttons: Send button messages
 - POST /api/whatsapp/interactive/send-list: Send list messages
 - POST /api/whatsapp/interactive/send-cta: Send call-to-action messages
+- GET /api/{platform}/interactive/limits: The shared interactive limits
 - POST /api/{platform}/interactive/send-carousel: Send a card carousel
 
 Router configuration:
@@ -13,8 +14,10 @@ Router configuration:
 - Full URL: /api/whatsapp/interactive/
 """
 
+from typing import Self
+
 from fastapi import Depends, Request
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.inbox_context import get_inbox_messenger
@@ -30,6 +33,13 @@ from wappa.domain.interactive import (
     BUTTON_ID_MAX,
     BUTTON_TITLE_MAX,
     BUTTONS_MAX,
+    CARD_BUTTONS_MAX,
+    CARD_SUBTITLE_MAX,
+    CARD_TEXT_MAX,
+    CARD_TITLE_MAX,
+    CAROUSEL_BODY_MAX,
+    CAROUSEL_CARDS_MAX,
+    CAROUSEL_CARDS_MIN,
     FOOTER_MAX,
     HEADER_TEXT_MAX,
     LIST_BODY_MAX,
@@ -41,6 +51,7 @@ from wappa.domain.interactive import (
     ROW_TITLE_MAX,
     SECTION_TITLE_MAX,
     MessageCard,
+    check_carousel,
 )
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.results import MessageResult
@@ -142,10 +153,10 @@ async def send_cta_message(
     messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    """Send interactive call-to-action message via WhatsApp.
+    """Send a call-to-action message with one URL button.
 
-    Supports external URL buttons for call-to-action scenarios.
-    Based on WhatsApp Cloud API 2025 CTA URL specifications.
+    An optional text, image, video or document header and an optional footer;
+    limits are the shared minimum across Platforms.
     """
     return await messenger.send_cta_message(
         button_text=request.button_text,
@@ -161,8 +172,23 @@ async def send_cta_message(
 class CarouselMessage(DeliveryRequest):
     """A carousel of 2–10 cards (``IMessenger.send_carousel``)."""
 
-    body: str = Field(..., min_length=1, description="Text shown with the carousel")
-    cards: list[MessageCard] = Field(..., min_length=1, max_length=10)
+    body: str = Field(
+        ...,
+        min_length=1,
+        max_length=CAROUSEL_BODY_MAX,
+        description="Text shown with the carousel",
+    )
+    cards: list[MessageCard] = Field(
+        ..., min_length=CAROUSEL_CARDS_MIN, max_length=CAROUSEL_CARDS_MAX
+    )
+    reply_to_message_id: str | None = Field(
+        None, description="Optional message ID for replies"
+    )
+
+    @model_validator(mode="after")
+    def _shared_limits(self) -> Self:
+        check_carousel(self.cards, self.body)
+        return self
 
 
 @send_router.post(
@@ -170,9 +196,11 @@ class CarouselMessage(DeliveryRequest):
     response_model=MessageResult,
     summary="Send Carousel",
     description=(
-        "Send a card carousel. WhatsApp: media carousel, 2–10 cards, each with "
-        "`image_url` and the same button kind and count. Instagram: generic "
-        "template carousel. Platform rules are checked before any call (400)."
+        "Send a card carousel of 2–10 cards. WhatsApp: media carousel; every "
+        "card needs a `header` image or video by public `url` and the same "
+        "button kind and count. Instagram: generic template carousel; a video "
+        "card needs `header.poster_url` (else 501). "
+        "Platform rules are checked before any call."
     ),
 )
 @map_send_errors("send carousel")
@@ -187,6 +215,7 @@ async def send_carousel_message(
         request.cards,
         direct_target(messenger, request),
         request.body,
+        reply_to_message_id=request.reply_to_message_id,
     )
 
 
@@ -227,7 +256,23 @@ async def get_interactive_limits() -> dict:
             "max_row_id_length": ROW_ID_MAX,
         },
         "cta_messages": {
+            "max_button_text_length": BUTTON_TITLE_MAX,
+            "max_body_length": BUTTON_BODY_MAX,
+            "max_header_text_length": HEADER_TEXT_MAX,
+            "max_footer_length": FOOTER_MAX,
+            "supported_header_kinds": ["text", "image", "video", "document"],
             "required_url_protocols": ["http://", "https://"],
+        },
+        "carousels": {
+            "min_cards": CAROUSEL_CARDS_MIN,
+            "max_cards": CAROUSEL_CARDS_MAX,
+            "max_body_length": CAROUSEL_BODY_MAX,
+            "max_card_title_length": CARD_TITLE_MAX,
+            "max_card_subtitle_length": CARD_SUBTITLE_MAX,
+            "max_card_text_length": CARD_TEXT_MAX,
+            "max_card_buttons": CARD_BUTTONS_MAX,
+            "max_button_title_length": BUTTON_TITLE_MAX,
+            "supported_card_header_kinds": ["image", "video"],
         },
         "general": {
             "length_unit": "characters",

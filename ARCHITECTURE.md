@@ -310,7 +310,7 @@ Event lanes beyond message/status/error/system (message updates, comments, menti
 | `wappa/core/inbound/instagram_routing.py` | Signature-first, whole-batch admission: resolve every entry's Inbox before returning one delivery per event/change. Authors never select an Inbox. |
 | `wappa/messaging/instagram/graph.py` | Inbox-bound Graph HTTP, outcome classification (accepted/rejected/indeterminate), credential-free error text. |
 | `wappa/messaging/instagram/messenger.py` | `IMessenger` facade: maps the shared contract (`mark_as_read`, button/list/CTA messages, carousels, captions as follow-up text, location/contact as text, sticker as image) onto Instagram APIs, PrivateReply, local limit checks, capability lookup. |
-| `wappa/messaging/instagram/media_library.py` | `IMediaLibrary`: reusable `message_attachments` upload (attachment_id) and CDN download through the attachment reader. |
+| `wappa/messaging/instagram/media_library.py` | `IMediaLibrary`: reusable `message_attachments` upload of a file or bytes (attachment_id; a sticker as an image) and CDN download through the attachment reader; `info`/`delete` raise `UnsupportedOperationError`. |
 | `wappa/messaging/instagram/content.py` | `ICommentControls` (including public `reply_comment`) and `IConversationContentReader` (Focused Capabilities). |
 | `wappa/messaging/instagram/media.py` | Media rules and the credential-free, host-restricted `InstagramAttachmentReader`, private to `InstagramMediaLibrary.download`. |
 | `wappa/connections/contract.py` | `IInboxConnector` (ADR-0017): begin / complete / activate / disconnect, grant, readiness and activation results. |

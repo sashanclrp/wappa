@@ -32,8 +32,8 @@ The route modules live in `wappa/api/routes/whatsapp/` (the folder name is histo
 
 ## Capability gates and status mapping (ADR-0021)
 
-- `requires_capability(kind)` asks the Inbox's Messenger for a Focused Capability (`ICommentControls`, `IConversationContentReader`, `IConversationHistoryReader`, `IMediaLibrary` for media upload and download, with no Platform branch) and answers 501 `"<platform> does not provide <kind>"` when it is missing.
-- WhatsApp-only routes (Templates, Template info, media info and delete on the concrete `WhatsAppMediaHandler`, limits, validators, `/health`) reach the client through `InboxExecutionContext.whatsapp_client()` or `.template_transport()`, which call `whatsapp_only(...)` and answer the same 501.
+- `requires_capability(kind)` asks the Inbox's Messenger for a Focused Capability (`ICommentControls`, `IConversationContentReader`, `IConversationHistoryReader`, `IMediaLibrary` for media upload, download, info and delete, with no Platform branch) and answers 501 `"<platform> does not provide <kind>"` when it is missing.
+- WhatsApp-only routes (Templates, Template info, media limits, validators, `/health`) reach the client through `InboxExecutionContext.whatsapp_client()` or `.template_transport()`, which call `whatsapp_only(...)` and answer the same 501. A capability method the Platform has no endpoint for (Instagram `IMediaLibrary.info`/`delete`) raises `UnsupportedOperationError`, which `map_send_errors` turns into the same 501.
 - Send routes own no status mapping. Each builds its target with `direct_target(messenger, request)` and is decorated with `map_send_errors(operation)` (`wappa/api/utils/error_helpers.py`), the one mapper: `UnsupportedOperationError` → 501, `ValueError` (a local rule violation, raised before I/O) → 400, any other exception → 500, and a failed `MessageResult` (or `MediaUploadResult`) → the status its `error_code` maps to in `ERROR_CODE_MAPPING` (default 400) through `raise_for_failed_result`. Pydantic validation stays 422.
 
 ## Capability groups and profiles (ADR-0007, ADR-0009)

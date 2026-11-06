@@ -25,6 +25,7 @@ from wappa.domain.inbox import InboxRef, PlatformAccountRef
 from wappa.domain.inbox.errors import InboxNotFoundError
 from wappa.domain.inbox.ports import IInboxCredentialResolver, ResolvedInboxCredentials
 from wappa.messaging import (
+    CardMedia,
     CommentRef,
     ContactCard,
     DeliveryAddresses,
@@ -708,7 +709,7 @@ async def test_every_dm_operation_uses_native_wire_format():
                     MessageCard(
                         title="One",
                         subtitle="s",
-                        image_url="https://example.com/1.png",
+                        header=CardMedia.image(url="https://example.com/1.png"),
                         buttons=(ReplyButton(id="1", title="Pick"),),
                     ),
                     MessageCard(title="Two", default_url="https://example.com/2"),

@@ -29,10 +29,7 @@ from wappa.api.dependencies.media_transfer import (
     LibraryMediaUploader,
     get_media_uploader,
 )
-from wappa.api.dependencies.whatsapp_dependencies import (
-    get_whatsapp_media_handler,
-    get_whatsapp_media_payloads,
-)
+from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_media_payloads
 from wappa.api.routes.whatsapp.route_families import RouteFamily
 from wappa.api.utils import direct_target, dispatch_message_event, map_send_errors
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
@@ -44,10 +41,7 @@ from wappa.domain.models.media_result import (
     MediaInfoResult,
     MediaUploadResult,
 )
-from wappa.domain.results import MessageResult
-from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
-    WhatsAppMediaHandler,
-)
+from wappa.domain.results import MessageResult, OperationOutcome
 from wappa.messaging.whatsapp.models.media_models import (
     AudioMessage,
     DocumentMessage,
@@ -255,41 +249,7 @@ async def send_sticker_message(
     )
 
 
-@router.get(
-    "/info/{media_id}",
-    response_model=MediaInfoResult,
-    summary="Get Media Information",
-    description="Retrieve media information including URL, MIME type, and file size",
-)
-async def get_media_info(
-    media_id: str,
-    media_handler: WhatsAppMediaHandler = Depends(get_whatsapp_media_handler),
-) -> MediaInfoResult:
-    """Get media information by ID.
-
-    Returns media URL (valid for 5 minutes), MIME type, file size, and SHA256 hash.
-    """
-    try:
-        result = await media_handler.get_media_info(media_id)
-
-        if not result.success:
-            if "not found" in (result.error or "").lower():
-                raise HTTPException(status_code=404, detail=result.error)
-            else:
-                raise HTTPException(status_code=400, detail=result.error)
-
-        return result
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get media info for media_id '{media_id}': {type(e).__name__}: {e}",
-        ) from e
-
-
-_DOWNLOAD_STATUS = {
+_READ_STATUS = {
     ReadOutcome.NOT_FOUND: 404,
     ReadOutcome.ACCESS_DENIED: 403,
     ReadOutcome.REJECTED: 400,
@@ -302,6 +262,41 @@ _EXTENSIONS = {
     "audio/mpeg": ".mp3",
     "application/pdf": ".pdf",
 }
+
+
+@router.get(
+    "/info/{media_id}",
+    response_model=MediaInfoResult,
+    summary="Get Media Information",
+    description=(
+        "Describe a stored media file through the Inbox's IMediaLibrary: URL "
+        "(WhatsApp: valid about 5 minutes), MIME type, size and SHA-256. A "
+        "Platform without a media info endpoint (Instagram) answers 501."
+    ),
+)
+@map_send_errors("get media info")
+async def get_media_info(
+    media_id: str,
+    library: IMediaLibrary = Depends(requires_capability(IMediaLibrary)),
+    messenger: IMessenger = Depends(get_inbox_messenger),
+) -> MediaInfoResult:
+    result = await library.info(media_id)
+    if not result.found or result.value is None:
+        raise HTTPException(
+            status_code=_READ_STATUS.get(result.outcome, 502),
+            detail=result.error or result.outcome.value,
+        )
+    info = result.value
+    return MediaInfoResult(
+        success=True,
+        platform=messenger.platform,
+        media_id=info.media_id,
+        url=info.url,
+        mime_type=info.mime_type,
+        file_size=info.size,
+        sha256=info.sha256,
+        inbox_id=messenger.inbox_id,
+    )
 
 
 @router.get(
@@ -323,7 +318,7 @@ async def download_media(
     if not result.found or result.value is None:
         status = 413 if result.error_code == "SIZE" else None
         raise HTTPException(
-            status_code=status or _DOWNLOAD_STATUS.get(result.outcome, 502),
+            status_code=status or _READ_STATUS.get(result.outcome, 502),
             detail=result.error or result.outcome.value,
         )
     media = result.value
@@ -336,39 +331,37 @@ async def download_media(
     )
 
 
+_DELETE_STATUS = {"HTTP_400": 404, "HTTP_404": 404, "HTTP_401": 403, "HTTP_403": 403}
+
+
 @management_router.delete(
     "/{media_id}",
     response_model=MediaDeleteResult,
     summary="Delete Media",
-    description="Delete media from WhatsApp servers",
+    description=(
+        "Delete a stored media file through the Inbox's IMediaLibrary "
+        "(WhatsApp media persist 30 days unless deleted earlier). A Platform "
+        "without a media delete endpoint (Instagram) answers 501."
+    ),
 )
+@map_send_errors("delete media")
 async def delete_media(
     media_id: str,
-    media_handler: WhatsAppMediaHandler = Depends(get_whatsapp_media_handler),
+    library: IMediaLibrary = Depends(requires_capability(IMediaLibrary)),
 ) -> MediaDeleteResult:
-    """Delete media by ID.
-
-    Permanently removes media from WhatsApp servers.
-    Media files persist for 30 days unless deleted earlier.
-    """
-    try:
-        result = await media_handler.delete_media(media_id)
-
-        if not result.success:
-            if "not found" in (result.error or "").lower():
-                raise HTTPException(status_code=404, detail=result.error)
-            else:
-                raise HTTPException(status_code=400, detail=result.error)
-
-        return result
-
-    except HTTPException:
-        raise
-    except Exception as e:
+    result = await library.delete(media_id)
+    if not result.success:
+        status = 502 if result.outcome is OperationOutcome.INDETERMINATE else 400
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to delete media_id '{media_id}': {type(e).__name__}: {e}",
-        ) from e
+            status_code=_DELETE_STATUS.get(result.error_code or "", status),
+            detail=result.error or result.outcome.value,
+        )
+    return MediaDeleteResult(
+        success=True,
+        platform=result.platform,
+        media_id=result.media_id,
+        inbox_id=result.inbox_id,
+    )
 
 
 @router.get(

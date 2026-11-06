@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from wappa.core.logging.logger import get_logger
-from wappa.domain.contacts import ContactCard
+from wappa.domain.contacts import ContactCard, contact_cards
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interactive import (
     InteractiveHeader,
@@ -14,6 +14,8 @@ from wappa.domain.interactive import (
     ReplyButton,
     UrlButton,
     check_button_message,
+    check_carousel,
+    check_cta_message,
     check_list_message,
 )
 from wappa.domain.interfaces.media_library import IMediaLibrary
@@ -655,10 +657,11 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         button_url: str,
         target: DirectMessage,
         body: str,
-        header: str | None = None,
+        header: InteractiveHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
+        check_cta_message(button_text, button_url, body, footer)
         return await self._deliver(
             target,
             lambda recipient: self.interactive_handler.send_cta_button(
@@ -666,7 +669,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
                 body=body,
                 button_text=button_text,
                 button_url=button_url,
-                header_text=header,
+                header=header,
                 footer_text=footer,
                 reply_to_message_id=reply_to_message_id,
             ),
@@ -677,27 +680,35 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         cards: Sequence[MessageCard],
         target: DirectMessage,
         body: str,
+        reply_to_message_id: str | None = None,
     ) -> MessageResult:
         """Interactive media carousel (2–10 cards, outside Templates).
 
-        Each card needs ``image_url``; ``title`` + ``subtitle`` become the card
-        body (≤ 160). Buttons are one ``UrlButton`` or 1–2 ``ReplyButton`` and
-        must match in kind and count across cards (Meta rule). A reply-button
-        tap arrives as an interactive ``button_reply`` with the button ``id``.
+        Each card needs a ``header`` (image or video, by ``media_id`` or
+        ``url``); ``title`` + ``subtitle`` become the card body. Buttons are one
+        ``UrlButton`` or 1–2 ``ReplyButton`` and must match in kind and count
+        across cards (Meta rule). A reply-button tap arrives as an interactive
+        ``button_reply`` with the button ``id``.
         """
+        check_carousel(cards, body)
         target.resolve_all(InboxRef.whatsapp(self._inbox_id))
         interactive = {
             "type": "carousel",
-            "body": {"text": _wa_check(body, 1024, "WhatsApp carousel body")},
+            "body": {"text": body},
             "action": {"cards": _wa_cards(cards)},
         }
         return await self._deliver(
             require_direct_message(target, "WhatsApp send_carousel"),
-            lambda recipient: self._send_carousel_to(recipient, interactive),
+            lambda recipient: self._send_carousel_to(
+                recipient, interactive, reply_to_message_id
+            ),
         )
 
     async def _send_carousel_to(
-        self, recipient: str, interactive: dict[str, Any]
+        self,
+        recipient: str,
+        interactive: dict[str, Any],
+        reply_to_message_id: str | None,
     ) -> MessageResult:
         payload: dict[str, Any] = {
             "messaging_product": "whatsapp",
@@ -705,6 +716,8 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
             "type": "interactive",
             "interactive": interactive,
         }
+        if reply_to_message_id:
+            payload["context"] = {"message_id": reply_to_message_id}
         try:
             apply_recipient_to_payload(payload, recipient)
             response = await self.client.post_request(payload)
@@ -852,16 +865,18 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
 
     async def send_contact(
         self,
-        contact: ContactCard,
+        contacts: ContactCard | Sequence[ContactCard],
         target: DirectMessage,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
+        """One native contacts message carrying every card."""
+        cards = contact_cards(contacts)
         target.resolve_all(InboxRef.whatsapp(self._inbox_id))
         return await self._deliver(
             target,
             lambda recipient: self.specialized_handler.send_contact_card(
                 recipient=recipient,
-                contact=contact,
+                contacts=cards,
                 reply_to_message_id=reply_to_message_id,
             ),
         )
@@ -898,25 +913,13 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         )
 
 
-def _wa_check(value: str, limit: int, what: str) -> str:
-    if not value or not value.strip():
-        raise ValueError(f"{what} must not be empty")
-    if len(value) > limit:
-        raise ValueError(f"{what} is {len(value)} characters; limit is {limit}")
-    return value
-
-
 WHATSAPP_STICKER_SUFFIXES = frozenset({".webp"})
 WHATSAPP_AUDIO_SUFFIXES = frozenset({".aac", ".amr", ".mp3", ".m4a", ".ogg"})
 WHATSAPP_VOICE_SUFFIXES = frozenset({".ogg"})
 
 
 def _wa_cards(cards: Sequence[MessageCard]) -> list[dict[str, Any]]:
-    if not 2 <= len(cards) <= 10:
-        raise ValueError(
-            "Carousels need 2–10 cards; for one card use send_button_message "
-            "with an image header"
-        )
+    """Card count and text limits are checked by the neutral values."""
     shapes = {
         (
             isinstance(c.buttons[0], UrlButton) if c.buttons else None,
@@ -930,8 +933,8 @@ def _wa_cards(cards: Sequence[MessageCard]) -> list[dict[str, Any]]:
         )
     out: list[dict[str, Any]] = []
     for index, card in enumerate(cards):
-        if card.image_url is None:
-            raise ValueError("WhatsApp carousel cards need image_url")
+        if card.header is None:
+            raise ValueError("WhatsApp carousel cards need a header image or video")
         text = "\n".join(p for p in (card.title, card.subtitle) if p)
         url_buttons = [b for b in card.buttons if isinstance(b, UrlButton)]
         replies = [b for b in card.buttons if isinstance(b, ReplyButton)]
@@ -946,8 +949,12 @@ def _wa_cards(cards: Sequence[MessageCard]) -> list[dict[str, Any]]:
             # Meta requires type on every card and documents "cta_url" for
             # quick-reply cards too; omitting it is a 400 (code 100).
             "type": "cta_url",
-            "header": {"type": "image", "image": {"link": str(card.image_url)}},
-            "body": {"text": _wa_check(text, 160, "WhatsApp carousel card text")},
+            "header": {
+                "type": card.header.kind,
+                # Card headers take a public link only (no Media ID).
+                card.header.kind: {"link": str(card.header.url)},
+            },
+            "body": {"text": text},
         }
         if url_buttons:
             element["action"] = {
@@ -958,10 +965,6 @@ def _wa_cards(cards: Sequence[MessageCard]) -> list[dict[str, Any]]:
                 },
             }
         else:
-            if len(replies) > 2:
-                raise ValueError(
-                    "WhatsApp carousel cards allow at most 2 reply buttons"
-                )
             element["action"] = {
                 "buttons": [
                     {

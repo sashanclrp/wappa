@@ -16,8 +16,8 @@ Media Adaptation adds one Platform-neutral engine that reads what a file really 
 - Rules live in two shapes: `MediaType.get_supported_mime_types` / `get_max_file_size` in `wappa/messaging/whatsapp/models/media_models.py`, and `MEDIA_RULES` (suffix sets and byte caps) in `wappa/messaging/instagram/media.py`. Both key off the file suffix or a guessed MIME type, never the bytes.
 - No rule covers codecs, channels, dimensions, animation, or the "needs a public URL" constraint. A wrong codec fails at Meta (WhatsApp `131053`, or silently unplayable on Android) instead of before I/O.
 - `send_sticker` takes `MediaRenditions` and picks the first accepted suffix; the Host must ship `["s.webp", "s.png"]`.
-- `send_carousel` takes `MessageCard.image_url: HttpUrl`. Both Platforms need a public URL for a card (see the tables), so a Host with a local file or a Media ID has no way to make a carousel. The planned card contract (`MediaRef(url | media_id)` plus `poster_url`, discussed in the Instagram conversations work and not yet in the tree) has nothing to fill it with.
-- `IMediaLibrary.upload(path, family, *, mime_type=None)` (ADR-0024 draft) uploads whatever it is given. Instagram attachments cannot be downloaded back by ID, so an uploaded `attachment_id` cannot later become a card URL.
+- `send_carousel` takes `MessageCard.header: CardMedia` (`kind` image or video, a public `url`, and `poster_url` for an Instagram video card). Card media is URL-only on both Platforms, because WhatsApp card headers take a public link and no Media ID. Instagram rejects a video card without `poster_url` before any call ("pass poster_url, or enable media adaptation"), and a Host with only a local file cannot build a card at all. This service fills exactly those cases.
+- `IMediaLibrary.upload(source: Path | bytes, family, *, mime_type=None, filename=None)` (ADR-0024 draft) uploads whatever it is given. Instagram attachments cannot be downloaded back by ID, so an uploaded `attachment_id` cannot later become a card URL.
 - Drift found while checking: Wappa lists `video/3gp`, Meta documents `video/3gpp`; Wappa omits static WebP as a WhatsApp image, which Meta now accepts (and transcodes to JPEG).
 
 ## Goals
@@ -116,7 +116,7 @@ Host-supplied renditions still win: `send_sticker(["s.webp", "s.png"])` keeps wo
 
 - Each adapter calls the engine at its existing resolve step, before any upload or send: `WhatsAppMessenger._resolve_media_object` and the Instagram local-path upload path, plus both `IMediaLibrary.upload` implementations. The call is `prepare(source, use, spec) -> PreparedMedia` with `PreparedMedia` being a local path, a cached Media ID, or a public URL, depending on `MediaRule.delivery`.
 - `send_audio(..., is_voice=True)` selects `MediaUse.voice`; `send_sticker` selects `sticker`; carousel cards select `card_image` / `card_video`.
-- Carousel: when a card's media is a `media_id` or local file and the rule is `url_only`, the adapter gets a public URL from section 4 (for an Instagram `attachment_id`, from the bytes stored at upload). When an Instagram card carries video, the poster frame becomes `image_url` unless the Host gave `poster_url`. The planned `MediaRef` + `poster_url` card contract is a dependency of this PRD; this PRD adds no card fields itself.
+- Carousel: card media is `url_only` on both Platforms, so a Host with only a local file gets a public URL from section 4 and passes it as `CardMedia.url`. When an Instagram card carries video, the poster frame becomes `image_url` unless the Host gave `poster_url`. The URL-only `CardMedia(kind, url, poster_url)` card contract is in place; this PRD adds no card fields itself.
 - `IMessenger` and `IMediaLibrary` signatures do not change. `pick_rendition` stays as the first step, and its docstring loses "Wappa never converts media".
 
 ### 6. Packaging
@@ -167,7 +167,7 @@ Live checks (added to the live test plan, run by hand on test Inboxes, never in 
 
 1. Detection (no new dependency): `MediaSpec` on `PlatformEntry`, the two verified specs, `probe` with magic bytes and Pillow, `plan`, refusal errors before I/O, the `3gpp` and static-WebP drift fixes. Breaking only where a lying suffix used to slip through; listed in the CHANGELOG.
 2. Adaptation: the `wappa[media]` extra, `adapt`, the process pool, the content cache and the Media ID cache, pre-adaptation in `IMediaLibrary.upload`. Off by default.
-3. Public URLs: `MediaStore`, `/media/public/{token}`, `SYSTEM_PUBLIC_BASE_URL`, carousel filling with the `MediaRef` + `poster_url` card contract. Gate on the Instagram re-fetch live check.
+3. Public URLs: `MediaStore`, `/media/public/{token}`, `SYSTEM_PUBLIC_BASE_URL`, carousel filling with the URL-only `CardMedia(kind, url, poster_url)` card contract. Gate on the Instagram re-fetch live check.
 
 Each phase updates `docs/public-contract.md`, both `ARCHITECTURE.md` files, `CONTEXT.md` (new terms: Media Spec, Media Use, Media Adaptation, Public Media URL) and the CHANGELOG in the same change; phase 1 lands with the ADR that retires "Wappa never converts media".
 

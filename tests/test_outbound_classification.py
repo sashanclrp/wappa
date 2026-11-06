@@ -169,7 +169,7 @@ ORDINARY_PAYLOADS = [
         id="location",
     ),
     pytest.param(
-        ContactMessage(recipient=RECIPIENT, contact=contact_card()),
+        ContactMessage(recipient=RECIPIENT, contacts=[contact_card()]),
         OutboundTransportFamily.CONTACT,
         None,
         "contact",
@@ -344,7 +344,7 @@ def test_shapes_that_name_no_transport_are_rejected(payload: object) -> None:
     ("payload", "message_type"),
     [
         pytest.param(
-            ContactRequest(recipient=RECIPIENT, contact=contact_card()),
+            ContactRequest(recipient=RECIPIENT, contacts=[contact_card()]),
             "contact",
             id="contact-request",
         ),

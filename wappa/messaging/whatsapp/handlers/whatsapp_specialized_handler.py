@@ -1,5 +1,6 @@
 """WhatsApp specialized message handler (contacts, locations, location requests)."""
 
+from collections.abc import Sequence
 from typing import Any
 
 from wappa.core.logging.logger import get_logger
@@ -61,29 +62,20 @@ class WhatsAppSpecializedHandler:
     async def send_contact_card(
         self,
         recipient: str,
-        contact: ContactCard,
+        contacts: Sequence[ContactCard],
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
+        """One ``contacts`` message carrying every card (Cloud API array)."""
         try:
-            if not contact.name.formatted_name:
-                raise ValueError(
-                    "Contact must include 'formatted_name' in the name object"
-                )
-            if not contact.phones:
-                raise ValueError("Contact must include at least one phone number")
-
-            contact_dict = self._convert_contact_to_api_format(contact)
             payload = self._build_payload(
                 recipient=recipient,
                 message_type="contacts",
-                message_data=[contact_dict],
+                message_data=[self._convert_contact_to_api_format(c) for c in contacts],
                 reply_to_message_id=reply_to_message_id,
                 include_recipient_type=False,
             )
 
-            self.logger.debug(
-                f"Sending contact card for '{contact.name.formatted_name}' to {recipient}"
-            )
+            self.logger.debug(f"Sending {len(contacts)} contact card(s) to {recipient}")
             result = await self._send_payload(payload, recipient)
             self.logger.info(f"Contact card sent successfully to {result.recipient}")
             return result
@@ -194,13 +186,15 @@ class WhatsAppSpecializedHandler:
             ("first_name", "last_name", "middle_name", "suffix", "prefix"),
         )
 
-        phones: list[dict[str, Any]] = []
-        for phone in contact.phones:
-            phone_dict: dict[str, Any] = {"phone": phone.phone}
-            _copy_optional(phone, phone_dict, ("type", "wa_id"))
-            phones.append(phone_dict)
+        api_contact: dict[str, Any] = {"name": name_dict}
 
-        api_contact: dict[str, Any] = {"name": name_dict, "phones": phones}
+        if contact.phones:
+            phones: list[dict[str, Any]] = []
+            for phone in contact.phones:
+                phone_dict: dict[str, Any] = {"phone": phone.phone}
+                _copy_optional(phone, phone_dict, ("type", "wa_id"))
+                phones.append(phone_dict)
+            api_contact["phones"] = phones
 
         if contact.emails:
             emails: list[dict[str, Any]] = []

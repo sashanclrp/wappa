@@ -3,13 +3,36 @@
 from typing import Any
 
 from wappa.core.logging.logger import get_logger
-from wappa.domain.interactive import InteractiveHeader, ListSection, ReplyButton
+from wappa.domain.interactive import (
+    InteractiveHeader,
+    ListSection,
+    MediaRef,
+    ReplyButton,
+)
 from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.models.basic_models import message_result_from_payload
 from wappa.messaging.whatsapp.utils.error_helpers import handle_whatsapp_error
 from wappa.schemas.core.recipient import apply_recipient_to_payload
 from wappa.schemas.core.types import PlatformType
+
+
+def wa_media_object(ref: MediaRef) -> dict[str, Any]:
+    """Cloud API media object: the uploaded ``id`` when set, else the ``link``."""
+    if ref.media_id is not None:
+        return {"id": ref.media_id}
+    return {"link": str(ref.url)}
+
+
+def wa_header(header: InteractiveHeader) -> dict[str, Any]:
+    """``InteractiveHeader`` maps 1:1 onto the Cloud API header object."""
+    if header.kind == "text":
+        return {"type": "text", "text": header.text}
+    assert header.media is not None  # guaranteed by InteractiveHeader
+    media = wa_media_object(header.media)
+    if header.filename is not None:
+        media["filename"] = header.filename
+    return {"type": header.kind, header.kind: media}
 
 
 class WhatsAppInteractiveHandler:
@@ -33,15 +56,6 @@ class WhatsAppInteractiveHandler:
             platform=PlatformType.WHATSAPP,
             inbox_id=self._inbox_id,
         )
-
-    def _check_validations(
-        self, validations: list[tuple[bool, str, str]], recipient: str
-    ) -> MessageResult | None:
-        # Each tuple is (failed_condition, error_message, error_code).
-        for condition, error, code in validations:
-            if condition:
-                return self._validation_error(error, code, recipient)
-        return None
 
     def _build_interactive_payload(
         self,
@@ -69,21 +83,6 @@ class WhatsAppInteractiveHandler:
             inbox_id=self._inbox_id,
             fallback_recipient=recipient,
         )
-
-    @staticmethod
-    def _build_header_dict(header: InteractiveHeader) -> dict[str, Any]:
-        """``InteractiveHeader`` maps 1:1 onto the Cloud API header object."""
-        if header.kind == "text":
-            return {"type": "text", "text": header.text}
-        assert header.media is not None  # guaranteed by InteractiveHeader
-        media: dict[str, Any] = (
-            {"link": str(header.media.url)}
-            if header.media.url is not None
-            else {"id": header.media.media_id}
-        )
-        if header.filename is not None:
-            media["filename"] = header.filename
-        return {"type": header.kind, header.kind: media}
 
     @property
     def platform(self) -> PlatformType:
@@ -115,7 +114,7 @@ class WhatsAppInteractiveHandler:
                 },
             }
             if header:
-                interactive_data["header"] = self._build_header_dict(header)
+                interactive_data["header"] = wa_header(header)
             if footer_text:
                 interactive_data["footer"] = {"text": footer_text}
             payload = self._build_interactive_payload(
@@ -209,26 +208,12 @@ class WhatsAppInteractiveHandler:
         body: str,
         button_text: str,
         button_url: str,
-        header_text: str | None = None,
+        header: InteractiveHeader | None = None,
         footer_text: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
+        """Limits are checked by ``check_cta_message`` before this call."""
         try:
-            validations: list[tuple[bool, str, str]] = [
-                (
-                    not all([body, button_text, button_url]),
-                    "body, button_text, and button_url are required parameters",
-                    "MISSING_REQUIRED_PARAMS",
-                ),
-                (
-                    not button_url.startswith(("http://", "https://")),
-                    "button_url must start with http:// or https://",
-                    "INVALID_URL_FORMAT",
-                ),
-            ]
-            if error := self._check_validations(validations, recipient):
-                return error
-
             interactive_data = {
                 "type": "cta_url",
                 "body": {"text": body},
@@ -242,8 +227,8 @@ class WhatsAppInteractiveHandler:
                 interactive_data=interactive_data,
                 reply_to_message_id=reply_to_message_id,
             )
-            if header_text:
-                payload["interactive"]["header"] = {"type": "text", "text": header_text}
+            if header:
+                payload["interactive"]["header"] = wa_header(header)
             if footer_text:
                 payload["interactive"]["footer"] = {"text": footer_text}
 

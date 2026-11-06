@@ -240,10 +240,16 @@ class IMessenger(ABC):
         button_url: str,
         target: DirectMessage,
         body: str,
-        header: str | None = None,
+        header: InteractiveHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
+        """One URL button. ``header`` is text or media, as on WhatsApp.
+
+        Limits (``check_cta_message``) are the shared minimum across
+        Platforms. Instagram folds a text header and footer into the button
+        text and sends a media header first as its own message.
+        """
         raise UnsupportedOperationError(
             f"{self.platform.value} does not support send_cta_message"
         )
@@ -253,13 +259,16 @@ class IMessenger(ABC):
         cards: Sequence[MessageCard],
         target: DirectMessage,
         body: str,
+        reply_to_message_id: str | None = None,
     ) -> MessageResult:
         """A horizontally scrollable carousel of 2–10 cards with an intro ``body``.
 
-        WhatsApp: interactive media carousel (every card needs ``image_url``;
-        buttons must match across cards). Instagram: ``body`` as a text message,
-        then a generic template. A single card is ``send_button_message`` with an
-        image header.
+        WhatsApp: interactive media carousel (every card needs a ``header``
+        image or video by public URL, and a button; buttons must match across
+        cards). Instagram: ``body`` as a text message (carrying the reply
+        context), then a generic template; a video card needs
+        ``header.poster_url``. A single card is
+        ``send_button_message`` with a media header.
         """
         raise UnsupportedOperationError(
             f"{self.platform.value} does not support send_carousel"
@@ -277,10 +286,15 @@ class IMessenger(ABC):
 
     async def send_contact(
         self,
-        contact: ContactCard,
+        contacts: ContactCard | Sequence[ContactCard],
         target: DirectMessage,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
+        """Send one contact card or several in one message.
+
+        WhatsApp: one native contacts message. Instagram: each card as a text
+        block, split over several messages beyond 1000 UTF-8 bytes.
+        """
         raise UnsupportedOperationError(
             f"{self.platform.value} does not support send_contact"
         )

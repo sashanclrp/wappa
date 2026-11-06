@@ -32,6 +32,8 @@ Unordered. Each needs a design pass before it can move to pending.
 
 - [261105-mid-whatsapp-calling-prd.md](./drafts/261105-mid-whatsapp-calling-prd.md): WhatsApp Business Calling — an `ICallControls` capability (accept, reject, terminate, outbound calls, call permission) on top of the existing `CallWebhook`.
 
+- [261106-low-whatsapp-first-remaining-gaps.md](./drafts/261106-low-whatsapp-first-remaining-gaps.md): the WhatsApp-first sweep's open gaps — reaction sends (with the open decision on Instagram's heart-only reactions), the WhatsApp interactive types Wappa does not offer (flow, voice call, catalog, product, address), and send status plus Template parameters Wappa drops.
+
 - [261106-mid-media-adaptation-service.md](./drafts/261106-mid-media-adaptation-service.md): Media Adaptation — a Platform-neutral engine that detects real media types and adapts media to each Platform's `MediaSpec` (transcode, resize, video poster frame, sticker and voice-note formats), runs off the event loop with a content-hash cache, and serves short-lived Wappa-hosted public URLs where a Platform needs one; optional `wappa[media]` extra, off by default.
 
 - [261105-mid-whatsapp-flows-prd.md](./drafts/261105-mid-whatsapp-flows-prd.md): WhatsApp Flows — an `IFlowMessaging` capability to send Flows and a typed `nfm_reply` on receive; data exchange and management in a later phase.

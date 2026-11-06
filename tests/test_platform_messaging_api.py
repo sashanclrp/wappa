@@ -122,7 +122,9 @@ class _Messenger:
             inbox_id=self.inbox_id,
         )
 
-    async def send_carousel(self, cards: Any, target: Any, body: str) -> MessageResult:
+    async def send_carousel(
+        self, cards: Any, target: Any, body: str, reply_to_message_id: Any = None
+    ) -> MessageResult:
         self.calls.append(("send_carousel", (len(cards), body)))
         return self._ok(target.recipient_id)
 
@@ -198,7 +200,10 @@ def test_whatsapp_urls_are_unchanged_and_carry_every_address() -> None:
 
 def test_carousel_route_calls_the_one_carousel_method() -> None:
     app, _, runtime = _app()
-    card = {"title": "Plan", "image_url": "https://example.com/a.png"}
+    card = {
+        "title": "Plan",
+        "header": {"kind": "image", "url": "https://example.com/a.png"},
+    }
 
     response = TestClient(app).post(
         "/api/instagram/interactive/send-carousel",
@@ -228,7 +233,6 @@ def test_an_action_the_platform_lacks_is_501() -> None:
     ("method", "path"),
     [
         ("GET", "/api/instagram/templates/info"),
-        ("GET", "/api/instagram/media/info/1234567890"),
         ("GET", "/api/instagram/health"),
     ],
 )
@@ -284,7 +288,9 @@ from wappa.domain.interfaces.conversation_capabilities import (  # noqa: E402
     ReadResult,
 )
 from wappa.domain.interfaces.media_library import (  # noqa: E402
+    DeleteResult,
     IMediaLibrary,
+    MediaInfo,
     UploadResult,
 )
 from wappa.domain.models.media_result import MediaDownloadResult  # noqa: E402
@@ -349,16 +355,37 @@ class _Library:
         self.downloads: list[tuple[str, int | None]] = []
 
     async def upload(
-        self, source: Any, family: Any, *, mime_type: str | None = None
+        self,
+        source: Any,
+        family: Any,
+        *,
+        mime_type: str | None = None,
+        filename: str | None = None,
     ) -> UploadResult:
-        self.uploaded.append(
-            (source.name, family.value, source.read_bytes(), mime_type)
-        )
+        self.uploaded.append((filename, family.value, source, mime_type))
         return UploadResult(
             outcome=OperationOutcome.ACCEPTED,
             platform=self.platform,
             inbox_id=self.inbox_id,
             media_id="att-1",
+        )
+
+    async def info(self, media_id: str) -> ReadResult[MediaInfo]:
+        if self.platform is PlatformType.INSTAGRAM:
+            raise UnsupportedOperationError("Instagram has no media info endpoint")
+        return ReadResult(
+            outcome=ReadOutcome.FOUND,
+            value=MediaInfo(media_id=media_id, mime_type="image/png", size=9),
+        )
+
+    async def delete(self, media_id: str) -> DeleteResult:
+        if self.platform is PlatformType.INSTAGRAM:
+            raise UnsupportedOperationError("Instagram has no media delete endpoint")
+        return DeleteResult(
+            outcome=OperationOutcome.ACCEPTED,
+            platform=self.platform,
+            inbox_id=self.inbox_id,
+            media_id=media_id,
         )
 
     async def download(
@@ -513,6 +540,30 @@ def test_whatsapp_media_upload_goes_through_the_media_library() -> None:
     assert response.status_code == 200, response.text
     assert response.json()["platform"] == "whatsapp"
     assert library.uploaded == [("voice.ogg", "audio", b"ogg-bytes", "audio/ogg")]
+
+
+def test_media_info_and_delete_follow_the_media_library() -> None:
+    """No WhatsApp-only gate: Instagram's library has no endpoint, so 501."""
+    app, _, runtime = _app()
+    _with_instagram_capabilities(runtime)
+    wa = InboxRef.whatsapp(WA_INBOX)
+    runtime.messengers[wa] = _Messenger(wa)
+    runtime.messengers[wa].capability = {  # type: ignore[attr-defined]
+        IMediaLibrary: _Library(PlatformType.WHATSAPP, WA_INBOX)
+    }.get
+    client = TestClient(app)
+    wa_headers = {INBOX_ID_HEADER: WA_INBOX}
+
+    ig_info = client.get("/api/instagram/media/info/att-1", headers=IG_HEADERS)
+    ig_delete = client.delete("/api/instagram/media/att-1", headers=IG_HEADERS)
+    wa_info = client.get("/api/whatsapp/media/info/wa-1", headers=wa_headers)
+    wa_delete = client.delete("/api/whatsapp/media/wa-1", headers=wa_headers)
+
+    assert ig_info.status_code == 501 and ig_delete.status_code == 501
+    assert wa_info.status_code == 200, wa_info.text
+    assert wa_info.json()["media_id"] == "wa-1"
+    assert wa_info.json()["file_size"] == 9
+    assert wa_delete.status_code == 200 and wa_delete.json()["success"] is True
 
 
 def test_media_download_serves_the_instagram_attachment() -> None:

@@ -86,7 +86,7 @@ async def send_contact_card(
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     return await messenger.send_contact(
-        contact=request.contact,
+        contacts=request.contacts,
         target=direct_target(messenger, request),
         reply_to_message_id=request.reply_to_message_id,
     )
@@ -134,7 +134,7 @@ async def validate_contact_data(contact: ContactCard) -> ContactValidationResult
 
         validation_issues: list[str] = []
 
-        for phone in contact.phones:
+        for phone in contact.phones or []:
             if not phone.phone.startswith("+"):
                 validation_issues.append(
                     f"Phone number should start with country code: {phone.phone}"

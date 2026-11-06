@@ -1,8 +1,12 @@
 """Platform-neutral contact card (ADR-0016).
 
 One typed value for ``IMessenger.send_contact`` on every Platform: WhatsApp
-sends it as a native contact message; Instagram renders it as text.
+sends one or several cards as a native contacts message; Instagram renders
+each card as a text block. As in the WhatsApp Cloud API, only
+``name.formatted_name`` is required.
 """
+
+from collections.abc import Sequence
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -82,12 +86,20 @@ class ContactCard(BaseModel):
     org: ContactOrganization | None = Field(
         None, description="Organization information"
     )
-    phones: list[ContactPhone] = Field(
-        ..., min_length=1, max_length=5, description="Phone numbers"
+    phones: list[ContactPhone] | None = Field(
+        None, max_length=5, description="Phone numbers"
     )
     urls: list[ContactUrl] | None = Field(
         None, max_length=5, description="Website URLs"
     )
+
+
+def contact_cards(contacts: ContactCard | Sequence[ContactCard]) -> list[ContactCard]:
+    """``send_contact``'s one card or several, as a non-empty list."""
+    cards = [contacts] if isinstance(contacts, ContactCard) else list(contacts)
+    if not cards:
+        raise ValueError("send_contact needs at least one ContactCard")
+    return cards
 
 
 __all__ = [
@@ -98,4 +110,5 @@ __all__ = [
     "ContactOrganization",
     "ContactPhone",
     "ContactUrl",
+    "contact_cards",
 ]

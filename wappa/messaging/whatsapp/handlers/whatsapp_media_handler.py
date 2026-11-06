@@ -614,11 +614,23 @@ class WhatsAppMediaHandler:
                 success=False,
                 media_id=media_id,
                 error=f"API indicated deletion failed: {error_msg}",
-                error_code="DELETION_FAILED",
+                error_code="DELETION_REJECTED",
                 platform=PlatformType.WHATSAPP,
                 inbox_id=self._inbox_id,
             )
 
+        except httpx.HTTPStatusError as e:
+            # Keep Graph's status: an unknown Media ID (400/404) or a refused
+            # token (401/403) is a refusal, not an unknown outcome.
+            self.logger.warning(f"Deleting media ID {media_id} failed: {e}")
+            return MediaDeleteResult(
+                success=False,
+                media_id=media_id,
+                error=str(e),
+                error_code=f"HTTP_{e.response.status_code}",
+                platform=PlatformType.WHATSAPP,
+                inbox_id=self._inbox_id,
+            )
         except Exception as e:
             self.logger.exception(f"Error deleting media ID {media_id}: {e}")
             return MediaDeleteResult(

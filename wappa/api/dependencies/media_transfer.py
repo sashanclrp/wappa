@@ -7,7 +7,6 @@ A Platform without a media library answers 501.
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 from fastapi import Depends
@@ -47,14 +46,15 @@ class LibraryMediaUploader:
             return self._failed(
                 f"Unsupported media type {media_type}", "MIME_TYPE_UNSUPPORTED"
             )
-        name = Path(filename).name or "upload"
-        with tempfile.TemporaryDirectory(prefix="wappa-upload-") as folder:
-            path = Path(folder) / name
-            path.write_bytes(file_data)
-            try:
-                result = await self._library.upload(path, family, mime_type=media_type)
-            except ValueError as exc:  # local Platform rule (format, size, name)
-                return self._failed(str(exc), "MEDIA_REJECTED")
+        try:
+            result = await self._library.upload(
+                file_data,
+                family,
+                mime_type=media_type,
+                filename=Path(filename).name or None,
+            )
+        except ValueError as exc:  # local Platform rule (format, size, name)
+            return self._failed(str(exc), "MEDIA_REJECTED")
         return MediaUploadResult(
             success=result.success,
             platform=self._platform,

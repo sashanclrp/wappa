@@ -17,7 +17,9 @@ from wappa.schemas.core.recipient import DeliveryRequest
 
 
 class ContactMessage(DeliveryRequest):
-    contact: ContactCard = Field(..., description="Contact card information")
+    contacts: list[ContactCard] = Field(
+        ..., min_length=1, description="One or more contact cards, sent together"
+    )
     reply_to_message_id: str | None = Field(None, description="Message ID to reply to")
 
 

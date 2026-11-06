@@ -72,9 +72,9 @@ Every action that exists on both Platforms has one `IMessenger` method; the Inst
 | up to 3 choices | `send_button_message(buttons: list[ReplyButton], target, body, header=None, footer=None)` | button template with postbacks; image header becomes a one-card generic template |
 | up to 13 choices | `send_list_message(sections, target, body, button_text, ...)` | quick replies (rows flattened; section titles, descriptions and `button_text` dropped) |
 | open a URL | `send_cta_message(...)` | button template with one `web_url` |
-| 2–10 cards | `send_carousel(cards: Sequence[MessageCard], target, body)` | `body` as text, then a generic template |
+| 2–10 cards | `send_carousel(cards: Sequence[MessageCard], target, body, reply_to_message_id=None)` | `body` as text, then a generic template; a video card shows its `poster_url` |
 | share a location | `send_location(latitude, longitude, target, name=None, address=None)` | text: name, address and a `📍` maps link |
-| share a contact | `send_contact(contact, target)` | text card (name, organization, phones, emails, urls) |
+| share contacts | `send_contact(contacts, target)` | one text block per card (name, organization, phones, emails, urls) |
 | send a sticker | `send_sticker(source, target)` | sent as an image (png/jpeg/gif; `.webp` rejected before I/O) |
 | send media with a caption | `send_image/video/document(..., caption=...)` | media, then the caption as a follow-up text; `filename`/`transcript` ignored |
 

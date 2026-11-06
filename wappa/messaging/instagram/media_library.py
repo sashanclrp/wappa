@@ -2,29 +2,43 @@
 
 - ``upload``: ``POST /{ig}/message_attachments`` with ``is_reusable`` →
   ``attachment_id`` (send it with ``send_image(attachment_id, ...)`` etc.).
+  A file or bytes go up as multipart; a sticker uploads as an image (Instagram
+  has no stickers).
 - ``download``: the attachment URL Instagram delivered, fetched without
   credentials from allowed Meta CDN hosts, bounded by ``max_bytes``.
+- ``info`` / ``delete``: ``UnsupportedOperationError``; Instagram has no
+  endpoint to describe or delete an uploaded attachment.
 
-``mime_type`` on ``upload`` is ignored: Instagram's rules key off the file
-suffix.
+Instagram's rules key off the file suffix: a ``Path`` keeps its name, and
+``bytes`` take ``filename`` or, failing that, a name built from ``mime_type``.
 """
 
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 from pathlib import Path
 
 from wappa.domain.interfaces.conversation_capabilities import MediaBytes, ReadResult
 from wappa.domain.interfaces.media_library import (
+    DeleteResult,
     IMediaLibrary,
     MediaFamily,
+    MediaInfo,
     UploadResult,
 )
+from wappa.domain.messaging_targets import UnsupportedOperationError
 from wappa.domain.results import OperationOutcome
 from wappa.schemas.core.types import PlatformType
 
 from .graph import InstagramGraphClient
-from .media import InstagramAttachmentReader, mime_for, validate_local_file
+from .media import (
+    InstagramAttachmentReader,
+    mime_for,
+    upload_name,
+    validate_local_file,
+    validate_upload,
+)
 
 
 class InstagramMediaLibrary(IMediaLibrary):
@@ -35,19 +49,31 @@ class InstagramMediaLibrary(IMediaLibrary):
         self._reader = reader
 
     async def upload(
-        self, source: Path, family: MediaFamily, *, mime_type: str | None = None
+        self,
+        source: Path | bytes,
+        family: MediaFamily,
+        *,
+        mime_type: str | None = None,
+        filename: str | None = None,
     ) -> UploadResult:
-        _ = mime_type  # Instagram's rules key off the file suffix
-        rule = validate_local_file(source, family.value)
+        # Instagram has no stickers: a sticker is stored (and sent) as an image.
+        kind = "image" if family is MediaFamily.STICKER else family.value
+        if isinstance(source, bytes):
+            name = upload_name(filename, mime_type)
+            rule = validate_upload(name, len(source), kind)
+        else:
+            name = source.name
+            rule = validate_local_file(source, kind)
         message = {
             "attachment": {"type": rule.wire_type, "payload": {"is_reusable": True}}
         }
-        with source.open("rb") as handle:
+        opened = source.open("rb") if isinstance(source, Path) else nullcontext(source)
+        with opened as content:
             response = await self._graph.request(
                 "POST",
                 f"{self._graph.account_id}/message_attachments",
                 data={"platform": "instagram", "message": json.dumps(message)},
-                files={"filedata": (source.name, handle, mime_for(source))},
+                files={"filedata": (name, content, mime_for(name))},
                 operation=f"Instagram {family.value} upload",
                 timeout=120.0,
             )
@@ -75,6 +101,16 @@ class InstagramMediaLibrary(IMediaLibrary):
         self, media_id: str, *, max_bytes: int | None = None
     ) -> ReadResult[MediaBytes]:
         return await self._reader.get_bytes(media_id, max_bytes=max_bytes)
+
+    async def info(self, media_id: str) -> ReadResult[MediaInfo]:
+        raise UnsupportedOperationError(
+            "Instagram has no endpoint to describe an uploaded attachment"
+        )
+
+    async def delete(self, media_id: str) -> DeleteResult:
+        raise UnsupportedOperationError(
+            "Instagram has no endpoint to delete an uploaded attachment"
+        )
 
 
 __all__ = ["InstagramMediaLibrary"]

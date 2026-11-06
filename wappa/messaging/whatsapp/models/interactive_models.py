@@ -6,6 +6,7 @@ from pydantic import Field, model_validator
 
 from wappa.domain.interactive import (
     BUTTON_BODY_MAX,
+    BUTTON_TITLE_MAX,
     BUTTONS_MAX,
     FOOTER_MAX,
     HEADER_TEXT_MAX,
@@ -16,6 +17,7 @@ from wappa.domain.interactive import (
     ListSection,
     ReplyButton,
     check_button_message,
+    check_cta_message,
     check_list_message,
 )
 from wappa.schemas.core.recipient import DeliveryRequest
@@ -39,7 +41,7 @@ class ButtonMessage(InteractiveMessage):
         None,
         description=(
             'Optional header: {"kind": "text", "text": ...} or an image, video or '
-            'document by {"media": {"url": ...}} or {"media": {"media_id": ...}}'
+            'document by {"media": {"url": ..., "media_id": ...}} (either or both)'
         ),
     )
     footer: str | None = Field(None, max_length=FOOTER_MAX)
@@ -75,11 +77,26 @@ class ListMessage(InteractiveMessage):
 
 
 class CTAMessage(InteractiveMessage):
+    body: str = Field(..., min_length=1, max_length=BUTTON_BODY_MAX)
     button_text: str = Field(
-        ..., min_length=1, description="Text to display on the button"
+        ...,
+        min_length=1,
+        max_length=BUTTON_TITLE_MAX,
+        description="Text to display on the button",
     )
     button_url: str = Field(
         ..., pattern=r"^https?://", description="URL to load when button is tapped"
     )
-    header: str | None = Field(None, description="Optional header text")
-    footer: str | None = Field(None, description="Optional footer text")
+    header: InteractiveHeader | None = Field(
+        None,
+        description=(
+            'Optional header: {"kind": "text", "text": ...} or an image, video or '
+            'document by {"media": {"url": ..., "media_id": ...}} (either or both)'
+        ),
+    )
+    footer: str | None = Field(None, max_length=FOOTER_MAX)
+
+    @model_validator(mode="after")
+    def _shared_limits(self) -> Self:
+        check_cta_message(self.button_text, self.button_url, self.body, self.footer)
+        return self

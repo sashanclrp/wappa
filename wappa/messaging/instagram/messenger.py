@@ -14,12 +14,14 @@ Contract mappings (ADR-0016: one Messenger method per action):
   buttons (text ≤ 640, 1–3); a media header is sent first as its own
   attachment
 - ``send_list_message`` → ``message.quick_replies[]`` on the (last) text
-- ``send_cta_message`` → ``template_type = button`` with one ``web_url``
-- ``send_carousel`` → intro text, then ``template_type = generic`` (2–10)
+- ``send_cta_message`` → ``template_type = button`` with one ``web_url``; a
+  media header is sent first as its own attachment
+- ``send_carousel`` → intro text, then ``template_type = generic`` (2–10); a
+  video card shows its poster image and opens the video on tap
 - ``mark_as_read`` → ``sender_action`` ``mark_seen`` then ``typing_on``
 - media by https URL, by ``IMediaLibrary.upload`` attachment_id, or a ``Path``
   (uploaded first)
-- ``send_location`` / ``send_contact`` → text (maps link / contact card);
+- ``send_location`` / ``send_contact`` → text (maps link / one block per card);
   ``send_sticker`` → image
 - ``send_location_request`` / ``send_contact_request`` → not available
   (WhatsApp-only core actions; a text prompt would not return the data)
@@ -38,7 +40,7 @@ from typing import Any
 import httpx
 from pydantic import SecretStr
 
-from wappa.domain.contacts import ContactCard
+from wappa.domain.contacts import ContactCard, contact_cards
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interactive import (
     CardButton,
@@ -48,6 +50,8 @@ from wappa.domain.interactive import (
     ReplyButton,
     UrlButton,
     check_button_message,
+    check_carousel,
+    check_cta_message,
     check_list_message,
 )
 from wappa.domain.interfaces.conversation_capabilities import (
@@ -82,11 +86,9 @@ from .media_library import InstagramMediaLibrary
 TEXT_MAX_BYTES = 1000
 BUTTON_TEXT_MAX = 640
 BUTTONS_MAX = 3
-CARD_TEXT_MAX = 80
-CAROUSEL_MIN = 2
-CAROUSEL_MAX = 10
-# Interactive titles, IDs and counts need no check here: the neutral values
-# already enforce the minimum across Platforms (wappa.domain.interactive).
+# Interactive titles, IDs, card texts and counts need no check here: the
+# neutral values already enforce the minimum across Platforms
+# (wappa.domain.interactive).
 
 
 def _check_text(text: str, *, what: str = "Instagram text") -> str:
@@ -161,34 +163,48 @@ def _button_texts(
     return _fold(header, body), footer or ""
 
 
-def _check_carousel(cards: Sequence[MessageCard]) -> None:
-    if not CAROUSEL_MIN <= len(cards) <= CAROUSEL_MAX:
-        raise ValueError(
-            f"Carousels need {CAROUSEL_MIN}–{CAROUSEL_MAX} cards; for one card use "
-            "send_button_message with an image header"
-        )
-
-
 def _card(card: MessageCard) -> dict[str, Any]:
-    _check_len(card.title, CARD_TEXT_MAX, "Instagram card title")
+    """One generic-template element.
+
+    The element has one image slot: an image card shows ``url``; a video card
+    shows ``poster_url`` and opens the video on tap unless the card has its
+    own ``default_url``. A video without ``poster_url`` is rejected before any
+    call: a card is one visual unit, so its media is never sent apart.
+    """
     element: dict[str, Any] = {"title": card.title}
     if card.subtitle:
-        element["subtitle"] = _check_len(
-            card.subtitle, CARD_TEXT_MAX, "Instagram card subtitle"
-        )
-    if card.image_url:
-        element["image_url"] = str(card.image_url)
-    if card.default_url:
-        element["default_action"] = {"type": "web_url", "url": str(card.default_url)}
+        element["subtitle"] = card.subtitle
+    default_url = card.default_url
+    if card.header is not None:
+        if card.header.kind == "image":
+            element["image_url"] = str(card.header.url)
+        elif card.header.poster_url is None:
+            raise UnsupportedOperationError(
+                f"Instagram card {card.title!r}: a video card shows a still image; "
+                "pass poster_url, or enable media adaptation"
+            )
+        else:
+            element["image_url"] = str(card.header.poster_url)
+            default_url = default_url or card.header.url
+    if default_url:
+        element["default_action"] = {"type": "web_url", "url": str(default_url)}
     if card.buttons:
-        if len(card.buttons) > BUTTONS_MAX:
-            raise ValueError(f"Instagram cards allow at most {BUTTONS_MAX} buttons")
         element["buttons"] = [_card_button(b) for b in card.buttons]
     if len(element) == 1:
         raise ValueError(
             "Instagram cards need a subtitle, image, default URL or button"
         )
     return element
+
+
+def _contact_text(card: ContactCard) -> str:
+    lines = [f"👤 {card.name.formatted_name}"]
+    if card.org and (card.org.company or card.org.title):
+        lines.append(" · ".join(p for p in (card.org.title, card.org.company) if p))
+    lines += [f"📞 {p.phone}" for p in card.phones or []]
+    lines += [f"✉️ {e.email}" for e in card.emails or []]
+    lines += [f"🔗 {u.url}" for u in card.urls or []]
+    return "\n".join(lines)
 
 
 class InstagramMessenger(IMessenger):
@@ -564,23 +580,19 @@ class InstagramMessenger(IMessenger):
 
     async def send_contact(
         self,
-        contact: ContactCard,
+        contacts: ContactCard | Sequence[ContactCard],
         target: DirectMessage,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        """Instagram has no contact message: the contact card is sent as text.
+        """Instagram has no contact message: each card is sent as a text block.
 
-        ``contact`` is the same typed ``ContactCard`` WhatsApp sends natively.
+        ``contacts`` are the same typed ``ContactCard`` values WhatsApp sends
+        natively. The blocks are separated by a blank line, and text over 1000
+        UTF-8 bytes is split into several messages as ``send_text`` does.
         """
-        card = contact
-        lines = [f"👤 {card.name.formatted_name}"]
-        if card.org and (card.org.company or card.org.title):
-            lines.append(" · ".join(p for p in (card.org.title, card.org.company) if p))
-        lines += [f"📞 {p.phone}" for p in card.phones]
-        lines += [f"✉️ {e.email}" for e in card.emails or []]
-        lines += [f"🔗 {u.url}" for u in card.urls or []]
+        blocks = [_contact_text(card) for card in contact_cards(contacts)]
         return await self.send_text(
-            "\n".join(lines), target, reply_to_message_id=reply_to_message_id
+            "\n\n".join(blocks), target, reply_to_message_id=reply_to_message_id
         )
 
     # ── interactive (WhatsApp-shaped contract, ADR-0016) ────────────────
@@ -634,8 +646,34 @@ class InstagramMessenger(IMessenger):
         refused; that refusal returns and the buttons are not sent.
         """
         check_button_message(buttons, body, footer)
-        direct = self._direct(target, "send_button_message")
-        converted = [_reply(b) for b in buttons]
+        return await self._headed_button_template(
+            self._direct(target, "send_button_message"),
+            header,
+            body,
+            footer,
+            [_reply(b) for b in buttons],
+            "Instagram Button Message send",
+            reply_to_message_id,
+        )
+
+    async def _headed_button_template(
+        self,
+        direct: DirectMessage,
+        header: InteractiveHeader | None,
+        body: str,
+        footer: str | None,
+        buttons: list[dict[str, Any]],
+        operation: str,
+        reply_to_message_id: str | None,
+    ) -> MessageResult:
+        """A button template under a WhatsApp-shaped header.
+
+        A media header goes first as its own attachment (``url`` preferred,
+        else the ``attachment_id``); a text header and the footer fold into
+        the template text, with any overflow sent first as plain text. The
+        reply context goes on the first message; the first refusal returns
+        and nothing after it is sent.
+        """
         text_header = header.text if header and header.kind == "text" else None
         if header is not None and header.media is not None:
             source = (
@@ -656,11 +694,7 @@ class InstagramMessenger(IMessenger):
                 return intro
             reply_to_message_id = None
         return await self._button_template(
-            direct,
-            text,
-            converted,
-            "Instagram Button Message send",
-            reply_to_message_id,
+            direct, text, buttons, operation, reply_to_message_id
         )
 
     async def send_list_message(
@@ -704,17 +738,23 @@ class InstagramMessenger(IMessenger):
         button_url: str,
         target: DirectMessage,
         body: str,
-        header: str | None = None,
+        header: InteractiveHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        """One URL button → Instagram ``web_url`` button; header/footer fold into text."""
-        direct = self._direct(target, "send_cta_message")
-        button = _url_button(UrlButton(title=button_text, url=button_url))
-        return await self._button_template(
-            direct,
-            _fold(header, body, footer),
-            [button],
+        """One URL button → Instagram ``web_url`` button template.
+
+        The header is emulated as for ``send_button_message``: a text header
+        and the footer fold into the text, a media header is sent first.
+        """
+        check_cta_message(button_text, button_url, body, footer)
+        button = UrlButton.model_validate({"title": button_text, "url": button_url})
+        return await self._headed_button_template(
+            self._direct(target, "send_cta_message"),
+            header,
+            body,
+            footer,
+            [_url_button(button)],
             "Instagram CTA send",
             reply_to_message_id,
         )
@@ -724,16 +764,18 @@ class InstagramMessenger(IMessenger):
         cards: Sequence[MessageCard],
         target: DirectMessage,
         body: str,
+        reply_to_message_id: str | None = None,
     ) -> MessageResult:
         """``body`` as a text message, then the cards as a generic template.
 
-        Instagram carousels carry no intro text, so ``body`` is sent first; if
-        it is not accepted, the carousel is not sent and that result returns.
+        Instagram carousels carry no intro text, so ``body`` is sent first,
+        carrying the reply context; if it is not accepted, the carousel is not
+        sent and that result returns. Every card is checked before any call.
         """
+        check_carousel(cards, body)
         direct = self._direct(target, "send_carousel")
-        _check_carousel(cards)
         elements = [_card(c) for c in cards]
-        intro = await self.send_text(body, direct)
+        intro = await self._send_texts(body, direct, reply_to_message_id)
         if not intro.success:
             return intro
         template = {"template_type": "generic", "elements": elements}

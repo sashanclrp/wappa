@@ -108,12 +108,13 @@ def test_interactive_header_matches_its_kind(fields: dict[str, Any]) -> None:
         InteractiveHeader.model_validate(fields)
 
 
-@pytest.mark.parametrize(
-    "fields", [{}, {"url": "https://example.com/a.png", "media_id": "m1"}]
-)
-def test_media_ref_needs_exactly_one_source(fields: dict[str, str]) -> None:
+def test_media_ref_needs_a_url_or_a_media_id() -> None:
     with pytest.raises(ValidationError):
-        MediaRef.model_validate(fields)
+        MediaRef.model_validate({})
+    both = MediaRef.model_validate(
+        {"url": "https://example.com/a.png", "media_id": "m1"}
+    )
+    assert both.media_id == "m1" and str(both.url) == "https://example.com/a.png"
 
 
 @pytest.mark.parametrize(

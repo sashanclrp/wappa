@@ -4,16 +4,18 @@
 returns as an ``InboundMessageWebhook`` whose ``get_interactive_selection()`` is
 the button ``id``: a WhatsApp ``button_reply``, or an Instagram postback.
 ``UrlButton`` opens a page and produces no webhook. ``MessageCard`` is one card
-of ``send_carousel``. ``InteractiveHeader`` heads a button message (text, or an
-image, video or document by URL or media ID, as in the WhatsApp Cloud API), and
+of ``send_carousel``, headed by a ``CardMedia`` image or video.
+``InteractiveHeader`` heads a button or CTA message (text, or an image, video
+or document by URL or media ID, as in the WhatsApp Cloud API), and
 ``ListSection``/``ListRow`` are the options of ``send_list_message``; a row tap
 returns its ``id`` as the selection.
 
 The shape follows WhatsApp; every limit is the most restrictive one across the
 installed Platforms (the constants below) and is enforced when the value is
 built, so a value that constructs is deliverable on every Platform. Plain
-``body``/``footer``/``sections`` arguments are checked by
-``check_button_message`` and ``check_list_message`` before any Platform call.
+``body``/``footer``/``sections``/``cards`` arguments are checked by
+``check_button_message``, ``check_list_message``, ``check_cta_message`` and
+``check_carousel`` before any Platform call.
 Nothing here is a wire format.
 """
 
@@ -32,12 +34,12 @@ from pydantic import (
 # ── Interactive limits: the minimum across WhatsApp and Instagram ───────────
 # Characters unless noted. "folded" means Instagram has no slot and joins the
 # value into the message text; "not shown" means Instagram has no slot at all.
-BUTTON_TITLE_MAX = 20  # WhatsApp reply title 20; Instagram postback title 20
+BUTTON_TITLE_MAX = 20  # WhatsApp reply title and CTA display_text 20; Instagram 20
 BUTTON_ID_MAX = 256  # WhatsApp reply id 256; Instagram postback payload 1000
 BUTTONS_MAX = 3  # WhatsApp 3 reply buttons; Instagram button template 3
 HEADER_TEXT_MAX = 60  # WhatsApp header text 60; Instagram folded
 FOOTER_MAX = 60  # WhatsApp footer 60; Instagram folded
-BUTTON_BODY_MAX = 640  # WhatsApp button body 1024; Instagram button template text 640
+BUTTON_BODY_MAX = 640  # WhatsApp button/CTA body 1024; Instagram button template 640
 LIST_BODY_MAX = 1000  # WhatsApp list body 4096; Instagram text 1000 UTF-8 bytes
 LIST_BUTTON_TEXT_MAX = 20  # WhatsApp list opener 20; Instagram not shown
 LIST_SECTIONS_MAX = 10  # WhatsApp 10 sections; Instagram flattens to quick replies
@@ -46,6 +48,15 @@ SECTION_TITLE_MAX = 24  # WhatsApp section title 24; Instagram not shown
 ROW_ID_MAX = 200  # WhatsApp row id 200; Instagram quick-reply payload 1000
 ROW_TITLE_MAX = 20  # WhatsApp row title 24; Instagram quick-reply title 20
 ROW_DESCRIPTION_MAX = 72  # WhatsApp row description 72; Instagram not shown
+CAROUSEL_CARDS_MIN = 2  # WhatsApp carousel 2; Instagram generic template 1
+CAROUSEL_CARDS_MAX = 10  # WhatsApp carousel 10; Instagram generic template 10
+CAROUSEL_BODY_MAX = 1000  # WhatsApp carousel body 1024; Instagram intro text 1000 bytes
+CARD_TITLE_MAX = 80  # WhatsApp card body (title + subtitle) 160; Instagram title 80
+CARD_SUBTITLE_MAX = 80  # WhatsApp card body (title + subtitle) 160; Instagram 80
+CARD_TEXT_MAX = (
+    160  # WhatsApp card body (title, newline, subtitle) 160; Instagram 2 slots
+)
+CARD_BUTTONS_MAX = 2  # WhatsApp 2 reply buttons (or 1 URL button); Instagram 3
 
 
 def _nonblank(value: str) -> str:
@@ -82,31 +93,14 @@ class UrlButton(BaseModel):
 CardButton = ReplyButton | UrlButton
 
 
-class MessageCard(BaseModel):
-    """One carousel card: image, title, optional subtitle and buttons.
-
-    WhatsApp requires ``image_url`` and renders ``title`` + ``subtitle`` as the
-    card body (≤ 160 chars); Instagram shows them as card title and subtitle
-    (≤ 80 each). ``default_url`` (tap on the card itself) is Instagram-only
-    presentation and is ignored where unsupported.
-    """
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-    title: str = Field(min_length=1)
-    subtitle: str | None = None
-    image_url: HttpUrl | None = None
-    default_url: HttpUrl | None = None
-    buttons: tuple[CardButton, ...] = ()
-
-    _check = field_validator("title")(_nonblank)
-
-
 class MediaRef(BaseModel):
-    """One media file by public ``url`` or by ``media_id``; set exactly one.
+    """One media file by public ``url``, by ``media_id``, or both.
 
     A ``media_id`` is issued by the Inbox's own Platform (WhatsApp media
     upload, Instagram ``attachment_id`` from ``IMediaLibrary.upload``); it does
-    not exist on another Platform.
+    not exist on another Platform. WhatsApp sends ``media_id`` when set and
+    falls back to ``url``; Instagram prefers ``url``. Set both to serve one
+    value on several Platforms.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -114,9 +108,67 @@ class MediaRef(BaseModel):
     media_id: str | None = Field(default=None, min_length=1)
 
     @model_validator(mode="after")
-    def _exactly_one(self) -> Self:
-        if (self.url is None) == (self.media_id is None):
-            raise ValueError("MediaRef needs exactly one of url or media_id")
+    def _at_least_one(self) -> Self:
+        if self.url is None and self.media_id is None:
+            raise ValueError("MediaRef needs a url, a media_id or both")
+        return self
+
+
+class CardMedia(BaseModel):
+    """The image or video heading a carousel card, by public ``url`` only.
+
+    Meta documents WhatsApp carousel card headers as a public ``link`` (no
+    Media ID), so card media is URL-only on every Platform. WhatsApp sends
+    ``url`` as the card header link and ignores ``poster_url``. An Instagram
+    card has an image slot only: an image shows ``url``; a video shows
+    ``poster_url`` and opens ``url`` on tap, so Instagram rejects a video
+    without ``poster_url`` before any call.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    kind: Literal["image", "video"]
+    url: HttpUrl
+    poster_url: HttpUrl | None = None
+
+    @classmethod
+    def image(cls, *, url: str) -> Self:
+        return cls.model_validate({"kind": "image", "url": url})
+
+    @classmethod
+    def video(cls, *, url: str, poster_url: str | None = None) -> Self:
+        return cls.model_validate(
+            {
+                "kind": "video",
+                "url": url,
+                **({"poster_url": poster_url} if poster_url else {}),
+            }
+        )
+
+
+class MessageCard(BaseModel):
+    """One carousel card: media header, title, optional subtitle and buttons.
+
+    WhatsApp requires ``header`` and at least one button, and renders
+    ``title`` + ``subtitle`` as the card body; Instagram shows them as card
+    title and subtitle. ``default_url`` (tap on the card itself) is
+    Instagram-only presentation and is ignored where unsupported.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+    header: CardMedia | None = None
+    title: str = Field(min_length=1, max_length=CARD_TITLE_MAX)
+    subtitle: str | None = Field(
+        default=None, min_length=1, max_length=CARD_SUBTITLE_MAX
+    )
+    default_url: HttpUrl | None = None
+    buttons: tuple[CardButton, ...] = Field(default=(), max_length=CARD_BUTTONS_MAX)
+
+    _check = field_validator("title")(_nonblank)
+
+    @model_validator(mode="after")
+    def _card_text(self) -> Self:
+        text = "\n".join(p for p in (self.title, self.subtitle) if p)
+        _check_len(text, CARD_TEXT_MAX, "Card title + subtitle")
         return self
 
 
@@ -124,7 +176,7 @@ type HeaderKind = Literal["text", "image", "video", "document"]
 
 
 class InteractiveHeader(BaseModel):
-    """Header of a button message, shaped like the WhatsApp Cloud API header.
+    """Header of a button or CTA message, shaped like the WhatsApp Cloud API header.
 
     ``kind="text"`` takes ``text`` (≤ ``HEADER_TEXT_MAX``); ``image``,
     ``video`` and ``document`` take ``media``; ``filename`` is for a document
@@ -214,6 +266,27 @@ def check_button_message(
     _check_len(footer, FOOTER_MAX, "Footer")
 
 
+def check_cta_message(
+    button_text: str, button_url: str, body: str, footer: str | None
+) -> None:
+    """Shared limits of ``send_cta_message``; ``ValueError`` before any I/O."""
+    UrlButton.model_validate({"title": button_text, "url": button_url})
+    _nonblank(body)
+    _check_len(body, BUTTON_BODY_MAX, "CTA message body")
+    _check_len(footer, FOOTER_MAX, "Footer")
+
+
+def check_carousel(cards: Sequence[MessageCard], body: str) -> None:
+    """Shared limits of ``send_carousel``; ``ValueError`` before any I/O."""
+    if not CAROUSEL_CARDS_MIN <= len(cards) <= CAROUSEL_CARDS_MAX:
+        raise ValueError(
+            f"Carousels need {CAROUSEL_CARDS_MIN}–{CAROUSEL_CARDS_MAX} cards; for "
+            "one card use send_button_message with a media header"
+        )
+    _nonblank(body)
+    _check_len(body, CAROUSEL_BODY_MAX, "Carousel body")
+
+
 def check_list_message(
     sections: Sequence[ListSection],
     body: str,
@@ -248,6 +321,13 @@ __all__ = [
     "BUTTON_BODY_MAX",
     "BUTTON_ID_MAX",
     "BUTTON_TITLE_MAX",
+    "CARD_BUTTONS_MAX",
+    "CARD_SUBTITLE_MAX",
+    "CARD_TEXT_MAX",
+    "CARD_TITLE_MAX",
+    "CAROUSEL_BODY_MAX",
+    "CAROUSEL_CARDS_MAX",
+    "CAROUSEL_CARDS_MIN",
     "FOOTER_MAX",
     "HEADER_TEXT_MAX",
     "LIST_BODY_MAX",
@@ -259,6 +339,7 @@ __all__ = [
     "ROW_TITLE_MAX",
     "SECTION_TITLE_MAX",
     "CardButton",
+    "CardMedia",
     "HeaderKind",
     "InteractiveHeader",
     "ListRow",
@@ -268,5 +349,7 @@ __all__ = [
     "ReplyButton",
     "UrlButton",
     "check_button_message",
+    "check_carousel",
+    "check_cta_message",
     "check_list_message",
 ]

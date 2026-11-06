@@ -304,12 +304,18 @@ class MessengerPipeline(IMessenger):
         cards: Sequence[MessageCard],
         target: DirectMessage,
         body: str,
+        reply_to_message_id: str | None = None,
     ) -> MessageResult:
         return await self._invoke(
             "send_carousel",
             "interactive",
             target,
-            {"cards": cards, "target": target, "body": body},
+            {
+                "cards": cards,
+                "target": target,
+                "body": body,
+                "reply_to_message_id": reply_to_message_id,
+            },
         )
 
     # ------------------------------------------------------------------ #
@@ -473,7 +479,7 @@ class MessengerPipeline(IMessenger):
         button_url: str,
         target: DirectMessage,
         body: str,
-        header: str | None = None,
+        header: InteractiveHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
@@ -515,7 +521,7 @@ class MessengerPipeline(IMessenger):
 
     async def send_contact(
         self,
-        contact: ContactCard,
+        contacts: ContactCard | Sequence[ContactCard],
         target: DirectMessage,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
@@ -524,7 +530,7 @@ class MessengerPipeline(IMessenger):
             "contact",
             target,
             {
-                "contact": contact,
+                "contacts": contacts,
                 "target": target,
                 "reply_to_message_id": reply_to_message_id,
             },

@@ -28,6 +28,7 @@ from wappa.domain.contacts import (
 )
 from wappa.domain.interactive import (
     CardButton,
+    CardMedia,
     InteractiveHeader,
     ListRow,
     ListSection,
@@ -52,8 +53,10 @@ from wappa.domain.interfaces.history_reader import (
     IConversationHistoryReader,
 )
 from wappa.domain.interfaces.media_library import (
+    DeleteResult,
     IMediaLibrary,
     MediaFamily,
+    MediaInfo,
     UploadResult,
 )
 from wappa.domain.interfaces.messaging_interface import IMessenger
@@ -130,6 +133,7 @@ __all__ = [
     "ReplyButton",
     "UrlButton",
     "CardButton",
+    "CardMedia",
     "InteractiveHeader",
     "MessageCard",
     "ListSection",
@@ -150,6 +154,8 @@ __all__ = [
     "HistoryPage",
     "IMediaLibrary",
     "MediaFamily",
+    "MediaInfo",
+    "DeleteResult",
     "UploadResult",
     "PostContent",
     "PostChild",

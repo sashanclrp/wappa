@@ -61,7 +61,7 @@ class MediaType(Enum):
             },
             cls.IMAGE: {"image/jpeg", "image/png"},
             cls.STICKER: {"image/webp"},
-            cls.VIDEO: {"video/3gp", "video/mp4"},
+            cls.VIDEO: {"video/3gpp", "video/mp4"},
         }
         return supported_types[media_type]
 

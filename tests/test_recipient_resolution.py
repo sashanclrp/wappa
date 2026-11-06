@@ -77,10 +77,12 @@ def test_handler_request_canonicalizes_recipient() -> None:
 def test_specialized_route_request_canonicalizes_recipient() -> None:
     request = ContactRequest(
         recipient="co.13491208655302741918",
-        contact={
-            "name": {"formatted_name": "Demo User"},
-            "phones": [{"phone": "+57 300 123 4567"}],
-        },
+        contacts=[
+            {
+                "name": {"formatted_name": "Demo User"},
+                "phones": [{"phone": "+57 300 123 4567"}],
+            }
+        ],
     )
 
     assert request.recipient == "CO.13491208655302741918"
