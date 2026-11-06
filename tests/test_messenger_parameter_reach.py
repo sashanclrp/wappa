@@ -115,7 +115,7 @@ VALUES: dict[str | tuple[str, str], Any] = {
     "cards": [_card(1), _card(2)],
     "contacts": [
         ContactCard(
-            name=ContactName(formatted_name="Reach Person"),
+            name=ContactName(first_name="Reach", last_name="Person"),
             phones=[ContactPhone(phone="+573009998877")],
         )
     ],
@@ -401,7 +401,7 @@ EMULATIONS: dict[str, Callable[[InstagramMessengerAdapter], Any]] = {
     "split contacts": lambda m: m.send_contact(
         [
             ContactCard(
-                name=ContactName(formatted_name=f"Person {i} " + "n" * 40),
+                name=ContactName(first_name=f"Person {i} " + "n" * 40),
                 phones=[ContactPhone(phone=f"+5730000000{i:02d}")],
             )
             for i in range(20)

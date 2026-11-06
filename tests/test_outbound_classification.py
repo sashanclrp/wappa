@@ -62,7 +62,7 @@ RECIPIENT = "573001112233"
 
 def contact_card() -> ContactCard:
     return ContactCard(
-        name=ContactName(formatted_name="Ada Lovelace"),
+        name=ContactName(first_name="Ada", last_name="Lovelace"),
         phones=[ContactPhone(phone="+573001112233")],
     )
 

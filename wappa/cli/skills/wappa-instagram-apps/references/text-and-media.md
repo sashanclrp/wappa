@@ -57,7 +57,7 @@ The same calls work on both Platforms; Instagram adapts them instead of raising:
 | Operation | Instagram renders |
 | --- | --- |
 | `send_location(latitude, longitude, target, name=..., address=...)` | text: name, address and a `📍` Google Maps link |
-| `send_contact(contacts, target)` | one text block per card (👤 name, organization, 📞 phones, ✉️ emails, 🔗 urls), split over 1000 UTF-8 bytes; `contacts` is one `ContactCard` or a list, in WhatsApp's contact-card shape (only `name.formatted_name` required) |
+| `send_contact(contacts, target)` | one text block per card (👤 name, organization, 📞 phones, ✉️ emails, 🔗 urls), split over 1000 UTF-8 bytes; `contacts` is one `ContactCard` or a list, in WhatsApp's contact-card shape (`name.first_name` required; the 👤 line is `name.formatted_name`, built from the name parts when omitted) |
 | `send_sticker(source, target)` | an image; png/jpeg/gif only, a `.webp` file is rejected before I/O |
 
 Location and phone-number requests are WhatsApp-only (`self.whatsapp.send_location_request`, `self.whatsapp.send_contact_request`), because a text prompt on Instagram cannot return the location or phone. `self.whatsapp` is `None` in an Instagram dispatch, so ask the User to type the answer there.

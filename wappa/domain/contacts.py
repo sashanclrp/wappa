@@ -2,13 +2,13 @@
 
 One typed value for ``IMessenger.send_contact`` on every Platform: WhatsApp
 sends one or several cards as a native contacts message; Instagram renders
-each card as a text block. Only ``name.formatted_name`` is
-required: WhatsApp also needs one name part, so a name without any takes
-``first_name`` from ``formatted_name`` when it is built.
+each card as a text block. The name follows WhatsApp's
+shape: ``first_name`` is required and ``formatted_name`` is built from the
+parts when omitted.
 """
 
 from collections.abc import Sequence
-from typing import Self
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -35,37 +35,48 @@ class ContactEmail(BaseModel):
 
 
 class ContactName(BaseModel):
-    formatted_name: str = Field(
-        ..., min_length=1, max_length=100, description="Full formatted name"
-    )
-    first_name: str | None = Field(None, max_length=50, description="First name")
+    """A contact's name in WhatsApp's shape: the parts, and the display line.
+
+    ``first_name`` is required, as WhatsApp needs one part besides
+    ``formatted_name`` (131009 otherwise). ``formatted_name`` is the display
+    line; when omitted it is built from the parts (prefix, first, middle,
+    last, suffix). Instagram shows ``formatted_name`` as the card's name line.
+    """
+
+    # Filled from the parts when omitted; first_name is required, so a built
+    # name always has one.
+    formatted_name: str = Field("", max_length=100, description="Full formatted name")
+    first_name: str = Field(..., min_length=1, max_length=50, description="First name")
     last_name: str | None = Field(None, max_length=50, description="Last name")
     middle_name: str | None = Field(None, max_length=50, description="Middle name")
     suffix: str | None = Field(None, max_length=20, description="Name suffix")
     prefix: str | None = Field(None, max_length=20, description="Name prefix")
 
-    @field_validator("formatted_name")
+    @model_validator(mode="before")
     @classmethod
-    def validate_formatted_name_required(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("formatted_name is required and cannot be empty")
-        return v.strip()
+    def _formatted_from_parts(cls, data: Any) -> Any:
+        if isinstance(data, dict) and not (data.get("formatted_name") or "").strip():
+            parts = (
+                data.get(key)
+                for key in (
+                    "prefix",
+                    "first_name",
+                    "middle_name",
+                    "last_name",
+                    "suffix",
+                )
+            )
+            joined = " ".join(p.strip() for p in parts if p and p.strip())
+            if joined:
+                data = {**data, "formatted_name": joined}
+        return data
 
-    @model_validator(mode="after")
-    def _one_name_part(self) -> Self:
-        # WhatsApp rejects a name with only formatted_name (131009, "ContactName
-        # should have at least one optional value be set along with formatted
-        # Name"), so a card that builds always carries one part.
-        parts = (
-            self.first_name,
-            self.last_name,
-            self.middle_name,
-            self.suffix,
-            self.prefix,
-        )
-        if not any(parts):
-            self.first_name = self.formatted_name[:50]
-        return self
+    @field_validator("formatted_name", "first_name")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("must not be blank")
+        return v.strip()
 
 
 class ContactOrganization(BaseModel):

@@ -79,7 +79,7 @@ def test_specialized_route_request_canonicalizes_recipient() -> None:
         recipient="co.13491208655302741918",
         contacts=[
             {
-                "name": {"formatted_name": "Demo User"},
+                "name": {"first_name": "Demo", "last_name": "User"},
                 "phones": [{"phone": "+57 300 123 4567"}],
             }
         ],

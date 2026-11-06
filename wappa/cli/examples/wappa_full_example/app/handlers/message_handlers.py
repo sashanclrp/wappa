@@ -577,6 +577,11 @@ class MessageHandlers:
                 contact_dict["name"]["first_name"] = name_obj.first_name
             if hasattr(name_obj, "last_name"):
                 contact_dict["name"]["last_name"] = name_obj.last_name
+            # Outbound names follow WhatsApp's shape: first_name is required.
+            if not contact_dict["name"].get("first_name"):
+                contact_dict["name"]["first_name"] = contact_dict["name"].get(
+                    "formatted_name"
+                )
 
         # Extract phone numbers
         if hasattr(contact_obj, "phones") and contact_obj.phones:

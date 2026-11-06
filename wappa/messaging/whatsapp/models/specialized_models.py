@@ -53,7 +53,7 @@ class BusinessContact(BaseModel):
         urls = [ContactUrl(url=self.website, type="WORK")] if self.website else None
 
         return ContactCard(
-            name=ContactName(formatted_name=self.business_name),
+            name=ContactName(first_name=self.business_name),
             phones=phones,
             emails=emails,
             urls=urls,

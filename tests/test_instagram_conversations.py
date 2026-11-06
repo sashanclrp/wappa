@@ -1253,7 +1253,7 @@ async def test_location_contact_and_sticker_are_adapted_requests_are_not():
         contact = await messenger.send_contact(
             ContactCard.model_validate(
                 {
-                    "name": {"formatted_name": "Ana Ruiz"},
+                    "name": {"first_name": "Ana", "last_name": "Ruiz"},
                     "phones": [{"phone": "+573001112233"}],
                     "emails": [{"email": "ana@example.com"}],
                 }

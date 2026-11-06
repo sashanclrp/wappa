@@ -396,7 +396,8 @@ async def test_instagram_cta_sends_a_media_header_first_then_the_button() -> Non
 
 
 def _contact(name: str, phone: str | None = None) -> ContactCard:
-    data: dict[str, Any] = {"name": {"formatted_name": name}}
+    first, _, last = name.partition(" ")
+    data: dict[str, Any] = {"name": {"first_name": first, "last_name": last or None}}
     if phone:
         data["phones"] = [{"phone": phone}]
     return ContactCard.model_validate(data)
@@ -416,7 +417,13 @@ async def test_whatsapp_sends_several_cards_in_one_contacts_message() -> None:
             "name": {"formatted_name": "Ana", "first_name": "Ana"},
             "phones": [{"phone": "+57 300 111 2233"}],
         },
-        {"name": {"formatted_name": "Front desk", "first_name": "Front desk"}},
+        {
+            "name": {
+                "formatted_name": "Front desk",
+                "first_name": "Front",
+                "last_name": "desk",
+            }
+        },
     ]
     assert (await wa.send_contact(_contact("Solo"), WA_DM)).success
 
@@ -426,7 +433,7 @@ async def test_instagram_renders_each_card_as_a_text_block_split_over_1000_bytes
 ):
     ig, client, sent = _ig()
     many = [
-        _contact(f"Person {i:02d} " + "x" * 60, "+57 300 111 2233") for i in range(14)
+        _contact(f"Person{i:02d} " + "x" * 48, "+57 300 111 2233") for i in range(14)
     ]
     async with client:
         short = await ig.send_contact([_contact("Ana"), _contact("Bo")], IG_DM)
@@ -515,11 +522,16 @@ async def test_limits_endpoint_reports_the_shared_cta_and_card_limits() -> None:
     assert limits["carousels"]["supported_card_header_kinds"] == ["image", "video"]
 
 
-def test_a_name_without_parts_takes_first_name_from_formatted_name() -> None:
-    # WhatsApp answers 131009 "ContactName should have at least one optional
-    # value be set along with formatted Name" otherwise.
+def test_contact_names_follow_whatsapp_shape() -> None:
+    # WhatsApp needs a name part besides formatted_name (131009 otherwise), so
+    # first_name is required; formatted_name is built from the parts.
     from wappa.domain.contacts import ContactName
 
-    assert ContactName(formatted_name="Wappa Support").first_name == "Wappa Support"
-    named = ContactName(formatted_name="Ana Ruiz", last_name="Ruiz")
-    assert named.first_name is None and named.last_name == "Ruiz"
+    with pytest.raises(ValidationError):
+        ContactName.model_validate({"formatted_name": "Wappa Support"})
+    full = ContactName(
+        prefix="Dr.", first_name="Ana", middle_name="M.", last_name="Ruiz"
+    )
+    assert full.formatted_name == "Dr. Ana M. Ruiz"
+    own = ContactName(first_name="Ana", last_name="Ruiz", formatted_name="Ana R.")
+    assert own.formatted_name == "Ana R."
