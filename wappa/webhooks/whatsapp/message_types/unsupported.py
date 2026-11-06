@@ -18,7 +18,7 @@ from wappa.schemas.core.types import (
     UniversalMessageData,
 )
 from wappa.webhooks.core.base_message import BaseMessage, BaseMessageContext
-from wappa.webhooks.whatsapp.base_models import (
+from wappa.webhooks.whatsapp.models.base import (
     MessageContext,
     MessageError,
     WhatsAppMessageIdentity,
@@ -182,7 +182,7 @@ class WhatsAppUnsupportedMessage(WhatsAppMessageIdentity, BaseMessage):
         return self.context is not None
 
     def get_context(self) -> BaseMessageContext | None:
-        from .text import WhatsAppMessageContext
+        from .context import WhatsAppMessageContext
 
         return WhatsAppMessageContext(self.context) if self.context else None
 

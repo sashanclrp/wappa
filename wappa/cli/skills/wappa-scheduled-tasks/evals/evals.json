@@ -1,0 +1,68 @@
+{
+  "skill_name": "wappa-scheduled-tasks",
+  "evals": [
+    {
+      "id": "apscheduler-reminder",
+      "prompt": "Users can ask my Wappa bot to remind them at a specific date. I already run APScheduler 4 with Postgres. Wire reminders in.",
+      "expected_output": "A module-level async job body with plain arguments calls Scheduling.from_app(app).dispatch(ScheduledEvent(...)) with inbox_ref, user_id, execution_id and scheduled_for; process_scheduled_event routes by action and sends with the prepared self.messenger; the job body lets exceptions propagate; the scheduler starts in a startup hook with priority 40 or later; no SchedulingPlugin, no Redis timer, no Messenger or cache construction; warns that reminders outside the 24-hour window need a Template on WhatsApp.",
+      "assertions": [
+        "calls Scheduling.from_app(app).dispatch from an async job body",
+        "does not catch the dispatch exception and report success",
+        "does not build a Messenger or Cache Factory by hand",
+        "does not use a Redis expiry trigger for a calendar date",
+        "warns about the 24-hour window for a later send"
+      ]
+    },
+    {
+      "id": "mixed-expiry-identifiers",
+      "prompt": "I have two Redis timers: agent_trigger is keyed by the user's id and template_rollback is keyed by the wamid of a sent message. Handle both when they expire.",
+      "expected_output": "SchedulingPlugin(redis_expiry=True, expiry_subjects=binding); the binding returns the identifier for agent_trigger, None for template_rollback, and raises for an unknown action; the hook routes by event.action and reads the wamid from event.identifier; the rollback branch has no self.user_id or self.cache_factory; no classification by identifier shape; idempotency across workers does not rely on event.execution_id, which is None here.",
+      "assertions": [
+        "returns None from the binding for the wamid-keyed action",
+        "does not decide by the identifier's shape",
+        "reads the message id from event.identifier",
+        "does not use self.cache_factory in the Inbox-only branch",
+        "does not key idempotency on event.execution_id for a Redis timer"
+      ]
+    },
+    {
+      "id": "heartbeat-system-scope",
+      "prompt": "Add a one-minute heartbeat to my Wappa app that checks stale rows in my database. Runs must not overlap.",
+      "expected_output": "A Host scheduler or asyncio loop calls dispatch with no inbox_ref and no user_id; the hook uses self.db; overlap control is configured on the engine because Wappa has none; no invented Inbox, no self.messenger; a static add_cron is acceptable when the schedule is fixed, with distributed locking noted for several workers.",
+      "assertions": [
+        "the event has no inbox_ref and no user_id",
+        "overlap control belongs to the scheduler or Host, not Wappa",
+        "does not send through self.messenger in System scope"
+      ]
+    },
+    {
+      "id": "digest-for-other-users",
+      "prompt": "A weekly job for one Inbox finds its owners in my database and must update each owner's Wappa user cache and message them.",
+      "expected_output": "An Inbox-scoped event; the hook loops over owners with async with self.scope(user_id=owner) as scoped, using scoped.cache_factory and sending through self.messenger with an explicit target per owner; Host dependencies built on self are not assumed on scoped; a failure in one owner is a Host decision.",
+      "assertions": [
+        "uses self.scope for each owner",
+        "does not construct caches or Messengers by hand",
+        "does not reuse a dependency set on self inside the scope"
+      ]
+    },
+    {
+      "id": "migrate-old-expiry-handlers",
+      "prompt": "Upgrade my app to Wappa 0.34. I have @expiry_registry.on_expire_action handlers using create_expiry_messenger, and a CronPlugin with process_cron_event.",
+      "expected_output": "Moves handler bodies into process_scheduled_event, deletes capability construction, replaces ExpiryPlugin and CronPlugin with one SchedulingPlugin and an expiry_subjects binding, renames cron_id to action, warns that cron failures now propagate and already-armed keys fire into the new hook, and keeps Host admission and fences inside the hook.",
+      "assertions": [
+        "replaces both plugins with SchedulingPlugin",
+        "adds an expiry_subjects binding for User-keyed actions",
+        "warns about already-armed triggers",
+        "warns that cron failures now reach max_retries"
+      ]
+    },
+    {
+      "id": "not-this-skill",
+      "prompt": "Store the user's name in the Wappa user cache during a conversation.",
+      "expected_output": "Not a Scheduled Task: the cache question belongs to wappa-state-and-storage, with no scheduler or SchedulingPlugin added.",
+      "assertions": [
+        "does not add SchedulingPlugin or a scheduler"
+      ]
+    }
+  ]
+}

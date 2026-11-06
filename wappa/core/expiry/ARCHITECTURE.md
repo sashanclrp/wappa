@@ -1,68 +1,48 @@
 # Expiry Context — Architecture
 
-## Planned dispatch integration
-
-The [scheduled-dispatch PRD](../../../docs/backlog/pending/261106-high-scheduled-task-dispatch.md) preserves the Redis-only TTL pool, key/control operations, notification setup and reconnect/tracking behavior described here. Its planned change is to translate each notification and Host-supplied subject identity into the shared context-bound WappaEventHandler hook, replacing free-function business callbacks and manual capability helpers. It does not add due indexes, replay, claims/leases, persistent Run state, shadow payload keys, memory/JSON timers or stronger delivery guarantees. The current implementation below remains current-code documentation until that PRD lands.
-
 ## Responsibilities
 
 This context owns:
 - Subscribing to Redis keyspace notifications (`__keyevent@{db}__:expired`)
-- Parsing expired Expiry Keys into structured `ExpiryEvent` objects
-- Routing each event to the correct registered handler via `ExpirationHandlerRegistry`
-- Dispatching handlers as fire-and-forget async tasks with completion logging
-- Wrapping each dispatch in an SSE identity scope so SSE events emitted from handlers carry coherent `inbox_id` / user identity
+- Parsing expired Expiry Keys into `ExpiryNotification` objects
+- Asking the Host's `ExpirySubjectBinding` whether the identifier is a User
+- Running the resulting `ScheduledEvent` as tracked background work, with failures logged
 - Reconnecting to Redis on connection loss with exponential backoff
-- Providing helper factories (`create_expiry_messenger`, `create_expiry_cache_factory`) that bootstrap framework dependencies for use inside expiry handlers
-- Holding a reference to the host `FastAPI` app via `AppContext` so framework
-  helpers can reach `SessionLifecycle` and configured infrastructure
 
 ## Explicit Boundaries
 
 This context does **not** own:
-- Business logic executed when a key expires (that lives in host application handlers)
-- Writing or TTL-setting of Expiry Keys (callers use `KeyFactory.trigger()` from `wappa.persistence.redis`)
+- Business logic when a key expires (the Host's `process_scheduled_event`)
+- Context construction: Messengers, caches, database factories and SSE scope (delegated to `DispatchContextBuilder.scope`, through `wappa.core.scheduling`)
+- Writing or TTL-setting of Expiry Keys (the Host uses `cache_factory.create_expiry_cache()`)
 - Redis pool management or connection pooling (delegated to `RedisClient` / `PoolAlias`)
-- SSE channel management or event schemas (delegated to `wappa.core.sse`)
-- Cache namespace rules or user-cache schemas (delegated to `wappa.persistence`)
-- Messenger credentials or API client construction (delegated to `MessengerFactory`)
+- Plugin lifecycle (delegated to `SchedulingPlugin`)
+- Delivery guarantees beyond Redis Pub/Sub: no replay, claims, leases, due indexes or history. Every listening process receives each notification, and a key that expires while none listens is missed. Stronger coordination belongs to the Host.
 
 ## Module Structure
 
 ```
 wappa/core/expiry/
-├── __init__.py          # Public surface: re-exports all key types and singletons
+├── __init__.py          # Public surface of this context
 ├── listener.py          # Orchestrator: run_expiry_listener(), _run_listener_loop()
-├── registry.py          # ExpirationHandlerRegistry singleton (expiry_registry)
-├── parser.py            # ExpiryEventParser + ExpiryEvent dataclass
-├── dispatcher.py        # ExpiryDispatcher — fire-and-forget task creation + SSE scope
+├── parser.py            # parse_expiry_notification() + ExpiryNotification dataclass
+├── dispatcher.py        # ExpiryDispatcher: notification → ScheduledEvent on tracked work;
+│                        #   ExpirySubjectBinding protocol
 ├── connection.py        # RedisConnectionManager, RedisConnection, ConnectionConfig
-├── reconnection.py      # ReconnectionStrategy, ReconnectionConfig (exponential backoff)
-├── app_context.py       # AppContext singleton, set_fastapi_app() / get_fastapi_app()
-└── context_helpers.py   # create_expiry_messenger(), create_expiry_cache_factory(),
-                         # parse_inbox_ref_from_expired_key()
+└── reconnection.py      # ReconnectionStrategy, ReconnectionConfig (exponential backoff)
 ```
 
 ## Key Classes and Their Roles
 
 | Class / Symbol | Role |
 |---|---|
-| `run_expiry_listener` | Entry point. Instantiates all components and drives the reconnect loop. |
-| `ExpirationHandlerRegistry` | Stores `action_name → async handler` mappings. Provides `@on_expire_action` decorator and `resolve(expired_key)` lookup. Global singleton `expiry_registry`. |
-| `ExpiryEventParser` | Decodes raw pub/sub messages; delegates key resolution to `registry.resolve()`. Returns `ExpiryEvent` or `None`. |
-| `ExpiryEvent` | Immutable data container: `expired_key`, `handler`, `identifier`, `action`. |
-| `ExpiryDispatcher` | Creates an `asyncio.Task` per event via `_run_with_sse_scope`. Logs completion or errors via done-callback. |
+| `run_expiry_listener` | Entry point. Drives the reconnect loop and hands each parsed notification to the dispatcher. |
+| `parse_expiry_notification` | Decodes raw pub/sub messages. Ignores keys that are not triggers; logs and drops a trigger with an invalid Inbox namespace. |
+| `ExpiryNotification` | Immutable data container: `expired_key`, `inbox_ref`, `action`, `identifier`. |
+| `ExpirySubjectBinding` | Host-supplied async mapping to the subject User or `None`. Absent, every expiry is Inbox-only work. |
+| `ExpiryDispatcher` | Tracks one task per notification, builds the `ScheduledEvent` and logs a failure from a done-callback, since no caller awaits it. |
 | `RedisConnectionManager` | Obtains a Redis client from the pool, enables `notify-keyspace-events=Ex`, creates and manages a PubSub subscription. |
 | `ReconnectionStrategy` | Tracks failure count, computes `base_delay × 2^(n-1)` (capped at `max_delay`), exposes `should_retry()` and `async wait()`. |
-| `AppContext` | Module-level singleton holding a `FastAPI` reference; accessed by context helpers to reach the core-owned `SessionLifecycle` and the `DispatchContextBuilder` that resolves Inbox credentials. |
-
-## Design Patterns
-
-- **Orchestrator + Components**: `run_expiry_listener` composes `RedisConnectionManager`, `ExpiryEventParser`, `ExpiryDispatcher`, and `ReconnectionStrategy` without owning any of their logic.
-- **Registry / Decorator**: `ExpirationHandlerRegistry.on_expire_action` follows the familiar decorator-registration pattern, keeping handler registration co-located with business code.
-- **Longest-prefix matching**: `_best_match` allows hierarchical action namespaces if needed (e.g., `payment_reminder:urgent` is more specific than `payment_reminder`).
-- **Fire-and-forget with observability**: `asyncio.create_task` keeps the listener loop non-blocking; done-callbacks provide error visibility without coupling listener to handler lifetimes.
-- **Singleton context**: `AppContext` and `expiry_registry` are module-level singletons — the only acceptable globals — to avoid threading global state through every call site.
 
 ## Data Flow
 
@@ -76,24 +56,23 @@ __keyevent@{db}__:expired  (pub/sub channel)
 RedisConnectionManager.pubsub.listen()          [connection.py]
         │  raw message dict
         ▼
-ExpiryEventParser.parse(message)                [parser.py]
-        │  delegates to registry.resolve(expired_key)
-        ├─── No handler → None → listener loop ignores
+parse_expiry_notification(message)              [parser.py]
+        │  not a trigger or invalid namespace → None → listener ignores
+        │  ExpiryNotification(expired_key, inbox_ref, action, identifier)
+        ▼
+ExpiryDispatcher.dispatch(notification)         [dispatcher.py]
+        │  BackgroundWorkTracker.track(...)
+        ▼
+ExpirySubjectBinding(inbox_ref, action, identifier) → User or None   [Host]
+        │  ScheduledEvent(source="redis_expiry", ...)
+        ▼
+Scheduling.run(event)                           [wappa/core/scheduling]
+        │  DispatchContextBuilder.scope: canonical User, Messenger, caches, SSE
+        ▼
+handler.handle_scheduled_event(event) → process_scheduled_event   [Host]
         │
-        │  ExpiryEvent(expired_key, handler, identifier, action)
         ▼
-ExpiryDispatcher.dispatch(event)                [dispatcher.py]
-        │  asyncio.create_task(_run_with_sse_scope(event))
-        ▼
-_run_with_sse_scope                             [dispatcher.py]
-        │  parse_inbox_from_expired_key → inbox_id
-        │  classify_meta_identifier → bsuid / phone
-        │  sse_event_scope(inbox_id, user_id, …)
-        ▼
-event.handler(identifier, expired_key)          [host application handler]
-        │  optionally calls create_expiry_messenger / create_expiry_cache_factory
-        ▼
-done-callback: _on_completion logs success or error
+done-callback: failure logged with action and identifier
 ```
 
 On connection loss, `run_expiry_listener` calls `reconnection.record_failure()` and `await reconnection.wait()` before restarting `_run_listener_loop`, up to `max_attempts` (default: infinite).

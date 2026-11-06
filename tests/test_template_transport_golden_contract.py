@@ -18,15 +18,13 @@ import pytest
 from wappa.domain.inbox import InboxRef
 from wappa.domain.results import OperationOutcome
 from wappa.messaging.meta.graph import GraphResponse, MetaGraphError, meta_error_code
-from wappa.messaging.whatsapp.handlers.whatsapp_template_handler import (
-    WhatsAppTemplateHandler,
-)
+from wappa.messaging.whatsapp.errors import handle_whatsapp_error
+from wappa.messaging.whatsapp.messenger import WhatsAppMessengerAdapter
 from wappa.messaging.whatsapp.models.template_models import (
     TemplateParameter,
     TemplateParameterType,
     WhatsAppTemplateType,
 )
-from wappa.messaging.whatsapp.utils.error_helpers import handle_whatsapp_error
 from wappa.webhooks.whatsapp import WhatsAppMessageStatus, WhatsAppWebhook
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "meta" / "v25.0"
@@ -80,9 +78,11 @@ async def test_golden_template_requests(
     uses_marketing_endpoint: bool,
 ) -> None:
     client = _GoldenClient(_fixture("template_accepted_response.json"))
-    handler = WhatsAppTemplateHandler(client=client, inbox_id="inbox-test")
+    handler = WhatsAppMessengerAdapter(
+        client=client, media_transport=None, inbox_id="inbox-test"
+    )
 
-    result = await handler.send_text_template(
+    result = await handler._send_text_template_to(
         recipient=recipient,
         template_name=_fixture(request_fixture)["template"]["name"],
         template_type=template_type,
@@ -107,10 +107,12 @@ async def test_golden_authentication_copy_code_request() -> None:
     fills the ``code=otp{{1}}`` placeholder in the button's URL.
     """
     client = _GoldenClient(_fixture("template_accepted_response.json"))
-    handler = WhatsAppTemplateHandler(client=client, inbox_id="inbox-test")
+    handler = WhatsAppMessengerAdapter(
+        client=client, media_transport=None, inbox_id="inbox-test"
+    )
     expected = _fixture("authentication_copy_code_request.json")
 
-    result = await handler.send_text_template(
+    result = await handler._send_text_template_to(
         recipient="573001112233",
         template_name=expected["template"]["name"],
         body_parameters=[
@@ -176,9 +178,6 @@ async def test_adapter_phone_evidence_reaches_template_transport(phone: str) -> 
         TemplateTransportOutcome,
         TextTemplateTransportRequest,
     )
-    from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
-        WhatsAppMessengerAdapter,
-    )
 
     # Synthetic contradiction, not a recovered production response.
     response = {
@@ -195,14 +194,9 @@ async def test_adapter_phone_evidence_reaches_template_transport(phone: str) -> 
         "messages": [{"id": "wamid.synthetic.identity-echo"}],
     }
     client = _GoldenClient(response)
-    handler = WhatsAppTemplateHandler(client=client, inbox_id="inbox-test")
-
     messenger = WhatsAppMessengerAdapter(
         client=client,
-        media_handler=None,
-        interactive_handler=None,
-        template_handler=handler,
-        specialized_handler=None,
+        media_transport=None,
         inbox_id="inbox-test",
     )
 

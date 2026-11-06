@@ -38,28 +38,7 @@ Wappa opens one pool per database on the same server:
 
 ## Expiry triggers
 
-A per-User timer is an expiry key, not a cron:
-
-```python
-from wappa import ExpiryPlugin, expiry_registry
-from wappa.core.expiry import create_expiry_messenger, parse_inbox_ref_from_expired_key
-
-app = Wappa(cache="redis")
-app.add_plugin(ExpiryPlugin())
-
-# in a handler: arm or re-arm (same action + identifier resets the timer)
-await self.cache_factory.create_expiry_cache().set("followup", webhook.user.user_id, 900)
-
-@expiry_registry.on_expire_action("followup")       # module level, not a handler method
-async def on_followup(identifier: str, full_key: str) -> None:
-    inbox_ref = parse_inbox_ref_from_expired_key(full_key)   # None for a malformed key
-    if inbox_ref is None:
-        return
-    messenger = await create_expiry_messenger(inbox_ref)
-    ...
-```
-
-`ExpiryPlugin` turns on Redis keyspace notifications (`notify-keyspace-events Ex`). A managed Redis that forbids `CONFIG SET` needs that setting applied by hand. Expiry events are Redis Pub/Sub messages: a key that expires while no Wappa process listens is never seen, and every listening process receives it. With several workers, make the handler idempotent (for example, `create_if_absent` on a table row keyed by the trigger). The full example is `wappa examples` → `wappa_expiry_example`.
+A per-User timer is an expiry key, not a cron, armed with `await self.cache_factory.create_expiry_cache().set("followup", user_id, 900)`. Re-arming the same action and identifier resets it. The key holds no data, so keep what the timer needs in a cache. Wiring it to the hook, the subject binding, `rebind` and delivery rules are in the `wappa-scheduled-tasks` skill.
 
 ## Inspect and verify
 

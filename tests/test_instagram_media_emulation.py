@@ -23,7 +23,7 @@ from wappa.domain.inbox import InboxRef
 from wappa.domain.interactive import ListRow, ListSection
 from wappa.domain.interfaces.media_library import MediaFamily
 from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
-from wappa.messaging.instagram.media import ascii_name
+from wappa.messaging.instagram.media.rules import ascii_name
 from wappa.messaging.instagram.messenger import PARTS_KEY, InstagramMessengerAdapter
 from wappa.schemas.core.types import PlatformType
 

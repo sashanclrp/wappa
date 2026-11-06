@@ -37,13 +37,7 @@ from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.domain.results import MessageResult
 from wappa.messaging.instagram.messenger import PARTS_KEY, InstagramMessengerAdapter
-from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
-    WhatsAppInteractiveHandler,
-)
-from wappa.messaging.whatsapp.handlers.whatsapp_specialized_handler import (
-    WhatsAppSpecializedHandler,
-)
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+from wappa.messaging.whatsapp.messenger import (
     WhatsAppMessengerAdapter,
 )
 from wappa.schemas.core.types import PlatformType
@@ -211,10 +205,7 @@ def _whatsapp() -> tuple[WhatsAppMessengerAdapter, Callable[[], str]]:
     client = _WhatsAppClient()
     messenger = WhatsAppMessengerAdapter(
         client=client,  # type: ignore[arg-type]
-        media_handler=None,  # type: ignore[arg-type]
-        interactive_handler=WhatsAppInteractiveHandler(client, "pnid"),  # type: ignore[arg-type]
-        template_handler=None,  # type: ignore[arg-type]
-        specialized_handler=WhatsAppSpecializedHandler(client, "pnid"),  # type: ignore[arg-type]
+        media_transport=None,  # type: ignore[arg-type]
         inbox_id="pnid",
     )
     return messenger, lambda: json.dumps(client.posted, ensure_ascii=False)

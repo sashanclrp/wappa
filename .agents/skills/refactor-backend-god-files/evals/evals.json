@@ -1,0 +1,35 @@
+{
+  "skill_name": "refactor-backend-god-files",
+  "evals": [
+    {
+      "id": "placement-and-drift-reported-when-asked-only-about-size",
+      "prompt": "Split any Wappa module over 450 LOC in wappa/messaging/instagram.",
+      "expected_output": "Runs the two ls commands on the package, splits messenger.py into a messenger/ package with operation-family mixins, and separately reports placement and scaffold-drift findings (flat media.py mixing rules and the CDN reader, content.py mixing controls and reader, error mapping not mirroring WhatsApp's) against wappa-develop references/scaffolding.md.",
+      "assertions": [
+        "Lists placement and scaffold-drift findings separately from size findings",
+        "Compares the Instagram layout with the canonical scaffold, not only with LOC",
+        "Keeps IMessenger as a base after the mixins"
+      ]
+    },
+    {
+      "id": "public-path-break-recorded",
+      "prompt": "Move wappa/messaging/whatsapp/payload_builders.py into a payloads/ package.",
+      "expected_output": "Finds the path in docs/public-contract.md, treats the move as a clean-cut break with a CHANGELOG Unreleased entry and migration-guide search term, updates importers (API routes and dependencies) and tests/test_public_contract_imports.py, leaves no re-export shim at the old path, and runs the five gates against the baseline.",
+      "assertions": [
+        "Checks docs/public-contract.md before moving",
+        "Adds no compatibility alias at the old path",
+        "Lists the break in CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "fan-out-respects-shared-files-and-others-work",
+      "prompt": "Split the WhatsApp and Instagram Messenger adapters in parallel with sub-agents. The working tree also has someone else's uncommitted scheduling rework.",
+      "expected_output": "Records git status first, hoists Meta-wide error mapping into wappa/messaging/meta/ on the main agent, dispatches one worker per adapter that edits only its folder and runs only its per-package check, keeps platforms.py, facades, tests and docs on the main agent, checks git status at the join against the preflight record, and never stages the scheduling files.",
+      "assertions": [
+        "Edits wappa/platforms.py and tests only on the main agent",
+        "Workers do not run pytest mid-flight",
+        "Does not stage or commit the other uncommitted work"
+      ]
+    }
+  ]
+}

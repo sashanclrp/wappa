@@ -34,9 +34,7 @@ from wappa.messaging import (
     TextTemplateTransportRequest,
 )
 from wappa.messaging.template_transport import _request_digest, _send_request
-from wappa.messaging.whatsapp.handlers.whatsapp_template_handler import (
-    WhatsAppTemplateHandler,
-)
+from wappa.messaging.whatsapp.messenger import WhatsAppMessengerAdapter
 from wappa.messaging.whatsapp.models.template_info_models import TemplateInfo
 from wappa.messaging.whatsapp.models.template_models import (
     TemplateParameter,
@@ -68,9 +66,11 @@ class _Client:
         }
 
 
-def _handler() -> tuple[WhatsAppTemplateHandler, _Client]:
+def _handler() -> tuple[WhatsAppMessengerAdapter, _Client]:
     client = _Client()
-    return WhatsAppTemplateHandler(client=client, inbox_id="inbox-1"), client
+    return WhatsAppMessengerAdapter(
+        client=client, media_transport=None, inbox_id="inbox-1"
+    ), client
 
 
 def _auth_request(**overrides: Any) -> TextTemplateTransportRequest:
@@ -98,7 +98,7 @@ async def test_authentication_send_emits_body_and_otp_button(
 ) -> None:
     handler, client = _handler()
 
-    result = await handler.send_text_template(
+    result = await handler._send_text_template_to(
         recipient="573001112233",
         template_name="otp_test_code",
         body_parameters=[TemplateParameter(type=TemplateParameterType.TEXT, text=CODE)],
@@ -125,7 +125,7 @@ async def test_authentication_send_emits_body_and_otp_button(
 async def test_otp_button_index_is_a_string_not_an_integer() -> None:
     handler, client = _handler()
 
-    await handler.send_text_template(
+    await handler._send_text_template_to(
         recipient="573001112233",
         template_name="otp_test_code",
         body_parameters=[TemplateParameter(type=TemplateParameterType.TEXT, text=CODE)],
@@ -142,7 +142,7 @@ async def test_otp_button_index_is_a_string_not_an_integer() -> None:
 async def test_button_index_is_expressible_for_multi_button_templates() -> None:
     handler, client = _handler()
 
-    await handler.send_text_template(
+    await handler._send_text_template_to(
         recipient="573001112233",
         template_name="otp_test_code",
         body_parameters=[TemplateParameter(type=TemplateParameterType.TEXT, text=CODE)],
@@ -158,7 +158,7 @@ async def test_button_index_is_expressible_for_multi_button_templates() -> None:
 async def test_non_authentication_templates_emit_no_button() -> None:
     handler, client = _handler()
 
-    await handler.send_text_template(
+    await handler._send_text_template_to(
         recipient="573001112233",
         template_name="welcome",
         body_parameters=[
@@ -335,7 +335,7 @@ def test_authentication_templates_reject_a_location_header() -> None:
 async def test_handler_refuses_authentication_send_without_a_method() -> None:
     handler, client = _handler()
 
-    result = await handler.send_text_template(
+    result = await handler._send_text_template_to(
         recipient="573001112233",
         template_name="otp_test_code",
         body_parameters=[TemplateParameter(type=TemplateParameterType.TEXT, text=CODE)],
@@ -350,7 +350,7 @@ async def test_handler_refuses_authentication_send_without_a_method() -> None:
 async def test_handler_refuses_a_method_on_a_non_authentication_template() -> None:
     handler, client = _handler()
 
-    result = await handler.send_text_template(
+    result = await handler._send_text_template_to(
         recipient="573001112233",
         template_name="welcome",
         body_parameters=[
@@ -383,7 +383,7 @@ async def test_handler_refuses_a_malformed_authentication_body(
 ) -> None:
     handler, client = _handler()
 
-    result = await handler.send_text_template(
+    result = await handler._send_text_template_to(
         recipient="573001112233",
         template_name="otp_test_code",
         body_parameters=body_parameters,
@@ -399,7 +399,7 @@ async def test_handler_refuses_a_malformed_authentication_body(
 async def test_handler_refuses_an_unknown_authentication_method() -> None:
     handler, client = _handler()
 
-    result = await handler.send_text_template(
+    result = await handler._send_text_template_to(
         recipient="573001112233",
         template_name="otp_test_code",
         body_parameters=[TemplateParameter(type=TemplateParameterType.TEXT, text=CODE)],

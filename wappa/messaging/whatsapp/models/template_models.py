@@ -12,12 +12,6 @@ from pydantic import (
 )
 
 
-class WhatsAppTemplateMediaType(StrEnum):
-    IMAGE = "image"
-    VIDEO = "video"
-    DOCUMENT = "document"
-
-
 class TemplateParameterType(StrEnum):
     TEXT = "text"
     CURRENCY = "currency"

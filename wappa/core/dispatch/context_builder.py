@@ -1,6 +1,6 @@
 """Shared construction of Dispatch Context capabilities.
 
-Webhook intake, API-message events, cron jobs, and External Webhook Sources
+Webhook intake, API-message events, Scheduled Tasks, and External Webhook Sources
 all bind a ``WappaEventHandler`` clone to Inbox and User identity plus the
 runtime capabilities the path needs. This module is the one place that
 knows how to turn qualified Inbox identity into a Messenger, a Cache
@@ -9,12 +9,21 @@ Factory, and the optional ``db`` / ``db_read`` session factories.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping, Sequence
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
+from wappa.core.logging.context import (
+    bind_inbox_context,
+    bind_user_context,
+    reset_inbox_context,
+    reset_user_context,
+)
 from wappa.core.messaging.pipeline import MessengerPipeline
 from wappa.core.messaging.sent_message_registry import TableSentMessageRegistry
+from wappa.core.sse.context import sse_event_scope, sse_identity_cleared
 from wappa.domain.factories.messenger_factory import MessengerFactory
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.inbox.ports import IInboxCredentialResolver, ResolvedInboxCredentials
@@ -31,6 +40,7 @@ if TYPE_CHECKING:
     from wappa.core.config.meta_application import MetaApplicationConfig
     from wappa.core.events.event_handler import WappaEventHandler
     from wappa.domain.interfaces.cache_factory import ICacheFactory
+    from wappa.domain.interfaces.identity_resolver import IIdentityResolver
     from wappa.domain.interfaces.messaging_interface import IMessenger
     from wappa.platforms import PlatformEntry
     from wappa.schemas.core.types import PlatformType
@@ -43,7 +53,7 @@ def resolve_database_factories(
 ) -> tuple[SessionFactory | None, SessionFactory | None]:
     """``(db, db_read)`` for a session manager, or ``(None, None)``.
 
-    Every dispatch path — webhook, API message, cron, External Webhook Source —
+    Every dispatch path — webhook, API message, scheduled, External Webhook Source —
     derives its optional session factories here. Wappa never installs a fake
     session factory in place of ``None``.
     """
@@ -68,6 +78,7 @@ class RuntimeCapabilities:
     meta_application_config: MetaApplicationConfig | None = None
     redis_manager: Any | None = None
     postgres_session_manager: Any | None = None
+    identity_resolver: IIdentityResolver | None = None
     platforms: Mapping[PlatformType, PlatformEntry] = field(
         default_factory=lambda: _default_platforms()
     )
@@ -97,6 +108,7 @@ class RuntimeCapabilities:
             meta_application_config=getattr(state, "meta_application_config", None),
             redis_manager=getattr(state, "redis_manager", None),
             postgres_session_manager=getattr(state, "postgres_session_manager", None),
+            identity_resolver=getattr(state, "identity_resolver", None),
             platforms=getattr(state, "platforms", None) or _default_platforms(),
         )
 
@@ -196,7 +208,7 @@ class DispatchContextBuilder:
         cache_factory: ICacheFactory | None,
     ) -> WappaEventHandler:
         db, db_read = self.database_factories()
-        return base_handler.with_context(
+        handler = base_handler.with_context(
             inbox_id=inbox_ref.inbox_id if inbox_ref is not None else None,
             inbox_ref=inbox_ref,
             user_id=user_id,
@@ -206,6 +218,98 @@ class DispatchContextBuilder:
             db_read=db_read,
             platforms=self.capabilities.platforms,
         )
+        # ``self.scope(...)`` clones the prototype again, never this clone, so
+        # state a Host set during one dispatch cannot leak into another subject.
+        handler._scope_opener = partial(self.scope, base_handler)
+        return handler
+
+    async def canonical_user(self, inbox_ref: InboxRef, subject: str) -> str:
+        """Ask the Host resolver for the canonical User of ``subject``.
+
+        Resolver failures propagate: acting under a guessed User would read and
+        write the wrong cache.
+        """
+        resolver = self.capabilities.identity_resolver
+        if resolver is None:
+            return subject
+        canonical = await resolver.resolve(subject, inbox_id=inbox_ref.inbox_id)
+        if not canonical:
+            raise ValueError(
+                f"Identity resolver returned no User for a subject in {inbox_ref}"
+            )
+        return canonical
+
+    @asynccontextmanager
+    async def scope(
+        self,
+        base_handler: WappaEventHandler,
+        *,
+        inbox_ref: InboxRef | None,
+        user_id: str | None,
+    ) -> AsyncIterator[WappaEventHandler]:
+        """Yield a fresh handler bound to one explicit scope.
+
+        +----------------+--------------------------------------------------+
+        | Inbox and User | canonical User, Messenger, Cache Factory, db     |
+        | Inbox only     | Messenger, db; no invented User or Cache Factory |
+        | System         | db; no invented Inbox, Messenger or User         |
+        +----------------+--------------------------------------------------+
+
+        A required capability that cannot be built raises before the body runs.
+        SSE and log identity hold for the body and are restored on exit, so a
+        nested scope never leaks into its parent or into concurrent work.
+        """
+        if inbox_ref is None:
+            if user_id is not None:
+                raise ValueError("A User-scoped context requires inbox_ref")
+            handler = self.bind_handler(
+                base_handler,
+                inbox_ref=None,
+                user_id=None,
+                messenger=None,
+                cache_factory=None,
+            )
+            with _log_identity(None, None), sse_identity_cleared():
+                yield handler
+            return
+
+        canonical = (
+            await self.canonical_user(inbox_ref, user_id)
+            if user_id is not None
+            else None
+        )
+        with _log_identity(inbox_ref.inbox_id, canonical):
+            messenger = await self.messenger(inbox_ref)
+            cache_factory = (
+                self.cache_factory(inbox_ref, canonical)
+                if canonical is not None
+                else None
+            )
+            handler = self.bind_handler(
+                base_handler,
+                inbox_ref=inbox_ref,
+                user_id=canonical,
+                messenger=messenger,
+                cache_factory=cache_factory,
+            )
+            async with sse_event_scope(
+                inbox_id=inbox_ref.inbox_id,
+                user_id=canonical or "unknown",
+                platform=inbox_ref.platform.value,
+                tracker=self.capabilities.background_work_tracker,
+            ):
+                yield handler
+
+
+@contextmanager
+def _log_identity(inbox_id: str | None, user_id: str | None) -> Iterator[None]:
+    inbox_token = bind_inbox_context(inbox_id)
+    user_token = bind_user_context(user_id)
+    try:
+        yield
+    finally:
+        reset_user_context(user_token)
+        reset_inbox_context(inbox_token)
 
 
 __all__ = [

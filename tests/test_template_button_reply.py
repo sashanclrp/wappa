@@ -10,9 +10,9 @@ from typing import Any
 
 import pytest
 
-from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.schemas.core.types import MessageType
 from wappa.webhooks.whatsapp.message_types.button import WhatsAppButtonMessage
+from wappa.webhooks.whatsapp.processor import WhatsAppWebhookProcessor
 
 # The routed Inbox the runtime passes to translate().
 INBOX_ID = "routed-inbox"

@@ -9,7 +9,7 @@ forward too, so message capabilities (Templates, user-data requests) keep the
 pipeline wrapping.
 
 Each Platform's subclass lives in its adapter folder and is built by its
-``PlatformEntry.build_platform_messenger`` in ``wappa/platforms.py``
+``PlatformEntry.build_platform_messenger`` in ``wappa/platforms/``
 (ADR-0025 rule 12).
 """
 

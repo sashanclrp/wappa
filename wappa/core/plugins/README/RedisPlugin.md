@@ -6,7 +6,7 @@
 
 `RedisPlugin` initializes and manages Redis connectivity for the entire Wappa application. It creates a `RedisManager` singleton with connection pools during startup, stores it in `app.state.redis_manager`, performs a health check, and tears everything down on shutdown.
 
-This is the foundational Redis plugin -- other plugins that need Redis (`RedisPubSubPlugin`, `ExpiryPlugin`, `SSEEventsPlugin`) depend on `RedisPlugin` being registered first.
+This is the foundational Redis plugin -- other plugins that need Redis (`RedisPubSubPlugin`, `SchedulingPlugin(redis_expiry=True)`, `SSEEventsPlugin`) depend on `RedisPlugin` being registered first.
 
 ## How to activate
 
@@ -75,9 +75,9 @@ RedisPlugin uses the **Hook-Based pattern** (Pattern 2 in the architecture). Dur
 ```
 Startup:   WappaCorePlugin (10)  -->  RedisPlugin (20)  -->  RedisPubSubPlugin (22)
                                                          -->  SSEEventsPlugin (24)
-                                                         -->  ExpiryPlugin (25)
+                                                         -->  SchedulingPlugin (25)
 
-Shutdown:  ExpiryPlugin (25)  -->  SSEEventsPlugin (24)  -->  RedisPubSubPlugin (22)  -->  RedisPlugin (20)
+Shutdown:  SchedulingPlugin (25)  -->  SSEEventsPlugin (24)  -->  RedisPubSubPlugin (22)  -->  RedisPlugin (20)
 ```
 
 ## Accessing Redis in event handlers
@@ -123,7 +123,7 @@ If `RedisManager` is not initialized, the response indicates `"healthy": False` 
 | Plugin | Priority | Relationship |
 |---|---|---|
 | `RedisPubSubPlugin` | 22 | Requires `RedisManager` for PubSub channels. Raises `RuntimeError` if Redis is not initialized |
-| `ExpiryPlugin` | 25 | Requires `RedisManager` for key expiry listeners. Raises `RuntimeError` if Redis is not initialized |
+| `SchedulingPlugin` (`redis_expiry=True`) | 25 | Requires `RedisManager` for key expiry listeners. Raises `RuntimeError` if Redis is not initialized |
 | `SSEEventsPlugin` | 24 | Uses `RedisManager` (when available) for wrapping messengers with event broadcasting |
 
 Always register `RedisPlugin` before any of these plugins. When using `Wappa(cache="redis")`, this ordering is handled automatically.

@@ -2,7 +2,7 @@
 checked_on: 2026-11-06
 checked_against:
   - Wappa's live format matrix of 2026-11-06 (every family by link and upload on WhatsApp and Instagram)
-  - wappa/messaging/whatsapp/media_rules.py and wappa/messaging/instagram/media.py
+  - wappa/messaging/whatsapp/media/rules.py and wappa/messaging/instagram/media/rules.py
   - https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media/
   - https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/
 revision: 2
@@ -86,8 +86,8 @@ Neither Platform: an extension-less URL or a Media ID is not checked (no fetch);
 
 ## What Wappa refuses before any call
 
-- **WhatsApp** (`wappa/messaging/whatsapp/media_rules.py`, content read by `wappa/domain/media_probe.py`): by suffix, image `.jpg`, `.jpeg`, `.png`, `.webp`, video `.mp4/.3gp`, audio `.aac`, `.amr`, `.mp3`, `.m4a`, `.ogg`, voice `.ogg`, sticker `.webp`; by content for local files and uploads, animated WebP as an image, GIF, HEIC, HEVC, MOV, WebM, OGG without Opus, WAV, a sticker not 512×512, size caps; by stored MIME type for a voice note (`audio/ogg`) or sticker (`image/webp`) sent by Media ID; every carousel card.
-- **Instagram** (`wappa/messaging/instagram/media.py`): by suffix, image png/jpeg/gif (WebP by URL only), audio aac/m4a/wav/mp4, video mp4/webm (an upload: MP4 only), document pdf as a file; by content for uploads, WebP bytes and HEVC video; size caps. An audio or video URL in another format is refused like a file (as on WhatsApp); only a document URL Instagram cannot attach is shared as a link text.
+- **WhatsApp** (`wappa/messaging/whatsapp/media/rules.py`, content read by `wappa/domain/media_probe.py`): by suffix, image `.jpg`, `.jpeg`, `.png`, `.webp`, video `.mp4/.3gp`, audio `.aac`, `.amr`, `.mp3`, `.m4a`, `.ogg`, voice `.ogg`, sticker `.webp`; by content for local files and uploads, animated WebP as an image, GIF, HEIC, HEVC, MOV, WebM, OGG without Opus, WAV, a sticker not 512×512, size caps; by stored MIME type for a voice note (`audio/ogg`) or sticker (`image/webp`) sent by Media ID; every carousel card.
+- **Instagram** (`wappa/messaging/instagram/media/rules.py`): by suffix, image png/jpeg/gif (WebP by URL only), audio aac/m4a/wav/mp4, video mp4/webm (an upload: MP4 only), document pdf as a file; by content for uploads, WebP bytes and HEVC video; size caps. An audio or video URL in another format is refused like a file (as on WhatsApp); only a document URL Instagram cannot attach is shared as a link text.
 - Not covered: an extension-less URL or a Media ID for images and video (no fetch); Meta decides those.
 
 ## How to use these facts

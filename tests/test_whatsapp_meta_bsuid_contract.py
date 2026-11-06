@@ -3,10 +3,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from wappa.core.events.event_dispatcher import WappaEventDispatcher
-from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
-    WhatsAppInteractiveHandler,
-)
-from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
+from wappa.messaging.whatsapp.messenger import WhatsAppMessengerAdapter
 from wappa.webhooks.core.webhook_interfaces import (
     CallWebhook,
     EchoOrigin,
@@ -19,6 +16,7 @@ from wappa.webhooks.whatsapp.message_types.contact import WhatsAppContactMessage
 from wappa.webhooks.whatsapp.message_types.interactive import (
     WhatsAppInteractiveMessage,
 )
+from wappa.webhooks.whatsapp.processor import WhatsAppWebhookProcessor
 
 # The routed Inbox the runtime passes to translate().
 INBOX_ID = "routed-inbox"
@@ -137,9 +135,11 @@ async def test_contact_request_send_uses_bsuid_recipient_payload() -> None:
         ],
         "messages": [{"id": "wamid.contact-request-send-001"}],
     }
-    handler = WhatsAppInteractiveHandler(client=client, inbox_id="508386009032748")
+    handler = WhatsAppMessengerAdapter(
+        client=client, media_transport=None, inbox_id="508386009032748"
+    )
 
-    result = await handler.send_contact_request(
+    result = await handler._send_contact_request_to(
         recipient="CO.2186878922080769",
         body="Share your phone number",
     )
@@ -748,7 +748,7 @@ async def test_system_user_id_change_maps_observed_previous_user_id() -> None:
 @pytest.mark.asyncio
 async def test_system_schema_reports_unobserved_fields_as_drift() -> None:
     """Strict mode (conftest): a never-observed ``system`` key is reported as drift."""
-    from wappa.processors.errors import ProcessorError
+    from wappa.core.inbound.errors import ProcessorError
 
     with pytest.raises(ProcessorError, match="surprise_field"):
         await WhatsAppWebhookProcessor().translate(
@@ -859,8 +859,8 @@ async def test_real_contact_name_is_still_preserved() -> None:
 
 async def test_status_with_pricing_subtype_free_tier_is_accepted() -> None:
     """Live 2026-11-05: Meta sent pricing.subtype on a free service message."""
-    from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
     from wappa.webhooks import StatusWebhook
+    from wappa.webhooks.whatsapp.processor import WhatsAppWebhookProcessor
 
     payload = {
         "object": "whatsapp_business_account",

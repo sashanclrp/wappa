@@ -12,8 +12,8 @@ from wappa.domain.inbox import InboxRef
 from wappa.domain.interactive import CardMedia, MessageCard, ReplyButton
 from wappa.domain.media_probe import probe
 from wappa.messaging import DeliveryAddresses, DirectMessage
-from wappa.messaging.whatsapp.media_rules import check_bytes, check_name
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+from wappa.messaging.whatsapp.media.rules import check_bytes, check_name
+from wappa.messaging.whatsapp.messenger import (
     WhatsAppMessengerAdapter,
 )
 
@@ -38,10 +38,7 @@ def _wa() -> tuple[WhatsAppMessengerAdapter, _Client]:
     client = _Client()
     messenger = WhatsAppMessengerAdapter(
         client=client,  # type: ignore[arg-type]
-        media_handler=None,  # type: ignore[arg-type]
-        interactive_handler=None,  # type: ignore[arg-type]
-        template_handler=None,  # type: ignore[arg-type]
-        specialized_handler=None,  # type: ignore[arg-type]
+        media_transport=None,  # type: ignore[arg-type]
         inbox_id="pnid",
     )
     return messenger, client
@@ -186,7 +183,7 @@ def test_instagram_takes_webp_by_url_only():
     """Live matrix 2026-11-06: a WebP renders on Instagram by URL, but the
     upload endpoint answers it with HTTP 500; an animated WebP shows only its
     first frame (GIF animates)."""
-    from wappa.messaging.instagram.media import (
+    from wappa.messaging.instagram.media.rules import (
         MEDIA_RULES,
         check_upload_content,
         url_format_accepted,
@@ -208,7 +205,7 @@ def test_instagram_uploads_video_only_as_h264_mp4():
     """Live matrix 2026-11-06: WebM and MOV uploads answer HTTP 500; an HEVC
     MP4 uploads but its send is refused (3/1545003). WebM plays by URL; a MOV
     link shows an empty placeholder, so MOV is refused everywhere."""
-    from wappa.messaging.instagram.media import (
+    from wappa.messaging.instagram.media.rules import (
         check_upload_content,
         url_format_accepted,
         validate_upload,

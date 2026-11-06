@@ -47,6 +47,6 @@ Instagram's code `4` is an app-level budget (about 200 calls per hour per daily 
 A media or behavior rule changes only from recorded evidence:
 
 1. The live result is in the plan (link or upload, format, codec, what rendered).
-2. Encode the rule before I/O in the Platform's rules module (`wappa/messaging/whatsapp/media_rules.py` and `wappa/domain/media_probe.py`, or `wappa/messaging/instagram/media.py`), with an error that names the problem and says to convert first. Never add conversion.
+2. Encode the rule before I/O in the Platform's rules module (`wappa/messaging/whatsapp/media/rules.py` and `wappa/domain/media_probe.py`, or `wappa/messaging/instagram/media/rules.py`), with an error that names the problem and says to convert first. Never add conversion.
 3. Add tests for the refusal and the accepted neighbor (`tests/test_whatsapp_media_rules.py`, `tests/test_instagram_media_emulation.py`, `tests/test_one_method_per_action.py`).
 4. Update the PRD's media-formats reference (`docs/backlog/in_progress/261103-instagram-conversations/references/media-formats.md`), the shipped copy `wappa/cli/skills/wappa-apps/references/media-formats.md` (keep the unified kit valid), `messaging.md` rows, `docs/public-contract.md`, and `CHANGELOG.md` (a new refusal is a break).

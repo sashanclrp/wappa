@@ -7,9 +7,7 @@ from pydantic import SecretStr
 from wappa.domain.inbox import InboxRef
 from wappa.messaging import PlatformUserProfile, ReadOutcome
 from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
-    WhatsAppMessengerAdapter,
-)
+from wappa.messaging.whatsapp.messenger import WhatsAppMessengerAdapter
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
 
@@ -20,10 +18,7 @@ IG_USER = UserBase(platform_user_id="6551596044932863")
 def _whatsapp() -> WhatsAppMessengerAdapter:
     return WhatsAppMessengerAdapter(
         client=None,  # type: ignore[arg-type]
-        media_handler=None,  # type: ignore[arg-type]
-        interactive_handler=None,  # type: ignore[arg-type]
-        template_handler=None,  # type: ignore[arg-type]
-        specialized_handler=None,  # type: ignore[arg-type]
+        media_transport=None,  # type: ignore[arg-type]
         inbox_id="pnid",
     )
 

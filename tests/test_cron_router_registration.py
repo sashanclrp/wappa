@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from wappa.core.auth.middleware import AuthMiddleware
 from wappa.core.auth.strategies.bearer_token import BearerTokenStrategy
 from wappa.core.factory.wappa_builder import WappaBuilder
-from wappa.core.plugins.cron_plugin import CronPlugin
+from wappa.core.plugins.scheduling_plugin import SchedulingPlugin
 
 
 @pytest.mark.parametrize("include_router", [True, False])
@@ -35,7 +35,9 @@ def test_cron_startup_routes_preserve_auth_dependencies_and_openapi(
     get_router = MagicMock(return_value=source)
     monkeypatch.setattr("fastapi_crons.get_cron_router", get_router)
 
-    plugin = CronPlugin(event_handler=MagicMock(), include_router=include_router)
+    plugin = SchedulingPlugin(
+        event_handler=MagicMock(), include_cron_router=include_router
+    ).add_cron("report", "0 9 * * *")
     builder = WappaBuilder().add_plugin(plugin)
     builder.add_middleware(AuthMiddleware, strategy=BearerTokenStrategy(token="secret"))
     app = builder.build()
@@ -59,8 +61,6 @@ def test_cron_startup_routes_preserve_auth_dependencies_and_openapi(
             assert path not in app.openapi()["paths"]
             assert calls == []
             get_router.assert_not_called()
-        assert app.state.cron_plugin is plugin
 
     scheduler.start.assert_awaited_once_with()
     scheduler.stop.assert_awaited_once_with()
-    assert not hasattr(app.state, "cron_plugin")

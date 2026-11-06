@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import pytest
 
-from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.webhooks.whatsapp.message_types.interactive import (
     WhatsAppInteractiveMessage,
 )
+from wappa.webhooks.whatsapp.processor import WhatsAppWebhookProcessor
 
 # The routed Inbox the runtime passes to translate().
 INBOX_ID = "routed-inbox"
@@ -254,7 +254,7 @@ async def test_unmodelled_interactive_type_is_unsupported_not_400(monkeypatch) -
 
 @pytest.mark.asyncio
 async def test_unmodelled_interactive_type_fails_in_strict_mode(monkeypatch) -> None:
-    from wappa.processors.errors import ProcessorError
+    from wappa.core.inbound.errors import ProcessorError
 
     monkeypatch.setenv("WAPPA_STRICT_META_SCHEMA", "1")
     with pytest.raises(ProcessorError, match="InteractiveContent.type=product_reply"):

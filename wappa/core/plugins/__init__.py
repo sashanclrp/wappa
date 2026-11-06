@@ -6,7 +6,7 @@ This module contains all the core plugins that extend Wappa functionality:
 - PostgresDatabasePlugin for SQLModel/SQLAlchemy integration
 - Redis plugin for caching and session management
 - SSEEventsPlugin for native FastAPI SSE event streaming
-- ExpiryPlugin: Redis expiry action listener for time-based automation
+- SchedulingPlugin: Redis expiry and static cron triggers for the scheduled lane
 - Middleware plugins (CORS, Auth, Rate Limiting)
 - Webhook plugins for payment providers and custom endpoints
 """
@@ -20,13 +20,12 @@ from ..auth import (
 )
 from .auth_plugin import AuthPlugin
 from .cors_plugin import CORSPlugin
-from .cron_plugin import CronPlugin
 from .custom_middleware_plugin import CustomMiddlewarePlugin
-from .expiry_plugin import ExpiryPlugin
 from .postgres_database_plugin import PostgresDatabasePlugin
 from .rate_limit_plugin import RateLimitPlugin, RateLimitProfile, rate_limit
 from .redis_plugin import RedisPlugin
 from .redis_pubsub_plugin import RedisPubSubPlugin
+from .scheduling_plugin import SchedulingPlugin
 from .sse_events_plugin import SSEEventsPlugin
 from .wappa_core_plugin import WappaCorePlugin
 from .webhook_plugin import WebhookPlugin
@@ -40,7 +39,7 @@ __all__ = [
     "RedisPlugin",
     "RedisPubSubPlugin",
     "SSEEventsPlugin",
-    "ExpiryPlugin",
+    "SchedulingPlugin",
     # Middleware
     "CORSPlugin",
     "AuthPlugin",
@@ -56,5 +55,4 @@ __all__ = [
     "JWTStrategy",
     # Integrations
     "WebhookPlugin",
-    "CronPlugin",
 ]

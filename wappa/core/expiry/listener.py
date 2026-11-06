@@ -3,8 +3,8 @@ Expiry Listener - Redis KEYSPACE notification listener for expiry events.
 
 Components:
 - RedisConnectionManager: Connection lifecycle
-- ExpiryEventParser: Key parsing (delegates to registry.resolve)
-- ExpiryDispatcher: Handler dispatch
+- parse_expiry_notification: Key parsing
+- ExpiryDispatcher: Adapts notifications to the scheduled-event path
 - ReconnectionStrategy: Backoff logic
 """
 
@@ -12,34 +12,30 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
 
 from .connection import ConnectionConfig, RedisConnectionManager
 from .dispatcher import ExpiryDispatcher
-from .parser import ExpiryEventParser
+from .parser import parse_expiry_notification
 from .reconnection import ReconnectionConfig, ReconnectionStrategy
-from .registry import expiry_registry
-
-if TYPE_CHECKING:
-    from wappa.core.lifecycle import BackgroundWorkTracker
 
 logger = logging.getLogger(__name__)
 
 
 async def run_expiry_listener(
     *,
+    dispatcher: ExpiryDispatcher,
     alias: str = "expiry",
     reconnect_delay: int = 10,
     max_reconnect_attempts: int | None = None,
-    background_work_tracker: BackgroundWorkTracker,
 ) -> None:
     """
     Run long-running expiry listener task.
 
-    Subscribes to Redis KEYSPACE notifications for expired keys
-    and dispatches registered handlers asynchronously.
+    Subscribes to Redis KEYSPACE notifications for expired keys and hands each
+    valid Expiry Key to the dispatcher.
 
     Args:
+        dispatcher: Adapts each notification to the scheduled-event path
         alias: Redis pool alias (default: "expiry")
         reconnect_delay: Seconds to wait before reconnecting on error
         max_reconnect_attempts: Max reconnection attempts (None = infinite)
@@ -49,21 +45,12 @@ async def run_expiry_listener(
         2. Enable keyspace notifications
         3. Subscribe to __keyevent@{db}__:expired channel
         4. Listen for expiry events
-        5. Parse expired keys via registry.resolve()
-        6. Dispatch handlers asynchronously
+        5. Parse expired keys
+        6. Dispatch them asynchronously
         7. Reconnect on connection loss with exponential backoff
-
-    Example:
-        # Start as background task in main.py
-        listener_task = asyncio.create_task(
-            run_expiry_listener(alias="expiry"),
-            name="expiry_listener"
-        )
     """
     # Initialize components with configuration
     connection_manager = RedisConnectionManager(config=ConnectionConfig(alias=alias))
-    parser = ExpiryEventParser(registry=expiry_registry)
-    dispatcher = ExpiryDispatcher(tracker=background_work_tracker)
     reconnection = ReconnectionStrategy(
         config=ReconnectionConfig(
             base_delay=reconnect_delay,
@@ -77,7 +64,6 @@ async def run_expiry_listener(
         try:
             await _run_listener_loop(
                 connection_manager=connection_manager,
-                parser=parser,
                 dispatcher=dispatcher,
             )
             reconnection.reset()
@@ -111,7 +97,6 @@ async def run_expiry_listener(
 async def _run_listener_loop(
     *,
     connection_manager: RedisConnectionManager,
-    parser: ExpiryEventParser,
     dispatcher: ExpiryDispatcher,
 ) -> None:
     """
@@ -121,17 +106,16 @@ async def _run_listener_loop(
 
     Args:
         connection_manager: Manages Redis connection lifecycle
-        parser: Parses expiry events from messages
-        dispatcher: Dispatches handlers for events
+        dispatcher: Dispatches each parsed notification
     """
     connection = await connection_manager.connect()
 
     logger.info("Expiry listener active and listening")
 
     async for msg in connection.pubsub.listen():
-        event = parser.parse(msg)
-        if event:
-            dispatcher.dispatch(event)
+        notification = parse_expiry_notification(msg)
+        if notification is not None:
+            dispatcher.dispatch(notification)
 
 
 __all__ = [

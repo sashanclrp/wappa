@@ -14,9 +14,7 @@ from wappa.domain.inbox import InboxRef
 from wappa.domain.results import OperationOutcome
 from wappa.messaging import DeliveryAddresses, DirectMessage
 from wappa.messaging.meta.graph import GraphResponse, MetaGraphError
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
-    WhatsAppMessengerAdapter,
-)
+from wappa.messaging.whatsapp.messenger import WhatsAppMessengerAdapter
 from wappa.schemas.core.recipient import whatsapp_delivery_order
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
@@ -56,10 +54,7 @@ class _Client:
 def _wa(client: _Client) -> WhatsAppMessengerAdapter:
     return WhatsAppMessengerAdapter(
         client=client,  # type: ignore[arg-type]
-        media_handler=None,  # type: ignore[arg-type]
-        interactive_handler=None,  # type: ignore[arg-type]
-        template_handler=None,  # type: ignore[arg-type]
-        specialized_handler=None,  # type: ignore[arg-type]
+        media_transport=None,  # type: ignore[arg-type]
         inbox_id="pnid",
     )
 
@@ -165,7 +160,7 @@ async def test_local_media_is_uploaded_once_across_fallback(tmp_path):
 
     client = _Client(reject={PHONE: 131030})
     wa = _wa(client)
-    wa.media_handler = _Uploads()  # type: ignore[assignment]
+    wa.media_transport = _Uploads()  # type: ignore[assignment]
     image = tmp_path / "a.png"
     image.write_bytes(b"\x89PNG\r\n\x1a\n")
     result = await wa.send_image(image, _both())

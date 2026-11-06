@@ -107,9 +107,7 @@ def test_api_event_dispatcher_binds_user_id_when_distinct() -> None:
 
     import asyncio
 
-    asyncio.get_event_loop().run_until_complete(
-        dispatcher.dispatch(event, _fake_request())
-    )
+    asyncio.run(dispatcher.dispatch(event, _fake_request()))
 
     handler.with_context.assert_called_once()
     call_kwargs = handler.with_context.call_args.kwargs
@@ -130,9 +128,7 @@ def test_api_event_dispatcher_falls_back_to_recipient_when_same() -> None:
 
     import asyncio
 
-    asyncio.get_event_loop().run_until_complete(
-        dispatcher.dispatch(event, _fake_request())
-    )
+    asyncio.run(dispatcher.dispatch(event, _fake_request()))
 
     call_kwargs = handler.with_context.call_args.kwargs
     assert call_kwargs["user_id"] == "+573001234567"

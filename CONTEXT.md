@@ -11,7 +11,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **Inbox Reference** | Wappa's globally unique runtime identity for one Inbox, composed of `(platform, inbox_id)`. Code represents it as `InboxRef`. Components that persist, cache, route, or compare Inboxes across Platforms use this value rather than an unqualified `inbox_id`. |
 | **Platform** | An external messaging platform such as WhatsApp, Telegram, Instagram, or Teams. |
 | `PlatformType` | The Platform vocabulary enum. Values: `whatsapp`, `telegram`, `instagram`, `teams`. A member names a Platform; it does not mean the Platform is installed. |
-| **Platform Registry** | The installed-Platform set: `PLATFORMS` in `wappa/platforms.py`, one `PlatformEntry` (inbound `PlatformWebhooks` adapter, Messenger builder, display name) per installed Platform. WhatsApp and Instagram are installed; Telegram and Teams are reserved vocabulary, and every Wappa surface rejects them instead of treating them as WhatsApp. |
+| **Platform Registry** | The installed-Platform set: `PLATFORMS` in `wappa/platforms/`, one `PlatformEntry` (inbound `PlatformWebhooks` adapter, Messenger builder, display name) per installed Platform. WhatsApp and Instagram are installed; Telegram and Teams are reserved vocabulary, and every Wappa surface rejects them instead of treating them as WhatsApp. |
 | **Platform Account** | Platform-side account metadata that groups one or more Inboxes. For WhatsApp this is the WABA (WhatsApp Business Account); for Instagram it is the professional account itself, with the same native ID as its Inbox. |
 | `platform_account_id` | The identifier of the Platform Account. For WhatsApp, this is the WABA ID (`entry[].id` in Meta's webhook payload). |
 | **Platform Account Reference** | Wappa's globally unique identity for one Platform Account, composed of `(platform, platform_account_id)`. Code represents it as `PlatformAccountRef`. Components that compare, cache, or resolve Platform Accounts across Platforms use this value rather than an unqualified `platform_account_id`. |
@@ -55,7 +55,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | `process_system_webhook(webhook)` | Fires on system events. User-scoped: phone number change, BSUID update, marketing preference change. Account-scoped (Platform Account / WABA, no User): coexistence `account_offboarded` / `account_reconnected`. Input: `SystemWebhook`. |
 | `process_external_event(event)` | Fires when a third-party webhook (MercadoPago, Stripe, CRM) is routed through Wappa. Input: `ExternalEvent`. |
 | `process_api_message(event)` | Fires after a message is sent via Wappa's REST API. Used for tracking, DB writes, analytics. Input: `APIMessageEvent`. |
-| `process_cron_event(event)` | Fires when a scheduled cron triggers. Input: `CronEvent`. |
+| `process_scheduled_event(event)` | Fires when a Scheduled Task runs, on a fresh handler prepared for the event's explicit scope. Input: `ScheduledEvent`. |
 
 | **Schema Drift** | Meta sends a field or webhook `field` that Wappa's models do not describe. Wappa processes the event, answers `200`, and logs `META_SCHEMA_DRIFT` once per field per process without the value. With `WAPPA_STRICT_META_SCHEMA=1` it raises `MetaSchemaDriftError` instead. |
 | **Unmodelled Field** | A property of a Meta payload, or a webhook `change.field`, that Wappa does not model. An unmodelled webhook field the Host did not register becomes `SystemWebhook(UNSUPPORTED_EVENT)`. Wrong types in modelled fields are not drift; they are errors. |
@@ -189,15 +189,15 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 |------|-----------|
 | **Scheduling** | The runtime lane through which Wappa receives triggered work and prepares the scoped Host handler. |
 | **Scheduled Task** | Host-defined work invoked by a timer, scheduler or other scheduled trigger. |
-| **Scheduled Event** | The Wappa event carrying a Scheduled Task's action, subject and source to the Host handler. |
+| **Scheduled Event** | The Wappa event carrying a Scheduled Task's action, subject and source to the Host handler. Its scope is explicit: Inbox and User, Inbox only, or System. |
+| **Expiry Subject Binding** | The Host's mapping from an expired action and identifier to its subject User, or to none for Inbox-only work. It maps identity only. |
 
 ## Expiry
 
 | Term | Definition |
 |------|-----------|
-| **Expiry Action** | A time-triggered handler that fires when a Redis key expires. Registered via decorator. |
+| **Expiry Action** | The action name on an Expiry Key. When the key expires, Wappa delivers it to `process_scheduled_event` as `ScheduledEvent.action`. |
 | **Expiry Key** | Redis key with TTL. Format: `{inbox_namespace}:EXPTRIGGER:{action}:{identifier}`, where the namespace is Wappa-derived from `InboxRef`. Parsed on expiration to recover the qualified Inbox Reference; invalid keys have no fabricated fallback scope. It carries no User dimension — a trigger belongs to an action and an identifier, which may or may not be a `user_id`. |
-| **Cron Scope** | An optional `InboxRef` attached to a scheduled Cron Event. It grants Inbox capabilities only for that concrete Platform-qualified Inbox. A cron without it is database-only; System Scope is not an Inbox. |
 
 ## HTTP Client Lifecycle
 

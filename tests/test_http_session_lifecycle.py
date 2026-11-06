@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
@@ -142,65 +142,6 @@ class TestMessengerFactorySessionGuard:
 
 
 # --- Expiry context helpers ---
-
-
-class TestExpiryMessengerSessionGuard:
-    @pytest.mark.asyncio
-    async def test_no_lifecycle_raises_http_not_available(self):
-        from wappa.core.expiry.context_helpers import (
-            SessionLifecycleNotAvailableError,
-            create_expiry_messenger,
-        )
-
-        mock_app = MagicMock()
-        mock_app.state.session_lifecycle = None
-
-        mock_context = MagicMock()
-        mock_context.get_app.return_value = mock_app
-
-        with (
-            patch(
-                "wappa.core.expiry.context_helpers.get_app_context",
-                return_value=mock_context,
-            ),
-            pytest.raises(
-                SessionLifecycleNotAvailableError,
-                match="SessionLifecycle not available",
-            ),
-        ):
-            await create_expiry_messenger(InboxRef.whatsapp("12345"))
-
-    @pytest.mark.asyncio
-    async def test_draining_lifecycle_raises_messenger_error(self):
-        from wappa.core.expiry.context_helpers import (
-            MessengerCreationError,
-            create_expiry_messenger,
-        )
-        from wappa.core.lifecycle import SessionLifecycle
-
-        client = SessionLifecycle._default_client_factory()
-        lifecycle = SessionLifecycle(client)
-        lifecycle.begin_drain()
-
-        mock_app = MagicMock()
-        mock_app.state.session_lifecycle = lifecycle
-
-        mock_context = MagicMock()
-        mock_context.get_app.return_value = mock_app
-
-        with (
-            patch(
-                "wappa.core.expiry.context_helpers.get_app_context",
-                return_value=mock_context,
-            ),
-            pytest.raises(MessengerCreationError),
-        ):
-            await create_expiry_messenger(InboxRef.whatsapp("12345"))
-
-        await client.aclose()
-
-
-# --- WappaContextFactory ---
 
 
 class TestContextFactorySessionGuard:

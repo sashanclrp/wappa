@@ -18,7 +18,7 @@ from wappa.domain.interfaces.conversation_capabilities import (
     IConversationContentReader,
 )
 from wappa.domain.interfaces.history_reader import IConversationHistoryReader
-from wappa.messaging.instagram.content import InstagramContentReader
+from wappa.messaging.instagram.capabilities.content import InstagramContentReader
 
 
 class InstagramMessenger(PlatformMessenger):

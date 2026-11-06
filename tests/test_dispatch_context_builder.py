@@ -1,4 +1,4 @@
-"""One Dispatch Context builder across webhook, API, cron, and external paths (PRD 5)."""
+"""One Dispatch Context builder across webhook, API, scheduled, and external paths (PRD 5)."""
 
 from __future__ import annotations
 

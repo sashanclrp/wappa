@@ -573,11 +573,10 @@ WAPPA = Path(__file__).resolve().parents[1] / "wappa"
 # adapter folder may name a Platform. Every other path is listed file by file;
 # the CLI scaffolds are Host code and get no exemption.
 _ADAPTER_PATHS = re.compile(
-    r"^(platforms\.py"
+    r"^(platforms/"
     r"|schemas/core/types\.py"
     r"|domain/inbox/credentials\.py"
     r"|(messaging|webhooks)/(whatsapp|instagram)/"
-    r"|processors/(whatsapp|instagram)_processor\.py"
     r"|connections/(whatsapp|instagram|meta_login)\.py"
     r"|api/routes/whatsapp/)"
 )
@@ -625,7 +624,7 @@ _ALLOWED_ADAPTER_IMPORTS: dict[str, str] = {
     "api/dependencies/whatsapp_dependencies.py": (
         "dependencies of the WhatsApp extension router, which only WhatsApp mounts"
     ),
-    "core/events/event_handler.py": (
+    "core/events/event_handler/_state.py": (
         "TYPE_CHECKING-only types of the self.whatsapp / self.instagram Platform "
         "Messenger attributes (ADR-0025 rule 12); the registry builds them"
     ),

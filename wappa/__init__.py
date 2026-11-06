@@ -16,17 +16,17 @@ from .core.config.meta_application import MetaApplicationConfig
 from .core.config.settings import settings
 from .core.context import WappaContext
 from .core.events.event_handler import WappaEventHandler
-from .core.expiry import expiry_registry
 from .core.external_webhooks import (
     DispatchReport,
     ExternalEventRegistry,
     HMACSignatureVerifier,
 )
 from .core.factory import WappaBuilder, WappaPlugin
-from .core.plugins import ExpiryPlugin
+from .core.plugins import SchedulingPlugin
+from .core.scheduling import Scheduling
 from .core.wappa_app import Wappa
-from .domain.events.cron_event import CronEvent
 from .domain.events.external_event import ExternalEvent
+from .domain.events.scheduled_event import ScheduledEvent
 from .domain.inbox import (
     IInboxDirectorySource,
     InboxCredentialService,
@@ -62,11 +62,10 @@ __all__ = [
     "DispatchReport",
     "HMACSignatureVerifier",
     "WappaContext",
-    # Cron Scheduling
-    "CronEvent",
-    # Expiry Actions System
-    "expiry_registry",
-    "ExpiryPlugin",
+    # Scheduled Work
+    "ScheduledEvent",
+    "Scheduling",
+    "SchedulingPlugin",
     # Identity Resolution
     "IIdentityResolver",
     "IExternalWebhookContextResolver",

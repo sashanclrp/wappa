@@ -24,7 +24,7 @@ from wappa.domain.inbox.credentials import CredentialRecord
 from wappa.domain.inbox.identity import InboxRef, PlatformAccountRef
 from wappa.domain.inbox.services import InboxCredentialService
 from wappa.domain.results import OperationOutcome
-from wappa.messaging.instagram.client import describe_error
+from wappa.messaging.instagram.errors import describe_error
 from wappa.messaging.meta.graph import GraphResponse, graph_request
 from wappa.schemas.core.types import PlatformType
 

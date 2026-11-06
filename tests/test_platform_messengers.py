@@ -41,13 +41,11 @@ from wappa.domain.messaging_targets import (
 from wappa.domain.results import MessageResult
 from wappa.domain.user_profile import PlatformUserProfile
 from wappa.messaging.instagram import InstagramMessenger
-from wappa.messaging.instagram.media_library import InstagramMediaLibrary
+from wappa.messaging.instagram.media.library import InstagramMediaLibrary
 from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
 from wappa.messaging.whatsapp import WhatsAppMessenger
-from wappa.messaging.whatsapp.media_library import WhatsAppMediaLibrary
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
-    WhatsAppMessengerAdapter,
-)
+from wappa.messaging.whatsapp.media.library import WhatsAppMediaLibrary
+from wappa.messaging.whatsapp.messenger import WhatsAppMessengerAdapter
 from wappa.platforms import PLATFORMS, platform_messenger
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks import InboundMessageWebhook
@@ -61,10 +59,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def _whatsapp_adapter() -> WhatsAppMessengerAdapter:
     return WhatsAppMessengerAdapter(
         client=None,  # type: ignore[arg-type]
-        media_handler=None,  # type: ignore[arg-type]
-        interactive_handler=None,  # type: ignore[arg-type]
-        template_handler=None,  # type: ignore[arg-type]
-        specialized_handler=None,  # type: ignore[arg-type]
+        media_transport=None,  # type: ignore[arg-type]
         inbox_id=WA_REF.inbox_id,
     )
 
@@ -272,7 +267,7 @@ def test_media_raises_on_a_messenger_without_a_media_library() -> None:
 
 
 def test_the_handler_imports_platform_messengers_for_typing_only() -> None:
-    path = ROOT / "wappa/core/events/event_handler.py"
+    path = ROOT / "wappa/core/events/event_handler/_state.py"
     tree = ast.parse(path.read_text())
     adapter = re.compile(r"^wappa\.messaging\.(whatsapp|instagram)\b")
     typing_only = {

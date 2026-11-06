@@ -5,7 +5,7 @@ Canonical import surface for host applications:
     from wappa.api import convert_body_parameters, raise_for_failed_result
 
 ``TemplateStateService`` is WhatsApp-only and imports from
-``wappa.messaging.whatsapp.services``.
+``wappa.messaging.whatsapp.capabilities.templates``.
 """
 
 from .utils import (

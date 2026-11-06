@@ -1,5 +1,5 @@
 """WhatsApp messenger implementations package."""
 
-from .whatsapp_messenger import WhatsAppMessengerAdapter
+from .adapter import WhatsAppMessengerAdapter
 
 __all__ = ["WhatsAppMessengerAdapter"]

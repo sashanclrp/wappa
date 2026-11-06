@@ -11,9 +11,7 @@ from wappa.messaging import (
     TemplateTransportRouting,
     TextTemplateTransportRequest,
 )
-from wappa.messaging.whatsapp.handlers.whatsapp_template_handler import (
-    WhatsAppTemplateHandler,
-)
+from wappa.messaging.whatsapp.messenger import WhatsAppMessengerAdapter
 from wappa.messaging.whatsapp.models.template_models import WhatsAppTemplateType
 
 
@@ -37,16 +35,18 @@ class _DummyClient:
         }
 
 
-def _build_handler() -> tuple[WhatsAppTemplateHandler, _DummyClient]:
+def _build_handler() -> tuple[WhatsAppMessengerAdapter, _DummyClient]:
     client = _DummyClient()
-    return WhatsAppTemplateHandler(client=client, inbox_id="inbox-1"), client
+    return WhatsAppMessengerAdapter(
+        client=client, media_transport=None, inbox_id="inbox-1"
+    ), client
 
 
 @pytest.mark.asyncio
 async def test_marketing_template_uses_marketing_messages_by_default() -> None:
     handler, client = _build_handler()
 
-    result = await handler.send_text_template(
+    result = await handler._send_text_template_to(
         recipient="573001112233",
         template_name="promo_template",
         template_type=WhatsAppTemplateType.MARKETING,
@@ -61,7 +61,7 @@ async def test_marketing_template_uses_marketing_messages_by_default() -> None:
 async def test_marketing_template_explicit_fallback_uses_messages() -> None:
     handler, client = _build_handler()
 
-    result = await handler.send_text_template(
+    result = await handler._send_text_template_to(
         recipient="573001112233",
         template_name="promo_template",
         template_type=WhatsAppTemplateType.MARKETING,
@@ -94,7 +94,7 @@ async def test_template_payload_uses_exact_recipient_field(
 ) -> None:
     handler, client = _build_handler()
 
-    await handler.send_text_template(
+    await handler._send_text_template_to(
         recipient=recipient,
         template_name="utility_template",
         template_type=WhatsAppTemplateType.UTILITY,
@@ -109,7 +109,7 @@ async def test_template_payload_uses_exact_recipient_field(
 async def test_provider_response_never_triggers_cross_endpoint_retry() -> None:
     handler, client = _build_handler()
 
-    await handler.send_text_template(
+    await handler._send_text_template_to(
         recipient="573001112233",
         template_name="promo_template",
         template_type=WhatsAppTemplateType.MARKETING,

@@ -1,6 +1,6 @@
 ---
 checked_on: 2026-11-06
-checked_against: Wappa 0.34 code (wappa/domain/interfaces/template_messaging.py, wappa/messaging/whatsapp/platform_messenger.py, wappa/schemas/core/recipient.py, wappa/messaging/whatsapp/utils/error_helpers.py, wappa/messaging/outbound_runtime.py) and Meta WhatsApp Cloud API pages (Graph v26.0)
+checked_against: Wappa 0.34 code (wappa/domain/interfaces/template_messaging.py, wappa/messaging/whatsapp/platform_messenger.py, wappa/schemas/core/recipient.py, wappa/messaging/whatsapp/errors.py, wappa/messaging/outbound_runtime.py) and Meta WhatsApp Cloud API pages (Graph v26.0)
 revision: 1
 ---
 

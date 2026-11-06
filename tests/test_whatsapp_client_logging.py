@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from wappa.messaging.meta.graph import MetaGraphError
-from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
+from wappa.messaging.whatsapp.client import WhatsAppClient
 
 TOKEN = "1234567890abcdefghijklmnopqrstuvwxyz"
 

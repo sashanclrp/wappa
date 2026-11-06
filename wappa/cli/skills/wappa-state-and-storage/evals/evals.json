@@ -54,10 +54,10 @@
     {
       "id": "redis-setup-and-timer",
       "prompt": "Turn on Redis for my Wappa app and send a follow-up if the user goes silent for 15 minutes.",
-      "expected_output": "Wappa(cache='redis') with REDIS_URL (no second RedisPlugin); ExpiryPlugin plus a module-level @expiry_registry.on_expire_action handler; arms it with create_expiry_cache().set(action, user_id, 900) and re-arms on each message; parses the InboxRef from the key and uses create_expiry_messenger; mentions keyspace notifications and idempotency across workers; no CronPlugin for a per-User timer.",
+      "expected_output": "Wappa(cache='redis') with REDIS_URL (no second RedisPlugin); SchedulingPlugin(redis_expiry=True) with an expiry_subjects binding that returns the User for this action; arms it with create_expiry_cache().set(action, user_id, 900) and re-arms on each message; sends from process_scheduled_event with the prepared self.messenger, without building a Messenger; mentions keyspace notifications and idempotency across workers; no cron for a per-User timer; routes the wiring to wappa-scheduled-tasks.",
       "assertions": [
         "uses Wappa(cache=\"redis\") without adding RedisPlugin again",
-        "uses ExpiryPlugin with @expiry_registry.on_expire_action",
+        "uses SchedulingPlugin(redis_expiry=True) with process_scheduled_event and an expiry_subjects binding",
         "does not use a cron for a per-User timer"
       ]
     }

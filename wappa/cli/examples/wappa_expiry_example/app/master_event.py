@@ -6,19 +6,53 @@ Handles incoming messages by:
 2. Creating/resetting 15-second expiry triggers
 3. Showing real-time feedback to users
 
-When expiry fires (15s inactivity), the expiry handler echoes all messages back.
+When the trigger expires (15s inactivity), Wappa routes it to
+process_scheduled_event on a fresh handler with its Messenger and cache already
+built, which echoes all messages back.
 """
 
 from datetime import UTC, datetime
 
-from wappa import WappaEventHandler
+from wappa import ScheduledEvent, WappaEventHandler
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.webhooks import InboundMessageWebhook
 
+from .utils import format_inactivity_message_history
+
+USER_INACTIVITY = "user_inactivity"
+
 
 class MasterEventHandler(WappaEventHandler):
     """Event handler for message accumulation with expiry tracking."""
+
+    async def process_scheduled_event(self, event: ScheduledEvent) -> None:
+        """Route expired triggers. Failures are logged by Wappa's expiry lane."""
+        if event.action == USER_INACTIVITY:
+            await self._echo_accumulated_messages()
+
+    async def _echo_accumulated_messages(self) -> None:
+        """Echo everything the User sent, then clean up."""
+        assert self.cache_factory is not None
+        assert self.messenger is not None
+        assert self.inbox_ref is not None
+        assert self.user_id is not None
+
+        user_cache = self.cache_factory.create_user_cache()
+        user_data = await user_cache.get()
+        messages = (user_data or {}).get("messages", [])
+        if not messages:
+            self.logger.info(f"No messages to echo for user {self.user_id}")
+            return
+
+        await self.messenger.send_text(
+            target=DirectMessage(
+                inbox_ref=self.inbox_ref,
+                addresses=DeliveryAddresses.of(self.user_id),
+            ),
+            text=format_inactivity_message_history(messages, len(messages)),
+        )
+        await user_cache.delete()
 
     async def process_message(self, webhook: InboundMessageWebhook) -> None:
         """
@@ -74,11 +108,11 @@ class MasterEventHandler(WappaEventHandler):
             expiry_cache = self.cache_factory.create_expiry_cache()
 
             # Delete old trigger if exists (to reset timer)
-            await expiry_cache.delete("user_inactivity", user_id)
+            await expiry_cache.delete(USER_INACTIVITY, user_id)
 
             # Create new 15-second trigger
             success = await expiry_cache.set(
-                action="user_inactivity",
+                action=USER_INACTIVITY,
                 identifier=user_id,
                 ttl_seconds=15,
             )

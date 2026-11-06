@@ -10,7 +10,6 @@ from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.conversation_capabilities import ReadOutcome
 from wappa.messaging import IConversationHistoryReader
 from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
-from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.schemas.core.types import MessageType, PlatformType
 from wappa.webhooks import (
     EntryPointKind,
@@ -20,6 +19,7 @@ from wappa.webhooks import (
     MessageUpdateKind,
     MessageUpdateWebhook,
 )
+from wappa.webhooks.whatsapp.processor import WhatsAppWebhookProcessor
 
 # The routed Inbox the runtime passes to translate().
 INBOX_ID = "routed-inbox"

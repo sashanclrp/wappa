@@ -29,17 +29,18 @@ This context does NOT own:
 wappa/persistence/
 ├── cache_factory.py              # Selects backend (redis / memory / json)
 ├── scope.py                      # SYSTEM_SCOPE, context_id rules, create_system_table_cache()
-├── inbox_directory.py            # InboxDirectoryTable — Wappa-owned rows on a System-Scope table
+├── inbox_directory/              # InboxDirectoryTable (table.py) and InboxDirectoryRow (row.py): Wappa-owned rows on a System-Scope table
 ├── cache_space.py                # Optional host-owned namespace segment for table names
-├── row_conditions.py             # Canonical encoding for conditional row comparisons
-├── typed_table_cache.py          # TypedTableCache[T] convenience wrapper over ITableCache
-├── versioned_table_cache.py      # VersionedTableCache[T] — bump-to-invalidate read models
+├── tables/                       # Table Cache helpers
+│   ├── typed.py                  # TypedTableCache[T] convenience wrapper over ITableCache
+│   ├── versioned.py              # VersionedTableCache[T]: bump-to-invalidate read models
+│   └── row_conditions.py         # Canonical encoding for conditional row comparisons
 │
 ├── redis/                        # Primary production backend
 │   ├── redis_client.py           # 5-pool, fork-safe async Redis client
 │   ├── redis_manager.py          # App-lifecycle wrapper: init / health / cleanup
 │   ├── redis_cache_factory.py    # ICacheFactory → instantiates cache handlers
-│   ├── ops.py                    # Thin async wrappers over raw redis-py commands
+│   ├── ops/                      # Thin async wrappers over redis-py: strings, hashes, keys, composite
 │   ├── pubsub_subscriber.py      # PubSub subscription utilities (subscribe / build_channel)
 │   │
 │   └── redis_handler/

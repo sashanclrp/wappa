@@ -16,8 +16,8 @@ from wappa.connections import IInboxConnector
 from wappa.connections.instagram import InstagramConnector
 from wappa.connections.whatsapp import WhatsAppConnector
 from wappa.core.inbound.platform_webhooks import PlatformWebhooks
-from wappa.core.messaging.pipeline import (
-    MessengerPipeline,
+from wappa.core.messaging.pipeline import MessengerPipeline
+from wappa.core.messaging.pipeline.capabilities import (
     _PipelineTemplates,
     _PipelineUserDataRequests,
 )
@@ -32,15 +32,13 @@ from wappa.domain.interfaces.user_data_requests import (
 )
 from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.domain.results import MessageResult
-from wappa.messaging.instagram.media_library import InstagramMediaLibrary
+from wappa.messaging.instagram.media.library import InstagramMediaLibrary
 from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
-from wappa.messaging.whatsapp.media_library import WhatsAppMediaLibrary
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
-    WhatsAppMessengerAdapter,
-)
-from wappa.processors.instagram_processor import InstagramWebhookProcessor
-from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
+from wappa.messaging.whatsapp.media.library import WhatsAppMediaLibrary
+from wappa.messaging.whatsapp.messenger import WhatsAppMessengerAdapter
 from wappa.schemas.core.types import PlatformType
+from wappa.webhooks.instagram.processor import InstagramWebhookProcessor
+from wappa.webhooks.whatsapp.processor import WhatsAppWebhookProcessor
 
 # Every cross-Platform action on the contract: the abstract ones every
 # Platform implements plus the optional operations whose base default raises
@@ -71,10 +69,7 @@ def _shape(func: Any) -> list[tuple[str, Any, Any]]:
 def _whatsapp() -> WhatsAppMessengerAdapter:
     return WhatsAppMessengerAdapter(
         client=None,  # type: ignore[arg-type]
-        media_handler=None,  # type: ignore[arg-type]
-        interactive_handler=None,  # type: ignore[arg-type]
-        template_handler=None,  # type: ignore[arg-type]
-        specialized_handler=None,  # type: ignore[arg-type]
+        media_transport=None,  # type: ignore[arg-type]
         inbox_id="pnid",
     )
 

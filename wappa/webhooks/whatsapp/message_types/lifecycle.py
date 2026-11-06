@@ -11,7 +11,7 @@ from wappa.schemas.core.types import (
     UniversalMessageData,
 )
 from wappa.webhooks.core.base_message import BaseMessage, BaseMessageContext
-from wappa.webhooks.whatsapp.base_models import WhatsAppMessageIdentity
+from wappa.webhooks.whatsapp.models.base import WhatsAppMessageIdentity
 
 
 class RevokeContent(BaseMessageContext):

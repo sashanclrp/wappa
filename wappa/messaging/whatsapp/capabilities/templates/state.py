@@ -1,0 +1,193 @@
+"""
+Template state management service (WhatsApp extension).
+
+Handles creation and management of template-triggered user state.
+Follows SRP: only responsible for template state operations.
+
+When a template is sent with state_config, this service creates a cache entry
+that can be retrieved when the user responds, enabling routing of responses
+to specific handlers based on the original template context.
+
+Identity scoping is delegated to an injected ``IIdentityResolver`` (default
+passthrough), so host applications can map transport recipients to canonical
+user ids without modifying framework code. Callers that already hold a
+canonical id may pass ``user_id=`` explicitly to bypass the resolver.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+
+from wappa.core.logging.logger import get_logger
+from wappa.domain.interfaces.cache_factory import ICacheFactory
+from wappa.domain.interfaces.identity_resolver import (
+    IIdentityResolver,
+    PassthroughIdentityResolver,
+)
+from wappa.messaging.whatsapp.models.template_models import TemplateStateConfig
+
+
+class TemplateStateService:
+    """
+    Service for managing template-triggered user state.
+
+    Creates cache entries when templates with state_config are sent,
+    enabling routing of subsequent user responses.
+
+    Follows:
+    - SRP: Only handles template state operations
+    - DIP: Depends on ICacheFactory and IIdentityResolver abstractions
+    - OCP: Identity resolution is extended via injection, not modification
+    """
+
+    STATE_KEY_PREFIX = "template-"
+
+    def __init__(
+        self,
+        cache_factory: ICacheFactory,
+        identity_resolver: IIdentityResolver | None = None,
+    ):
+        """
+        Initialize with cache factory and optional identity resolver.
+
+        Args:
+            cache_factory: Factory for creating cache instances with context
+            identity_resolver: Maps transport recipients to canonical user
+                ids for cache scoping. Defaults to passthrough (recipient
+                used as-is), which preserves pre-existing behavior.
+        """
+        self.cache_factory = cache_factory
+        self.identity_resolver = identity_resolver or PassthroughIdentityResolver()
+        self.logger = get_logger(__name__)
+
+    def _make_state_key(self, state_value: str) -> str:
+        """Create cache key from state value."""
+        return f"{self.STATE_KEY_PREFIX}{state_value}"
+
+    async def set_template_state(
+        self,
+        recipient: str,
+        state_config: TemplateStateConfig,
+        message_id: str | None,
+        template_name: str,
+        user_id: str | None = None,
+    ) -> bool:
+        """
+        Create user cache state for template response routing.
+
+        The cache entry is keyed under ``user_id`` when provided, otherwise
+        under whatever the configured ``IIdentityResolver`` returns for
+        ``recipient``. The default resolver returns ``recipient`` unchanged,
+        so naive callers see today's behavior.
+
+        Args:
+            recipient: Transport identifier of the recipient (e.g. phone).
+            state_config: State configuration from template request.
+            message_id: WhatsApp message ID from send response.
+            template_name: Name of the template sent.
+            user_id: Optional explicit canonical user id. When provided,
+                bypasses the identity resolver entirely. Use this when the
+                caller has already resolved identity upstream.
+
+        Returns:
+            True if state was created successfully, False otherwise.
+        """
+        try:
+            cache_user_id = user_id or await self.identity_resolver.resolve(
+                recipient,
+                inbox_id=self.cache_factory.inbox_id,
+            )
+
+            state_key = self._make_state_key(state_config.state_value)
+            state_data = {
+                "template_state": state_config.state_value,
+                "template_name": template_name,
+                "message_id": message_id,
+                "recipient": recipient,
+                "user_id": cache_user_id,
+                "created_at": datetime.now(UTC).isoformat(),
+                **(state_config.initial_context or {}),
+            }
+
+            state_cache = self.cache_factory.create_state_cache(user_id=cache_user_id)
+            success = await state_cache.upsert(
+                state_key,
+                state_data,
+                ttl=state_config.ttl_seconds,
+            )
+
+            if success:
+                self.logger.info(
+                    f"Template state created: {state_key} for user_id={cache_user_id} "
+                    f"(recipient={recipient}), TTL: {state_config.ttl_seconds}s"
+                )
+            else:
+                self.logger.warning(f"Failed to create template state: {state_key}")
+
+            return success
+
+        except Exception as e:
+            self.logger.error(f"Failed to set template state: {e}", exc_info=True)
+            return False
+
+    async def get_template_state(self, state_value: str) -> dict[str, Any] | None:
+        """
+        Retrieve template state by state_value.
+
+        Args:
+            state_value: The state identifier (without prefix)
+
+        Returns:
+            State data if found, None otherwise
+        """
+        try:
+            state_cache = self.cache_factory.create_state_cache()
+            return await state_cache.get(handler_name=self._make_state_key(state_value))
+        except Exception as e:
+            self.logger.error(f"Failed to get template state: {e}", exc_info=True)
+            return None
+
+    async def delete_template_state(self, state_value: str) -> bool:
+        """
+        Delete template state by state_value.
+
+        Args:
+            state_value: The state identifier (without prefix)
+
+        Returns:
+            True if deleted, False otherwise
+        """
+        try:
+            state_key = self._make_state_key(state_value)
+            state_cache = self.cache_factory.create_state_cache()
+            deleted = await state_cache.delete(handler_name=state_key)
+
+            if deleted > 0:
+                self.logger.info(f"Template state deleted: {state_key}")
+                return True
+            return False
+        except Exception as e:
+            self.logger.error(f"Failed to delete template state: {e}", exc_info=True)
+            return False
+
+    async def template_state_exists(self, state_value: str) -> bool:
+        """
+        Check if template state exists.
+
+        Args:
+            state_value: The state identifier (without prefix)
+
+        Returns:
+            True if exists, False otherwise
+        """
+        try:
+            state_cache = self.cache_factory.create_state_cache()
+            return await state_cache.exists(
+                handler_name=self._make_state_key(state_value)
+            )
+        except Exception as e:
+            self.logger.error(
+                f"Failed to check template state existence: {e}", exc_info=True
+            )
+            return False

@@ -17,8 +17,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-from collections.abc import AsyncIterator, Callable, Coroutine
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
@@ -192,5 +192,19 @@ async def sse_event_scope(
     token = _sse_event_context.set(ctx)
     try:
         yield ctx
+    finally:
+        _sse_event_context.reset(token)
+
+
+@contextmanager
+def sse_identity_cleared() -> Iterator[None]:
+    """Run work with no SSE identity, restoring the caller's scope on exit.
+
+    System-scoped scheduled work has no Inbox or User; without this it would
+    inherit and publish under whatever identity the caller's context carried.
+    """
+    token = _sse_event_context.set(None)
+    try:
+        yield
     finally:
         _sse_event_context.reset(token)

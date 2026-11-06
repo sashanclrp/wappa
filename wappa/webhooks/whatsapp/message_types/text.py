@@ -11,16 +11,16 @@ from typing import Any, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from wappa.schemas.core.types import (
-    ConversationType,
-    PlatformType,
     UniversalMessageData,
 )
 from wappa.webhooks.core.base_message import BaseMessageContext, BaseTextMessage
-from wappa.webhooks.whatsapp.base_models import (
+from wappa.webhooks.whatsapp.models.base import (
     AdReferral,
     MessageContext,
-    WhatsAppMessageIdentity,
 )
+
+from ._base import WhatsAppMessageBase
+from .context import WhatsAppMessageContext
 
 
 class TextContent(BaseModel):
@@ -43,74 +43,7 @@ class TextContent(BaseModel):
         return v.strip()
 
 
-class WhatsAppMessageContext(BaseMessageContext):
-    """
-    WhatsApp-specific message context adapter for universal interface.
-
-    Adapts WhatsApp MessageContext to the universal context interface.
-    """
-
-    def __init__(self, whatsapp_context: MessageContext | None):
-        super().__init__()
-        self._context = whatsapp_context
-
-    @property
-    def original_message_id(self) -> str | None:
-        """Get the ID of the original message being replied to or forwarded."""
-        return self._context.id if self._context else None
-
-    @property
-    def original_sender_id(self) -> str | None:
-        """Get the sender ID of the original message."""
-        if not self._context:
-            return None
-        return self._context.from_bsuid or self._context.from_
-
-    @property
-    def is_reply(self) -> bool:
-        """Check if this represents a reply context."""
-        if not self._context:
-            return False
-        return (
-            self._context.id is not None
-            and not self._context.forwarded
-            and not self._context.frequently_forwarded
-            and self._context.referred_product is None
-        )
-
-    @property
-    def is_forward(self) -> bool:
-        """Check if this represents a forward context."""
-        if not self._context:
-            return False
-        return bool(self._context.forwarded or self._context.frequently_forwarded)
-
-    def to_universal_dict(self) -> dict[str, Any]:
-        """Convert to platform-agnostic dictionary representation."""
-        if not self._context:
-            return {"platform": PlatformType.WHATSAPP.value, "has_context": False}
-
-        return {
-            "platform": PlatformType.WHATSAPP.value,
-            "has_context": True,
-            "original_message_id": self.original_message_id,
-            "original_sender_id": self.original_sender_id,
-            "is_reply": self.is_reply,
-            "is_forward": self.is_forward,
-            "whatsapp_data": {
-                "original_sender_phone": self._context.from_,
-                "original_sender_bsuid": self._context.from_bsuid,
-                "original_sender_parent_bsuid": self._context.from_parent_bsuid,
-                "forwarded": self._context.forwarded,
-                "frequently_forwarded": self._context.frequently_forwarded,
-                "referred_product": self._context.referred_product.model_dump()
-                if self._context.referred_product
-                else None,
-            },
-        }
-
-
-class WhatsAppTextMessage(WhatsAppMessageIdentity, BaseTextMessage):
+class WhatsAppTextMessage(WhatsAppMessageBase, BaseTextMessage):
     """
     WhatsApp text message model.
 
@@ -131,20 +64,6 @@ class WhatsAppTextMessage(WhatsAppMessageIdentity, BaseTextMessage):
     )
 
     # Standard message fields
-    from_: str = Field(
-        default="",
-        alias="from",
-        description="WhatsApp user phone number (may be empty for username-only users)",
-    )
-    from_bsuid: str | None = Field(
-        None,
-        alias="from_user_id",
-        description="Business Scoped User ID (BSUID) - stable identifier from webhook",
-    )
-    id: str = Field(..., description="Unique WhatsApp message ID")
-    timestamp_str: str = Field(
-        ..., alias="timestamp", description="Unix timestamp when the message was sent"
-    )
     type: Literal["text"] = Field(
         ..., description="Message type, always 'text' for text messages"
     )
@@ -161,11 +80,6 @@ class WhatsAppTextMessage(WhatsAppMessageIdentity, BaseTextMessage):
     )
 
     @property
-    def has_bsuid(self) -> bool:
-        """Check if this message has a BSUID set."""
-        return bool(self.from_bsuid and self.from_bsuid.strip())
-
-    @property
     def has_phone_number(self) -> bool:
         """Check if this message has a phone number (from_) set."""
         return bool(self.from_ and self.from_.strip())
@@ -179,29 +93,6 @@ class WhatsAppTextMessage(WhatsAppMessageIdentity, BaseTextMessage):
         messaged them recently or isn't in their contacts.
         """
         return self.has_bsuid and not self.has_phone_number
-
-    @field_validator("id")
-    @classmethod
-    def validate_message_id(cls, v: str) -> str:
-        """Validate WhatsApp message ID format."""
-        if not v or len(v) < 10:
-            raise ValueError("WhatsApp message ID must be at least 10 characters")
-        # WhatsApp message IDs typically start with 'wamid.'
-        if not v.startswith("wamid."):
-            raise ValueError("WhatsApp message ID should start with 'wamid.'")
-        return v
-
-    @field_validator("timestamp_str")
-    @classmethod
-    def validate_timestamp(cls, v: str) -> str:
-        """Validate Unix timestamp format."""
-        if not v.isdigit():
-            raise ValueError("Timestamp must be numeric")
-        # Validate reasonable timestamp range (after 2020, before 2100)
-        timestamp_int = int(v)
-        if timestamp_int < 1577836800 or timestamp_int > 4102444800:
-            raise ValueError("Timestamp must be a valid Unix timestamp")
-        return v
 
     @model_validator(mode="after")
     def validate_message_consistency(self) -> Self:
@@ -256,24 +147,9 @@ class WhatsAppTextMessage(WhatsAppMessageIdentity, BaseTextMessage):
         return self.referral is not None
 
     @property
-    def sender_phone(self) -> str:
-        """
-        Get the sender's phone number (clean accessor).
-
-        Note: May return empty string for username-only senders.
-        Use effective_sender_id for a guaranteed identifier.
-        """
-        return self.from_
-
-    @property
     def message_body(self) -> str:
         """Get the text message body (clean accessor)."""
         return self.text.body
-
-    @property
-    def unix_timestamp(self) -> int:
-        """Get the timestamp as an integer."""
-        return self.timestamp
 
     def get_reply_context(self) -> tuple[str | None, str | None]:
         """
@@ -337,48 +213,6 @@ class WhatsAppTextMessage(WhatsAppMessageIdentity, BaseTextMessage):
         }
 
     # Implement abstract methods from BaseMessage
-
-    @property
-    def platform(self) -> PlatformType:
-        """Get the platform this message came from."""
-        return PlatformType.WHATSAPP
-
-    @property
-    def message_id(self) -> str:
-        """Get the unique message identifier."""
-        return self.id
-
-    @property
-    def sender_id(self) -> str:
-        """
-        Get the recommended sender identifier for caching, storage, and messaging.
-
-        Returns:
-            BSUID if available and non-empty, otherwise phone number (from_).
-            This is the identifier you should use for:
-            - Redis/cache keys
-            - Database user records
-            - Sending messages back to the user
-        """
-        if self.from_bsuid and self.from_bsuid.strip():
-            return self.from_bsuid.strip()
-        return self.from_
-
-    @property
-    def timestamp(self) -> int:
-        """Get the message timestamp as Unix timestamp."""
-        return int(self.timestamp_str)
-
-    @property
-    def conversation_id(self) -> str:
-        """Get the conversation/chat identifier."""
-        # For WhatsApp, use sender ID as conversation ID for 1-on-1 chats
-        return self.group_id or self.sender_id
-
-    @property
-    def conversation_type(self) -> ConversationType:
-        """Get the type of conversation."""
-        return ConversationType.GROUP if self.group_id else ConversationType.PRIVATE
 
     def has_context(self) -> bool:
         """Check if this message has context (reply, forward, etc.)."""

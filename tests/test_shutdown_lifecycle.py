@@ -85,27 +85,24 @@ class TestShutdownPriorityOrdering:
         assert events == ["cron-stopped", "expiry-stopped", "http-closed"]
 
 
-class TestExpiryShutdownClearsAppContext:
+class TestExpiryListenerShutdown:
     @pytest.mark.asyncio
-    async def test_app_context_cleared(self):
-        """ExpiryPlugin shutdown calls AppContext.clear()."""
-        from wappa.core.expiry.app_context import get_app_context
-        from wappa.core.plugins.expiry_plugin import ExpiryPlugin
+    async def test_listener_is_cancelled_and_removed_from_app_state(self):
+        """SchedulingPlugin shutdown stops the listener and cleans app.state."""
+        from wappa.core.plugins.scheduling_plugin import SchedulingPlugin
 
-        plugin = ExpiryPlugin()
+        plugin = SchedulingPlugin(redis_expiry=True)
+        task = asyncio.create_task(asyncio.sleep(60))
+        plugin._listener_task = task
 
         mock_app = MagicMock(spec=FastAPI)
         mock_app.state = MagicMock()
-        mock_app.state.background_work_tracker = None
+        mock_app.state.expiry_listener_task = task
 
-        ctx = get_app_context()
-        ctx.set_app(mock_app)
-        assert ctx.is_initialized
+        await plugin._stop_expiry_listener(mock_app)
 
-        plugin._listener_task = None
-        await plugin._shutdown_hook(mock_app)
-
-        assert not ctx.is_initialized
+        assert task.cancelled()
+        assert not hasattr(mock_app.state, "expiry_listener_task")
 
 
 class TestDrainCompletesBeforeSessionClose:

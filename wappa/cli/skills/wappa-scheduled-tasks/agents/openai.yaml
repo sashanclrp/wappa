@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wappa Scheduled Tasks"
+  short_description: "Reminders, timers, recurring jobs and heartbeats on one hook"
+  default_prompt: "Use $wappa-scheduled-tasks to run my reminders, timers and recurring jobs through Wappa's scheduled hook."

@@ -17,8 +17,8 @@ import pytest
 from wappa.api.services.handler_state_service import HandlerStateService
 from wappa.domain.events.api_message_event import APIMessageEvent
 from wappa.domain.interfaces.identity_resolver import IIdentityResolver
+from wappa.messaging.whatsapp.capabilities.templates import TemplateStateService
 from wappa.messaging.whatsapp.models.template_models import TemplateStateConfig
-from wappa.messaging.whatsapp.services import TemplateStateService
 
 
 class _FakeStateCache:

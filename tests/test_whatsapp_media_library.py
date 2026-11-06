@@ -12,10 +12,10 @@ from wappa.domain.interfaces.media_library import MediaFamily
 from wappa.domain.models.media_result import MediaDownloadResult, MediaInfoResult
 from wappa.domain.results import OperationOutcome
 from wappa.messaging.meta.graph import GraphResponse, MetaGraphError
-from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
-    WhatsAppMediaHandler,
+from wappa.messaging.whatsapp.media.library import WhatsAppMediaLibrary
+from wappa.messaging.whatsapp.media.transport import (
+    WhatsAppMediaTransport,
 )
-from wappa.messaging.whatsapp.media_library import WhatsAppMediaLibrary
 from wappa.schemas.core.types import PlatformType
 
 
@@ -38,7 +38,7 @@ def _library(body: bytes) -> WhatsAppMediaLibrary:
         yield response
 
     client.stream_get = stream_get
-    handler = WhatsAppMediaHandler(
+    handler = WhatsAppMediaTransport(
         client=client, inbox_id="555", media_download_client=MagicMock()
     )
     handler.get_media_info = AsyncMock(  # type: ignore[method-assign]
@@ -112,7 +112,7 @@ async def test_download_failure_says_whether_a_retry_can_help(
 def _info_failing_library(error: Exception) -> WhatsAppMediaLibrary:
     client = MagicMock()
     client.get_request = AsyncMock(side_effect=error)
-    handler = WhatsAppMediaHandler(
+    handler = WhatsAppMediaTransport(
         client=client, inbox_id="555", media_download_client=MagicMock()
     )
     return WhatsAppMediaLibrary(handler, "555")

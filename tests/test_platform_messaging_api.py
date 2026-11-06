@@ -410,7 +410,7 @@ from wappa.domain.results import (  # noqa: E402
     ControlResult,
     OperationOutcome,
 )
-from wappa.messaging.whatsapp.media_library import WhatsAppMediaLibrary  # noqa: E402
+from wappa.messaging.whatsapp.media.library import WhatsAppMediaLibrary  # noqa: E402
 
 
 class _Controls:

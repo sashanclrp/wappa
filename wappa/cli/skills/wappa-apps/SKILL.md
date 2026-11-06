@@ -32,7 +32,8 @@ Progress:
 | Something fails, or proving it works | `references/testing-and-troubleshooting.md` |
 | Multi-step forms, intakes, Scores | `wappa-conversational-scores` skill |
 | Caches, Redis, TTL, Postgres, where data lives | `wappa-state-and-storage` skill |
-| Many Inboxes, Inbox Directory, plugins, SSE, external webhooks, crons, upgrading Wappa | `wappa-host-integration` skill |
+| Many Inboxes, Inbox Directory, plugins, SSE, external webhooks, upgrading Wappa | `wappa-host-integration` skill |
+| Reminders, timers, recurring jobs, heartbeats, crons | `wappa-scheduled-tasks` skill |
 
 **3. Build.** These rules hold in every branch.
 
@@ -80,7 +81,7 @@ Run it with `wappa dev app/main.py`. `wappa init` scaffolds this shape, and `wap
 | `process_system_webhook` | Number, BSUID and marketing-preference changes, standalone referrals, events Wappa ignores |
 | `process_inbox_connection` | WhatsApp connection changes (Instagram sends none) |
 | `process_error` | Platform error webhooks |
-| `process_api_message` / `process_external_event` / `process_cron_event` | Wappa's runtime lanes: HTTP API sends, External Webhook Sources, crons. Check that an Inbox is bound (`self.messenger` set) before sending; see `wappa-host-integration`. |
+| `process_api_message` / `process_external_event` / `process_scheduled_event` | Wappa's runtime lanes: HTTP API sends, External Webhook Sources, Scheduled Tasks. Check that an Inbox is bound (`self.messenger` set) before sending; see `wappa-host-integration`. |
 
 Past Instagram messages come from `self.instagram.history.read_history(user_id)`.
 

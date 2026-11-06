@@ -14,8 +14,8 @@ from wappa.domain.inbox import InboxRef
 from wappa.domain.results import OperationOutcome, message_outcome
 from wappa.messaging import DeliveryAddresses, DirectMessage
 from wappa.messaging.instagram.client import InstagramClient
-from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+from wappa.messaging.whatsapp.client import WhatsAppClient
+from wappa.messaging.whatsapp.messenger import (
     WhatsAppMessengerAdapter,
 )
 from wappa.resilience.rate_limits import (
@@ -209,10 +209,7 @@ def _wa(responses: list[httpx.Response], calls: list[dict]):
     )
     return WhatsAppMessengerAdapter(
         client=client,
-        media_handler=None,  # type: ignore[arg-type]
-        interactive_handler=None,  # type: ignore[arg-type]
-        template_handler=None,  # type: ignore[arg-type]
-        specialized_handler=None,  # type: ignore[arg-type]
+        media_transport=None,  # type: ignore[arg-type]
         inbox_id="pnid",
     )
 
@@ -320,10 +317,10 @@ async def test_pair_limit_without_recipient_holds_the_inbox(fake_time):
 
 async def test_whatsapp_upload_5xx_is_indeterminate_not_rejected(fake_time, tmp_path):
     from wappa.messaging import MediaFamily
-    from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
-        WhatsAppMediaHandler,
+    from wappa.messaging.whatsapp.media.library import WhatsAppMediaLibrary
+    from wappa.messaging.whatsapp.media.transport import (
+        WhatsAppMediaTransport,
     )
-    from wappa.messaging.whatsapp.media_library import WhatsAppMediaLibrary
 
     client = WhatsAppClient(
         session=httpx.AsyncClient(
@@ -332,7 +329,7 @@ async def test_whatsapp_upload_5xx_is_indeterminate_not_rejected(fake_time, tmp_
         access_token="t",
         phone_number_id="pnid",
     )
-    handler = WhatsAppMediaHandler(
+    handler = WhatsAppMediaTransport(
         client=client,
         inbox_id="pnid",
         media_download_client=None,  # type: ignore[arg-type]

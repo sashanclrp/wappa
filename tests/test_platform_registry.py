@@ -33,7 +33,7 @@ from wappa.webhooks.core.webhook_interfaces.universal_webhooks import (
     InboundMessageWebhook,
     StatusWebhook,
 )
-from wappa.webhooks.instagram.models import InstagramTextMessage
+from wappa.webhooks.instagram.message_types import InstagramTextMessage
 
 INSTALLED = {PlatformType.WHATSAPP, PlatformType.INSTAGRAM}
 

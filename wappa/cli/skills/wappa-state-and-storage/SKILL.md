@@ -13,7 +13,7 @@ Wappa scopes every runtime cache by Inbox (`InboxRef.cache_namespace`, which is 
 | --- | --- | --- |
 | Where a User is in a flow (step, partial answers) | State cache, one key per flow, with a TTL | Transient; a miss means "no active flow" |
 | Per-User facts you reuse often (profile name, username, language) | User cache (`create_user_cache()`), refreshed from `resolve_platform_user_profile` | Fast reads, scoped by Inbox |
-| A timer per User ("remind in 15 minutes") | Expiry cache (`create_expiry_cache().set(action, id, ttl)`) plus an `@expiry_registry.on_expire_action` handler (Redis only) | Fires when the key expires |
+| A timer per User ("remind in 15 minutes") | Expiry cache (`create_expiry_cache().set(action, id, ttl)`) plus the `wappa-scheduled-tasks` skill (Redis only) | Fires when the key expires |
 | Agent memory | AI state cache (`create_ai_state_cache()`) | Scoped per Inbox, User and agent |
 | Shared rows (a slot, a counter, a lock-like record) | Table cache with `create_if_absent` / `replace_if` | Compare-and-set without races |
 | Submitted forms, orders, conversation history, `MessageResult.message_id` and `wappa_parts` IDs kept for status matching | **Database** (`PostgresDatabasePlugin`) or the Host's own store | Durable; never TTL-only |

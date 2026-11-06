@@ -2,18 +2,18 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
-    WhatsAppMediaHandler,
+from wappa.messaging.whatsapp.media.transport import (
+    WhatsAppMediaTransport,
 )
 
 
-def _make_handler() -> WhatsAppMediaHandler:
+def _make_handler() -> WhatsAppMediaTransport:
     client = MagicMock()
     client.url_builder.get_media_url.return_value = (
         "https://graph.facebook.com/v26.0/123/media"
     )
     client.post_request = AsyncMock(return_value={"id": "media_id_abc"})
-    return WhatsAppMediaHandler(
+    return WhatsAppMediaTransport(
         client=client,
         inbox_id="phone_123",
         media_download_client=MagicMock(),

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refactor God Files"
+  short_description: "Split Wappa god files into small DDD-shaped packages"
+  default_prompt: "Use $refactor-backend-god-files to split this Wappa module or package into small cohesive files without changing behaviour."

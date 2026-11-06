@@ -76,7 +76,7 @@ Hooks and middleware use a numeric priority to control execution order:
 | 10 | Core system initialization | WappaCorePlugin (logging, HTTP session) |
 | 20 | Infrastructure services | RedisPlugin |
 | 22 | Event-based infrastructure | RedisPubSubPlugin, SSEEventsPlugin |
-| 25 | Data infrastructure | PostgresDatabasePlugin, ExpiryPlugin |
+| 25 | Data infrastructure | PostgresDatabasePlugin, SchedulingPlugin |
 | 50 | User hooks (default) | Custom startup logic |
 | 70+ | Late initialization | Post-setup tasks |
 
@@ -137,7 +137,7 @@ Full guide: [MessengerMiddleware.md](./MessengerMiddleware.md).
 ### Real-Time Events
 - **SSEEventsPlugin** -- Server-Sent Events streaming for incoming/outgoing messages
 - **RedisPubSubPlugin** -- Redis PubSub notifications for distributed event broadcasting
-- **ExpiryPlugin** -- Redis key expiry listener for time-based automation
+- **SchedulingPlugin** -- Redis expiry listener and static crons on the scheduled lane
 
 ### HTTP Middleware Wrappers
 - **AuthPlugin** -- strategy-based authentication (Bearer, Basic, JWT, custom)
@@ -187,7 +187,7 @@ class RedisPlugin:
         del app.state.redis_manager
 ```
 
-**Used by**: WappaCorePlugin, RedisPlugin, PostgresDatabasePlugin, ExpiryPlugin, SSEEventsPlugin, RedisPubSubPlugin
+**Used by**: WappaCorePlugin, RedisPlugin, PostgresDatabasePlugin, SchedulingPlugin, SSEEventsPlugin, RedisPubSubPlugin
 
 ### Pattern 3: Router + Hooks (routes with lifecycle)
 
@@ -210,7 +210,7 @@ Some plugins depend on others being initialized first. The priority system enfor
 ```
 WappaCorePlugin (10)  -->  RedisPlugin (20)  -->  SSEEventsPlugin (24)
                                               -->  RedisPubSubPlugin (22)
-                                              -->  ExpiryPlugin (25)
+                                              -->  SchedulingPlugin (25)
                                               -->  PostgresDatabasePlugin (25)
 ```
 
@@ -263,7 +263,7 @@ app.add_plugin(MyPlugin(some_config="value"))
 | PostgresDatabasePlugin | `postgres_database_plugin.py` | [PostgresDatabasePlugin.md](./PostgresDatabasePlugin.md) |
 | SSEEventsPlugin | `sse_events_plugin.py` | [SSEEventsPlugin.md](./SSEEventsPlugin.md) |
 | RedisPubSubPlugin | `redis_pubsub_plugin.py` | [RedisPubSubPlugin.md](./RedisPubSubPlugin.md) |
-| ExpiryPlugin | `expiry_plugin.py` | [ExpiryPlugin.md](./ExpiryPlugin.md) |
+| SchedulingPlugin | `scheduling_plugin.py` | [SchedulingPlugin.md](./SchedulingPlugin.md) |
 | AuthPlugin | `auth_plugin.py` | [AuthPlugin.md](./AuthPlugin.md) |
 | CORSPlugin | `cors_plugin.py` | [CORSPlugin.md](./CORSPlugin.md) |
 | RateLimitPlugin | `rate_limit_plugin.py` | [RateLimitPlugin.md](./RateLimitPlugin.md) |

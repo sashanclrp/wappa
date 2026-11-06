@@ -7,8 +7,8 @@ import pytest
 
 from wappa.core.lifecycle.session_lifecycle import SessionLifecycle
 from wappa.domain.interfaces.session_provider import RuntimeDrainingError
-from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
-    WhatsAppMediaHandler,
+from wappa.messaging.whatsapp.media.transport import (
+    WhatsAppMediaTransport,
 )
 
 
@@ -85,7 +85,7 @@ class TestMediaHandlerPooledClient:
         stream_ctx.__aexit__ = AsyncMock(return_value=False)
         pooled.stream = MagicMock(return_value=stream_ctx)
 
-        handler = WhatsAppMediaHandler(
+        handler = WhatsAppMediaTransport(
             client=mock_wa_client,
             inbox_id="phone_123",
             media_download_client=pooled,
@@ -97,7 +97,7 @@ class TestMediaHandlerPooledClient:
         mock_wa_client.post_request = AsyncMock(return_value={"id": "media_id_abc"})
 
         with patch(
-            "wappa.messaging.whatsapp.handlers.whatsapp_media_handler.httpx.AsyncClient"
+            "wappa.messaging.whatsapp.media._base.httpx.AsyncClient"
         ) as mock_cls:
             result = await handler.upload_media_from_url(
                 "https://cdn.example.com/photo.jpg"

@@ -8,6 +8,7 @@ from wappa.api.dependencies.whatsapp_dependencies import (
     get_whatsapp_template_info_service,
 )
 from wappa.messaging.meta.graph import MetaGraphError
+from wappa.messaging.whatsapp.capabilities.templates import WhatsAppTemplateInfoService
 from wappa.messaging.whatsapp.models.template_info_models import (
     TemplateByIdRequest,
     TemplateByNameRequest,
@@ -16,7 +17,6 @@ from wappa.messaging.whatsapp.models.template_info_models import (
     TemplateListRequest,
     TemplateNamespaceResponse,
 )
-from wappa.messaging.whatsapp.services import WhatsAppTemplateInfoService
 
 router = APIRouter(
     prefix="/templates",

@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from wappa.domain.inbox.identity import InboxRef
-from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.schemas.core.types import MessageType, PlatformType
 from wappa.webhooks import EchoOrigin, OutboundEchoWebhook
+from wappa.webhooks.whatsapp.processor import WhatsAppWebhookProcessor
 
 PHONE_ID = "1234567890"
 REF = InboxRef(platform=PlatformType.INSTAGRAM, inbox_id="17841400000000000")
@@ -80,7 +80,7 @@ async def test_whatsapp_outbound_only_shape_keeps_native_type_without_raw_dict()
 
 
 async def test_instagram_echo_starts_unknown_until_the_runtime_proves_it():
-    from wappa.processors.instagram_processor import InstagramWebhookProcessor
+    from wappa.webhooks.instagram.processor import InstagramWebhookProcessor
 
     echo = await InstagramWebhookProcessor().translate(
         {

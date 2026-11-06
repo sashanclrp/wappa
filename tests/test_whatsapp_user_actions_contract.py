@@ -9,10 +9,10 @@ penalises the webhook for.
 
 import pytest
 
-from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.schemas.core.types import WebhookType
 from wappa.webhooks.core.webhook_interfaces import SystemEventType, SystemWebhook
-from wappa.webhooks.whatsapp.webhook_container import WhatsAppWebhook
+from wappa.webhooks.whatsapp.models.webhook import WhatsAppWebhook
+from wappa.webhooks.whatsapp.processor import WhatsAppWebhookProcessor
 
 
 def _payload(user_actions: list[dict]) -> dict:

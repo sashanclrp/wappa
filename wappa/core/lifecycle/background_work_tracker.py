@@ -41,6 +41,7 @@ class BackgroundWorkTracker:
         Raises RuntimeError if the runtime is draining.
         """
         if self._draining:
+            coro.close()
             raise RuntimeError(
                 "Wappa runtime is draining — cannot accept new background work. "
                 "This task was submitted after shutdown began."

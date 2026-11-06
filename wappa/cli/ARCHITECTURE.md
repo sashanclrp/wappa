@@ -19,7 +19,10 @@
 
 ```
 wappa/cli/
-  main.py              # All CLI logic: commands, server launch, scaffold, examples menu
+  main.py              # The Typer app and thin commands (dev, prod, init, examples, migrate)
+  scaffold.py          # `wappa init`: templates, shipped skills, safe-file allowlist
+  serve.py             # dev/prod: ASGI server command building and launch
+  examples_catalog.py  # `wappa examples`: the catalog, menu and copy
   templates/           # Static files rendered verbatim by `wappa init`
     __init__.py.template
     main.py.template
@@ -29,7 +32,8 @@ wappa/cli/
   examples/            # Self-contained runnable Host Application projects
     init/                     # Basic Project (Beginner)
     simple_echo_example/      # Simple Echo Bot (Beginner)
-    wappa_expiry_example/     # Expiry Actions Demo (Intermediate)
+    wappa_expiry_example/     # Expiry Triggers Demo (Intermediate)
+    scheduled_tasks_example/  # Scheduled Tasks Demo (Intermediate)
     json_cache_example/       # JSON Cache Demo (Intermediate)
     redis_cache_example/      # Redis Cache Demo (Intermediate)
     openai_transcript/        # OpenAI Transcription (Intermediate)
@@ -38,7 +42,7 @@ wappa/cli/
     wappa_full_example/       # Full-Featured Bot (Advanced)
 ```
 
-All CLI logic lives in `main.py`. There are no sub-modules.
+`main.py` holds only the Typer app and thin commands; each concern has its module beside it.
 
 ## Commands
 
@@ -64,11 +68,11 @@ The scaffolded `app/main.py` imports `Wappa` and calls `app.set_event_handler(Ma
 
 ## Design Patterns
 
-- **Single-file command module**: all four commands, server helpers, and the examples menu live in `main.py`. No internal sub-packages.
+- **Thin command module**: commands live in `main.py`, their work in `scaffold.py`, `serve.py` and `examples_catalog.py`.
 - **Static templates**: scaffolding reads raw text files from `cli/templates/`; no templating engine or variable substitution.
 - **Static examples**: examples are complete directories committed to source. `wappa examples` is a file-copy operation, not code generation.
 - **Subprocess delegation**: `dev` and `prod` spawn the ASGI server as a subprocess via `subprocess.run`, keeping the CLI process thin and server-agnostic.
-- **Safe-file allowlist**: a frozen set (`_SAFE_EXISTING_FILES`) guards non-empty directory detection without blocking valid project roots.
+- **Safe-file allowlist**: a frozen set (`_SAFE_EXISTING_FILES` in `scaffold.py`) guards non-empty directory detection without blocking valid project roots.
 
 ## Explicit targets in generated handlers
 
@@ -76,4 +80,4 @@ Generated scaffolds and bundled consumer examples construct `DirectMessage` with
 
 ## Developer skills (`wappa/cli/skills/`)
 
-The canonical source of Wappa's shipped Host skills: `wappa-apps` (the Platform-neutral core and router, with one reference per Platform and topic), `wappa-conversational-scores`, `wappa-state-and-storage` and `wappa-host-integration`. Maintainer skills (`wappa-develop`, `bump-version`) live in `.agents/skills/` and never ship. Each has `SKILL.md`, directly linked `references/`, `agents/openai.yaml` and `evals/evals.json`. The repo root exposes them through relative symlinks in `.claude/skills/` and `.agents/skills/`. They are wheel package data, and `wappa init` copies them into the generated project's `.claude/skills/<name>` with an `.agents/skills/<name>` symlink, keeping any existing skill folder untouched (`_emit_skills`). `tests/test_shipped_skills.py` checks that every taught `from wappa… import …` and every `self.messenger` / `self.whatsapp` / `self.instagram` method exists, that no code block teaches `recipient=`, that frontmatter names match folders, that every reference is linked and every named sibling skill ships, that the isolation example runs, and that emission never overwrites. Lint with the `skills-engineering` linter (normal, `--professional` and `--lanes`) after each edit.
+The canonical source of Wappa's shipped Host skills: `wappa-apps` (the Platform-neutral core and router, with one reference per Platform and topic), `wappa-conversational-scores`, `wappa-state-and-storage`, `wappa-host-integration` and `wappa-scheduled-tasks`. Maintainer skills (`wappa-develop`, `bump-version`) live in `.agents/skills/` and never ship. Each has `SKILL.md`, directly linked `references/`, `agents/openai.yaml` and `evals/evals.json`. The repo root exposes them through relative symlinks in `.claude/skills/` and `.agents/skills/`. They are wheel package data, and `wappa init` copies them into the generated project's `.claude/skills/<name>` with an `.agents/skills/<name>` symlink, keeping any existing skill folder untouched (`_emit_skills`). `tests/test_shipped_skills.py` checks that every taught `from wappa… import …` and every `self.messenger` / `self.whatsapp` / `self.instagram` method exists, that no code block teaches `recipient=`, that frontmatter names match folders, that every reference is linked and every named sibling skill ships, that the isolation example runs, and that emission never overwrites. Lint with the `skills-engineering` linter (normal, `--professional` and `--lanes`) after each edit.

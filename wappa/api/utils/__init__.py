@@ -8,6 +8,8 @@ Provides common functionality for route handlers including:
 - Event dispatch decorators
 """
 
+from wappa.core.logging.context import require_inbox_context
+
 from .error_helpers import (
     direct_target,
     map_error_to_status,
@@ -16,7 +18,6 @@ from .error_helpers import (
     raise_if_rate_limited,
 )
 from .event_decorators import dispatch_message_event, fire_api_event
-from .inbox_helpers import require_inbox_context
 from .response_helpers import (
     convert_body_parameters,
     convert_buttons_to_dict,

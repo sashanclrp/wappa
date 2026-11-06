@@ -12,6 +12,7 @@ from wappa.core.dispatch.context_builder import (
     RuntimeCapabilities,
 )
 from wappa.core.events import WappaEventDispatcher
+from wappa.core.inbound.errors import ProcessorError
 from wappa.core.logging.context import (
     bind_inbox_context,
     bind_user_context,
@@ -25,7 +26,6 @@ from wappa.domain.inbox.errors import InboxDirectoryError
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.sent_message_registry import ISentMessageRegistry
 from wappa.persistence.cache_factory import create_cache_factory
-from wappa.processors.errors import ProcessorError
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.webhook_interfaces import (
     CallWebhook,

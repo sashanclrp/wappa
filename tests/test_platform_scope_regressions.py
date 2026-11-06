@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from wappa.core.expiry.context_helpers import parse_inbox_ref_from_expired_key
+from wappa.core.expiry import parse_expiry_notification
 from wappa.domain.inbox.identity import InboxRef
 from wappa.persistence.redis.pubsub_subscriber import build_channel, build_pattern
 from wappa.schemas.core.types import PlatformType
@@ -17,10 +17,13 @@ WA = InboxRef.whatsapp("1014417365082534")
 
 @pytest.mark.parametrize("inbox", [IG, WA])
 def test_expiry_keys_parse_back_to_their_own_platform(inbox: InboxRef) -> None:
-    """Expiry helpers take an InboxRef; the key carries a qualified namespace."""
+    """The key carries a qualified namespace, on every Platform."""
     key = f"{inbox.cache_namespace}:EXPTRIGGER:reminder:USER1"
 
-    assert parse_inbox_ref_from_expired_key(key) == inbox
+    notification = parse_expiry_notification({"type": "message", "data": key})
+
+    assert notification is not None
+    assert notification.inbox_ref == inbox
 
 
 def test_pubsub_channels_take_the_platform_from_an_inbox_ref() -> None:

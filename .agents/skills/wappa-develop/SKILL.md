@@ -5,7 +5,7 @@ description: Guides changes to the Wappa library itself — a Messenger method, 
 
 # Developing Wappa
 
-Wappa is a Platform-facing runtime: it owns intake, sends, dispatch, cache scoping and its public contract; the Host owns every business concept. Every change keeps four promises: **WhatsApp first** (neutral contracts mirror WhatsApp; other Platforms emulate, ADR-0028), **no Platform branch in shared code** (only adapter folders and `wappa/platforms.py`), **clean cut** (no aliases or shims; every break listed in `CHANGELOG.md`), and **no media conversion** (Wappa enforces format rules before I/O; the Host converts).
+Wappa is a Platform-facing runtime: it owns intake, sends, dispatch, cache scoping and its public contract; the Host owns every business concept. Every change keeps four promises: **WhatsApp first** (neutral contracts mirror WhatsApp; other Platforms emulate, ADR-0028), **no Platform branch in shared code** (only adapter folders and `wappa/platforms/`), **clean cut** (no aliases or shims; every break listed in `CHANGELOG.md`), and **no media conversion** (Wappa enforces format rules before I/O; the Host converts).
 
 ## Workflow
 
@@ -31,6 +31,7 @@ Progress:
 | A message family or event lane | `wappa/webhooks/ARCHITECTURE.md` → "Adding a message family or event lane" |
 | An HTTP route | `wappa/api/ARCHITECTURE.md` → "Adding a route" |
 | A new Platform | `references/add-a-platform.md` |
+| A new module or package, or where code goes | `references/scaffolding.md`; split an oversized file with the `refactor-backend-god-files` skill |
 | A media or format rule, a live gate, a Meta behaviour question, debugging the dev server, Meta or Redis | `references/live-verification.md` |
 | A shipped Host skill, or any change a Host would code against | `references/shipped-skills.md` |
 
@@ -46,4 +47,5 @@ Progress:
 - Never start a server on the user's port (8000) or send a live message to a real account yourself; ask the user to run the send and read the result.
 - Agent instructions live only in `AGENTS.md`; no `CLAUDE.md`.
 - Shared modules never import a Platform adapter or branch on `PlatformType`; `tests/test_third_platform_contract.py` has a guard test for it.
+- Every Platform keeps the one scaffold and no module passes 450 lines; `tests/test_platform_scaffold.py` fails otherwise, and there is no exception list.
 - Never weaken a WhatsApp seam to fit another Platform; emulate, and raise `UnsupportedOperationError` only when emulation is impossible.

@@ -5,8 +5,11 @@ from datetime import UTC, datetime
 
 from pydantic import Field
 
-from ....domain.interfaces.cache_interfaces import IExpiryCache
-from ..ops import delete, exists, get_ttl, setex
+from ....domain.interfaces.cache_interfaces import (
+    ExpiryKeyConflictError,
+    IExpiryCache,
+)
+from ..ops import delete, exists, get_ttl, rename_if_absent, setex
 from ..redis_client import PoolAlias
 from .utils.inbox_cache import InboxCache
 from .utils.serde import dumps
@@ -210,3 +213,40 @@ class RedisExpiry(InboxCache, IExpiryCache):
         """
         key = self._key(action, identifier)
         return await get_ttl(key, alias=self.redis_alias)
+
+    async def rebind(
+        self, action: str, old_identifier: str, new_identifier: str
+    ) -> bool:
+        """
+        Move a pending trigger to a new identifier, keeping its remaining TTL.
+
+        For Host identity changes: the Host supplies the authoritative old and
+        new identifiers and calls this once per action it arms. The trigger fires
+        on time, under the new identifier. Atomic (RENAMENX).
+
+        Args:
+            action: Action name
+            old_identifier: Identifier the trigger is armed under
+            new_identifier: Identifier it should fire under
+
+        Returns:
+            True if a trigger now sits under ``new_identifier``, False if no
+            trigger was armed under ``old_identifier``
+
+        Raises:
+            ExpiryKeyConflictError: A trigger already exists under
+                ``new_identifier``. Both keys are left unchanged; the Host decides
+                which one to keep.
+        """
+        old_key = self._key(action, old_identifier)
+        new_key = self._key(action, new_identifier)
+        if old_key == new_key:
+            return await exists(old_key, alias=self.redis_alias) > 0
+
+        renamed = await rename_if_absent(old_key, new_key, alias=self.redis_alias)
+        if renamed is False:
+            raise ExpiryKeyConflictError(
+                f"Expiry trigger already exists for action '{action}' under "
+                f"identifier '{new_identifier}'"
+            )
+        return renamed is True

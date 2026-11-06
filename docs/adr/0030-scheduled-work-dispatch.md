@@ -1,6 +1,6 @@
 # Scheduled work uses Wappa context; Hosts own scheduler engines
 
-Accepted design, 2026-11-06. The user approved the final responsibility table in the [grilling session](../sasha/grilling-sessions/261106-scheduling-domain.md#q26-final-question-wappa-versus-host-responsibilities). This is planned work, not a claim that the interfaces have shipped; the [pending PRD](../backlog/pending/261106-high-scheduled-task-dispatch.md) owns implementation and exit criteria.
+Accepted 2026-11-06, implemented in Wappa. The user approved the final responsibility table in the [grilling session](../sasha/grilling-sessions/261106-scheduling-domain.md#q26-final-question-wappa-versus-host-responsibilities). The [PRD](../backlog/in_progress/261106-high-scheduled-task-dispatch.md) records the exit criteria.
 
 ## Context
 
@@ -19,3 +19,11 @@ The public contract changes cleanly: scheduled-event names replace cron-specific
 ## Consequences
 
 All five task behaviors can reuse one ready-context handler without introducing five scheduler implementations. Wappa does not promise stronger Redis notification delivery or remove Host-owned Agency/send fences. Native timer data and identity remain explicit; arbitrary message identifiers never imply a User. There are no new deployed services, SQL objects, HTTP management routes or execution-history stores in this deliverable.
+
+## Implementation choices
+
+- `SchedulingPlugin` replaces `CronPlugin` and `ExpiryPlugin`, because both only ran trigger sources for the one lane. A Host scheduler needs no plugin.
+- An expired key's identifier is never read as a User. Without an `ExpirySubjectBinding`, expiry is Inbox-only work, and SSE identity no longer classifies the identifier by shape (ADR-0022): a Host refines it with `update_identity`.
+- Awaited dispatch runs as tracked work, so shutdown drains it and a draining runtime refuses it with `RuntimeError`. Resolver failures propagate instead of falling back to the armed identifier; a Host that prefers that fallback applies it inside its resolver.
+- `self.scope(...)` clones the handler prototype, not the current clone, so Host state set for one subject cannot reach another. It is available on handlers bound by `DispatchContextBuilder`: scheduled and Platform webhook dispatch.
+- `IExpiryCache.rebind` uses RENAMENX: atomic, TTL preserved, and a destination conflict raises `ExpiryKeyConflictError` with both keys unchanged.

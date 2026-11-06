@@ -62,8 +62,8 @@ class WappaContextFactory:
     """
     Factory for creating WappaContext instances from app.state.
 
-    Delegates to the shared ``DispatchContextBuilder`` so cron jobs and
-    External Webhook Sources bind the same capabilities as webhook intake.
+    Delegates to the shared ``DispatchContextBuilder`` so External Webhook
+    Sources bind the same capabilities as webhook intake.
     Stored on app.state.wappa_context_factory during startup.
     """
 
@@ -89,7 +89,7 @@ class WappaContextFactory:
 
         Raises:
             InboxDirectoryError: the Inbox Directory could not answer for this
-                Inbox. Cron and External Webhook Source callers see the typed
+                Inbox. External Webhook Source callers see the typed
                 category instead of a silently context-less handler.
             ValueError: User or Messenger capabilities were requested without an
                 Inbox identifier.

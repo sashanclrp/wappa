@@ -13,7 +13,7 @@ Usage:
 
 # Main webhook container
 # Base models and metadata
-from .base_models import (
+from .models.base import (
     ContactProfile,
     Conversation,
     ErrorData,
@@ -25,8 +25,8 @@ from .base_models import (
 )
 
 # Status models
-from .status_models import MessageStatus, WhatsAppMessageStatus
-from .webhook_container import WhatsAppWebhook
+from .models.status import MessageStatus, WhatsAppMessageStatus
+from .models.webhook import WhatsAppWebhook
 
 __all__ = [
     # Main webhook

@@ -23,7 +23,7 @@ app.add_plugin(AuthPlugin(BearerTokenStrategy(os.environ["API_TOKEN"])))
 app.add_plugin(CORSPlugin(allow_origins=["https://app.example.com"], allow_methods=["GET", "POST"]))
 ```
 
-Every plugin import is `from wappa.core.plugins import ...` (`ExpiryPlugin` is also exported from `wappa`). `Wappa` methods chain: `add_plugin`, `add_router(router, public=False)`, `add_middleware(cls, priority=50)`, `add_startup_hook(fn, priority=50)`, `add_shutdown_hook`, `register_webhook_field(field_name, parser, handler, platform=PlatformType...)`, `set_identity_resolver`, `configure(**overrides)`. Embedded Hosts that need full control compose a `WappaBuilder` instead. A bare `WappaBuilder()` has no core plugin and no Meta webhook router, so prefer `Wappa(...)` unless you mean it. A plugin is any object with a synchronous `configure(builder)` (`WappaPlugin`); its async work goes in startup and shutdown hooks it registers.
+Every plugin import is `from wappa.core.plugins import ...` (`SchedulingPlugin` is also exported from `wappa`). `Wappa` methods chain: `add_plugin`, `add_router(router, public=False)`, `add_middleware(cls, priority=50)`, `add_startup_hook(fn, priority=50)`, `add_shutdown_hook`, `register_webhook_field(field_name, parser, handler, platform=PlatformType...)`, `set_identity_resolver`, `configure(**overrides)`. Embedded Hosts that need full control compose a `WappaBuilder` instead. A bare `WappaBuilder()` has no core plugin and no Meta webhook router, so prefer `Wappa(...)` unless you mean it. A plugin is any object with a synchronous `configure(builder)` (`WappaPlugin`); its async work goes in startup and shutdown hooks it registers.
 
 ## Startup order
 

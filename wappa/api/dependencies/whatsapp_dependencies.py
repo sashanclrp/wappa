@@ -21,14 +21,14 @@ from wappa.api.dependencies.inbox_context import (
     route_platform,
 )
 from wappa.core.logging.logger import get_logger
-from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
-from wappa.messaging.whatsapp.payload_builders import (
-    WhatsAppMediaPayloadBuilder,
-    WhatsAppMessagePayloadBuilder,
-)
-from wappa.messaging.whatsapp.services import (
+from wappa.messaging.whatsapp.capabilities.templates import (
     TemplateStateService,
     WhatsAppTemplateInfoService,
+)
+from wappa.messaging.whatsapp.client import WhatsAppClient
+from wappa.messaging.whatsapp.payloads import (
+    WhatsAppMediaPayloadBuilder,
+    WhatsAppMessagePayloadBuilder,
 )
 from wappa.schemas.core.types import PlatformType
 

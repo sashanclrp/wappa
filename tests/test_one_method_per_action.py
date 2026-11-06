@@ -27,9 +27,7 @@ from wappa.messaging import (
     UrlButton,
 )
 from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
-    WhatsAppMessengerAdapter,
-)
+from wappa.messaging.whatsapp.messenger import WhatsAppMessengerAdapter
 from wappa.schemas.core.types import PlatformType
 
 WA_DM = DirectMessage(
@@ -66,10 +64,7 @@ def _wa(media: object = None) -> tuple[WhatsAppMessengerAdapter, _Client]:
     client = _Client()
     messenger = WhatsAppMessengerAdapter(
         client=client,  # type: ignore[arg-type]
-        media_handler=media,  # type: ignore[arg-type]
-        interactive_handler=None,  # type: ignore[arg-type]
-        template_handler=None,  # type: ignore[arg-type]
-        specialized_handler=None,  # type: ignore[arg-type]
+        media_transport=media,  # type: ignore[arg-type]
         inbox_id="pnid",
     )
     return messenger, client
@@ -359,7 +354,7 @@ async def test_whatsapp_voice_and_sticker_by_media_id_check_the_mime_type():
     with pytest.raises(ValueError, match="audio/mpeg"):
         await wa.send_audio("1234567890", WA_DM, is_voice=True)
     assert (await wa.send_audio("1234567890", WA_DM)).success  # plain audio: no lookup
-    assert wa.media_handler.asked == ["1234567890"]
+    assert wa.media_transport.asked == ["1234567890"]
 
     for mime, ok in (("audio/ogg; codecs=opus", True), (None, True)):
         wa, client = _wa(_Media(mime))

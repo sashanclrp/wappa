@@ -15,10 +15,10 @@ from wappa.domain.inbox.routing import InboxRoutingMode
 from wappa.schemas.core.types import PlatformType
 
 from ..config.settings import settings
+from ..logging.devserver import release_dev_pidfile
 from ..logging.logger import (
     ContextLogger,
     get_app_logger,
-    release_dev_pidfile,
     setup_app_logging,
 )
 from ..types import CacheType

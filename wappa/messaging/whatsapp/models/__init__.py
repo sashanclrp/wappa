@@ -15,7 +15,6 @@ from .template_models import (
     TemplateParameter,
     TemplateParameterType,
     TemplateStateConfig,
-    WhatsAppTemplateMediaType,
     WhatsAppTemplateType,
 )
 
@@ -28,6 +27,5 @@ __all__ = [
     "TemplateParameter",
     "TemplateParameterType",
     "TemplateStateConfig",
-    "WhatsAppTemplateMediaType",
     "WhatsAppTemplateType",
 ]

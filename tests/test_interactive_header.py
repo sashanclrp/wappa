@@ -25,13 +25,10 @@ from wappa.domain.interactive import (
 )
 from wappa.messaging import CommentRef, DeliveryAddresses, DirectMessage, PrivateReply
 from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
-from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
-    WhatsAppInteractiveHandler,
-)
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+from wappa.messaging.whatsapp.messenger import (
     WhatsAppMessengerAdapter,
 )
-from wappa.messaging.whatsapp.payload_builders import WhatsAppMediaPayloadBuilder
+from wappa.messaging.whatsapp.payloads.media import WhatsAppMediaPayloadBuilder
 from wappa.schemas.core.types import PlatformType
 
 PHONE = "573001112233"
@@ -60,10 +57,7 @@ def _wa() -> tuple[WhatsAppMessengerAdapter, _Client]:
     client = _Client()
     messenger = WhatsAppMessengerAdapter(
         client=client,  # type: ignore[arg-type]
-        media_handler=None,  # type: ignore[arg-type]
-        interactive_handler=WhatsAppInteractiveHandler(client, "pnid"),  # type: ignore[arg-type]
-        template_handler=None,  # type: ignore[arg-type]
-        specialized_handler=None,  # type: ignore[arg-type]
+        media_transport=None,  # type: ignore[arg-type]
         inbox_id="pnid",
     )
     return messenger, client

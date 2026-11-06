@@ -19,7 +19,6 @@ from .contact import (
     WhatsAppContactMessage,
 )
 from .document import DocumentContent, WhatsAppDocumentMessage
-from .errors import WhatsAppWebhookError, create_webhook_error_from_raw
 from .image import ImageContent, WhatsAppImageMessage
 from .interactive import (
     ButtonReply,
@@ -57,9 +56,6 @@ __all__ = [
     # Document message schemas
     "DocumentContent",
     "WhatsAppDocumentMessage",
-    # Error schemas (webhook-level)
-    "WhatsAppWebhookError",
-    "create_webhook_error_from_raw",
     # Image message schemas
     "ImageContent",
     "WhatsAppImageMessage",

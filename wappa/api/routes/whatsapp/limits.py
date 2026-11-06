@@ -14,7 +14,7 @@ from wappa.api.dependencies.whatsapp_dependencies import (
     get_whatsapp_media_payloads,
     get_whatsapp_message_payloads,
 )
-from wappa.messaging.whatsapp.payload_builders import (
+from wappa.messaging.whatsapp.payloads import (
     WhatsAppMediaPayloadBuilder,
     WhatsAppMessagePayloadBuilder,
 )

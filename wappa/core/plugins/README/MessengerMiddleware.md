@@ -14,7 +14,7 @@ builder.add_messenger_middleware(middleware, priority=50)
 
 That's the extension point. Plugins use it. Downstream apps use it. The `WebhookController` stays agnostic of which concerns are active.
 
-Source: `wappa/core/messaging/pipeline.py`
+Source: `wappa/core/messaging/pipeline/`
 
 ## Why it exists (what it replaced)
 

@@ -1,4 +1,4 @@
-"""One Dispatch Context builder shared by webhook, API, cron, and external paths."""
+"""One Dispatch Context builder shared by webhook, API, scheduled, and external paths."""
 
 from .context_builder import (
     DispatchContextBuilder,

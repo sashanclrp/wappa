@@ -4,9 +4,9 @@ import logging
 
 import pytest
 
-from wappa.processors.errors import ProcessorError
-from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
-from wappa.webhooks.whatsapp.status_models import WhatsAppMessageStatus
+from wappa.core.inbound.errors import ProcessorError
+from wappa.webhooks.whatsapp.models.status import WhatsAppMessageStatus
+from wappa.webhooks.whatsapp.processor import WhatsAppWebhookProcessor
 
 # The routed Inbox the runtime passes to translate().
 INBOX_ID = "routed-inbox"

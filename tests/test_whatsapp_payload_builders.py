@@ -1,4 +1,4 @@
-from wappa.messaging.whatsapp.payload_builders import (
+from wappa.messaging.whatsapp.payloads import (
     WhatsAppMediaPayloadBuilder,
     WhatsAppMessagePayloadBuilder,
 )

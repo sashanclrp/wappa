@@ -17,12 +17,12 @@ def live_session():
     client = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(5.0))
     yield client
     if not client.is_closed:
-        asyncio.get_event_loop().run_until_complete(client.aclose())
+        asyncio.run(client.aclose())
 
 
 @pytest.fixture
 def closed_session(live_session):
-    asyncio.get_event_loop().run_until_complete(live_session.aclose())
+    asyncio.run(live_session.aclose())
     return live_session
 
 

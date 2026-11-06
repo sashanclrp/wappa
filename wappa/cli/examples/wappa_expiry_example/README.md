@@ -1,16 +1,16 @@
 # Wappa Expiry Example
 
-**Inactivity Detection with Message Accumulation using ExpiryActions**
+**Inactivity Detection with Message Accumulation using Redis expiry triggers**
 
-This example demonstrates the ExpiryActions system by implementing an inactivity detector that accumulates messages and echoes them back after 15 seconds of silence.
+This example demonstrates Redis expiry triggers on the scheduled lane by implementing an inactivity detector that accumulates messages and echoes them back after 15 seconds of silence.
 
 ## 🎯 What This Example Shows
 
-- **ExpiryActions Pattern**: Using Redis KEYSPACE notifications for time-based automation (from wpDemoHotels)
+- **Expiry triggers**: Redis KEYSPACE notifications routed to `process_scheduled_event`, with the Messenger and caches already built
 - **Timer Reset Logic**: Creating/deleting expiry triggers to reset inactivity timers
 - **Message Accumulation**: Storing multiple messages in UserCache during a conversation
 - **Batch Processing**: Processing accumulated data when expiry fires
-- **Clean Architecture**: Separation between event handling and expiry handling
+- **Subject binding**: The Host states which expired actions are keyed by a User
 
 ## 🔄 How It Works
 
@@ -28,7 +28,7 @@ This example demonstrates the ExpiryActions system by implementing an inactivity
 
 3. **User stops sending messages**
    - After 15 seconds of inactivity, expiry trigger fires
-   - Expiry handler reads all accumulated messages
+   - `process_scheduled_event` reads all accumulated messages
    - All messages echoed back with timestamps
    - UserCache cleaned up automatically
 
@@ -63,13 +63,13 @@ This example demonstrates the ExpiryActions system by implementing an inactivity
 ┌──────────────────────────────┐
 │  ExpiryListener (background) │
 │  - Detects expired key       │
-│  - Parses user_id            │
-│  - Dispatches handler        │
+│  - Parses Inbox and action   │
+│  - Asks expiry_subject: User │
 └──────┬───────────────────────┘
        │
        v
 ┌──────────────────────────────┐
-│  handle_user_inactivity()    │
+│  process_scheduled_event()   │
 │  - Read messages from cache  │
 │  - Format with timestamps    │
 │  - Echo back to user         │
@@ -84,9 +84,9 @@ wappa_expiry_example/
 ├── README.md                 # This file
 └── app/
     ├── __init__.py
-    ├── main.py              # Wappa app with ExpiryPlugin
-    ├── master_event.py      # Message accumulation logic
-    └── expiry_handlers.py   # Expiry action handler (@expiry_registry)
+    ├── main.py              # Wappa app with SchedulingPlugin and subject binding
+    ├── master_event.py      # Message accumulation and process_scheduled_event
+    └── utils.py             # Message history formatting
 ```
 
 ## 🚀 Running the Example
@@ -165,7 +165,7 @@ success = await expiry_cache.set(
 
 ### Customize Message Format
 
-Modify the echo format in `expiry_handlers.py`:
+Modify the echo format in `utils.py`:
 
 ```python
 # Customize the echo message template
@@ -176,15 +176,13 @@ for idx, msg in enumerate(messages, 1):
 
 ## 💡 Key Concepts Demonstrated
 
-### 1. Expiry Handler Registration
+### 1. The Scheduled Hook
 
 ```python
-from wappa import expiry_registry
-
-@expiry_registry.on_expire_action("user_inactivity")
-async def handle_user_inactivity(identifier: str, full_key: str) -> None:
-    # This fires when the trigger expires
-    pass
+async def process_scheduled_event(self, event: ScheduledEvent) -> None:
+    # Fires when the trigger expires, with self.messenger and self.cache_factory ready
+    if event.action == "user_inactivity":
+        await self._echo_accumulated_messages()
 ```
 
 ### 2. Timer Reset Pattern
@@ -277,15 +275,12 @@ Look for these log messages:
    # Should return: "Ex"
    ```
 
-2. **Check ExpiryPlugin is registered**:
+2. **Check SchedulingPlugin is registered with `redis_expiry=True`**:
    ```python
-   app.use_plugin(ExpiryPlugin())  # ← Must be called
+   app.add_plugin(SchedulingPlugin(redis_expiry=True, expiry_subjects=expiry_subject))
    ```
 
-3. **Check expiry handlers imported**:
-   ```python
-   from . import expiry_handlers  # ← Must import to register decorator
-   ```
+3. **Check `process_scheduled_event` routes the action**: an unmatched action does nothing.
 
 ### Messages not accumulating?
 
@@ -314,9 +309,9 @@ Look for these log messages:
 
 - [Expiry context architecture](https://github.com/sashanclrp/wappa/blob/main/wappa/core/expiry/ARCHITECTURE.md)
 - [Redis KEYSPACE Notifications](https://redis.io/docs/manual/keyspace-notifications/)
-- [ExpiryPlugin reference](https://github.com/sashanclrp/wappa/blob/main/wappa/core/plugins/README/ExpiryPlugin.md)
+- [SchedulingPlugin reference](https://github.com/sashanclrp/wappa/blob/main/wappa/core/plugins/README/SchedulingPlugin.md)
 - [Cache factory pattern](https://github.com/sashanclrp/wappa/blob/main/wappa/persistence/cache_factory.py)
 
 ## 🙏 Credits
 
-This example is based on the ExpiryActions pattern from **wpDemoHotels**, demonstrating how to use Redis expiry events for inactivity detection and batch processing in production WhatsApp bots.
+This example is based on the expiry trigger pattern from **wpDemoHotels**, demonstrating how to use Redis expiry events for inactivity detection and batch processing in production WhatsApp bots.

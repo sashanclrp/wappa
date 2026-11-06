@@ -17,6 +17,7 @@
 | `wappa-conversational-scores` | Scores and guided flows |
 | `wappa-state-and-storage` | Caches, Redis, Postgres, isolation |
 | `wappa-host-integration` | Multi-Inbox, plugins, runtime lanes, upgrades |
+| `wappa-scheduled-tasks` | The scheduled hook, Host schedulers, Redis expiry triggers, static crons, moving off the old names |
 
 Maintainer skills (this one, `bump-version`) live in `.agents/skills/` with `.claude/skills/` symlinks and never ship.
 

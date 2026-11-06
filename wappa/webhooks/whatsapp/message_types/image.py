@@ -10,17 +10,16 @@ from typing import Any, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from wappa.schemas.core.types import (
-    ConversationType,
     MediaType,
-    PlatformType,
     UniversalMessageData,
 )
 from wappa.webhooks.core.base_message import BaseImageMessage, BaseMessageContext
-from wappa.webhooks.whatsapp.base_models import (
+from wappa.webhooks.whatsapp.models.base import (
     AdReferral,
     MessageContext,
-    WhatsAppMessageIdentity,
 )
+
+from ._base import WhatsAppMessageBase
 
 
 class ImageContent(BaseModel):
@@ -80,7 +79,7 @@ class ImageContent(BaseModel):
         return v
 
 
-class WhatsAppImageMessage(WhatsAppMessageIdentity, BaseImageMessage):
+class WhatsAppImageMessage(WhatsAppMessageBase, BaseImageMessage):
     """
     WhatsApp image message model.
 
@@ -95,17 +94,6 @@ class WhatsAppImageMessage(WhatsAppMessageIdentity, BaseImageMessage):
     )
 
     # Standard message fields (BSUID support v24.0+)
-    from_: str = Field(
-        default="",
-        alias="from",
-        description="WhatsApp user phone number (may be empty for username-only users)",
-    )
-    from_bsuid: str | None = Field(
-        None,
-        alias="from_user_id",
-        description="Business Scoped User ID (BSUID) - stable identifier from webhook",
-    )
-    id: str = Field(..., description="Unique WhatsApp message ID")
     timestamp_str: str = Field(
         ..., alias="timestamp", description="Unix timestamp when the image was sent"
     )
@@ -127,49 +115,9 @@ class WhatsAppImageMessage(WhatsAppMessageIdentity, BaseImageMessage):
     )
 
     @property
-    def sender_id(self) -> str:
-        """
-        Get the recommended sender identifier for caching, storage, and messaging.
-
-        Returns:
-            BSUID if available, otherwise phone number (from_).
-        """
-        if self.from_bsuid and self.from_bsuid.strip():
-            return self.from_bsuid.strip()
-        return self.from_
-
-    @property
-    def has_bsuid(self) -> bool:
-        """Check if this message has a BSUID set."""
-        return bool(self.from_bsuid and self.from_bsuid.strip())
-
-    @property
     def has_phone_number(self) -> bool:
         """Check if this message has a phone number (from_) set."""
         return bool(self.from_ and self.from_.strip())
-
-    @field_validator("id")
-    @classmethod
-    def validate_message_id(cls, v: str) -> str:
-        """Validate WhatsApp message ID format."""
-        if not v or len(v) < 10:
-            raise ValueError("WhatsApp message ID must be at least 10 characters")
-        # WhatsApp message IDs typically start with 'wamid.'
-        if not v.startswith("wamid."):
-            raise ValueError("WhatsApp message ID should start with 'wamid.'")
-        return v
-
-    @field_validator("timestamp_str")
-    @classmethod
-    def validate_timestamp(cls, v: str) -> str:
-        """Validate Unix timestamp format."""
-        if not v.isdigit():
-            raise ValueError("Timestamp must be numeric")
-        # Validate reasonable timestamp range (after 2020, before 2100)
-        timestamp_int = int(v)
-        if timestamp_int < 1577836800 or timestamp_int > 4102444800:
-            raise ValueError("Timestamp must be a valid Unix timestamp")
-        return v
 
     @model_validator(mode="after")
     def validate_message_consistency(self) -> Self:
@@ -220,16 +168,6 @@ class WhatsAppImageMessage(WhatsAppMessageIdentity, BaseImageMessage):
     def has_caption(self) -> bool:
         """Check if this image has a caption."""
         return self.image.caption is not None and len(self.image.caption.strip()) > 0
-
-    @property
-    def sender_phone(self) -> str:
-        """Get the sender's phone number (clean accessor)."""
-        return self.from_
-
-    @property
-    def unix_timestamp(self) -> int:
-        """Get the timestamp as an integer."""
-        return self.timestamp
 
     @property
     def media_asset_id(self) -> str:
@@ -317,38 +255,13 @@ class WhatsAppImageMessage(WhatsAppMessageIdentity, BaseImageMessage):
 
     # Implement abstract methods from BaseMessage
 
-    @property
-    def platform(self) -> PlatformType:
-        """Get the platform this message came from."""
-        return PlatformType.WHATSAPP
-
-    @property
-    def message_id(self) -> str:
-        """Get the unique message identifier."""
-        return self.id
-
-    @property
-    def timestamp(self) -> int:
-        """Get the message timestamp as Unix timestamp."""
-        return int(self.timestamp_str)
-
-    @property
-    def conversation_id(self) -> str:
-        """Get the conversation/chat identifier."""
-        return self.group_id or self.sender_id
-
-    @property
-    def conversation_type(self) -> ConversationType:
-        """Get the type of conversation."""
-        return ConversationType.GROUP if self.group_id else ConversationType.PRIVATE
-
     def has_context(self) -> bool:
         """Check if this message has context."""
         return self.context is not None
 
     def get_context(self) -> BaseMessageContext | None:
         """Get message context if available."""
-        from .text import WhatsAppMessageContext
+        from .context import WhatsAppMessageContext
 
         return WhatsAppMessageContext(self.context) if self.context else None
 

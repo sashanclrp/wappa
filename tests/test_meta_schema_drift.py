@@ -5,8 +5,6 @@ import logging
 import pytest
 from pydantic import ValidationError
 
-from wappa.processors.instagram_processor import InstagramWebhookProcessor
-from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.webhooks import (
     InboundMessageWebhook,
     StatusWebhook,
@@ -16,6 +14,8 @@ from wappa.webhooks import (
 from wappa.webhooks.core import schema_drift
 from wappa.webhooks.core.schema_drift import MetaSchemaDriftError
 from wappa.webhooks.core.webhook_interfaces import SystemEventDetail
+from wappa.webhooks.instagram.processor import InstagramWebhookProcessor
+from wappa.webhooks.whatsapp.processor import WhatsAppWebhookProcessor
 
 # The routed Inbox the runtime passes to translate().
 INBOX_ID = "routed-inbox"

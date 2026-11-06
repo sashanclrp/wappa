@@ -6,12 +6,13 @@ from typing import Any, cast
 
 from pydantic import BaseModel
 
+from wappa.persistence.tables.row_conditions import condition_tokens, require_full_row
+
 from ....domain.interfaces.cache_interfaces import (
     ITableCache,
     TableRowTransition,
     TableTransitionResult,
 )
-from ...row_conditions import condition_tokens, require_full_row
 from ...scope import resolve_table_context_id
 from ..ops import eval_script, hget, hincrby_with_expire
 from ..redis_client import PoolAlias

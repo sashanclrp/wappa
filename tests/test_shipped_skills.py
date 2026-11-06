@@ -6,13 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from wappa.cli.main import SKILLS_SOURCE, _emit_skills
+from wappa.cli.scaffold import SKILLS_SOURCE, _emit_skills
 
 SKILLS = (
     "wappa-apps",
     "wappa-conversational-scores",
     "wappa-state-and-storage",
     "wappa-host-integration",
+    "wappa-scheduled-tasks",
 )
 IMPORT = re.compile(r"^\s*from (wappa[\w.]*) import ([\w, ()]+)$", re.MULTILINE)
 
@@ -49,6 +50,12 @@ def test_every_taught_wappa_import_exists(path: Path):
 def test_no_legacy_recipient_keyword_is_taught(path: Path):
     blocks = path.read_text().split("```")[1::2]
     assert all("recipient=" not in block for block in blocks)
+
+
+def test_scheduled_testing_reference_example_runs():
+    source = (SKILLS_SOURCE / "wappa-scheduled-tasks/references/testing.md").read_text()
+    code = source.split("```python", 1)[1].split("```", 1)[0]
+    exec(compile(code, "testing.md", "exec"), {})  # noqa: S102
 
 
 async def test_isolation_reference_example_runs():

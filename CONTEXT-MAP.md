@@ -9,6 +9,7 @@ Wappa is a multi-context library. Each bounded context owns its own language, in
 | **Root (Shared Kernel)** | `/` | [`CONTEXT.md`](./CONTEXT.md) | [`ARCHITECTURE.md`](./ARCHITECTURE.md) | Cross-cutting terms, message flow overview, design patterns; owns the qualified identities `InboxRef` / `PlatformAccountRef`, `InboxRoutingMode`, and the Wappa-owned Inbox Directory |
 | **Webhooks** | `wappa/webhooks/` | [`CONTEXT.md`](./wappa/webhooks/CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/webhooks/ARCHITECTURE.md) | Platform-specific webhook parsing into universal models |
 | **Messaging** | `wappa/messaging/` | [`CONTEXT.md`](./wappa/messaging/CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/messaging/ARCHITECTURE.md) | Platform-specific outbound message construction and delivery |
+| **Platform Registry** | `wappa/platforms/` | root [`CONTEXT.md`](./CONTEXT.md) | [`ARCHITECTURE.md`](./ARCHITECTURE.md) (Package Scaffolding, Multi-Platform Strategy) | The composition root: one wiring module per Platform joining its inbound and outbound adapters. The only shared package that may import a Platform adapter ([ADR-0031](./docs/adr/0031-platform-adapter-scaffold.md)) |
 | **API** | `wappa/api/` | root [`CONTEXT.md`](./CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/api/ARCHITECTURE.md) | The optional messaging HTTP API under `/api/{platform}`, Inbox selection, capability gates and route groups ([ADR-0024](./docs/adr/0024-outbound-http-routes-and-transports.md)) |
 | **Connections** | `wappa/connections/` | root [`CONTEXT.md`](./CONTEXT.md) (Inbox Connector) | [ADR-0026](./docs/adr/0026-inbox-connection.md) | Connecting accounts as Inboxes: `IInboxConnector`, the shared Meta login core and its WhatsApp and Instagram connectors |
 | **Persistence** | `wappa/persistence/` | [`CONTEXT.md`](./wappa/persistence/CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/persistence/ARCHITECTURE.md) | Cache backends scoped by Inbox and user identity; Table Cache alone takes a general `context_id` (System Scope `__system__`, a Host-defined scope, or an Inbox namespace) and hosts the Inbox Directory tables |
@@ -18,9 +19,9 @@ Wappa is a multi-context library. Each bounded context owns its own language, in
 | **Plugins** | `wappa/core/plugins/` | [`CONTEXT.md`](./wappa/core/plugins/CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/core/plugins/ARCHITECTURE.md) | Composable framework extensions (auth, CORS, rate limiting, Redis, DB) |
 | **CLI** | `wappa/cli/` | [`CONTEXT.md`](./wappa/cli/CONTEXT.md) | [`ARCHITECTURE.md`](./wappa/cli/ARCHITECTURE.md) | Developer tooling: scaffolding, dev server, examples |
 
-## Planned scheduled-work lane
+## Scheduled-work lane
 
-The [scheduled-dispatch PRD](docs/backlog/pending/261106-high-scheduled-task-dispatch.md) adds one context-bound handler lane shared by existing Redis expiry and Host-owned scheduler callbacks. Dispatch/context ownership stays in Wappa; scheduler engines and Host business models stay outside it. Redis expiry remains Redis-only keyspace notification infrastructure. This is planned work; the current context inventory and implemented processor table below remain current-code descriptions until the implementation lands.
+Redis expiry, static crons and Host-owned scheduler callbacks share one context-bound handler lane, `process_scheduled_event`, entered through `Scheduling.dispatch` ([ADR-0030](docs/adr/0030-scheduled-work-dispatch.md)). Dispatch and context ownership stay in Wappa; scheduler engines and Host business models stay outside it. Redis expiry remains Redis-only keyspace notification infrastructure.
 
 ## Context Relationships
 
@@ -41,7 +42,7 @@ The [scheduled-dispatch PRD](docs/backlog/pending/261106-high-scheduled-task-dis
 │                    │  process_system_webhook(webhook)◄────── SystemWebhook
 │                    │  process_external_event(event) ◄────── ExternalEvent
 │                    │  process_api_message(event)    ◄────── APIMessageEvent
-│                    │  process_cron_event(event)     ◄────── CronEvent
+│                    │  process_scheduled_event(event)◄────── ScheduledEvent
 │                    │                                     │                │
 │                    │  Injected per-request:              │                │
 │                    │    self.inbox_id                    │                │
@@ -60,7 +61,7 @@ The [scheduled-dispatch PRD](docs/backlog/pending/261106-high-scheduled-task-dis
 │              ▲                        ▲                  ▲                │
 │              │                        │                  │                │
 │   ┌──────────┐            ┌───────────────┐    ┌────────────────┐        │
-│   │ Webhooks │            │  API Routes   │    │  CronPlugin /  │        │
+│   │ Webhooks │            │  API Routes   │    │ Scheduling /   │        │
 │   │ (inbound │            │  (outbound    │    │  ExternalWebhook│        │
 │   │  parsing)│            │   msg events) │    │  Processors    │        │
 │   └──────────┘            └───────────────┘    └────────────────┘        │
@@ -105,7 +106,7 @@ The Host Application implements `WappaEventHandler` and overrides these processo
 | `process_system_webhook()` | Platform webhook | `SystemWebhook` | System events: phone number change, BSUID update, marketing preference |
 | `process_external_event()` | External webhook | `ExternalEvent` | Third-party webhook (MercadoPago, Stripe, CRM, etc.) routed through Wappa |
 | `process_api_message()` | Outbound API | `APIMessageEvent` | A message was sent via Wappa's REST API (tracking, DB writes, analytics) |
-| `process_cron_event()` | CronPlugin | `CronEvent` | A scheduled cron fires (background tasks, reminders, reports) |
+| `process_scheduled_event()` | `Scheduling.dispatch`, Redis expiry, static crons | `ScheduledEvent` | A Scheduled Task fires: timer, reminder, recurring task or heartbeat |
 
 Each dispatch receives a **cloned handler instance** with its Dispatch Context
 already injected (`inbox_id`, `user_id`, `messenger`, `cache_factory`, `db`).

@@ -51,7 +51,7 @@ Only the WhatsApp extension router lives in `wappa/api/routes/whatsapp/`: `limit
 
 - Send request models subclass `DeliveryRequest` (`wappa/schemas/core/recipient.py`, carrying `recipient` plus every known address) and live in the neutral `wappa/schemas/requests/`: `wappa/schemas/requests/basic_models.py`, `wappa/schemas/requests/media_models.py`, `wappa/schemas/requests/interactive_models.py`, `wappa/schemas/requests/specialized_models.py`. They sit in the schemas layer so the routes and `classify_outbound_payload` share them, use the shared limits from `wappa/domain/interactive.py` (`TEXT_MAX`, `CAPTION_MAX` and the structured minimums), and import nothing from an adapter. The WhatsApp extension's own models (Template info, validator results) stay in `wappa/messaging/whatsapp/models/`.
 - Route-local models: `CarouselMessage` in `wappa/api/routes/interactive.py`, `ContactRequest` / `LocationRequest` / `LocationRequestRequest` / `ContactRequestRequest` in `wappa/api/routes/specialized.py`, `CoordinateValidationRequest` in `wappa/api/routes/whatsapp/validators.py`, `CommentReplyRequest` / `PrivateReplyRequest` in `wappa/api/routes/conversations.py`.
-- Template transport requests: `wappa/messaging/template_transport.py`. State handler requests: `wappa/api/models/handler_models.py`.
+- Template transport requests: `wappa/messaging/template_transport/`. State handler requests: `wappa/api/models/handler_models.py`.
 
 ## Tests that pin the API
 

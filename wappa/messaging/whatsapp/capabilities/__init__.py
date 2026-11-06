@@ -1,0 +1,1 @@
+"""WhatsApp-only extension capabilities."""

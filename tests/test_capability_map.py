@@ -19,9 +19,7 @@ from pydantic import SecretStr
 from wappa.domain.inbox import InboxRef
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
-    WhatsAppMessengerAdapter,
-)
+from wappa.messaging.whatsapp.messenger import WhatsAppMessengerAdapter
 from wappa.schemas.core.types import PlatformType
 
 ADR = Path(__file__).resolve().parents[1] / "docs/adr/0025-messenger-contract.md"
@@ -49,10 +47,7 @@ def _adr_capability_map() -> dict[str, set[str]]:
 def _whatsapp() -> IMessenger:
     return WhatsAppMessengerAdapter(
         client=None,  # type: ignore[arg-type]
-        media_handler=None,  # type: ignore[arg-type]
-        interactive_handler=None,  # type: ignore[arg-type]
-        template_handler=None,  # type: ignore[arg-type]
-        specialized_handler=None,  # type: ignore[arg-type]
+        media_transport=None,  # type: ignore[arg-type]
         inbox_id="pnid",
     )
 

@@ -1,11 +1,11 @@
-"""WhatsApp media rules: MIME types and size caps per media type.
+"""WhatsApp media types: MIME types and size caps per media type.
 
 The neutral media send request models live in ``wappa.schemas.requests``.
 """
 
-from enum import Enum
+from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from enum import Enum
 
 
 class MediaType(Enum):
@@ -16,7 +16,7 @@ class MediaType(Enum):
     VIDEO = "video"
 
     @classmethod
-    def get_supported_mime_types(cls, media_type: "MediaType") -> set[str]:
+    def get_supported_mime_types(cls, media_type: MediaType) -> set[str]:
         supported_types = {
             cls.AUDIO: {
                 "audio/aac",
@@ -42,7 +42,7 @@ class MediaType(Enum):
         return supported_types[media_type]
 
     @classmethod
-    def get_max_file_size(cls, media_type: "MediaType") -> int:
+    def get_max_file_size(cls, media_type: MediaType) -> int:
         max_sizes = {
             cls.AUDIO: 16 * 1024 * 1024,  # 16MB
             cls.DOCUMENT: 100 * 1024 * 1024,  # 100MB
@@ -51,21 +51,3 @@ class MediaType(Enum):
             cls.VIDEO: 16 * 1024 * 1024,  # 16MB
         }
         return max_sizes[media_type]
-
-
-class MediaUploadRequest(BaseModel):
-    media_type: str = Field(..., description="MIME type of the media file")
-    filename: str | None = Field(None, description="Original filename of the media")
-
-    @field_validator("media_type")
-    @classmethod
-    def validate_mime_type(cls, v: str) -> str:
-        supported_types: set[str] = set()
-        for media_type in MediaType:
-            supported_types.update(MediaType.get_supported_mime_types(media_type))
-
-        if v not in supported_types:
-            raise ValueError(
-                f"Unsupported MIME type: {v}. Supported types: {sorted(supported_types)}"
-            )
-        return v

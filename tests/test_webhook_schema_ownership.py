@@ -8,9 +8,8 @@ import pytest
 from pydantic import BaseModel
 
 from wappa.core.events.field_registry import FieldHandlerRegistry
+from wappa.core.inbound.errors import ProcessorError
 from wappa.platforms import BUILTIN_FIELDS
-from wappa.processors.errors import ProcessorError
-from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.schemas.core.types import MessageType, PlatformType
 from wappa.webhooks.core.base_message import BaseMessage, BaseMessageContext
 from wappa.webhooks.core.webhook_interfaces import (
@@ -23,6 +22,7 @@ from wappa.webhooks.core.webhook_interfaces import (
     UserBase,
 )
 from wappa.webhooks.whatsapp.message_types.text import WhatsAppTextMessage
+from wappa.webhooks.whatsapp.processor import WhatsAppWebhookProcessor
 
 # The routed Inbox the runtime passes to translate().
 INBOX_ID = "routed-inbox"

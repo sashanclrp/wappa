@@ -13,7 +13,6 @@ from .config.settings import settings
 # Event System
 from .events import (
     DefaultErrorHandler,
-    DefaultHandlerFactory,
     DefaultMessageHandler,
     DefaultStatusHandler,
     ErrorLogStrategy,
@@ -71,7 +70,6 @@ __all__ = [
     "DefaultMessageHandler",
     "DefaultStatusHandler",
     "DefaultErrorHandler",
-    "DefaultHandlerFactory",
     "MessageLogStrategy",
     "StatusLogStrategy",
     "ErrorLogStrategy",

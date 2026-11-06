@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from wappa.domain.interfaces.media_library import MediaFamily
-from wappa.messaging.whatsapp.media_library import WhatsAppMediaLibrary
+from wappa.messaging.whatsapp.media.library import WhatsAppMediaLibrary
 
 
 class _Handler:

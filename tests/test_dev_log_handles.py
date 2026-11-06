@@ -11,17 +11,17 @@ from unittest.mock import patch
 
 import pytest
 
-from wappa.core.logging import logger as wappa_logger
-from wappa.core.logging.logger import (
+from wappa.core.logging import devserver
+from wappa.core.logging.devserver import (
     CURRENT_LOG_NAME,
     DEV_PID_NAME,
-    DailyFileHandler,
     point_current_log,
     release_dev_pidfile,
     remove_dev_pidfile,
-    setup_app_logging,
     write_dev_pidfile,
 )
+from wappa.core.logging.file_handlers import DailyFileHandler
+from wappa.core.logging.logger import setup_app_logging
 
 
 def _record(created: float, msg: str = "line") -> logging.LogRecord:
@@ -84,9 +84,7 @@ def test_pidfile_labels_reloader_parent_and_port(
         "sys.argv", ["uvicorn", "app.main:app.asgi", "--port", "8123", "--reload"]
     )
     registered: list[tuple] = []
-    monkeypatch.setattr(
-        wappa_logger.atexit, "register", lambda *a: registered.append(a)
-    )
+    monkeypatch.setattr(devserver.atexit, "register", lambda *a: registered.append(a))
 
     path = write_dev_pidfile(tmp_path, log_file="/x/wappa_1.log")
 
@@ -104,7 +102,7 @@ def test_hypercorn_bind_port_is_detected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("sys.argv", ["hypercorn", "m:app", "--bind", "[::]:8443"])
-    monkeypatch.setattr(wappa_logger.atexit, "register", lambda *a: None)
+    monkeypatch.setattr(devserver.atexit, "register", lambda *a: None)
 
     data = _pidfile(write_dev_pidfile(tmp_path))
 
@@ -125,7 +123,7 @@ def test_release_removes_the_file_this_process_wrote(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Clean shutdown path: uvicorn re-raises SIGTERM, so atexit is not enough."""
-    monkeypatch.setattr(wappa_logger.atexit, "register", lambda *a: None)
+    monkeypatch.setattr(devserver.atexit, "register", lambda *a: None)
     path = write_dev_pidfile(tmp_path)
 
     assert release_dev_pidfile() is True
@@ -137,17 +135,20 @@ def test_setup_app_logging_in_dev_writes_both_handles(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("sys.argv", ["python", "-m", "app.main"])
-    monkeypatch.setattr(wappa_logger.atexit, "register", lambda *a: None)
+    monkeypatch.setattr(devserver.atexit, "register", lambda *a: None)
     root = logging.getLogger()
     saved = root.handlers[:]
     try:
-        with patch(
-            "wappa.core.logging.logger.settings",
-            log_level="INFO",
-            log_dir=str(tmp_path),
-            is_development=True,
-            logs_rich_format=None,
-            port=8765,
+        with (
+            patch(
+                "wappa.core.logging.logger.settings",
+                log_level="INFO",
+                log_dir=str(tmp_path),
+                is_development=True,
+                logs_rich_format=None,
+                port=8765,
+            ),
+            patch("wappa.core.logging.devserver.settings", port=8765),
         ):
             setup_app_logging()
         logging.getLogger("wappa.test").info("after setup")

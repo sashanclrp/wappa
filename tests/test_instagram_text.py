@@ -32,7 +32,6 @@ from wappa.messaging import (
     UnsupportedOperationError,
 )
 from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
-from wappa.processors.instagram_processor import InstagramWebhookProcessor
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks import (
     EchoOrigin,
@@ -40,6 +39,7 @@ from wappa.webhooks import (
     SystemEventType,
     SystemWebhook,
 )
+from wappa.webhooks.instagram.processor import InstagramWebhookProcessor
 from wappa.webhooks.instagram.routing import route_instagram_payload
 
 # The routed Inbox the runtime passes to translate().

@@ -45,11 +45,10 @@ from wappa.messaging import (
     TargetInboxMismatchError,
     UnsupportedOperationError,
 )
-from wappa.messaging.instagram.media import InstagramAttachmentReader
-from wappa.messaging.instagram.media_library import InstagramMediaLibrary
+from wappa.messaging.instagram.media.library import InstagramMediaLibrary
+from wappa.messaging.instagram.media.transport import InstagramAttachmentReader
 from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
 from wappa.platforms import BUILTIN_FIELDS, build_platforms
-from wappa.processors.instagram_processor import InstagramWebhookProcessor
 from wappa.schemas.core.types import MessageType, PlatformType
 from wappa.webhooks import (
     CustomWebhook,
@@ -65,6 +64,7 @@ from wappa.webhooks import (
     SystemEventType,
     SystemWebhook,
 )
+from wappa.webhooks.instagram.processor import InstagramWebhookProcessor
 from wappa.webhooks.instagram.routing import route_instagram_payload
 
 # The routed Inbox the runtime passes to translate().
@@ -849,16 +849,11 @@ async def test_private_reply_is_platform_neutral_and_rejected_at_send():
             posted.append(payload)
             return {"success": True}
 
-    from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
-        WhatsAppMessengerAdapter,
-    )
+    from wappa.messaging.whatsapp.messenger import WhatsAppMessengerAdapter
 
     wa = WhatsAppMessengerAdapter(
         client=Client(),  # type: ignore[arg-type]
-        media_handler=None,  # type: ignore[arg-type]
-        interactive_handler=None,  # type: ignore[arg-type]
-        template_handler=None,  # type: ignore[arg-type]
-        specialized_handler=None,  # type: ignore[arg-type]
+        media_transport=None,  # type: ignore[arg-type]
         inbox_id="pnid",
     )
     with pytest.raises(UnsupportedOperationError, match="PrivateReply"):
@@ -1126,9 +1121,7 @@ async def test_attachment_reader_is_bounded_and_credential_free():
 
 
 async def test_whatsapp_rejects_private_reply_explicitly():
-    from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
-        WhatsAppMessengerAdapter,
-    )
+    from wappa.messaging.whatsapp.messenger import WhatsAppMessengerAdapter
 
     wa = WhatsAppMessengerAdapter.__new__(WhatsAppMessengerAdapter)
     wa._inbox_id = "555"
@@ -1199,9 +1192,7 @@ async def test_mark_as_read_rejects_a_target_from_another_inbox():
 
 
 async def test_whatsapp_mark_as_read_sends_typing_and_accepts_a_target():
-    from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
-        WhatsAppMessengerAdapter,
-    )
+    from wappa.messaging.whatsapp.messenger import WhatsAppMessengerAdapter
 
     posted: list[dict] = []
 
@@ -1212,10 +1203,7 @@ async def test_whatsapp_mark_as_read_sends_typing_and_accepts_a_target():
 
     wa = WhatsAppMessengerAdapter(
         client=Client(),  # type: ignore[arg-type]
-        media_handler=None,  # type: ignore[arg-type]
-        interactive_handler=None,  # type: ignore[arg-type]
-        template_handler=None,  # type: ignore[arg-type]
-        specialized_handler=None,  # type: ignore[arg-type]
+        media_transport=None,  # type: ignore[arg-type]
         inbox_id="pnid",
     )
     wa_dm = DirectMessage(

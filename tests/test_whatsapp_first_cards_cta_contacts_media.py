@@ -41,13 +41,7 @@ from wappa.messaging import (
     UnsupportedOperationError,
 )
 from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
-from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
-    WhatsAppInteractiveHandler,
-)
-from wappa.messaging.whatsapp.handlers.whatsapp_specialized_handler import (
-    WhatsAppSpecializedHandler,
-)
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+from wappa.messaging.whatsapp.messenger import (
     WhatsAppMessengerAdapter,
 )
 from wappa.schemas.core.types import PlatformType
@@ -77,7 +71,7 @@ class _Client:
 
 
 class _MediaHandler:
-    """The WhatsAppMediaHandler calls WhatsAppMediaLibrary makes."""
+    """The WhatsAppMediaTransport calls WhatsAppMediaLibrary makes."""
 
     def __init__(self) -> None:
         self.calls: list[tuple[Any, ...]] = []
@@ -132,10 +126,7 @@ def _wa(media: object = None) -> tuple[WhatsAppMessengerAdapter, _Client]:
     client = _Client()
     messenger = WhatsAppMessengerAdapter(
         client=client,  # type: ignore[arg-type]
-        media_handler=media,  # type: ignore[arg-type]
-        interactive_handler=WhatsAppInteractiveHandler(client, "pnid"),  # type: ignore[arg-type]
-        template_handler=None,  # type: ignore[arg-type]
-        specialized_handler=WhatsAppSpecializedHandler(client, "pnid"),  # type: ignore[arg-type]
+        media_transport=media,  # type: ignore[arg-type]
         inbox_id="pnid",
     )
     return messenger, client

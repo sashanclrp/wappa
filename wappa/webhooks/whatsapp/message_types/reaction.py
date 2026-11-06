@@ -10,16 +10,16 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from wappa.schemas.core.types import (
-    ConversationType,
     MessageType,
-    PlatformType,
     UniversalMessageData,
 )
 from wappa.webhooks.core.base_message import (
     BaseMessageContext,
     BaseReactionMessage,
 )
-from wappa.webhooks.whatsapp.base_models import MessageContext, WhatsAppMessageIdentity
+from wappa.webhooks.whatsapp.models.base import MessageContext
+
+from ._base import WhatsAppMessageBase
 
 
 class ReactionContent(BaseModel):
@@ -57,7 +57,7 @@ class ReactionContent(BaseModel):
         return v
 
 
-class WhatsAppReactionMessage(WhatsAppMessageIdentity, BaseReactionMessage):
+class WhatsAppReactionMessage(WhatsAppMessageBase, BaseReactionMessage):
     """
     WhatsApp reaction message model.
 
@@ -72,17 +72,6 @@ class WhatsAppReactionMessage(WhatsAppMessageIdentity, BaseReactionMessage):
     )
 
     # Standard message fields (BSUID support v24.0+)
-    from_: str = Field(
-        default="",
-        alias="from",
-        description="WhatsApp user phone number (may be empty for username-only users)",
-    )
-    from_bsuid: str | None = Field(
-        None,
-        alias="from_user_id",
-        description="Business Scoped User ID (BSUID) - stable identifier from webhook",
-    )
-    id: str = Field(..., description="Unique WhatsApp message ID")
     timestamp_str: str = Field(
         ..., alias="timestamp", description="Unix timestamp when the reaction was sent"
     )
@@ -99,46 +88,6 @@ class WhatsAppReactionMessage(WhatsAppMessageIdentity, BaseReactionMessage):
     context: MessageContext | None = Field(
         None, description="Context for reactions (rare)"
     )
-
-    @property
-    def sender_id(self) -> str:
-        """Get the recommended sender identifier (BSUID if available, else phone)."""
-        if self.from_bsuid and self.from_bsuid.strip():
-            return self.from_bsuid.strip()
-        return self.from_
-
-    @property
-    def has_bsuid(self) -> bool:
-        """Check if this message has a BSUID set."""
-        return bool(self.from_bsuid and self.from_bsuid.strip())
-
-    @field_validator("id")
-    @classmethod
-    def validate_message_id(cls, v: str) -> str:
-        """Validate WhatsApp message ID format."""
-        if not v or len(v) < 10:
-            raise ValueError("WhatsApp message ID must be at least 10 characters")
-        # WhatsApp message IDs typically start with 'wamid.'
-        if not v.startswith("wamid."):
-            raise ValueError("WhatsApp message ID should start with 'wamid.'")
-        return v
-
-    @field_validator("timestamp_str")
-    @classmethod
-    def validate_timestamp(cls, v: str) -> str:
-        """Validate Unix timestamp format."""
-        if not v.isdigit():
-            raise ValueError("Timestamp must be numeric")
-        # Validate reasonable timestamp range (after 2020, before 2100)
-        timestamp_int = int(v)
-        if timestamp_int < 1577836800 or timestamp_int > 4102444800:
-            raise ValueError("Timestamp must be a valid Unix timestamp")
-        return v
-
-    @property
-    def sender_phone(self) -> str:
-        """Get the sender's phone number (clean accessor)."""
-        return self.from_
 
     @property
     def target_message_id(self) -> str:
@@ -163,11 +112,6 @@ class WhatsAppReactionMessage(WhatsAppMessageIdentity, BaseReactionMessage):
     def is_removing_reaction(self) -> bool:
         """Check if this is removing a reaction (no emoji)."""
         return self.reaction.emoji is None
-
-    @property
-    def unix_timestamp(self) -> int:
-        """Get the timestamp as an integer."""
-        return self.timestamp
 
     def get_emoji_display(self) -> str:
         """
@@ -202,34 +146,14 @@ class WhatsAppReactionMessage(WhatsAppMessageIdentity, BaseReactionMessage):
     # Implement abstract methods from BaseMessage
 
     @property
-    def platform(self) -> PlatformType:
-        return PlatformType.WHATSAPP
-
-    @property
     def message_type(self) -> MessageType:
         return MessageType.REACTION
-
-    @property
-    def message_id(self) -> str:
-        return self.id
-
-    @property
-    def timestamp(self) -> int:
-        return int(self.timestamp_str)
-
-    @property
-    def conversation_id(self) -> str:
-        return self.group_id or self.sender_id
-
-    @property
-    def conversation_type(self) -> ConversationType:
-        return ConversationType.GROUP if self.group_id else ConversationType.PRIVATE
 
     def has_context(self) -> bool:
         return self.context is not None
 
     def get_context(self) -> BaseMessageContext | None:
-        from .text import WhatsAppMessageContext
+        from .context import WhatsAppMessageContext
 
         return WhatsAppMessageContext(self.context) if self.context else None
 

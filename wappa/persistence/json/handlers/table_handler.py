@@ -10,12 +10,13 @@ from typing import Any, cast
 
 from pydantic import BaseModel
 
+from wappa.persistence.tables.row_conditions import require_full_row, row_predicate
+
 from ....domain.interfaces.cache_interfaces import (
     ITableCache,
     TableRowTransition,
     TableTransitionResult,
 )
-from ...row_conditions import require_full_row, row_predicate
 from ...scope import resolve_table_context_id
 from ..storage_manager import storage_manager
 from .utils.key_factory import default_key_factory

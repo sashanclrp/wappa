@@ -1,9 +1,5 @@
 # Plugins Architecture
 
-## Planned scheduled-work composition
-
-The [scheduled-dispatch PRD](../../../docs/backlog/pending/261106-high-scheduled-task-dispatch.md) plans a SchedulingPlugin/public scheduled-event lane that composes source adapters with the existing runtime lifecycle and DispatchContextBuilder. Redis TTL and existing static cron callbacks use that lane; Host-owned engines call its public async entry point. Plugin composition does not take over APScheduler/Celery database setup, scheduler supervision, job management or history, and adds no management router. Current plugin descriptions below refer to the implemented code until the clean public-contract replacement lands.
-
 ## Responsibilities
 
 - Define the `WappaPlugin` structural protocol used by all plugins.
@@ -45,8 +41,9 @@ wappa/core/plugins/
 │                                #   optional auto table creation. Priority 20.
 │
 │   ── Infrastructure listeners ──
-├── expiry_plugin.py             # ExpiryPlugin: spawns the Redis keyspace expiry asyncio.Task,
-│                                #   requires RedisPlugin (priority 20) to run first. Priority 25.
+├── scheduling_plugin.py         # SchedulingPlugin: lifecycle of Wappa's own scheduled-work
+│                                #   sources. Redis expiry listener (priority 25, requires
+│                                #   RedisPlugin) and static crons on fastapi-crons (priority 30).
 ├── redis_pubsub_plugin.py       # RedisPubSubPlugin: wraps inbound handlers and outbound
 │                                #   messenger calls to publish to Redis PubSub channels.
 │                                #   Requires RedisPlugin. Priority 25.
@@ -67,12 +64,9 @@ wappa/core/plugins/
 │                                #   user-provided middleware class. Configure-only.
 │
 │   ── Integrations ──
-├── webhook_plugin.py            # WebhookPlugin: mounts a named External Webhook
-│                                #   Source endpoint and delegates accepted work
-│                                #   to ExternalWebhookRuntime. Priority 30.
-└── cron_plugin.py               # CronPlugin: wraps fastapi-crons to schedule recurring jobs
-                                 #   that fire CronEvent into the WappaEventHandler pipeline
-                                 #   with full or db-only context depending on inbox_id scope.
+└── webhook_plugin.py            # WebhookPlugin: mounts a named External Webhook
+                                 #   Source endpoint and delegates accepted work
+                                 #   to ExternalWebhookRuntime. Priority 30.
                                  #   Priority 30.
 ```
 
@@ -84,15 +78,14 @@ wappa/core/plugins/
 | `WappaCorePlugin` | Mandatory first plugin. Sets up authenticated HTTP client + pooled media download client via `SessionLifecycle`, `BackgroundWorkTracker`, logging, core routes, and core middleware stack. Owns three-phase shutdown: drain mark (90) → background drain (70) → resource close (10). |
 | `RedisPlugin` | Infra plugin that initialises connection pools before any feature plugin that requires Redis. |
 | `PostgresDatabasePlugin` | Infra plugin that creates the async SQLAlchemy engine and injects `db`/`db_read` into handlers. |
-| `ExpiryPlugin` | Depends on `RedisPlugin`. Owns the long-running expiry listener task lifecycle. |
 | `RedisPubSubPlugin` | Depends on `RedisPlugin`. Decorates handlers and messenger at startup to fan out Redis notifications. |
 | `SSEEventsPlugin` | Self-contained real-time streaming composition plugin. It creates its injected `SSEHub` at configure time (default: `SSEEventHub`) so routes, wrappers, middleware, lifecycle, and health share one object. |
 | `AuthPlugin` | Stateless configure-only plugin. Delegates all auth logic to `AuthStrategy` + `AuthMiddleware`. |
 | `RateLimitPlugin` | Local per-process route limiter. Stores named `RateLimitProfile` policies on `app.state`; route modules opt in with `rate_limit(profile_name)`. |
 | `WebhookPlugin` | Mounts an ID-less or `{webhook_id}` external callback, admits it synchronously, and submits handler dispatch to `BackgroundWorkTracker`. |
-| `CronPlugin` | Wraps `fastapi-crons` scheduler. Bridges each fired cron into the `WappaEventHandler.process_cron_event()` pipeline. |
+| `SchedulingPlugin` | Owns the lifecycle of the Redis expiry listener and fastapi-crons engine; both reach `process_scheduled_event` through `Scheduling`. Composes sources only: context stays in `DispatchContextBuilder`, and Host schedulers need no plugin. |
 
-`CronPlugin` registers its monitoring router shell at configure time, then calls
+`SchedulingPlugin` registers its cron monitoring router shell when crons are declared at configure time, then calls
 `include_router(get_cron_router())` on that shell after the scheduler starts.
 FastAPI's router tree makes the added routes available under `/crons`, with
 their dependencies and OpenAPI metadata intact.

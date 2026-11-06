@@ -112,16 +112,6 @@ class ConversationType(StrEnum):
     BUSINESS = "business"  # Business conversation (WhatsApp Business)
 
 
-class UserRole(StrEnum):
-    """User roles in conversations."""
-
-    MEMBER = "member"
-    ADMIN = "admin"
-    OWNER = "owner"
-    MODERATOR = "moderator"
-    BOT = "bot"
-
-
 # Type aliases for complex types
 PlatformData = dict[str, Any]
 MessageMetadata = dict[str, Any]
@@ -139,12 +129,3 @@ class ErrorCode(StrEnum):
     PROCESSING_ERROR = "processing_error"
     UNKNOWN_MESSAGE_TYPE = "unknown_message_type"
     SIGNATURE_VALIDATION_FAILED = "signature_validation_failed"
-
-
-class ProcessingPriority(StrEnum):
-    """Priority levels for message processing."""
-
-    LOW = "low"
-    NORMAL = "normal"
-    HIGH = "high"
-    URGENT = "urgent"

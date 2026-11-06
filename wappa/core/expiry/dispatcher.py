@@ -1,18 +1,16 @@
-"""
-Expiry Dispatcher - Dispatches handlers asynchronously for expired keys.
-
-Single Responsibility: Fire-and-forget handler dispatch with completion tracking.
-"""
+"""Turn an expired Redis key into a Scheduled Event on tracked background work."""
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Protocol
 
-from wappa.core.sse.context import classify_meta_identifier, sse_event_scope
+from wappa.domain.events.scheduled_event import SOURCE_REDIS_EXPIRY, ScheduledEvent
+from wappa.domain.inbox.identity import InboxRef
 
-from .parser import ExpiryEvent
+from .parser import ExpiryNotification
 
 if TYPE_CHECKING:
     from wappa.core.lifecycle import BackgroundWorkTracker
@@ -20,102 +18,89 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def _run_with_sse_scope(
-    event: ExpiryEvent, tracker: BackgroundWorkTracker | None = None
-) -> None:
-    """Wrap the handler so any SSE emitted from inside carries coherent identity.
+class ExpirySubjectBinding(Protocol):
+    """The Host's answer to: whose User, if any, is this expired key about?
 
-    The expiry key only gives us ``(inbox, identifier)``. We classify
-    ``identifier`` by shape into bsuid/phone; apps can refine via
-    ``update_identity`` / ``update_metadata`` once they load cache state.
+    An Expiry Key has only an action and an opaque identifier, which may be a
+    User or a message ID. Only the Host knows which, so Wappa never guesses from
+    its shape. Return the subject User, or ``None`` for Inbox-only work. Raise
+    for an action the Host does not recognize: the failure is logged and the
+    hook does not run. A binding maps identity only; it builds no capabilities.
     """
-    from wappa.core.expiry.context_helpers import parse_inbox_ref_from_expired_key
 
-    inbox_ref = parse_inbox_ref_from_expired_key(event.expired_key)
-    if inbox_ref is None:
-        logger.warning(
-            "Dropping expiry event with invalid Inbox namespace: %s", event.expired_key
-        )
-        return
-    bsuid, phone = classify_meta_identifier(event.identifier)
-    async with sse_event_scope(
-        inbox_id=inbox_ref.inbox_id,
-        user_id=event.identifier,
-        bsuid=bsuid,
-        phone_number=phone,
-        platform=inbox_ref.platform.value,
-        tracker=tracker,
-    ):
-        await event.handler(event.identifier, event.expired_key)
+    def __call__(
+        self, *, inbox_ref: InboxRef, action: str, identifier: str
+    ) -> Awaitable[str | None]: ...
 
 
 class ExpiryDispatcher:
-    """Dispatches expiry handlers via BackgroundWorkTracker for lifecycle-safe execution."""
+    """Adapts expiry notifications to the shared scheduled-event path."""
 
-    def __init__(self, tracker: BackgroundWorkTracker) -> None:
+    def __init__(
+        self,
+        *,
+        run_event: Callable[[ScheduledEvent], Awaitable[None]],
+        tracker: BackgroundWorkTracker,
+        subjects: ExpirySubjectBinding | None = None,
+    ) -> None:
+        self._run_event = run_event
         self._tracker = tracker
+        self._subjects = subjects
 
-    def dispatch(self, event: ExpiryEvent) -> asyncio.Task:
-        """Dispatch handler as a tracked async task."""
-        coro = _run_with_sse_scope(event, tracker=self._tracker)
-        task_name = f"{event.handler_name}:{event.identifier}"
-
+    def dispatch(self, notification: ExpiryNotification) -> asyncio.Task[None]:
+        """Run the notification as tracked work; nothing awaits or retries it."""
+        task_name = f"expiry:{notification.action}:{notification.identifier}"
         try:
-            task = self._tracker.track(coro, name=task_name)
+            task = self._tracker.track(self._run(notification), name=task_name)
         except RuntimeError:
             logger.warning(
-                "Runtime draining — dropping expiry handler %s for %s",
-                event.handler_name,
-                event.identifier,
+                "Runtime draining: dropping expiry action %s for %s",
+                notification.action,
+                notification.identifier,
             )
             raise
-
-        logger.info(
-            "Dispatched handler: %s (action=%s, identifier=%s)",
-            event.handler_name,
-            event.action,
-            event.identifier,
-        )
-
-        task.add_done_callback(
-            lambda t: self._on_completion(t, event.action, event.identifier)
-        )
-
+        task.add_done_callback(lambda done: self._on_completion(done, notification))
         return task
 
-    def _on_completion(
-        self,
-        task: asyncio.Task,
-        action: str,
-        identifier: str,
-    ) -> None:
-        """
-        Log handler completion or errors.
+    async def _run(self, notification: ExpiryNotification) -> None:
+        await self._run_event(
+            ScheduledEvent(
+                action=notification.action,
+                source=SOURCE_REDIS_EXPIRY,
+                inbox_ref=notification.inbox_ref,
+                user_id=await self._subject(notification),
+                identifier=notification.identifier,
+                metadata={"expired_key": notification.expired_key},
+            )
+        )
 
-        Args:
-            task: Completed asyncio.Task
-            action: Action name for logging
-            identifier: Event identifier for logging
-        """
-        try:
-            exception = task.exception()
-            if exception:
-                logger.error(
-                    "Handler failed: action=%s, identifier=%s, error=%s",
-                    action,
-                    identifier,
-                    exception,
-                    exc_info=exception,
-                )
-            else:
-                logger.debug(
-                    "Handler completed: action=%s, identifier=%s",
-                    action,
-                    identifier,
-                )
-        except asyncio.CancelledError:
+    async def _subject(self, notification: ExpiryNotification) -> str | None:
+        if self._subjects is None:
+            return None
+        return await self._subjects(
+            inbox_ref=notification.inbox_ref,
+            action=notification.action,
+            identifier=notification.identifier,
+        )
+
+    @staticmethod
+    def _on_completion(
+        task: asyncio.Task[None], notification: ExpiryNotification
+    ) -> None:
+        """Expiry has no awaiting caller, so this log is where a failure surfaces."""
+        if task.cancelled():
             logger.debug(
-                "Handler cancelled: action=%s, identifier=%s",
-                action,
-                identifier,
+                "Expiry action cancelled: action=%s, identifier=%s",
+                notification.action,
+                notification.identifier,
+            )
+            return
+        exception = task.exception()
+        if exception is not None:
+            logger.error(
+                "Expiry action failed: action=%s, identifier=%s, error=%s",
+                notification.action,
+                notification.identifier,
+                exception,
+                exc_info=exception,
             )
