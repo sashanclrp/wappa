@@ -22,7 +22,7 @@ Media Adaptation adds one Platform-neutral engine that reads what a file really 
 - No rule covers codecs, channels, dimensions, animation, or the "needs a public URL" constraint. A wrong codec fails at Meta (WhatsApp `131053`, or silently unplayable on Android) instead of before I/O.
 - `send_sticker` takes `MediaRenditions` and picks the first accepted suffix; the Host must ship `["s.webp", "s.png"]`.
 - `send_carousel` takes `MessageCard.header: CardMedia` (`kind` image or video, a public `url`, and `poster_url` for an Instagram video card). Card media is URL-only on both Platforms, because WhatsApp card headers take a public link and no Media ID. Instagram rejects a video card without `poster_url` before any call ("pass poster_url, or enable media adaptation"), and a Host with only a local file cannot build a card at all. This service fills exactly those cases.
-- `IMediaLibrary.upload(source: Path | bytes, family, *, mime_type=None, filename=None)` (ADR-0024 draft) uploads whatever it is given. Instagram attachments cannot be downloaded back by ID, so an uploaded `attachment_id` cannot later become a card URL.
+- `IMediaLibrary.upload(source: Path | bytes, family, *, mime_type=None, filename=None)` (ADR-0025) uploads whatever it is given. Instagram attachments cannot be downloaded back by ID, so an uploaded `attachment_id` cannot later become a card URL.
 - Drift found while checking: Wappa lists `video/3gp`, Meta documents `video/3gpp`; Wappa omits static WebP as a WhatsApp image, which Meta now accepts (and transcodes to JPEG).
 
 ## Goals
@@ -106,16 +106,22 @@ Host-supplied renditions still win: `send_sticker(["s.webp", "s.png"])` keeps wo
 - Each job has a timeout. On timeout the pool is terminated and recreated, since a running process-pool job cannot be cancelled; the send returns an outcome instead of hanging. A semaphore caps queued jobs; past the cap a send fails fast as unavailable rather than piling up.
 - Input caps before any decode: `max_input_bytes`, max pixels (Pillow decompression-bomb limit kept on), max duration.
 - Result cache keyed by `(sha256(content), rule fingerprint, engine version)` holds the adapted bytes in the MediaStore (section 4) with a TTL. A second key `(InboxRef, content hash, MediaUse)` holds the Platform Media ID returned by a previous upload, with a TTL under the Platform's expiry (WhatsApp 29 days; Instagram a conservative 7 days until verified). Same content to the same Inbox therefore uploads once.
+- Read only what a job needs. A poster frame does not need the whole video: PyAV opens the source over HTTP (or from S3) and either seeks with `Range` requests (MP4 with the `moov` index at the front) or decodes sequentially from the start (WebM, whose cues often sit at the end), so a poster at 1 second reads the container header plus the first second of data, typically 1-3 MB of a 20 MB file, in memory with no disk write. Only when the source refuses `Range` and the index is at the end does the job stream to a temp file under the size cap, extract, and delete it immediately (seconds, not minutes). The one path that needs the whole file is reusing a Media ID across Platforms (download from one Platform, upload to another), bounded by WhatsApp's 16 MB video cap and deleted right after upload.
+- Cache first, regenerate on miss. Every derived artifact (poster, adapted sticker, transcoded audio) is reproducible from a durable source (the Host's URL, its S3 object, or bytes Wappa uploaded), so the cache is cache-aside with regeneration: look up `media:{content hash}:{rule}`; on a hit, serve; on a miss, take a single-flight lock (`SET media:lock:{key} NX EX 30`), regenerate, re-store with its TTL, release. Concurrent misses for the same key wait on the lock and reuse the result instead of all regenerating (no thundering herd when a campaign of thousands of sends misses at once). A Redis flush or expiry mid-campaign therefore costs one regeneration per artifact, never a failed send.
+- Campaigns upload once. For media that does not need a URL (template headers, ordinary media messages), the cheapest path is Meta's own Media ID: upload once per Inbox, cache the ID (WhatsApp IDs live 30 days; Instagram `is_reusable` attachment IDs), and every send references the ID, so neither S3 nor Redis nor Wappa's public route is touched per message. This Media ID cache (the `(InboxRef, content hash, MediaUse)` key above) is tried before any URL path. Only carousel cards, which accept URLs only, need the public-URL path.
 - Pre-adaptation at upload: `IMediaLibrary.upload(path, family)` adapts for that Inbox's spec before uploading and also stores the adapted bytes keyed by the returned Media ID. That is the only way an Instagram `attachment_id` can later become a card URL, since Instagram offers no download.
 
 ### 4. Wappa-hosted public media URLs
 
 - Route: `GET /media/public/{token}` (and `HEAD`), mounted on the existing app beside the webhook routes. It is a service route, so an embedding Host keeps it. The base comes from a new `SYSTEM_PUBLIC_BASE_URL` (the same https origin Meta already reaches for webhooks); without it, any send that needs a URL fails before I/O with a message naming the setting.
 - Token: 256 random bits, base64url. It is an opaque capability looked up in the store, not a signed payload. The bytes have to be stored anyway, so a stored record costs nothing and allows early revocation; an HMAC-signed stateless token would add a secret to manage for no gain. Record: content hash, pinned content type, size, `expires_at`, optional filename.
-- Storage: one small `MediaStore` (put, get, delete with TTL) with two implementations: a directory (default, single host or a shared volume) and Redis when `REDIS_URL` is set (per-object cap, default 16 MB). Workers on several hosts must use Redis or a shared volume; the directory store refuses to start in Redis routing setups that imply several hosts (open question).
+- Storage: one small `MediaStore` seam (put, get, delete with TTL, public URL for a key) with two real adapters:
+  - **Redis, DB 5, a new `media` pool alias.** It follows the existing one-pool-per-logical-DB convention in `wappa/persistence/redis/redis_client.py` (`users` 0, `state_handler` 1, `table` 2, `expiry` 3, `ai_state` 4). The `media` pool must be created with `decode_responses=False` (every current pool decodes to text, which would corrupt bytes). Values are binary strings (`SET media:{hash}:{rule} <bytes> EX <ttl>`) plus a small metadata hash (content type, size, filename). Redis is for small, ephemeral artifacts only: posters, stickers, thumbnails, short voice notes, with a per-object cap (default 1 MB); videos never go to Redis, because Redis memory costs far more than object storage. A separate DB isolates `FLUSHDB` and `SCAN`, but `maxmemory-policy` is per instance: with `volatile-lru` (or `volatile-ttl`) TTL-bearing media keys are evicted before Host keys without a TTL; when media volume matters, point the `media` pool at its own Redis instance.
+  - **S3-compatible object storage** (S3, R2, MinIO, GCS interop). Durable, serves its own presigned or public URLs, so Wappa's public route is not involved and costs nothing to serve. Derived artifacts are written back next to their source and kept for the source's lifetime: `catalog/shoe-12.webm` gets `catalog/shoe-12.poster.jpg`, so a catalog video's poster is generated once ever and the card's `image_url` is that object's URL.
+  - A directory store remains only for local development and single-host setups.
 - Response: the pinned `Content-Type` from the probe (never from the token or a query), `Content-Length`, `X-Content-Type-Options: nosniff`, `Content-Disposition: inline` for media and `attachment` for documents, `Referrer-Policy: no-referrer`, `Cache-Control: public, max-age=` the remaining TTL. Single-range `Range` support for video, since Meta's fetcher may use it (**unverified**).
 - Safety: unknown, expired and malformed tokens all return the same `404` with no body difference and constant-time lookup; no index, no listing, no path segments beyond the token; size served is capped by the record; tokens and URLs are never logged in full (prefix only).
-- TTL: default 1 hour for message media (Meta fetches at send). Card images get a longer default (7 days) because it is **unverified** whether Instagram copies `image_url` at send or re-fetches it when the thread renders; if it re-fetches, an expired card image breaks old carousels. Gate on a live check.
+- TTL: default **10 minutes** for Redis-held artifacts. Meta fetches media sent by `link` at send time and serves the bytes to Users from its own CDN, not from the Host's server: WhatsApp documents that it caches link media for 10 minutes, and Instagram message images are served from Meta's `fbcdn` / `lookaside` hosts, so the working assumption (strong, **to verify**) is that Instagram also copies `image_url` at send. 10 minutes covers retries and Meta's fetch. If the live check shows Instagram re-fetching at render, card images move to the S3 adapter (permanent) rather than to a longer Redis TTL. Because every artifact regenerates on a miss (section 3), a short TTL never breaks a later send; it only costs one regeneration.
 
 ### 5. Where it plugs in
 
@@ -140,14 +146,18 @@ Host-supplied renditions still win: `send_sticker(["s.webp", "s.png"])` keeps wo
 | `SYSTEM_MEDIA_MAX_INPUT_BYTES` | 100 MB | refuse larger inputs before decode |
 | `SYSTEM_MEDIA_FETCH_URLS` | off | fetch Host URLs to probe and adapt them (unauthenticated media client, https only, public addresses only, size-capped) |
 | `SYSTEM_PUBLIC_BASE_URL` | unset | origin for `/media/public/{token}`; unset disables public URLs |
-| `SYSTEM_MEDIA_URL_TTL_SECONDS` / `SYSTEM_MEDIA_CARD_URL_TTL_SECONDS` | 3600 / 604800 | public URL lifetimes |
-| `SYSTEM_MEDIA_STORE_DIR` | `./.wappa/media` | directory store; Redis is used when `REDIS_URL` is set |
+| `SYSTEM_MEDIA_URL_TTL_SECONDS` | 600 | lifetime of Redis-held artifacts and their public URLs (regenerated on miss) |
+| `SYSTEM_MEDIA_STORE` | `redis` when Redis is configured, else `dir` | `redis` (pool alias `media`, DB 5), `s3`, or `dir` (development) |
+| `REDIS_MEDIA_URL` | the Redis URL with DB 5 | connection for the `media` pool; may point at a separate instance |
+| `SYSTEM_MEDIA_REDIS_MAX_OBJECT_BYTES` | 1 MB | refuse larger objects in Redis (use S3) |
+| `SYSTEM_MEDIA_S3_BUCKET` / `SYSTEM_MEDIA_S3_PREFIX` / `SYSTEM_MEDIA_S3_ENDPOINT` | unset | S3-compatible store; credentials from the standard provider chain, never from Wappa settings |
+| `SYSTEM_MEDIA_STORE_DIR` | `./.wappa/media` | directory store (development only) |
 
 Logs (secret-free, no bytes, token prefix only): one `MEDIA_PROBE` line per file at debug; `MEDIA_ADAPTED` at info with use, from/to MIME and codecs, sizes, duration in ms, and cache hit; `MEDIA_REFUSED` at warning with the reason; `MEDIA_CODEC_UNVERIFIED` once per process when PyAV is absent. Counters for adaptations, cache hits, timeouts and pool restarts go through the existing logger; no metrics backend is added.
 
 Failures reuse existing outcomes, with no new result type:
 
-- Local rule violation that cannot or may not be adapted (wrong family, document type, detection-only mode, `Unfixable`): `ValueError` before I/O, HTTP 400, per ADR-0021 and ADR-0024. The message names the detected type, the rule and the fix (for example "install wappa[media] and set SYSTEM_MEDIA_ADAPT=1").
+- Local rule violation that cannot or may not be adapted (wrong family, document type, detection-only mode, `Unfixable`): `ValueError` before I/O, HTTP 400, per ADR-0024. The message names the detected type, the rule and the fix (for example "install wappa[media] and set SYSTEM_MEDIA_ADAPT=1").
 - Adaptation timed out, pool restarting, or queue full: `MessageResult` / `UploadResult` `REJECTED` with `error_code="MEDIA_UNAVAILABLE"` and no Platform call. `IMediaLibrary.download` is unaffected.
 - Public URL needed but `SYSTEM_PUBLIC_BASE_URL` unset: `ValueError`.
 - Platform refuses an adapted file anyway: the Platform's own `REJECTED` result, with `platform_response` kept, plus a `MEDIA_ADAPTED` log line so the mismatch can be traced to a spec value.
@@ -166,7 +176,7 @@ Offline, on fixtures checked into `tests/fixtures/media/` (each a few KB, genera
 - Public route: valid token serves pinned type and headers; expired, unknown and malformed tokens give identical 404s; no listing; HEAD and Range; token not logged.
 - Messenger parity: the existing parity and pipeline suites gain cases showing that WhatsApp and Instagram given the same Host call produce conforming payloads, with fake HTTP only.
 
-Live checks (added to the live test plan, run by hand on test Inboxes, never in CI): WhatsApp voice note from an MP3 shows the waveform and transcription; WhatsApp sticker from a PNG and from a GIF; WhatsApp High-profile MP4 plays on Android after adaptation; WhatsApp and Instagram carousels from local files and from Media IDs; Instagram card with video shows the poster; Instagram GIF image and WebP-as-image behaviour; whether an Instagram card image still renders after its public URL expires; whether Meta's fetcher uses `Range`.
+Live checks (added to the live test plan, run by hand on test Inboxes, never in CI): WhatsApp voice note from an MP3 shows the waveform and transcription; WhatsApp sticker from a PNG and from a GIF; WhatsApp High-profile MP4 plays on Android after adaptation; WhatsApp and Instagram carousels from local files and from Media IDs; Instagram card with video shows the poster; Instagram GIF image and WebP-as-image behaviour; whether an Instagram card image still renders after its public URL expires (sets the TTL and whether cards need S3); whether Meta's fetcher uses `Range`; a template campaign that survives a Redis `FLUSHDB` of DB 5 mid-run (regeneration path); a poster generated from an S3-hosted WebM and MP4 by Range read.
 
 ### 9. Phased rollout
 
@@ -176,6 +186,24 @@ Live checks (added to the live test plan, run by hand on test Inboxes, never in 
 
 Each phase updates `docs/public-contract.md`, both `ARCHITECTURE.md` files, `CONTEXT.md` (new terms: Media Spec, Media Use, Media Adaptation, Public Media URL) and the CHANGELOG in the same change; phase 1 lands with the ADR that retires "Wappa never converts media".
 
+### Source media: S3 and WebM masters
+
+A Host that keeps its media in S3 gets the best case: Range reads for probing and posters, durable write-back of derived artifacts, and URLs served by S3. The container of the master matters, though. WhatsApp accepts video only as MP4 or 3GPP with H.264 video and AAC audio; it does not accept WebM. Instagram accepts both. A WebM master therefore means a full transcode (VP8/VP9 to H.264) before any WhatsApp send, which costs real CPU, unlike a poster frame. The recommendation is an MP4 master (H.264 + AAC, `faststart`), which plays on WhatsApp, Instagram and the web; a WebM rendition can be kept beside it for a website. If the master stays WebM, the engine transcodes once per video and writes the MP4 back to S3 (`clip.webm` gets `clip.wa.mp4`), so the cost is paid once per video, never per send.
+
+### Scale and cost
+
+Worst case modelled: 100 distinct 20 MB videos per minute, each needing a poster (no cache hits).
+
+| Resource | With Range / sequential reads (this design) | Naive full download |
+| --- | --- | --- |
+| Data downloaded | about 1-2 MB per video: about 200 MB/min, about 12 GB/hour | 20 MB per video: 2 GB/min, about 120 GB/hour |
+| CPU | one 1080p frame decode + JPEG encode about 0.1-0.2 s: about 15 CPU-seconds/min, about a quarter of one core | same, plus disk I/O |
+| Disk | none (in memory) | about 20 MB per job briefly, a few hundred MB at peak |
+| Redis | 100 posters x about 100 KB = 10 MB per minute, expiring after 10 minutes (about 100 MB resident at steady state) | same |
+| Egress | Meta fetches each poster once (about 100 KB) and serves Users from its CDN | same |
+
+Ingress is free on most clouds, so the worst case costs about a quarter of a core and a little Redis memory, a few dollars a month; with realistic reuse (the same catalog videos sent to many Users) the cache hit rate is high and the cost is close to zero. The limits to protect are bandwidth and concurrency, not storage: the process pool size, a cap on concurrent remote reads, and the queue cap (section 3), so a burst gets a fast `MEDIA_UNAVAILABLE` instead of piling up. The zero-cost paths stay first: a Host-supplied `poster_url`, posters written back to S3, pre-adaptation at upload, and the Media ID cache for campaigns.
+
 ### Poster frame
 
 When a video card has no `poster_url`, the poster is the frame at **1 second** (a seek by timestamp, not by frame index, because frame rates vary: 1 second is frame 30 at 30 fps and frame 25 at 25 fps). The first frame is often black or a fade-in, so it is used only when the clip is shorter than 1 second. If the frame at 1 second is near-black (mean luminance below a small threshold), the engine tries 2 seconds, then falls back to the first decodable frame. The poster keeps the video's aspect ratio, is scaled to the `card_image` rule, and is encoded as JPEG. The whole step (download, decode, encode, publish) runs in the background pool under the same per-job timeout and cache as every other adaptation, and its failure returns the same pre-send rejection as adaptation off, so a send never half-completes.
@@ -183,14 +211,15 @@ When a video card has no `poster_url`, the poster is the frame at **1 second** (
 ## Open questions
 
 - License of the bundled FFmpeg in PyAV wheels (likely GPL through x264/x265): accept for the opt-in extra, or require a system FFmpeg or OpenH264 for H.264 encoding?
-- Does Instagram copy `image_url` at send, or hotlink it at render? This sets the card URL TTL, and possibly whether card images must be permanent.
+- Does Instagram copy `image_url` at send (working assumption: yes, bytes are served from Meta's CDN) or hotlink it at render? Live check: send a card whose image URL expires after 10 minutes, then open the thread on a device that never loaded it. If it hotlinks, card images must use the S3 adapter.
 - Is GIF accepted as an Instagram image on the Facebook Login path, and is WebP silently accepted or refused?
 - Instagram `attachment_id` lifetime (Messenger documents 90 days): what TTL is safe for the Media ID cache?
 - WhatsApp sticker dimensions: is 512×512 enforced by the Cloud API, or only advised?
 - Poster frame: decided 2026-11-06, see Poster frame.
 - Should `SYSTEM_MEDIA_FETCH_URLS` exist at all, or should Host URLs always pass through untouched?
-- Multi-host deployments without Redis: refuse public URLs at startup, or document a shared volume as the requirement?
-- Does `MediaUse` stay internal, or should `MediaFamily` gain `STICKER` / `VOICE` so `IMediaLibrary.upload` can pre-adapt for those uses (a public contract change)?
+- Multi-host deployments without Redis or S3: refuse public URLs at startup (proposed), or allow a shared volume?
+- Does the WhatsApp Cloud API honour `Range` and HTTP caching headers when it fetches link media, and does Meta's fetcher re-fetch within its 10-minute cache?
+- Does `MediaUse` stay internal? `MediaFamily.STICKER` already exists (hardening F10); should `MediaFamily` also gain `VOICE` so `IMediaLibrary.upload` can pre-adapt voice notes (a public contract change)?
 
 ## Exit criteria
 
