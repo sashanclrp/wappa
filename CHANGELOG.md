@@ -191,6 +191,8 @@ await self.whatsapp.templates.send_text_template("order_ready", target, params, 
 
 ### Fixed
 
+- The log redactor masked every `code=` field, so Meta's error code in Host log lines (`code=131053`) read `code=[REDACTED]`. The OAuth `code` is now masked only as a URL query parameter (after `?` or `&`).
+- An Instagram rejection logged nothing about Meta's reason: the result carries only the code. `graph_request` now logs Meta's error fields (message, type, code, subcode, user title and message, `fbtrace_id`) at ERROR, as WhatsApp logs its raw response; results are unchanged.
 - Access tokens no longer reach log files. httpx logs every request URL at INFO, and Meta's OAuth calls carry secrets in the query (`oauth/access_token?client_secret=…&code=…`, `debug_token?input_token=…`, `?access_token=…`), so the connect flow wrote full tokens to the DEV log file and the console. Every handler `setup_logging` installs now runs `SecretRedactingFilter`, which masks `access_token`, `input_token`, `client_secret`, `appsecret_proof`, `fb_exchange_token`, `code` query values and full `Bearer` tokens as `[REDACTED]`. Rotate any token that a log file from 0.34 development builds may contain.
 - The WhatsApp media upload MIME allow-list named the 3GP video type `video/3gp`; Meta's type is `video/3gpp`, which the payload builders already used. `MediaType` now lists `video/3gpp`.
 - `WhatsAppMessenger.send_document(caption=...)` dropped the caption: the document payload builder had no caption parameter. `document.caption` now reaches the Cloud API, from the Messenger and from `POST /api/whatsapp/media/send-document`.

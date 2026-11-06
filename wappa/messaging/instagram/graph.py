@@ -1,9 +1,9 @@
 """Inbox-bound Graph HTTP for Instagram (Unified Login, ``graph.facebook.com``).
 
 One place classifies provider outcomes so every operation reports the same
-accepted / rejected / indeterminate semantics and never leaks the bearer or
-raw provider error bodies. No automatic retries: an indeterminate mutation may
-already have taken effect.
+accepted / rejected / indeterminate semantics. Results never carry the bearer
+or raw provider error bodies; a rejection logs Meta's error fields. No
+automatic retries: an indeterminate mutation may already have taken effect.
 """
 
 from __future__ import annotations
@@ -15,8 +15,22 @@ from typing import Any
 import httpx
 from pydantic import SecretStr
 
+from wappa.core.logging.logger import get_logger
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.results import OperationOutcome
+
+logger = get_logger(__name__)
+
+# Meta's error fields worth logging; the body never carries the bearer.
+_LOGGED_ERROR_FIELDS = (
+    "message",
+    "type",
+    "code",
+    "error_subcode",
+    "error_user_title",
+    "error_user_msg",
+    "fbtrace_id",
+)
 
 # Known Messenger-family error codes → short, credential-free explanations.
 _KNOWN_ERRORS: dict[str, str] = {
@@ -136,6 +150,21 @@ class InstagramGraphClient:
         )
 
 
+def _log_rejection(operation: str, status: int, body: Mapping[str, Any]) -> None:
+    """Log Meta's error fields, as WhatsApp logs its raw response.
+
+    Results stay credential-free and carry only the code; the log is where
+    an operator reads why Meta refused.
+    """
+    error = body.get("error")
+    summary = (
+        {k: error[k] for k in _LOGGED_ERROR_FIELDS if k in error}
+        if isinstance(error, Mapping)
+        else {}
+    )
+    logger.error("Meta rejected %s (HTTP %s): %s", operation, status, summary)
+
+
 async def graph_request(
     client: httpx.AsyncClient,
     base: str,
@@ -194,6 +223,7 @@ async def graph_request(
             f"(HTTP {response.status_code}); do not automatically repeat it",
         )
     code = _error_code(body) or str(response.status_code)
+    _log_rejection(operation, response.status_code, body)
     return GraphResponse(
         outcome=OperationOutcome.REJECTED,
         status_code=response.status_code,

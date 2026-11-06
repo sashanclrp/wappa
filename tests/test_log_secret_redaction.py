@@ -45,6 +45,13 @@ def test_ordinary_code_fields_are_kept():
         redact_secrets("error_code=100 status_code=200")
         == "error_code=100 status_code=200"
     )
+    line = "FORMAT_SEND outcome=rejected code=131053 message_ids=-"
+    assert redact_secrets(line) == line
+
+
+def test_oauth_code_is_masked_as_the_first_query_parameter():
+    out = redact_secrets("GET https://x/connect/instagram/callback?code=AQ123&state=s")
+    assert "AQ123" not in out and "state=s" in out
 
 
 def test_existing_partial_token_hints_stay_readable():

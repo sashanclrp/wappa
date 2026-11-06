@@ -246,9 +246,11 @@ class ContextFilter(logging.Filter):
         return True
 
 
+# The OAuth ``code`` only counts as a URL query parameter (after ``?`` or
+# ``&``), so log fields such as ``code=131053`` stay readable.
 _SECRET_QUERY = re.compile(
-    r"(?<![A-Za-z0-9_])(?P<key>(?:access_token|input_token|client_secret|appsecret_proof"
-    r"|fb_exchange_token|code)=)[^&\s\"']+"
+    r"(?P<key>(?:(?<![A-Za-z0-9_])(?:access_token|input_token|client_secret"
+    r"|appsecret_proof|fb_exchange_token)|(?<=[?&])code)=)[^&\s\"']+"
 )
 # Full tokens only: Wappa's own "Bearer 12345678...wxyz" hint stays readable.
 _BEARER = re.compile(r"(?P<key>Bearer\s+)(?!\S*\.\.\.)[A-Za-z0-9._\-]{20,}")
