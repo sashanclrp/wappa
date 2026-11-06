@@ -310,3 +310,35 @@ def test_host_facing_examples_and_skills_never_look_up_a_capability() -> None:
         for path in _HOST_FACING
     }
     assert {path: lines for path, lines in found.items() if lines} == {}
+
+
+# ── outside a dispatch: OutboundRuntime builds the same Platform Messenger ───
+
+
+async def test_outbound_runtime_builds_the_platform_messenger_over_its_pipeline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from wappa.messaging.outbound_runtime import OutboundRuntime
+
+    recording = _Recording()
+    runtime = OutboundRuntime(
+        session_provider=httpx.AsyncClient,
+        media_download_client_provider=httpx.AsyncClient,
+        credential_resolver=None,  # type: ignore[arg-type]
+    )
+
+    async def fake_messenger(inbox_ref: InboxRef, **_: Any) -> IMessenger:
+        adapter = _whatsapp_adapter() if inbox_ref == WA_REF else _instagram_adapter()
+        return MessengerPipeline(adapter, [(recording, 50)])
+
+    monkeypatch.setattr(runtime, "messenger", fake_messenger)
+
+    whatsapp = await runtime.platform_messenger(WA_REF)
+    instagram = await runtime.platform_messenger(IG_REF)
+
+    assert isinstance(whatsapp, WhatsAppMessenger)
+    assert isinstance(instagram, InstagramMessenger)
+    await whatsapp.templates.send_text_template(
+        "welcome", _target(WA_REF), template_type="utility"
+    )
+    assert [i.method_name for i in recording.seen] == ["send_text_template"]

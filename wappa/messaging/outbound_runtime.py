@@ -56,6 +56,7 @@ class OutboundRuntime:
             platforms=platforms,
         )
         self._messenger_middleware = tuple(messenger_middleware)
+        self._platforms = platforms
 
     @classmethod
     def from_app(cls, app: FastAPI) -> OutboundRuntime:
@@ -132,6 +133,27 @@ class OutboundRuntime:
             inbox_ref, credentials=credentials
         )
         return MessengerPipeline(raw=raw, middleware=self._messenger_middleware)
+
+    async def platform_messenger(
+        self,
+        inbox_ref: InboxRef,
+        *,
+        credentials: ResolvedInboxCredentials | None = None,
+    ) -> IMessenger | None:
+        """The Inbox's Platform Messenger, outside a dispatch.
+
+        The same object a handler gets as ``self.whatsapp`` or
+        ``self.instagram``, built over :meth:`messenger` so middleware runs.
+        ``None`` when the Inbox's Platform adds no Platform Messenger. Hosts
+        narrow it with ``isinstance(m, WhatsAppMessenger)`` (or the Instagram
+        type) before using Platform methods.
+        """
+        from wappa.platforms import platform_messenger
+
+        return platform_messenger(
+            await self.messenger(inbox_ref, credentials=credentials),
+            self._platforms,
+        )
 
     def evict_inbox(self, inbox_ref: InboxRef) -> None:
         """Drop the cached Messenger for one Inbox.

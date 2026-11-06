@@ -77,7 +77,9 @@ Responsibilities other than sending conversation messages, and actions with no r
   `TrustedInboxCredential` (current token/version, Graph version/base; masked
   repr). Directory errors propagate typed. Host authorizes first.
 - `OutboundRuntime.from_app(app).messenger(inbox_ref)` → Inbox-bound
-  Messenger with app middleware for Host-initiated sends.
+  Messenger with app middleware for Host-initiated sends;
+  `.platform_messenger(inbox_ref)` → the same Platform Messenger a handler
+  gets as `self.whatsapp` / `self.instagram` (or `None`).
 - `register_webhook_field(field, *, parser, handler, platform)` on `Wappa`
   and `WappaBuilder`; Instagram built-in fields are reserved.
 - `wappa.connections` (ADR-0026): the `IInboxConnector` contract (`begin` → `AuthorizationRequest`, `complete` → `ConnectionGrant` with `DiscoveredInbox` + `InboxReadiness`, `activate(grant, inbox_ref, *, credentials, previous: CredentialRecord | None)` → `ActivationResult` whose `record` is the encrypted `ActiveInboxCredentialRecord`, `disconnect(inbox_ref, account_ref, token)`), implemented by `InstagramConnector` and `WhatsAppConnector` on `MetaLoginConfig`; plus `IConnectionIntentStore`/`InMemoryConnectionIntentStore`, `InstagramSubscriptions(client_provider=..., graph_base=..., app_id=None)` (`graph_base` is `MetaLoginConfig.graph_base`, the versioned Graph root), `parse_signed_request` and the `InboxConnectionError` hierarchy. `activate` raises `ValueError` before any Platform call when the grant or `inbox_ref` belongs to another Platform.
