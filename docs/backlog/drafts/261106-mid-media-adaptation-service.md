@@ -3,9 +3,14 @@ status: draft (design proposed 2026-11-06; no code; needs a grill session and an
 origin: WhatsApp First facade gap for media (send_sticker renditions, carousel card media, voice notes)
 checked_on: 2026-11-06
 supersedes_on_acceptance: the "Wappa never converts media" rule in wappa/domain/media_renditions.py and docs/public-contract.md (send_sticker paragraph)
+last_reviewed: 2026-11-06
 ---
 
 # Media Adaptation: Wappa detects real media types and adapts media to each Platform
+
+## Code reality (2026-11-06)
+
+Platform-neutral media upload/download and rendition selection exist. Automatic probing, adaptation, worker execution, content-hash caching and public media URLs do not. The one-media-seam hardening does not absorb this service.
 
 The Messenger contract mirrors WhatsApp, and every other Platform's adapter emulates it so a Host never writes Platform-specific code. Media is where that promise breaks today. Each Platform accepts different containers, codecs, sizes and dimensions, and some sends need media in a form the Host never supplied: a public https URL instead of a Media ID, an image instead of a video, a WebP sticker, an OGG/Opus voice note. Wappa checks file extensions only and "never converts media" (`wappa/domain/media_renditions.py`), so the Host has to know every Platform's rules and prepare renditions itself. That is exactly the Platform-specific code Wappa exists to remove.
 
@@ -89,7 +94,7 @@ Adaptations, all driven by `MediaRule.target`:
 | WebP static / animated | PNG / GIF | sticker or image on Instagram |
 | video in another codec, container or profile | H.264 Main, AAC, mp4 with faststart, one audio stream | `video` rule mismatch |
 | oversize video | bitrate capped from duration; refuse when the floor still does not fit | bytes over the rule |
-| video | first decodable frame as JPEG (the poster) | `card_image` needed but the card has video (Instagram, or a missing `poster_url`) |
+| video | the frame at 1 second as JPEG (the poster; see Poster frame below) | `card_image` needed but the card has video (Instagram, or a missing `poster_url`) |
 | MP3, AAC, WAV, stereo Opus | OGG/Opus mono (48 kHz, voice bitrate) | `voice` on WhatsApp |
 | OGG, MP3, WebM audio | m4a (AAC) | `audio` / `voice` on Instagram |
 
@@ -116,7 +121,7 @@ Host-supplied renditions still win: `send_sticker(["s.webp", "s.png"])` keeps wo
 
 - Each adapter calls the engine at its existing resolve step, before any upload or send: `WhatsAppMessenger._resolve_media_object` and the Instagram local-path upload path, plus both `IMediaLibrary.upload` implementations. The call is `prepare(source, use, spec) -> PreparedMedia` with `PreparedMedia` being a local path, a cached Media ID, or a public URL, depending on `MediaRule.delivery`.
 - `send_audio(..., is_voice=True)` selects `MediaUse.voice`; `send_sticker` selects `sticker`; carousel cards select `card_image` / `card_video`.
-- Carousel: card media is `url_only` on both Platforms, so a Host with only a local file gets a public URL from section 4 and passes it as `CardMedia.url`. When an Instagram card carries video, the poster frame becomes `image_url` unless the Host gave `poster_url`. The URL-only `CardMedia(kind, url, poster_url)` card contract is in place; this PRD adds no card fields itself.
+- Carousel: card media is `url_only` on both Platforms, so a Host with only a local file gets a public URL from section 4 and passes it as `CardMedia.url`. When an Instagram card carries video and `poster_url` is empty, Wappa produces the poster automatically: download the video from `CardMedia.url` (bounded by the card_video rule's `max_bytes`), extract the poster frame, encode it as JPEG to the `card_image` rule, publish it at a section 4 public URL, and send that URL as the element's `image_url`; tapping the card opens `CardMedia.url`. A Host-supplied `poster_url` always wins, and the poster is cached by (video content hash, rule), so the same video sent to many Users is processed once. With adaptation off, the clear pre-send rejection stays. The URL-only `CardMedia(kind, url, poster_url)` card contract is in place; this PRD adds no card fields itself.
 - `IMessenger` and `IMediaLibrary` signatures do not change. `pick_rendition` stays as the first step, and its docstring loses "Wappa never converts media".
 
 ### 6. Packaging
@@ -153,7 +158,7 @@ Offline, on fixtures checked into `tests/fixtures/media/` (each a few KB, genera
 
 - `probe`: every fixture detected from bytes, suffix lies ignored.
 - `plan`: a table-driven suite over (fixture, WhatsApp spec, Instagram spec, every `MediaUse`) asserting Conforms / Adapt(steps) / Unfixable. Pure, fast, no PyAV needed where the probe is recorded.
-- `adapt` (skipped when `av` is not importable, run in CI with the extra): output re-probes as conforming; sticker ≤ 100 KB / 500 KB at 512×512; voice note is mono Opus; video is H.264/AAC faststart; poster is the first frame.
+- `adapt` (skipped when `av` is not importable, run in CI with the extra): output re-probes as conforming; sticker ≤ 100 KB / 500 KB at 512×512; voice note is mono Opus; video is H.264/AAC faststart; poster is the frame at 1 second, or the first decodable frame for a clip shorter than 1 second.
 - Spec tests pin each table row and fail when a value changes without its source note changing.
 - Executor: timeout restarts the pool and returns `MEDIA_UNAVAILABLE`; queue cap; no event-loop blocking (a slow fake job does not delay a concurrent coroutine).
 - Cache: same content and rule hit; changed rule fingerprint misses; Media ID cache is Inbox-scoped and never crosses Inboxes or Platforms.
@@ -171,6 +176,10 @@ Live checks (added to the live test plan, run by hand on test Inboxes, never in 
 
 Each phase updates `docs/public-contract.md`, both `ARCHITECTURE.md` files, `CONTEXT.md` (new terms: Media Spec, Media Use, Media Adaptation, Public Media URL) and the CHANGELOG in the same change; phase 1 lands with the ADR that retires "Wappa never converts media".
 
+### Poster frame
+
+When a video card has no `poster_url`, the poster is the frame at **1 second** (a seek by timestamp, not by frame index, because frame rates vary: 1 second is frame 30 at 30 fps and frame 25 at 25 fps). The first frame is often black or a fade-in, so it is used only when the clip is shorter than 1 second. If the frame at 1 second is near-black (mean luminance below a small threshold), the engine tries 2 seconds, then falls back to the first decodable frame. The poster keeps the video's aspect ratio, is scaled to the `card_image` rule, and is encoded as JPEG. The whole step (download, decode, encode, publish) runs in the background pool under the same per-job timeout and cache as every other adaptation, and its failure returns the same pre-send rejection as adaptation off, so a send never half-completes.
+
 ## Open questions
 
 - License of the bundled FFmpeg in PyAV wheels (likely GPL through x264/x265): accept for the opt-in extra, or require a system FFmpeg or OpenH264 for H.264 encoding?
@@ -178,7 +187,7 @@ Each phase updates `docs/public-contract.md`, both `ARCHITECTURE.md` files, `CON
 - Is GIF accepted as an Instagram image on the Facebook Login path, and is WebP silently accepted or refused?
 - Instagram `attachment_id` lifetime (Messenger documents 90 days): what TTL is safe for the Media ID cache?
 - WhatsApp sticker dimensions: is 512×512 enforced by the Cloud API, or only advised?
-- Poster frame: strictly the first frame (fast, sometimes black), or the first non-black frame within the first second?
+- Poster frame: decided 2026-11-06, see Poster frame.
 - Should `SYSTEM_MEDIA_FETCH_URLS` exist at all, or should Host URLs always pass through untouched?
 - Multi-host deployments without Redis: refuse public URLs at startup, or document a shared volume as the requirement?
 - Does `MediaUse` stay internal, or should `MediaFamily` gain `STICKER` / `VOICE` so `IMediaLibrary.upload` can pre-adapt for those uses (a public contract change)?
