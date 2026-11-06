@@ -342,3 +342,26 @@ async def test_outbound_runtime_builds_the_platform_messenger_over_its_pipeline(
         "welcome", _target(WA_REF), template_type="utility"
     )
     assert [i.method_name for i in recording.seen] == ["send_text_template"]
+
+
+def test_binding_needs_no_capability_until_one_is_used() -> None:
+    whatsapp_adapter = _whatsapp_adapter()
+    whatsapp_adapter._capabilities = {}
+    instagram_adapter = _instagram_adapter()
+    instagram_adapter._capabilities = {}
+
+    whatsapp = _bind(whatsapp_adapter).whatsapp
+    instagram = _bind(instagram_adapter).instagram
+
+    assert whatsapp is not None and instagram is not None
+    with pytest.raises(UnsupportedOperationError):
+        _ = whatsapp.templates
+    with pytest.raises(UnsupportedOperationError):
+        _ = instagram.comments
+
+
+def test_instagram_content_offers_the_mention_reads() -> None:
+    instagram = _bind(_instagram_adapter()).instagram
+    assert instagram is not None
+    assert callable(instagram.content.get_mentioned_post)
+    assert callable(instagram.content.get_mentioned_comment)

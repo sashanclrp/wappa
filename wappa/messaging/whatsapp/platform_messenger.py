@@ -10,10 +10,10 @@ through the Messenger Pipeline's middleware.
 
 from __future__ import annotations
 
+from functools import cached_property
 from typing import TYPE_CHECKING
 
 from wappa.core.messaging.platform_messenger import PlatformMessenger
-from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.interfaces.template_messaging import ITemplateMessaging
 from wappa.domain.interfaces.user_data_requests import IUserDataRequests
 from wappa.domain.messaging_targets import DirectMessage
@@ -25,16 +25,19 @@ if TYPE_CHECKING:
 class WhatsAppMessenger(PlatformMessenger):
     """The dispatch's Messenger plus WhatsApp's Templates and User Data Requests."""
 
-    def __init__(self, messenger: IMessenger) -> None:
-        super().__init__(messenger)
-        self.templates: ITemplateMessaging = messenger.require_capability(
-            ITemplateMessaging
-        )
+    @cached_property
+    def templates(self) -> ITemplateMessaging:
         """WhatsApp Templates: ``send_text_template``, ``send_media_template``,
-        ``send_location_template``."""
-        self._user_data_requests: IUserDataRequests = messenger.require_capability(
-            IUserDataRequests
-        )
+        ``send_location_template``.
+
+        Looked up on first use, so binding a handler to a Messenger (a test
+        fake, say) never requires capabilities the code does not touch.
+        """
+        return self.messenger.require_capability(ITemplateMessaging)
+
+    @cached_property
+    def _user_data_requests(self) -> IUserDataRequests:
+        return self.messenger.require_capability(IUserDataRequests)
 
     async def send_location_request(
         self, body: str, target: DirectMessage, reply_to_message_id: str | None = None
