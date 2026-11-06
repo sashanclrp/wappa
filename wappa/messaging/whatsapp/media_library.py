@@ -1,8 +1,8 @@
 """WhatsApp Media Library over the Cloud API Media endpoints.
 
 ``upload`` takes a file or bytes, returns a Media ID (send it with
-``send_image(media_id, ...)``) and passes ``mime_type`` to the Media API (a
-``bytes`` upload guesses it from ``filename`` when ``None``); ``download``
+``send_image(media_id, ...)``) and passes ``mime_type`` to the Media API
+(guessed from the file name and family when ``None``); ``download``
 resolves an inbound Media ID and returns its bytes, bounded by ``max_bytes``
 and the WhatsApp per-type limit; ``info`` is ``GET /{media_id}`` and
 ``delete`` is ``DELETE /{media_id}``.
@@ -35,6 +35,18 @@ if TYPE_CHECKING:
     )
 
 
+def _guess_mime(name: str, family: MediaFamily) -> str | None:
+    """The MIME type for ``name``, read in the light of the upload's family.
+
+    Python maps ``.3gp`` to ``audio/3gpp``, which WhatsApp refuses for a video
+    (131053); a video upload sends ``video/3gpp`` instead.
+    """
+    mime = mimetypes.guess_type(name)[0]
+    if family is MediaFamily.VIDEO and mime == "audio/3gpp":
+        return "video/3gpp"
+    return mime
+
+
 class WhatsAppMediaLibrary(IMediaLibrary):
     def __init__(self, media_handler: WhatsAppMediaHandler, inbox_id: str) -> None:
         self._handler = media_handler
@@ -48,10 +60,9 @@ class WhatsAppMediaLibrary(IMediaLibrary):
         mime_type: str | None = None,
         filename: str | None = None,
     ) -> UploadResult:
-        _ = family  # WhatsApp takes the MIME type, inferred from the name if None
         if isinstance(source, bytes):
             name = filename or "upload"
-            mime = mime_type or mimetypes.guess_type(name)[0]
+            mime = mime_type or _guess_mime(name, family)
             if mime is None:
                 raise ValueError(
                     "WhatsApp byte uploads need a mime_type or a filename with "
@@ -60,7 +71,9 @@ class WhatsAppMediaLibrary(IMediaLibrary):
             result = await self._handler.upload_media_from_bytes(source, mime, name)
         else:
             result = await self._handler.upload_media(
-                source, media_type=mime_type, filename=filename
+                source,
+                media_type=mime_type or _guess_mime(filename or source.name, family),
+                filename=filename,
             )
         if result.success and result.media_id:
             return UploadResult(
