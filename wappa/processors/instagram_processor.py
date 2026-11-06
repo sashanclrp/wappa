@@ -30,7 +30,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from wappa.core.inbound.instagram_routing import route_instagram_payload
 from wappa.core.inbound.platform_webhooks import RoutedWebhookDelivery
 from wappa.core.logging.logger import get_logger
 from wappa.domain.inbox.identity import InboxRef
@@ -82,6 +81,7 @@ from wappa.webhooks.instagram.models import (
     InstagramWebhook,
     is_echo,
 )
+from wappa.webhooks.instagram.routing import route_instagram_payload
 
 if TYPE_CHECKING:
     from wappa.core.events.field_registry import FieldHandlerRegistry
@@ -140,9 +140,13 @@ class InstagramWebhookProcessor:
         return await route_instagram_payload(payload, resolver)
 
     async def translate(
-        self, payload: dict[str, Any], *, inbox_id: str | None = None
+        self, payload: dict[str, Any], *, inbox_id: str
     ) -> UniversalWebhook:
-        """Translate one routed event; the Inbox is the entry's account ID."""
+        """Translate one routed event; the Inbox is the entry's account ID.
+
+        Every Instagram entry carries its account ID, so ``inbox_id`` (the
+        routed Inbox) is checked against it by the runtime after translation.
+        """
         container = InstagramWebhook.model_validate(payload)
         report_schema_drift(container, platform="instagram", logger=self.logger)
         if len(container.entry) != 1:

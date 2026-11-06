@@ -353,7 +353,7 @@ async def test_instagram_list_splits_folded_text_and_keeps_quick_replies_last() 
 
 async def test_instagram_long_caption_follow_up_is_split() -> None:
     messenger, client, sent = _ig()
-    caption = " ".join(["caption"] * 200)  # 1599 bytes
+    caption = " ".join(["cáptión"] * 120)  # 959 characters, 1199 UTF-8 bytes
     async with client:
         result = await messenger.send_image(
             "https://example.com/a.png", IG_DM, caption=caption

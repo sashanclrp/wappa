@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 from pydantic import ValidationError
 
 from wappa.core.inbound.platform_webhooks import RoutedWebhookDelivery
-from wappa.core.inbound.webhook_routing import route_whatsapp_payload
 from wappa.core.logging.logger import get_logger
 from wappa.processors.errors import ProcessorError, UnsupportedMessageTypeError
 from wappa.schemas.core.recipient import looks_like_bsuid, looks_like_phone_number
 from wappa.schemas.core.types import ErrorCode, MessageType, PlatformType
 from wappa.webhooks.core.base_message import BaseMessage
 from wappa.webhooks.core.schema_drift import report_schema_drift, report_unmodelled
+from wappa.webhooks.whatsapp.routing import route_whatsapp_payload
 from wappa.webhooks.whatsapp.webhook_container import BUILTIN_WEBHOOK_FIELDS
 
 if TYPE_CHECKING:
@@ -293,9 +293,14 @@ class WhatsAppWebhookProcessor:
         self,
         payload: dict[str, Any],
         *,
-        inbox_id: str | None = None,
+        inbox_id: str,
     ) -> "UniversalWebhook":
-        """Translate one routed change; ``inbox_id`` defaults to its metadata."""
+        """Translate one routed change.
+
+        The Inbox is ``value.metadata.phone_number_id`` when the change has
+        metadata; a registered custom field has none and takes ``inbox_id``
+        (the routed Inbox). The runtime checks the result against it.
+        """
         try:
             webhook = self._parse_webhook_container(payload)
             self.logger.debug("Raw WhatsApp webhook received: %s", payload)
@@ -670,7 +675,7 @@ class WhatsAppWebhookProcessor:
         )
 
     def _create_inbox_base(
-        self, webhook: "WhatsAppWebhook", inbox_id: str | None = None
+        self, webhook: "WhatsAppWebhook", inbox_id: str
     ) -> "InboxBase":
         from wappa.webhooks.core.webhook_interfaces import InboxBase
 
@@ -689,7 +694,7 @@ class WhatsAppWebhookProcessor:
             )
 
         return InboxBase(
-            inbox_id=inbox_id or "",
+            inbox_id=inbox_id,
             display_address="",
             platform_account_id=waba_id,
         )

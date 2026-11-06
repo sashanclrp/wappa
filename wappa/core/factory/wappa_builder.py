@@ -250,7 +250,7 @@ class WappaBuilder:
         *,
         parser: type[BaseModel] | Callable[[dict[str, Any]], BaseModel],
         handler: Callable[["CustomWebhook"], Awaitable[None]],
-        platform: PlatformType = PlatformType.WHATSAPP,
+        platform: PlatformType,
     ) -> "WappaBuilder":
         """
         Register a typed handler for a non-built-in Meta webhook field.
@@ -272,6 +272,8 @@ class WappaBuilder:
             parser: ``BaseModel`` subclass or callable producing one.
             handler: Async callable invoked with the resulting
                 ``CustomWebhook``.
+            platform: The Platform whose webhook carries the field; required,
+                since a field name means nothing without its Platform.
 
         Returns:
             Self for method chaining.
@@ -297,6 +299,7 @@ class WappaBuilder:
                 "message_template_status_update",
                 parser=TemplateStatusUpdate,
                 handler=on_template_status,
+                platform=PlatformType.WHATSAPP,
             )
         """
         self.field_registry.register(

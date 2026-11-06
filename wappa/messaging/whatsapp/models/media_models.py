@@ -1,35 +1,11 @@
-"""Media message models for WhatsApp messaging."""
+"""WhatsApp media rules: MIME types and size caps per media type.
+
+The neutral media send request models live in ``wappa.schemas.requests``.
+"""
 
 from enum import Enum
-from pathlib import Path
 
-from pydantic import BaseModel, Field, ValidationInfo, field_validator
-
-from wappa.schemas.core.recipient import DeliveryRequest
-
-# Shared field for AI context description across media types.
-# NOT sent to WhatsApp - used for internal AI agent context only.
-AI_DESCRIPTION_FIELD = Field(
-    None,
-    max_length=2048,
-    description=(
-        "Optional description for AI context. "
-        "Describes the media content for AI agents. "
-        "NOT sent to WhatsApp - internal context only."
-    ),
-)
-
-# Shared field for AI context transcript for audio/video media.
-# NOT sent to WhatsApp - used for internal AI agent context only.
-AI_TRANSCRIPT_FIELD = Field(
-    None,
-    max_length=10000,
-    description=(
-        "Optional transcript for audio/video content. "
-        "Provides text transcription of audio for AI agents. "
-        "NOT sent to WhatsApp - internal context only."
-    ),
-)
+from pydantic import BaseModel, Field, field_validator
 
 
 class MediaType(Enum):
@@ -75,122 +51,6 @@ class MediaType(Enum):
             cls.VIDEO: 16 * 1024 * 1024,  # 16MB
         }
         return max_sizes[media_type]
-
-
-class MediaMessage(DeliveryRequest):
-    media_type: MediaType = Field(
-        ..., description="Type of media (audio, document, image, sticker, video)"
-    )
-    media_source: str | Path = Field(
-        ..., description="Either a URL string or a Path object to the local media file"
-    )
-    caption: str | None = Field(
-        None,
-        max_length=1024,
-        description="Optional caption for the media (not supported for audio and sticker)",
-    )
-    filename: str | None = Field(
-        None, description="Optional filename (used for documents)"
-    )
-    reply_to_message_id: str | None = Field(
-        None, description="Optional message ID for replies"
-    )
-
-    @field_validator("caption")
-    @classmethod
-    def validate_caption_for_media_type(
-        cls, v: str | None, info: ValidationInfo
-    ) -> str | None:
-        if v is not None and info.data and "media_type" in info.data:
-            media_type = info.data["media_type"]
-            if media_type in (MediaType.AUDIO, MediaType.STICKER):
-                raise ValueError(
-                    f"Caption not supported for {media_type.value} media type"
-                )
-        return v
-
-    @field_validator("filename")
-    @classmethod
-    def validate_filename_for_documents(
-        cls, v: str | None, info: ValidationInfo
-    ) -> str | None:
-        if v is not None and info.data and "media_type" in info.data:
-            media_type = info.data["media_type"]
-            if media_type != MediaType.DOCUMENT:
-                raise ValueError(
-                    f"Filename only supported for document media type, not {media_type.value}"
-                )
-        return v
-
-
-class ImageMessage(DeliveryRequest):
-    media_source: str | Path = Field(
-        ..., description="Either a URL string or a Path object to the local media file"
-    )
-    caption: str | None = Field(
-        None, max_length=1024, description="Optional caption for the image"
-    )
-    description: str | None = AI_DESCRIPTION_FIELD
-    reply_to_message_id: str | None = Field(
-        None, description="Optional message ID for replies"
-    )
-
-
-class VideoMessage(DeliveryRequest):
-    media_source: str | Path = Field(
-        ..., description="Either a URL string or a Path object to the local media file"
-    )
-    caption: str | None = Field(
-        None, max_length=1024, description="Optional caption for the video"
-    )
-    description: str | None = AI_DESCRIPTION_FIELD
-    transcript: str | None = AI_TRANSCRIPT_FIELD
-    reply_to_message_id: str | None = Field(
-        None, description="Optional message ID for replies"
-    )
-
-
-class AudioMessage(DeliveryRequest):
-    media_source: str | Path = Field(
-        ..., description="Either a URL string or a Path object to the local media file"
-    )
-    description: str | None = AI_DESCRIPTION_FIELD
-    transcript: str | None = AI_TRANSCRIPT_FIELD
-    is_voice: bool = Field(
-        False,
-        description=(
-            "Deliver as a voice note (waveform). WhatsApp: .ogg (Opus, mono) only, "
-            "otherwise 400. Instagram shows all audio as a voice message and "
-            "ignores the flag"
-        ),
-    )
-    reply_to_message_id: str | None = Field(
-        None, description="Optional message ID for replies"
-    )
-
-
-class DocumentMessage(DeliveryRequest):
-    media_source: str | Path = Field(
-        ..., description="Either a URL string or a Path object to the local media file"
-    )
-    caption: str | None = Field(
-        None, max_length=1024, description="Optional caption for the document"
-    )
-    description: str | None = AI_DESCRIPTION_FIELD
-    filename: str | None = Field(None, description="Optional filename for the document")
-    reply_to_message_id: str | None = Field(
-        None, description="Optional message ID for replies"
-    )
-
-
-class StickerMessage(DeliveryRequest):
-    media_source: str | Path = Field(
-        ..., description="Either a URL string or a Path object to the local media file"
-    )
-    description: str | None = AI_DESCRIPTION_FIELD
-    reply_to_message_id: str | None = Field(
-        None, description="Optional message ID for replies"
-    )
 
 
 class MediaUploadRequest(BaseModel):

@@ -28,6 +28,7 @@ from wappa.domain.inbox import (
     PlatformAccountRef,
     ResolvedInboxCredentials,
 )
+from wappa.domain.interfaces.user_data_requests import IUserDataRequests
 from wappa.domain.messaging_targets import UnsupportedOperationError
 from wappa.domain.results import MessageResult
 from wappa.messaging.outbound_runtime import OutboundRuntime
@@ -78,6 +79,9 @@ class _Messenger:
         self.inbox_id = inbox_ref.inbox_id
         self.calls: list[tuple[str, Any]] = []
 
+    def capability(self, kind: Any) -> Any:
+        return None  # no focused capabilities unless a test installs them
+
     def _ok(self, recipient: str) -> MessageResult:
         return MessageResult(
             success=True,
@@ -127,11 +131,6 @@ class _Messenger:
     ) -> MessageResult:
         self.calls.append(("send_carousel", (len(cards), body)))
         return self._ok(target.recipient_id)
-
-    async def send_location_request(self, *args: Any, **kwargs: Any) -> MessageResult:
-        raise UnsupportedOperationError(
-            f"{self.platform.value} does not support send_location_request"
-        )
 
 
 class _Runtime(OutboundRuntime):
@@ -203,6 +202,7 @@ def test_carousel_route_calls_the_one_carousel_method() -> None:
     card = {
         "title": "Plan",
         "header": {"kind": "image", "url": "https://example.com/a.png"},
+        "buttons": [{"id": "plan", "title": "Pick"}],
     }
 
     response = TestClient(app).post(
@@ -216,17 +216,59 @@ def test_carousel_route_calls_the_one_carousel_method() -> None:
     assert runtime.messengers[ig].calls == [("send_carousel", (2, "Pick"))]
 
 
-def test_an_action_the_platform_lacks_is_501() -> None:
+@pytest.mark.parametrize("route", ["send-location-request", "send-contact-request"])
+def test_an_action_the_platform_lacks_is_501(route: str) -> None:
     app, _, _ = _app()
 
     response = TestClient(app).post(
-        "/api/instagram/specialized/send-location-request",
+        f"/api/instagram/specialized/{route}",
         json={"recipient": "6551596044932863", "body": "Where are you?"},
         headers=IG_HEADERS,
     )
 
     assert response.status_code == 501
-    assert "instagram" in response.json()["detail"]
+    assert response.json()["detail"] == "instagram does not provide IUserDataRequests"
+
+
+class _UserDataRequests:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, Any]] = []
+
+    async def send_location_request(
+        self, body: str, target: Any, reply_to_message_id: str | None = None
+    ) -> MessageResult:
+        self.calls.append(("location", body, target))
+        return MessageResult(success=True, platform=PlatformType.WHATSAPP)
+
+    async def send_contact_request(
+        self, body: str, target: Any, reply_to_message_id: str | None = None
+    ) -> MessageResult:
+        self.calls.append(("contact", body, target))
+        return MessageResult(success=True, platform=PlatformType.WHATSAPP)
+
+
+def test_user_data_request_routes_reach_the_capability() -> None:
+    app, _, runtime = _app()
+    wa = InboxRef.whatsapp(WA_INBOX)
+    requests = _UserDataRequests()
+    messenger = runtime.messengers.setdefault(wa, _Messenger(wa))
+    messenger.capability = {IUserDataRequests: requests}.get  # type: ignore[attr-defined]
+    client = TestClient(app)
+    body = {"recipient": "573001112233", "body": "Share it"}
+
+    for route in ("send-location-request", "send-contact-request"):
+        response = client.post(
+            f"/api/whatsapp/specialized/{route}",
+            json=body,
+            headers={INBOX_ID_HEADER: WA_INBOX},
+        )
+        assert response.status_code == 200, response.text
+
+    assert [(kind, text) for kind, text, _ in requests.calls] == [
+        ("location", "Share it"),
+        ("contact", "Share it"),
+    ]
+    assert requests.calls[0][2].inbox_ref == wa
 
 
 _WHATSAPP_EXTENSION_ROUTES = [
@@ -658,7 +700,10 @@ def test_whatsapp_download_of_a_dead_media_id_answers_404() -> None:
     handler = MagicMock()
     handler.get_media_as_bytes = AsyncMock(
         return_value=MediaDownloadResult(
-            success=False, error="unknown media", error_code="HTTP_400"
+            platform=PlatformType.WHATSAPP,
+            success=False,
+            error="unknown media",
+            error_code="HTTP_400",
         )
     )
     library = WhatsAppMediaLibrary(handler, WA_INBOX)

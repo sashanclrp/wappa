@@ -12,17 +12,31 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from wappa.core.messaging.pipeline import MessengerPipeline, _PipelineTemplates
+from wappa.connections import IInboxConnector
+from wappa.connections.instagram import InstagramConnector
+from wappa.connections.whatsapp import WhatsAppConnector
+from wappa.core.inbound.platform_webhooks import PlatformWebhooks
+from wappa.core.messaging.pipeline import (
+    MessengerPipeline,
+    _PipelineTemplates,
+    _PipelineUserDataRequests,
+)
 from wappa.domain.inbox import InboxRef
 from wappa.domain.interfaces.media_library import IMediaLibrary
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.interfaces.template_messaging import ITemplateMessaging
+from wappa.domain.interfaces.user_data_requests import (
+    USER_DATA_REQUEST_METHODS,
+    IUserDataRequests,
+)
 from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.domain.results import MessageResult
 from wappa.messaging.instagram.media_library import InstagramMediaLibrary
 from wappa.messaging.instagram.messenger import InstagramMessenger
 from wappa.messaging.whatsapp.media_library import WhatsAppMediaLibrary
 from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
+from wappa.processors.instagram_processor import InstagramWebhookProcessor
+from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.schemas.core.types import PlatformType
 
 # Every cross-Platform action on the contract: the abstract ones every
@@ -104,6 +118,44 @@ def test_adapter_signatures_match_the_contract(adapter: type[IMessenger]):
         for name, member in vars(contract).items():
             if inspect.iscoroutinefunction(member) and not name.startswith("_"):
                 assert _shape(getattr(adapter, name)) == _shape(member), name
+
+
+def test_pipeline_user_data_requests_signature_matches_iuserdatarequests():
+    for name in USER_DATA_REQUEST_METHODS:
+        assert _shape(getattr(_PipelineUserDataRequests, name)) == _shape(
+            getattr(IUserDataRequests, name)
+        )
+        assert _shape(getattr(WhatsAppMessenger, name)) == _shape(
+            getattr(IUserDataRequests, name)
+        )
+
+
+def _public_methods(contract: type) -> dict[str, Any]:
+    return {
+        name: member
+        for name, member in vars(contract).items()
+        if inspect.isfunction(member) and not name.startswith("_")
+    }
+
+
+@pytest.mark.parametrize(
+    ("contract", "adapters"),
+    [
+        (PlatformWebhooks, (WhatsAppWebhookProcessor, InstagramWebhookProcessor)),
+        (IMediaLibrary, (WhatsAppMediaLibrary, InstagramMediaLibrary)),
+        (IInboxConnector, (WhatsAppConnector, InstagramConnector)),
+    ],
+    ids=["PlatformWebhooks", "IMediaLibrary", "IInboxConnector"],
+)
+def test_platform_adapters_match_their_contract_signatures(
+    contract: type, adapters: tuple[type, ...]
+):
+    # Liskov: no extra preconditions and no loosened or dropped parameters.
+    methods = _public_methods(contract)
+    assert methods, contract
+    for adapter in adapters:
+        for name, member in methods.items():
+            assert _shape(getattr(adapter, name)) == _shape(member), (adapter, name)
 
 
 @pytest.mark.parametrize("build", [_whatsapp, _instagram])
@@ -208,16 +260,16 @@ def test_capability_lookup_is_one_base_implementation():
         assert "require_capability" not in vars(adapter), adapter
 
 
-def test_capability_resolves_the_interface_and_the_concrete_class_on_both():
+def test_capability_resolves_the_interface_only_on_both():
     wa = _whatsapp()
     library = wa.capability(IMediaLibrary)
     assert isinstance(library, WhatsAppMediaLibrary)
     assert wa.capability(IMediaLibrary) is library  # built once, not per call
-    assert wa.capability(WhatsAppMediaLibrary) is library
+    assert wa.capability(WhatsAppMediaLibrary) is None  # never a concrete class
     assert wa.capability(ITemplateMessaging) is wa
 
     ig = _instagram()
     ig_library = ig.capability(IMediaLibrary)
     assert isinstance(ig_library, InstagramMediaLibrary)
-    assert ig.capability(InstagramMediaLibrary) is ig_library
+    assert ig.capability(InstagramMediaLibrary) is None
     assert ig.capability(ITemplateMessaging) is None

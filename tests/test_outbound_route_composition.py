@@ -31,6 +31,7 @@ ORDINARY_OUTBOUND_ROUTES = {
     ("/api/{platform}/specialized/send-contact", "POST"),
     ("/api/{platform}/specialized/send-location", "POST"),
     ("/api/{platform}/specialized/send-location-request", "POST"),
+    ("/api/{platform}/specialized/send-contact-request", "POST"),
 }
 
 INTERACTIVE_OUTBOUND_ROUTES = {

@@ -1,8 +1,9 @@
 """
 Wappa Webhook Schemas and Universal Interfaces
 
-Provides a stable import surface for universal webhook models and
-platform-specific webhook schemas.
+Provides a stable import surface for the universal webhook models. Each
+Platform's own schemas import from its adapter package
+(``wappa.webhooks.whatsapp``, ``wappa.webhooks.instagram``).
 
 Usage:
     # Universal webhook interfaces
@@ -56,17 +57,6 @@ from .core.webhook_interfaces.universal_webhooks import (
     SystemWebhook,
     UniversalWebhook,
 )
-from .whatsapp.base_models import (
-    ContactProfile,
-    Conversation,
-    ErrorData,
-    MessageContext,
-    MessageError,
-    Pricing,
-    WhatsAppContact,
-    WhatsAppMetadata,
-)
-from .whatsapp.webhook_container import WhatsAppWebhook
 
 __all__ = [
     "UniversalWebhook",
@@ -104,15 +94,6 @@ __all__ = [
     "BaseWebhook",
     "BaseWebhookMetadata",
     "BaseContact",
-    "WhatsAppWebhook",
-    "WhatsAppMetadata",
-    "WhatsAppContact",
-    "ContactProfile",
-    "MessageContext",
-    "MessageError",
-    "ErrorData",
-    "Pricing",
-    "Conversation",
     # Base message and webhook components
     "BaseMessage",
     "InboxBase",

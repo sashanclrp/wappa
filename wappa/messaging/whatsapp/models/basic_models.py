@@ -1,11 +1,13 @@
-"""Basic message models for WhatsApp messaging."""
+"""WhatsApp Cloud API send-response models and their ``MessageResult`` builders.
+
+The neutral HTTP request models live in ``wappa.schemas.requests``.
+"""
 
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from wappa.domain.results import MessageResult
-from wappa.schemas.core.recipient import DeliveryRequest
 from wappa.schemas.core.types import PlatformType
 
 
@@ -138,30 +140,3 @@ def message_result_from_payload(
     if result.recipient is None:
         result.recipient = fallback_recipient
     return result
-
-
-class BasicTextMessage(DeliveryRequest):
-    text: str = Field(
-        ..., min_length=1, max_length=4096, description="Text content of the message"
-    )
-    reply_to_message_id: str | None = Field(
-        None, description="Message ID to reply to (creates a thread)"
-    )
-    disable_preview: bool = Field(
-        False, description="Disable URL preview for links in the message"
-    )
-
-
-class ReadStatusMessage(BaseModel):
-    message_id: str = Field(..., min_length=1, description="Message ID to mark as read")
-    recipient: str = Field(
-        ...,
-        min_length=1,
-        description=(
-            "The User who sent the message; Instagram marks this User's thread "
-            "seen, WhatsApp checks it against the Inbox"
-        ),
-    )
-    typing: bool = Field(
-        False, description="Show typing indicator when marking as read"
-    )

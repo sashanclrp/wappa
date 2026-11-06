@@ -78,7 +78,7 @@ Every action that exists on both Platforms has one `IMessenger` method; the Inst
 | send a sticker | `send_sticker(source, target)` | sent as an image (png/jpeg/gif; `.webp` rejected before I/O) |
 | send media with a caption | `send_image/video/document(..., caption=...)` | media, then the caption as a follow-up text; `filename`/`transcript` ignored |
 
-`send_location_request` and `send_contact_request` stay WhatsApp-only: Instagram raises `UnsupportedOperationError` because a text prompt cannot return the data, so gate on `supported_operations`. Reactions have no send method yet (`send_reaction` is a recorded gap: deprioritized by the user on 2026-11-06).
+Location and phone-number requests are the WhatsApp-only `IUserDataRequests` capability: Instagram does not provide it because a text prompt cannot return the data, so gate on `messenger.capability(IUserDataRequests)`. Reactions have no send method yet (`send_reaction` is a recorded gap: deprioritized by the user on 2026-11-06).
 
 `mark_as_read` gained an optional `target`. WhatsApp marks the message read (and now really sends the typing indicator); existing WhatsApp calls without `target` are unchanged. Custom `IMessenger` implementations and test fakes that override `mark_as_read` must accept the new keyword. Earlier unreleased drafts exposed `mark_seen`, `set_typing`, `send_quick_replies`, `send_buttons`, `send_card`, `IMessenger.reply_comment`, `QuickReply`, `PostbackButton`, `SenderActionResult`, `IMessenger.download_media` and an `InteractionWebhook`/`process_interaction` lane; none of them exist in the released contract.
 

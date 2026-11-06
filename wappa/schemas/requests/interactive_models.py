@@ -1,4 +1,9 @@
-"""Interactive message models for WhatsApp messaging."""
+"""Neutral HTTP request models for button, list and CTA messages.
+
+Each model runs the same shared check as ``IMessenger`` (``check_button_message``,
+``check_list_message``, ``check_cta_message``), so a request that validates is
+deliverable on every Platform.
+"""
 
 from typing import Self
 
@@ -13,6 +18,7 @@ from wappa.domain.interactive import (
     LIST_BODY_MAX,
     LIST_BUTTON_TEXT_MAX,
     LIST_SECTIONS_MAX,
+    TEXT_MAX,
     InteractiveHeader,
     ListSection,
     ReplyButton,
@@ -25,7 +31,7 @@ from wappa.schemas.core.recipient import DeliveryRequest
 
 class InteractiveMessage(DeliveryRequest):
     body: str = Field(
-        ..., min_length=1, max_length=4096, description="Main message text"
+        ..., min_length=1, max_length=TEXT_MAX, description="Main message text"
     )
     reply_to_message_id: str | None = Field(
         None, description="Optional message ID for replies"

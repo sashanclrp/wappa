@@ -12,11 +12,13 @@ import pytest
 
 from wappa.api.routes.specialized import (
     ContactRequest,
+    ContactRequestRequest,
     LocationRequest,
     LocationRequestRequest,
 )
 from wappa.domain.contacts import ContactCard, ContactName, ContactPhone
 from wappa.domain.interactive import ListRow, ListSection, ReplyButton
+from wappa.domain.interfaces.media_library import MediaFamily
 from wappa.messaging import (
     LocationTemplateTransportRequest,
     MediaTemplateTransportRequest,
@@ -30,27 +32,27 @@ from wappa.messaging import (
     UnsupportedOutboundPayloadError,
     classify_outbound_payload,
 )
-from wappa.messaging.whatsapp.models.basic_models import (
+from wappa.schemas.requests.basic_models import (
     BasicTextMessage,
     ReadStatusMessage,
 )
-from wappa.messaging.whatsapp.models.interactive_models import (
+from wappa.schemas.requests.interactive_models import (
     ButtonMessage,
     CTAMessage,
     InteractiveMessage,
     ListMessage,
 )
-from wappa.messaging.whatsapp.models.media_models import (
+from wappa.schemas.requests.media_models import (
     AudioMessage,
     DocumentMessage,
     ImageMessage,
     MediaMessage,
-    MediaType,
     StickerMessage,
     VideoMessage,
 )
-from wappa.messaging.whatsapp.models.specialized_models import (
+from wappa.schemas.requests.specialized_models import (
     ContactMessage,
+    ContactRequestMessage,
     LocationMessage,
     LocationRequestMessage,
 )
@@ -162,6 +164,13 @@ ORDINARY_PAYLOADS = [
         id="location-request",
     ),
     pytest.param(
+        ContactRequestMessage(recipient=RECIPIENT, body="your phone?"),
+        OutboundTransportFamily.INTERACTIVE,
+        OutboundTransportSubkind.CONTACT_REQUEST,
+        "contact_request",
+        id="contact-request-prompt",
+    ),
+    pytest.param(
         LocationMessage(recipient=RECIPIENT, latitude=4.7, longitude=-74.0),
         OutboundTransportFamily.LOCATION,
         None,
@@ -202,9 +211,9 @@ def test_every_ordinary_payload_family_classifies(
     assert not classification.is_template
 
 
-@pytest.mark.parametrize("media_type", list(MediaType))
+@pytest.mark.parametrize("media_type", list(MediaFamily))
 def test_media_message_classifies_by_its_declared_media_type(
-    media_type: MediaType,
+    media_type: MediaFamily,
 ) -> None:
     payload = MediaMessage(
         recipient=RECIPIENT, media_type=media_type, media_source="https://x/y"
@@ -357,6 +366,11 @@ def test_shapes_that_name_no_transport_are_rejected(payload: object) -> None:
             LocationRequestRequest(recipient=RECIPIENT, body="where?"),
             "location_request",
             id="location-request-prompt",
+        ),
+        pytest.param(
+            ContactRequestRequest(recipient=RECIPIENT, body="phone?"),
+            "contact_request",
+            id="contact-request-prompt",
         ),
     ],
 )

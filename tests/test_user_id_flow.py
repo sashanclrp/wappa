@@ -13,9 +13,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from wappa.domain.events.api_message_event import APIMessageEvent
-from wappa.messaging.whatsapp.models.basic_models import BasicTextMessage
 from wappa.schemas.core.recipient import RecipientRequest
 from wappa.schemas.core.types import PlatformType
+from wappa.schemas.requests.basic_models import BasicTextMessage
 from wappa.webhooks.core.webhook_interfaces import StatusWebhook
 
 

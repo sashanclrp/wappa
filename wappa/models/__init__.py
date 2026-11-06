@@ -1,83 +1,54 @@
 """
-Wappa Data Models for API Endpoints
+Wappa data models for API endpoint schemas.
 
-Re-exports WhatsApp models with cleaner import paths for creating API endpoint schemas.
-This provides easy access to message models for FastAPI endpoint typing.
+Re-exports the neutral send request models (``wappa.schemas.requests``) and
+the neutral values they carry, for FastAPI endpoint typing on any Platform:
 
-Clean Architecture: Domain entities and data transfer objects.
-
-Usage (User Request: Quick access to WhatsApp models for endpoint schemas):
-    # Basic message models
     from wappa.models import BasicTextMessage, MessageResult
-
-    # Interactive models
     from wappa.models import ButtonMessage, ListMessage, CTAMessage
-
-    # Media models
     from wappa.models import ImageMessage, VideoMessage, AudioMessage
-
-    # Specialized models
     from wappa.models import ContactMessage, LocationMessage
 
-    Template transport requests are public from ``wappa.messaging``.
+WhatsApp-only models (``MediaType``, ``BusinessContact``, ``PersonalContact``,
+the validator results, ``TemplateParameter``, ``WhatsAppTemplateType``) import
+from ``wappa.messaging.whatsapp.models``. Template transport requests are
+public from ``wappa.messaging``.
 """
 
-# Re-export WhatsApp models with cleaner path (User Request: Quick access)
 from ..domain.contacts import ContactCard
 from ..domain.results import MessageResult
-from ..messaging.whatsapp.models import (
+from ..schemas.requests import (
     AudioMessage,
-    # Basic Models
     BasicTextMessage,
-    BusinessContact,
-    # Interactive Models
     ButtonMessage,
-    # Specialized Models
     ContactMessage,
-    ContactValidationResult,
+    ContactRequestMessage,
     CTAMessage,
     DocumentMessage,
     ImageMessage,
     ListMessage,
     LocationMessage,
     LocationRequestMessage,
-    LocationValidationResult,
-    # Media Models
-    MediaType,
-    PersonalContact,
     ReadStatusMessage,
     StickerMessage,
-    TemplateParameter,
     VideoMessage,
-    WhatsAppTemplateType,
 )
 
 __all__ = [
-    # Basic Models (User Request: Clean access for endpoint schemas)
     "BasicTextMessage",
     "MessageResult",
     "ReadStatusMessage",
-    # Interactive Models
     "ButtonMessage",
     "CTAMessage",
     "ListMessage",
-    # Media Models
-    "MediaType",
     "ImageMessage",
     "VideoMessage",
     "AudioMessage",
     "DocumentMessage",
     "StickerMessage",
-    # Specialized Models
     "ContactCard",
     "ContactMessage",
-    "ContactValidationResult",
+    "ContactRequestMessage",
     "LocationMessage",
     "LocationRequestMessage",
-    "LocationValidationResult",
-    "BusinessContact",
-    "PersonalContact",
-    # Template Models
-    "TemplateParameter",
-    "WhatsAppTemplateType",
 ]

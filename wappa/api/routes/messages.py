@@ -20,7 +20,7 @@ from wappa.api.utils import (
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.results import MessageResult
-from wappa.messaging.whatsapp.models.basic_models import (
+from wappa.schemas.requests.basic_models import (
     BasicTextMessage,
     ReadStatusMessage,
 )

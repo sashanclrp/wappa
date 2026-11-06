@@ -1,7 +1,8 @@
 """The inbound Platform seam: route an authenticated batch, then translate it.
 
 Every installed Platform supplies one ``PlatformWebhooks`` adapter through
-``wappa.platforms``. The webhook controller authenticates the request bytes
+``wappa.platforms``; its payload routing lives with its webhook schemas
+(``wappa.webhooks.<platform>.routing``). The webhook controller authenticates the request bytes
 (ADR-0023) and calls ``route``; the Inbound Runtime runs admission and echo
 proof, then calls ``translate`` (ADR-0023). Message-type tables stay private
 to each adapter.
@@ -24,6 +25,16 @@ if TYPE_CHECKING:
 
 class PayloadRoutingError(Exception):
     """An authenticated payload cannot identify a safe dispatch scope."""
+
+
+class PlatformAccountNotRegisteredError(PayloadRoutingError):
+    """A confirmed Platform Account has no active Inbox."""
+
+    def __init__(self, account_ref: PlatformAccountRef) -> None:
+        self.account_ref = account_ref
+        super().__init__(
+            f"No active Inbox is registered for Platform Account {account_ref}"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,7 +78,12 @@ class PlatformWebhooks(Protocol):
     async def translate(
         self, payload: dict[str, Any], *, inbox_id: str
     ) -> UniversalWebhook:
-        """Translate one routed delivery payload into a Universal Webhook."""
+        """Translate one routed delivery payload into a Universal Webhook.
+
+        ``inbox_id`` is the routed delivery's Inbox. A payload without its own
+        Inbox evidence takes it; the Inbound Runtime checks the translated
+        Inbox against it either way.
+        """
         ...
 
 

@@ -13,21 +13,14 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from wappa.core.inbound.platform_webhooks import (
+    PayloadRoutingError,
+    PlatformAccountNotRegisteredError,
+    RoutedWebhookDelivery,
+)
 from wappa.domain.inbox.errors import InboxMembershipError, InboxNotFoundError
 from wappa.domain.inbox.identity import InboxRef, PlatformAccountRef
 from wappa.domain.inbox.ports import IInboxCredentialResolver, ResolvedInboxCredentials
-
-from .platform_webhooks import PayloadRoutingError, RoutedWebhookDelivery
-
-
-class PlatformAccountNotRegisteredError(PayloadRoutingError):
-    """A confirmed Platform Account has no active Inbox."""
-
-    def __init__(self, account_ref: PlatformAccountRef) -> None:
-        self.account_ref = account_ref
-        super().__init__(
-            f"No active Inbox is registered for Platform Account {account_ref}"
-        )
 
 
 async def route_whatsapp_payload(

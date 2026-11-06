@@ -14,6 +14,9 @@ from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.schemas.core.types import MessageType
 from wappa.webhooks.whatsapp.message_types.button import WhatsAppButtonMessage
 
+# The routed Inbox the runtime passes to translate().
+INBOX_ID = "routed-inbox"
+
 MESSAGE_ID = "wamid.HBgMNTczMDAyNDA5MDEyFQIAEhgUMEExITEST0BUT09OMDBFRTAwQgA="
 
 
@@ -99,7 +102,7 @@ def test_forwarded_button_context_still_rejected() -> None:
 async def test_universal_webhook_exposes_button_text() -> None:
     processor = WhatsAppWebhookProcessor()
 
-    webhook = await processor.translate(_payload(_button_message()))
+    webhook = await processor.translate(_payload(_button_message()), inbox_id=INBOX_ID)
 
     assert webhook.message.message_type is MessageType.BUTTON
     assert webhook.get_message_text() == "QUIERO PROMO SUERO"

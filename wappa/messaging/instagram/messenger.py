@@ -26,8 +26,8 @@ Contract mappings (ADR-0025: one Messenger method per action):
   (uploaded first)
 - ``send_location`` / ``send_contact`` → text (maps link / one block per card);
   ``send_sticker`` → image
-- ``send_location_request`` / ``send_contact_request`` → not available
-  (WhatsApp-only core actions; a text prompt would not return the data)
+- ``IUserDataRequests`` (location / phone-number requests) → not provided
+  (``capability()`` is ``None``; a text prompt would not return the data)
 - reply: top-level ``reply_to: {"mid"}``
 
 Known local constraints are rejected before I/O; provider refusals and
@@ -53,9 +53,11 @@ from wappa.domain.interactive import (
     ReplyButton,
     UrlButton,
     check_button_message,
+    check_caption,
     check_carousel,
     check_cta_message,
     check_list_message,
+    check_text,
 )
 from wappa.domain.interfaces.conversation_capabilities import (
     ICommentControls,
@@ -231,25 +233,19 @@ def _card(card: MessageCard) -> dict[str, Any]:
     if card.subtitle:
         element["subtitle"] = card.subtitle
     default_url = card.default_url
-    if card.header is not None:
-        if card.header.kind == "image":
-            element["image_url"] = str(card.header.url)
-        elif card.header.poster_url is None:
-            raise UnsupportedOperationError(
-                f"Instagram card {card.title!r}: a video card shows a still image; "
-                "pass poster_url, or enable media adaptation"
-            )
-        else:
-            element["image_url"] = str(card.header.poster_url)
-            default_url = default_url or card.header.url
+    if card.header.kind == "image":
+        element["image_url"] = str(card.header.url)
+    elif card.header.poster_url is None:
+        raise UnsupportedOperationError(
+            f"Instagram card {card.title!r}: a video card shows a still image; "
+            "pass poster_url, or enable media adaptation"
+        )
+    else:
+        element["image_url"] = str(card.header.poster_url)
+        default_url = default_url or card.header.url
     if default_url:
         element["default_action"] = {"type": "web_url", "url": str(default_url)}
-    if card.buttons:
-        element["buttons"] = [_card_button(b) for b in card.buttons]
-    if len(element) == 1:
-        raise ValueError(
-            "Instagram cards need a subtitle, image, default URL or button"
-        )
+    element["buttons"] = [_card_button(b) for b in card.buttons]
     return element
 
 
@@ -421,6 +417,7 @@ class InstagramMessenger(IMessenger):
     ) -> MessageResult:
         """Text over 1000 UTF-8 bytes goes out as several messages.
 
+        The shared ``TEXT_MAX`` (WhatsApp's 4096 characters) is checked first.
         ``disable_preview`` is ignored: Instagram has no preview switch. A
         ``PrivateReply`` is one message per comment, so it cannot be split and
         an over-limit private reply raises ``ValueError``. For a split text
@@ -433,6 +430,7 @@ class InstagramMessenger(IMessenger):
             raise TypeError("send_text requires a DirectMessage or PrivateReply")
         # Validate target scope before content so wrong-Inbox fails first.
         target.resolve(self._inbox_ref)
+        check_text(text)
         if isinstance(target, PrivateReply):
             return await self._send(
                 target,
@@ -539,6 +537,7 @@ class InstagramMessenger(IMessenger):
         ``platform_response["wappa_parts"]``; a refused caption returns a failed
         result saying the media was already delivered (nothing retries).
         """
+        check_caption(caption)
         result = await self._send_media(family, source, target, reply_to_message_id)
         if not (caption and caption.strip()):
             return result

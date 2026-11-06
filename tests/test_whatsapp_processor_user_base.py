@@ -3,6 +3,9 @@ import pytest
 from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.webhooks.whatsapp.webhook_container import WhatsAppWebhook
 
+# The routed Inbox the runtime passes to translate().
+INBOX_ID = "routed-inbox"
+
 
 def test_create_user_base_from_contacts_preserves_wa_id_when_bsuid_exists() -> None:
     processor = WhatsAppWebhookProcessor()
@@ -93,7 +96,7 @@ async def test_translate_accepts_contact_without_profile() -> None:
     }
 
     processor = WhatsAppWebhookProcessor()
-    webhook = await processor.translate(payload)
+    webhook = await processor.translate(payload, inbox_id=INBOX_ID)
 
     assert webhook.user.user_id == "CO.2186878922080769"  # BSUID preferred (v0.3.3)
     assert webhook.user.phone_number == "573168227670"

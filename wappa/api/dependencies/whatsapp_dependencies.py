@@ -1,7 +1,7 @@
 """Dependencies of the WhatsApp extension router.
 
-Everything here serves routes that exist only on WhatsApp (limits, validators,
-Template info, ``/health``). The router mounts :func:`whatsapp_only` once, so
+Everything here serves routes and services that exist only on WhatsApp
+(limits, validators, Template info and Template state, ``/health``). The router mounts :func:`whatsapp_only` once, so
 every route behind it answers 501 under another Platform's path; the client
 is built here from the Inbox's resolved credentials, never in the shared
 Inbox Execution Context.
@@ -9,8 +9,12 @@ Inbox Execution Context.
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 
+from wappa.api.dependencies.cache_dependencies import (
+    build_cache_factory,
+    get_identity_resolver,
+)
 from wappa.api.dependencies.inbox_context import (
     InboxExecutionContext,
     get_inbox_execution_context,
@@ -22,7 +26,10 @@ from wappa.messaging.whatsapp.payload_builders import (
     WhatsAppMediaPayloadBuilder,
     WhatsAppMessagePayloadBuilder,
 )
-from wappa.messaging.whatsapp.services import WhatsAppTemplateInfoService
+from wappa.messaging.whatsapp.services import (
+    TemplateStateService,
+    WhatsAppTemplateInfoService,
+)
 from wappa.schemas.core.types import PlatformType
 
 
@@ -81,4 +88,15 @@ async def get_whatsapp_template_info_service(
     """
     return WhatsAppTemplateInfoService(
         client=client, business_account_id=context.platform_account_id
+    )
+
+
+async def get_template_state_service(
+    request: Request,
+    context: InboxExecutionContext = Depends(get_inbox_execution_context),
+) -> TemplateStateService:
+    """Template state service scoped to the selected Inbox."""
+    cache_factory = build_cache_factory(request, context, recipient="template-api")
+    return TemplateStateService(
+        cache_factory, identity_resolver=get_identity_resolver(request)
     )

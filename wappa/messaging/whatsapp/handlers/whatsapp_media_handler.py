@@ -77,6 +77,7 @@ class WhatsAppMediaHandler:
             media_path = Path(file_path)
             if not media_path.exists():
                 return MediaUploadResult(
+                    platform=PlatformType.WHATSAPP,
                     success=False,
                     error=f"Media file not found: {media_path}",
                     error_code="FILE_NOT_FOUND",
@@ -87,6 +88,7 @@ class WhatsAppMediaHandler:
                 media_type = mimetypes.guess_type(media_path)[0]
                 if not media_type:
                     return MediaUploadResult(
+                        platform=PlatformType.WHATSAPP,
                         success=False,
                         error=f"Could not determine MIME type for file: {media_path}",
                         error_code="MIME_TYPE_UNKNOWN",
@@ -95,6 +97,7 @@ class WhatsAppMediaHandler:
 
             if not self.validate_media_type(media_type):
                 return MediaUploadResult(
+                    platform=PlatformType.WHATSAPP,
                     success=False,
                     error=f"Unsupported MIME type '{media_type}'. Supported types: {sorted(self.supported_media_types)}",
                     error_code="MIME_TYPE_UNSUPPORTED",
@@ -105,6 +108,7 @@ class WhatsAppMediaHandler:
             if not self.validate_file_size(file_size, media_type):
                 max_size = self._get_max_size_for_mime_type(media_type)
                 return MediaUploadResult(
+                    platform=PlatformType.WHATSAPP,
                     success=False,
                     error=f"File size ({file_size} bytes) exceeds the limit ({max_size} bytes) for type {media_type}",
                     error_code="FILE_SIZE_EXCEEDED",
@@ -125,6 +129,7 @@ class WhatsAppMediaHandler:
             media_id = result.get("id")
             if not media_id:
                 return MediaUploadResult(
+                    platform=PlatformType.WHATSAPP,
                     success=False,
                     error=f"No media ID in response for {media_path.name}: {result}",
                     error_code="NO_MEDIA_ID",
@@ -146,6 +151,7 @@ class WhatsAppMediaHandler:
         except Exception as e:
             self.logger.exception(f"Failed to upload {file_path}: {e}")
             return MediaUploadResult(
+                platform=PlatformType.WHATSAPP,
                 success=False,
                 error=str(e),
                 error_code="UPLOAD_FAILED",
@@ -158,6 +164,7 @@ class WhatsAppMediaHandler:
         try:
             if not self.validate_media_type(media_type):
                 return MediaUploadResult(
+                    platform=PlatformType.WHATSAPP,
                     success=False,
                     error=f"Unsupported MIME type '{media_type}'. Supported types: {sorted(self.supported_media_types)}",
                     error_code="MIME_TYPE_UNSUPPORTED",
@@ -168,6 +175,7 @@ class WhatsAppMediaHandler:
             if not self.validate_file_size(file_size, media_type):
                 max_size = self._get_max_size_for_mime_type(media_type)
                 return MediaUploadResult(
+                    platform=PlatformType.WHATSAPP,
                     success=False,
                     error=f"File size ({file_size} bytes) exceeds the limit ({max_size} bytes) for type {media_type}",
                     error_code="FILE_SIZE_EXCEEDED",
@@ -187,6 +195,7 @@ class WhatsAppMediaHandler:
             media_id = result.get("id")
             if not media_id:
                 return MediaUploadResult(
+                    platform=PlatformType.WHATSAPP,
                     success=False,
                     error=f"No media ID in response for {filename}: {result}",
                     error_code="NO_MEDIA_ID",
@@ -208,6 +217,7 @@ class WhatsAppMediaHandler:
         except Exception as e:
             self.logger.exception(f"Failed to upload {filename} from bytes: {e}")
             return MediaUploadResult(
+                platform=PlatformType.WHATSAPP,
                 success=False,
                 error=str(e),
                 error_code="UPLOAD_FAILED",
@@ -228,6 +238,7 @@ class WhatsAppMediaHandler:
         except Exception as e:
             self.logger.exception(f"Failed to upload {filename} from stream: {e}")
             return MediaUploadResult(
+                platform=PlatformType.WHATSAPP,
                 success=False,
                 error=str(e),
                 error_code="UPLOAD_FAILED",
@@ -254,6 +265,7 @@ class WhatsAppMediaHandler:
             ) as response:
                 if response.status_code != 200:
                     return MediaUploadResult(
+                        platform=PlatformType.WHATSAPP,
                         success=False,
                         error=f"Download failed: HTTP {response.status_code} from {url}",
                         error_code="DOWNLOAD_FAILED",
@@ -266,6 +278,7 @@ class WhatsAppMediaHandler:
 
                 if not content_type or content_type == "application/octet-stream":
                     return MediaUploadResult(
+                        platform=PlatformType.WHATSAPP,
                         success=False,
                         error=f"Source URL did not provide a usable Content-Type header: {url}",
                         error_code="MIME_TYPE_UNKNOWN",
@@ -274,6 +287,7 @@ class WhatsAppMediaHandler:
 
                 if not self.validate_media_type(content_type):
                     return MediaUploadResult(
+                        platform=PlatformType.WHATSAPP,
                         success=False,
                         error=f"Unsupported MIME type '{content_type}' from source URL. Supported types: {sorted(self.supported_media_types)}",
                         error_code="MIME_TYPE_UNSUPPORTED",
@@ -286,6 +300,7 @@ class WhatsAppMediaHandler:
                     content_length_str := response.headers.get("content-length")
                 ) and int(content_length_str) > max_size:
                     return MediaUploadResult(
+                        platform=PlatformType.WHATSAPP,
                         success=False,
                         error=f"Source file size ({content_length_str} bytes) exceeds the limit ({max_size} bytes) for type {content_type}",
                         error_code="FILE_SIZE_EXCEEDED",
@@ -297,6 +312,7 @@ class WhatsAppMediaHandler:
                     data.extend(chunk)
                     if len(data) > max_size:
                         return MediaUploadResult(
+                            platform=PlatformType.WHATSAPP,
                             success=False,
                             error=f"Download aborted: file size exceeded {max_size} bytes for type {content_type}",
                             error_code="FILE_SIZE_EXCEEDED",
@@ -321,6 +337,7 @@ class WhatsAppMediaHandler:
         except TimeoutError:
             self.logger.warning(f"Download timed out after {timeout}s: {url}")
             return MediaUploadResult(
+                platform=PlatformType.WHATSAPP,
                 success=False,
                 error=f"Download timed out after {timeout}s: {url}",
                 error_code="DOWNLOAD_FAILED",
@@ -329,6 +346,7 @@ class WhatsAppMediaHandler:
         except Exception as e:
             self.logger.exception(f"Failed to upload media from URL {url}: {e}")
             return MediaUploadResult(
+                platform=PlatformType.WHATSAPP,
                 success=False,
                 error=str(e),
                 error_code="DOWNLOAD_FAILED",
@@ -343,6 +361,7 @@ class WhatsAppMediaHandler:
 
             if not result or "url" not in result:
                 return MediaInfoResult(
+                    platform=PlatformType.WHATSAPP,
                     success=False,
                     error=f"Invalid response for media ID {media_id}: {result}",
                     error_code="INVALID_RESPONSE",
@@ -366,6 +385,7 @@ class WhatsAppMediaHandler:
             # (400/404) or a refused token (401/403) from an outage (5xx).
             self.logger.warning(f"Media info for ID {media_id} failed: {e}")
             return MediaInfoResult(
+                platform=PlatformType.WHATSAPP,
                 success=False,
                 error=str(e),
                 error_code=f"HTTP_{e.response.status_code}",
@@ -374,6 +394,7 @@ class WhatsAppMediaHandler:
         except Exception as e:
             self.logger.exception(f"Error getting info for media ID {media_id}: {e}")
             return MediaInfoResult(
+                platform=PlatformType.WHATSAPP,
                 success=False,
                 error=str(e),
                 error_code="INFO_RETRIEVAL_FAILED",
@@ -395,6 +416,7 @@ class WhatsAppMediaHandler:
             media_info_result = await self.get_media_info(media_id)
             if not media_info_result.success:
                 return MediaDownloadResult(
+                    platform=PlatformType.WHATSAPP,
                     success=False,
                     error=f"Failed to get media URL for ID {media_id}: {media_info_result.error}",
                     error_code=_info_failure_code(media_info_result.error_code),
@@ -404,6 +426,7 @@ class WhatsAppMediaHandler:
             media_url = media_info_result.url
             if media_url is None:
                 return MediaDownloadResult(
+                    platform=PlatformType.WHATSAPP,
                     success=False,
                     error=f"Media URL missing for ID {media_id}",
                     error_code="MEDIA_URL_MISSING",
@@ -419,6 +442,7 @@ class WhatsAppMediaHandler:
                 if response.status_code != 200:
                     await response.aread()
                     return MediaDownloadResult(
+                        platform=PlatformType.WHATSAPP,
                         success=False,
                         error=f"Download failed for {media_id}: {response.status_code} - {response.text}",
                         error_code=f"HTTP_{response.status_code}",
@@ -439,6 +463,7 @@ class WhatsAppMediaHandler:
                     max_size = min(max_size, max_bytes)
                 if content_length > max_size:
                     return MediaDownloadResult(
+                        platform=PlatformType.WHATSAPP,
                         success=False,
                         error=f"Media file size ({content_length} bytes) exceeds max allowed ({max_size} bytes) for type {response_content_type}",
                         error_code="FILE_SIZE_EXCEEDED",
@@ -453,6 +478,7 @@ class WhatsAppMediaHandler:
                         downloaded_size += len(chunk)
                         if downloaded_size > max_size:
                             return MediaDownloadResult(
+                                platform=PlatformType.WHATSAPP,
                                 success=False,
                                 error=f"Download aborted: file size ({downloaded_size}) exceeded max ({max_size}) bytes for type {response_content_type}",
                                 error_code="FILE_SIZE_EXCEEDED",
@@ -522,6 +548,7 @@ class WhatsAppMediaHandler:
         except Exception as e:
             self.logger.exception(f"Error downloading media ID {media_id}: {e}")
             return MediaDownloadResult(
+                platform=PlatformType.WHATSAPP,
                 success=False,
                 error=str(e),
                 error_code="DOWNLOAD_FAILED",

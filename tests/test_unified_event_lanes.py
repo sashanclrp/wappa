@@ -21,6 +21,9 @@ from wappa.webhooks import (
     MessageUpdateWebhook,
 )
 
+# The routed Inbox the runtime passes to translate().
+INBOX_ID = "routed-inbox"
+
 ACCOUNT = "17841400000000000"
 IG_REF = InboxRef(platform=PlatformType.INSTAGRAM, inbox_id=ACCOUNT)
 PHONE_ID = "1234567890"
@@ -70,7 +73,8 @@ async def test_whatsapp_text_edit_is_a_message_update_with_typed_replacement():
                     }
                 ],
             },
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
     assert isinstance(webhook, MessageUpdateWebhook)
     assert webhook.update_kind is MessageUpdateKind.EDITED
@@ -107,7 +111,8 @@ async def test_whatsapp_ctwa_referral_fills_the_shared_entry_referral():
                     }
                 ],
             },
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
     assert isinstance(webhook, InboundMessageWebhook)
     ref = webhook.entry_referral
@@ -142,7 +147,8 @@ async def test_media_history_sync_builds_one_typed_thread():
                     }
                 ],
             },
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
     assert isinstance(webhook, HistorySyncWebhook)
     (thread,) = webhook.threads

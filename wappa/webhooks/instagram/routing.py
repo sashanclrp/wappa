@@ -10,12 +10,14 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from wappa.core.inbound.platform_webhooks import (
+    PayloadRoutingError,
+    RoutedWebhookDelivery,
+)
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.inbox.ports import IInboxCredentialResolver
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.instagram.models import InstagramWebhook
-
-from .platform_webhooks import PayloadRoutingError, RoutedWebhookDelivery
 
 
 async def route_instagram_payload(

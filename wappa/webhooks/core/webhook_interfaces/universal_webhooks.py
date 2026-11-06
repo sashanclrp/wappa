@@ -305,7 +305,11 @@ class StatusWebhook(BaseModel):
     message_id: str = Field(description="ID of the message this status refers to")
     status: MessageStatus = Field(description="Current status of the message")
     recipient_platform_id: str | None = Field(
-        default=None, description="Native recipient ID on non-WhatsApp Platforms"
+        default=None,
+        description=(
+            "Native recipient ID, set when the Platform identifies the User by "
+            "its own ID instead of address evidence"
+        ),
     )
     recipient_phone_id: str = Field(
         default="",

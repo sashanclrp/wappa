@@ -23,7 +23,7 @@ class MediaUploadResult(BaseModel):
     """
 
     success: bool
-    platform: PlatformType = PlatformType.WHATSAPP
+    platform: PlatformType
     media_id: str | None = None
     media_url: str | None = None
     file_size: int | None = None
@@ -52,7 +52,7 @@ class MediaInfoResult(BaseModel):
     """
 
     success: bool
-    platform: PlatformType = PlatformType.WHATSAPP
+    platform: PlatformType
     media_id: str | None = None
     url: str | None = None
     mime_type: str | None = None
@@ -75,7 +75,7 @@ class MediaDownloadResult(BaseModel):
     """
 
     success: bool
-    platform: PlatformType = PlatformType.WHATSAPP
+    platform: PlatformType
     file_data: bytes | None = None
     file_path: str | None = None
     mime_type: str | None = None
@@ -146,7 +146,7 @@ class MediaDeleteResult(BaseModel):
     """
 
     success: bool
-    platform: PlatformType = PlatformType.WHATSAPP
+    platform: PlatformType
     media_id: str | None = None
     error: str | None = None
     error_code: str | None = None

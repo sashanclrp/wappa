@@ -41,6 +41,10 @@ from ...domain.interfaces.template_messaging import (
     TEMPLATE_METHODS,
     ITemplateMessaging,
 )
+from ...domain.interfaces.user_data_requests import (
+    USER_DATA_REQUEST_METHODS,
+    IUserDataRequests,
+)
 from ...domain.media_renditions import MediaRenditions
 from ...domain.messaging_targets import DirectMessage, MessageTarget
 from ...schemas.core.types import PlatformType
@@ -160,7 +164,7 @@ MiddlewareEntry = tuple[MessengerMiddleware, int]
 class MessengerPipeline(IMessenger):
     """``IMessenger`` implementation composed from raw messenger + middleware.
 
-    The 17 ``IMessenger`` methods are implemented here exactly once. Each
+    The ``IMessenger`` methods are implemented here exactly once. Each
     builds a :class:`SendInvocation` and hands it to :meth:`_dispatch`,
     which walks the chain from outer to inner middleware and finally
     invokes the matching method on the raw messenger via reflection.
@@ -221,6 +225,8 @@ class MessengerPipeline(IMessenger):
         owner: object = self._raw
         if invocation.method_name in TEMPLATE_METHODS:
             owner = self._raw.require_capability(ITemplateMessaging)
+        elif invocation.method_name in USER_DATA_REQUEST_METHODS:
+            owner = self._raw.require_capability(IUserDataRequests)
         method = getattr(owner, invocation.method_name)
         result: MessageResult = await method(*invocation.args, **invocation.kwargs)
         return result
@@ -264,11 +270,13 @@ class MessengerPipeline(IMessenger):
     # ------------------------------------------------------------------ #
 
     def capability[C](self, kind: Callable[..., C]) -> C | None:
-        # Template sends are messages: wrap them so middleware still runs.
-        # Every other focused capability is not a message and bypasses it.
+        # Template sends and user-data requests are messages: wrap them so
+        # middleware still runs. Every other focused capability bypasses it.
         found = self._raw.capability(kind)
         if kind is ITemplateMessaging and found is not None:
             return _PipelineTemplates(self)  # type: ignore[return-value]
+        if kind is IUserDataRequests and found is not None:
+            return _PipelineUserDataRequests(self)  # type: ignore[return-value]
         return found
 
     async def send_text(
@@ -506,23 +514,6 @@ class MessengerPipeline(IMessenger):
             },
         )
 
-    async def send_contact_request(
-        self,
-        body: str,
-        target: DirectMessage,
-        reply_to_message_id: str | None = None,
-    ) -> MessageResult:
-        return await self._invoke(
-            "send_contact_request",
-            "request_contact_info",
-            target,
-            {
-                "body": body,
-                "target": target,
-                "reply_to_message_id": reply_to_message_id,
-            },
-        )
-
     # ------------------------------------------------------------------ #
     # IMessenger specialized.
     # ------------------------------------------------------------------ #
@@ -563,23 +554,6 @@ class MessengerPipeline(IMessenger):
                 "target": target,
                 "name": name,
                 "address": address,
-                "reply_to_message_id": reply_to_message_id,
-            },
-        )
-
-    async def send_location_request(
-        self,
-        body: str,
-        target: DirectMessage,
-        reply_to_message_id: str | None = None,
-    ) -> MessageResult:
-        return await self._invoke(
-            "send_location_request",
-            "location_request",
-            target,
-            {
-                "body": body,
-                "target": target,
                 "reply_to_message_id": reply_to_message_id,
             },
         )
@@ -715,4 +689,45 @@ class _PipelineTemplates(ITemplateMessaging):
                 **kw,
             },
             keyword_only=kw,
+        )
+
+
+class _PipelineUserDataRequests(IUserDataRequests):
+    """User-data request capability that still runs the message middleware."""
+
+    def __init__(self, pipeline: MessengerPipeline) -> None:
+        self._pipeline = pipeline
+
+    async def send_location_request(
+        self,
+        body: str,
+        target: DirectMessage,
+        reply_to_message_id: str | None = None,
+    ) -> MessageResult:
+        return await self._pipeline._invoke(
+            "send_location_request",
+            "location_request",
+            target,
+            {
+                "body": body,
+                "target": target,
+                "reply_to_message_id": reply_to_message_id,
+            },
+        )
+
+    async def send_contact_request(
+        self,
+        body: str,
+        target: DirectMessage,
+        reply_to_message_id: str | None = None,
+    ) -> MessageResult:
+        return await self._pipeline._invoke(
+            "send_contact_request",
+            "request_contact_info",
+            target,
+            {
+                "body": body,
+                "target": target,
+                "reply_to_message_id": reply_to_message_id,
+            },
         )

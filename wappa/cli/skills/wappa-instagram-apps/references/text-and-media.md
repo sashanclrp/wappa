@@ -48,7 +48,7 @@ await self.messenger.send_document(Path("assets/menu.pdf"), target)  # uploaded 
 | `send_video` | mp4/ogg/avi/mov/webm ≤ 25 MB |
 | `send_document` | pdf ≤ 25 MB |
 
-Instagram attachments carry no caption: a `caption` is sent as a follow-up text after the media (a long caption is split the same way as `send_text`), and `filename` and `transcript` are ignored. A media source is an https URL Meta can fetch, an attachment_id from `IMediaLibrary.upload`, or a local `Path` (uploaded first, then sent by attachment_id). Meta documents the upload only on the Page path, so verify it live on your setup and treat a refusal as data, not a bug to retry. Error codes come back as `code/subcode`: `10/2534022` means outside the messaging window, and `100/2018008` means Meta could not fetch the URL.
+Instagram attachments carry no caption: a `caption` is sent as a follow-up text after the media (a long caption is split the same way as `send_text`), and `filename` is ignored; `transcript` is middleware-only metadata that no Platform receives. Text keeps WhatsApp's limits on every Platform: `send_text` up to 4096 characters (`TEXT_MAX`) and a caption up to 1024 (`CAPTION_MAX`), checked before any send with `ValueError`. A media source is an https URL Meta can fetch, an attachment_id from `IMediaLibrary.upload`, or a local `Path` (uploaded first, then sent by attachment_id). Meta documents the upload only on the Page path, so verify it live on your setup and treat a refusal as data, not a bug to retry. Error codes come back as `code/subcode`: `10/2534022` means outside the messaging window, and `100/2018008` means Meta could not fetch the URL.
 
 ## Location, contact and sticker
 
@@ -60,7 +60,7 @@ The same calls work on both Platforms; Instagram adapts them instead of raising:
 | `send_contact(contacts, target)` | one text block per card (👤 name, organization, 📞 phones, ✉️ emails, 🔗 urls), split over 1000 UTF-8 bytes; `contacts` is one `ContactCard` or a list, in WhatsApp's contact-card shape (only `name.formatted_name` required) |
 | `send_sticker(source, target)` | an image; png/jpeg/gif only, a `.webp` file is rejected before I/O |
 
-`send_location_request` and `send_contact_request` stay WhatsApp-only: Instagram raises `UnsupportedOperationError`, because a text prompt cannot return the location or phone. Check `self.messenger.supported_operations` first and ask the User to type the answer otherwise.
+Location and phone-number requests are the WhatsApp-only `IUserDataRequests` capability (`send_location_request`, `send_contact_request`), because a text prompt on Instagram cannot return the location or phone. Check `requests = self.messenger.capability(IUserDataRequests)` (`from wappa.messaging import IUserDataRequests`) and ask the User to type the answer when it is `None`.
 
 ## Media Library: upload and download
 

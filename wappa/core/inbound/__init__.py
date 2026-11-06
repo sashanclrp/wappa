@@ -1,8 +1,14 @@
-"""Inbound Runtime boundary for accepted platform webhooks."""
+"""Inbound Runtime boundary for accepted platform webhooks.
+
+Each Platform's payload routing lives with its adapter:
+``wappa.webhooks.whatsapp.routing.route_whatsapp_payload`` and
+``wappa.webhooks.instagram.routing.route_instagram_payload``.
+"""
 
 from .meta_callback_auth import SIGNATURE_HEADER, MetaCallbackAuthenticator
 from .platform_webhooks import (
     PayloadRoutingError,
+    PlatformAccountNotRegisteredError,
     PlatformWebhooks,
     RoutedWebhookDelivery,
 )
@@ -15,10 +21,6 @@ from .runtime import (
     PayloadInboxMismatchError,
     ProcessorFailureError,
     UnsupportedPlatformError,
-)
-from .webhook_routing import (
-    PlatformAccountNotRegisteredError,
-    route_whatsapp_payload,
 )
 
 __all__ = (
@@ -36,5 +38,4 @@ __all__ = (
     "ProcessorFailureError",
     "RoutedWebhookDelivery",
     "UnsupportedPlatformError",
-    "route_whatsapp_payload",
 )

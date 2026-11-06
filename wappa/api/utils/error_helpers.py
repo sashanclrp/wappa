@@ -22,7 +22,7 @@ from wappa.domain.messaging_targets import (
 )
 from wappa.domain.models.media_result import MediaUploadResult
 from wappa.domain.results import MessageResult
-from wappa.messaging.whatsapp.utils.error_helpers import BSUID_ERROR_TAG
+from wappa.schemas.core.recipient import BSUID_ERROR_TAG
 
 # Error code to HTTP status code mapping
 ERROR_CODE_MAPPING: dict[str, int] = {

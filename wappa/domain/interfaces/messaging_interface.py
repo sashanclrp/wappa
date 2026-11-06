@@ -43,8 +43,14 @@ class IMessenger(ABC):
     Platform lacks raise ``UnsupportedOperationError``; check
     ``supported_operations`` instead of branching on the Platform name.
     Platform-only actions live behind ``capability()``: e.g. WhatsApp
-    Templates (``ITemplateMessaging``) and Instagram comments
+    Templates (``ITemplateMessaging``), WhatsApp location and phone-number
+    requests (``IUserDataRequests``) and Instagram comments
     (``ICommentControls``).
+
+    ``transcript`` (``send_video`` / ``send_audio``) is middleware-only
+    metadata: no adapter sends it to the Platform, and middleware reads it
+    from the ``SendInvocation`` arguments (e.g. to store what an AI Agent
+    said in a voice note).
     """
 
     # Platform-only capabilities by interface, filled once in each adapter's
@@ -57,20 +63,13 @@ class IMessenger(ABC):
         return frozenset({"send_text", "resolve_platform_user_profile"})
 
     def capability[C](self, kind: Callable[..., C]) -> C | None:
-        """Return a focused optional capability (e.g. ``ICommentControls``).
+        """Return a focused optional capability by its interface (e.g. ``ICommentControls``).
 
         ``None`` means this Platform adapter does not implement it. Capabilities
-        are bound to this Messenger's Inbox and credentials. Asking for the
-        concrete adapter class (e.g. ``InstagramMediaLibrary``) also resolves.
+        are bound to this Messenger's Inbox and credentials and are looked up
+        by the interface only, never by a concrete adapter class.
         """
-        wanted = cast(type, kind)
-        found = self._capabilities.get(wanted)
-        if found is None:
-            found = next(
-                (c for c in self._capabilities.values() if isinstance(c, wanted)),
-                None,
-            )
-        return cast("C | None", found)
+        return cast("C | None", self._capabilities.get(cast(type, kind)))
 
     def require_capability[C](self, kind: Callable[..., C]) -> C:
         found = self.capability(kind)
@@ -154,6 +153,7 @@ class IMessenger(ABC):
         reply_to_message_id: str | None = None,
         transcript: str | None = None,
     ) -> MessageResult:
+        """Send a video. ``transcript`` is middleware-only metadata, never sent."""
         raise UnsupportedOperationError(
             f"{self.platform.value} does not support send_video"
         )
@@ -181,7 +181,8 @@ class IMessenger(ABC):
         A single source without an extension (a Platform media ID) is passed
         through. ``ValueError`` before any Platform call when no rendition fits.
         Pass ``["note.ogg", "note.m4a"]`` with ``is_voice=True`` to send a voice
-        note on both Platforms from the same call.
+        note on both Platforms from the same call. ``transcript`` is
+        middleware-only metadata: no Platform receives it.
         """
         raise UnsupportedOperationError(
             f"{self.platform.value} does not support send_audio"
@@ -279,25 +280,16 @@ class IMessenger(ABC):
     ) -> MessageResult:
         """A horizontally scrollable carousel of 2–10 cards with an intro ``body``.
 
-        WhatsApp: interactive media carousel (every card needs a ``header``
-        image or video by public URL, and a button; buttons must match across
-        cards). Instagram: ``body`` as a text message (carrying the reply
-        context), then a generic template; a video card needs
-        ``header.poster_url``. A single card is
-        ``send_button_message`` with a media header.
+        Card rules are checked when the value is built (``MessageCard``:
+        a ``header`` image or video by public URL, one URL button or reply
+        buttons) and by ``check_carousel`` (2–10 cards, the same button kind
+        and count on every card). WhatsApp: interactive media carousel.
+        Instagram: ``body`` as a text message (carrying the reply context),
+        then a generic template; a video card needs ``header.poster_url``. A
+        single card is ``send_button_message`` with a media header.
         """
         raise UnsupportedOperationError(
             f"{self.platform.value} does not support send_carousel"
-        )
-
-    async def send_contact_request(
-        self,
-        body: str,
-        target: DirectMessage,
-        reply_to_message_id: str | None = None,
-    ) -> MessageResult:
-        raise UnsupportedOperationError(
-            f"{self.platform.value} does not support send_contact_request"
         )
 
     async def send_contact(
@@ -326,11 +318,4 @@ class IMessenger(ABC):
     ) -> MessageResult:
         raise UnsupportedOperationError(
             f"{self.platform.value} does not support send_location"
-        )
-
-    async def send_location_request(
-        self, body: str, target: DirectMessage, reply_to_message_id: str | None = None
-    ) -> MessageResult:
-        raise UnsupportedOperationError(
-            f"{self.platform.value} does not support send_location_request"
         )

@@ -1,5 +1,5 @@
 """
-Template state management service.
+Template state management service (WhatsApp extension).
 
 Handles creation and management of template-triggered user state.
 Follows SRP: only responsible for template state operations.

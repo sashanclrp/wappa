@@ -1,21 +1,13 @@
-"""WhatsApp models package."""
+"""WhatsApp adapter models: wire responses, media rules, Templates, validators.
 
-from .basic_models import BasicTextMessage, ReadStatusMessage
-from .interactive_models import ButtonMessage, CTAMessage, ListMessage
-from .media_models import (
-    AudioMessage,
-    DocumentMessage,
-    ImageMessage,
-    MediaType,
-    StickerMessage,
-    VideoMessage,
-)
+The neutral HTTP request models (text, media, interactive, contact, location)
+live in ``wappa.schemas.requests``.
+"""
+
+from .media_models import MediaType
 from .specialized_models import (
     BusinessContact,
-    ContactMessage,
     ContactValidationResult,
-    LocationMessage,
-    LocationRequestMessage,
     LocationValidationResult,
     PersonalContact,
 )
@@ -28,21 +20,8 @@ from .template_models import (
 )
 
 __all__ = [
-    "BasicTextMessage",
-    "ReadStatusMessage",
-    "ButtonMessage",
-    "CTAMessage",
-    "ListMessage",
     "MediaType",
-    "ImageMessage",
-    "VideoMessage",
-    "AudioMessage",
-    "DocumentMessage",
-    "StickerMessage",
-    "ContactMessage",
     "ContactValidationResult",
-    "LocationMessage",
-    "LocationRequestMessage",
     "LocationValidationResult",
     "BusinessContact",
     "PersonalContact",

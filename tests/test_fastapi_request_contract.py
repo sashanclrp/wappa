@@ -9,13 +9,14 @@ from fastapi.testclient import TestClient
 from wappa.api.dependencies.media_transfer import get_media_uploader
 from wappa.api.routes.media import upload_router
 from wappa.domain.models.media_result import MediaUploadResult
+from wappa.schemas.core.types import PlatformType
 
 
 @pytest.fixture
 def upload_api() -> tuple[TestClient, AsyncMock]:
     handler = AsyncMock()
     handler.upload_media_from_bytes.return_value = MediaUploadResult(
-        success=True, media_id="media-1"
+        platform=PlatformType.WHATSAPP, success=True, media_id="media-1"
     )
     app = FastAPI()
     app.include_router(upload_router, prefix="/api/whatsapp")

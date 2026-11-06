@@ -286,6 +286,10 @@ BSUID_PATTERN = re.compile(
 PHONE_SANITIZE_PATTERN = re.compile(r"[\s\-\(\)]")
 PHONE_PATTERN = re.compile(r"^\+?[1-9]\d{6,20}$")
 
+# ``MessageResult.error_code`` when a Platform cannot send this message type to
+# a BSUID address; the HTTP layer answers it with 400.
+BSUID_ERROR_TAG = "BSUID_RECIPIENT_NOT_SUPPORTED"
+
 
 def _normalize_bsuid(value: str) -> str:
     """Normalize the country and optional enterprise marker."""
@@ -476,6 +480,7 @@ class DeliveryRequest(RecipientRequest):
 
 __all__ = [
     "whatsapp_delivery_order",
+    "BSUID_ERROR_TAG",
     "BSUID_PATTERN",
     "ISO_ALPHA2_CODES",
     "PHONE_PATTERN",

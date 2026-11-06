@@ -19,11 +19,11 @@ from wappa.core.config.meta_application import MetaApplicationConfig
 from wappa.core.events import WappaEventDispatcher
 from wappa.core.events.field_registry import FieldHandlerRegistry
 from wappa.core.inbound import MetaCallbackAuthenticator
-from wappa.core.inbound.instagram_routing import route_instagram_payload
 from wappa.core.lifecycle import BackgroundWorkTracker, SessionLifecycle
 from wappa.domain.inbox import InboxRef, PlatformAccountRef
 from wappa.domain.inbox.errors import InboxNotFoundError
 from wappa.domain.inbox.ports import IInboxCredentialResolver, ResolvedInboxCredentials
+from wappa.domain.interfaces.user_data_requests import IUserDataRequests
 from wappa.messaging import (
     CardMedia,
     CommentRef,
@@ -65,6 +65,10 @@ from wappa.webhooks import (
     SystemEventType,
     SystemWebhook,
 )
+from wappa.webhooks.instagram.routing import route_instagram_payload
+
+# The routed Inbox the runtime passes to translate().
+INBOX_ID = "routed-inbox"
 
 SECRET = SecretStr("test-meta-secret")
 ACCOUNT = "17890001"
@@ -98,7 +102,7 @@ def msg(user=USER, **parts):
 
 
 async def parse(payload):
-    return await InstagramWebhookProcessor().translate(payload)
+    return await InstagramWebhookProcessor().translate(payload, inbox_id=INBOX_ID)
 
 
 # ── inbound families ─────────────────────────────────────────────────────
@@ -408,11 +412,12 @@ async def test_extension_field_registration_and_unknown_change():
     custom = await processor.translate(
         changes(
             {"field": "story_insights", "value": {"media_id": "s1", "impressions": 3}}
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
     assert isinstance(custom, CustomWebhook) and custom.parsed.impressions == 3
     unknown = await processor.translate(
-        changes({"field": "something_new", "value": {"x": 1}})
+        changes({"field": "something_new", "value": {"x": 1}}), inbox_id=INBOX_ID
     )
     assert unknown.system_event_type is SystemEventType.UNSUPPORTED_EVENT
 
@@ -712,7 +717,12 @@ async def test_every_dm_operation_uses_native_wire_format():
                         header=CardMedia.image(url="https://example.com/1.png"),
                         buttons=(ReplyButton(id="1", title="Pick"),),
                     ),
-                    MessageCard(title="Two", default_url="https://example.com/2"),
+                    MessageCard(
+                        title="Two",
+                        header=CardMedia.image(url="https://example.com/2.png"),
+                        default_url="https://example.com/2",
+                        buttons=(ReplyButton(id="2", title="Pick"),),
+                    ),
                 ],
                 DM,
                 "Our picks",
@@ -871,16 +881,15 @@ async def test_local_limits_reject_before_io():
             await messenger.send_button_message(
                 [ReplyButton(id=str(i), title=str(i)) for i in range(4)], DM, "x"
             )
+        card = MessageCard(
+            title="t",
+            header=CardMedia.image(url="https://example.com/t.png"),
+            buttons=(ReplyButton(id="t", title="T"),),
+        )
         with pytest.raises(ValueError, match="2–10 cards"):
-            await messenger.send_carousel(
-                [MessageCard(title="t", subtitle="s")] * 11, DM, "x"
-            )
+            await messenger.send_carousel([card] * 11, DM, "x")
         with pytest.raises(ValueError, match="2–10 cards"):
-            await messenger.send_carousel(
-                [MessageCard(title="t", subtitle="s")], DM, "x"
-            )
-        with pytest.raises(ValueError, match="need a subtitle"):
-            await messenger.send_carousel([MessageCard(title="only")] * 2, DM, "x")
+            await messenger.send_carousel([card], DM, "x")
         with pytest.raises(ValueError, match="https"):
             await messenger.send_image("http://insecure.example/a.png", DM)
     assert sent == []
@@ -1250,10 +1259,9 @@ async def test_location_contact_and_sticker_are_adapted_requests_are_not():
         )
         with pytest.raises(ValueError, match="png"):
             await messenger.send_sticker("https://example.com/s.webp", DM)
-        with pytest.raises(UnsupportedOperationError):
-            await messenger.send_location_request("Where are you?", DM)
-        with pytest.raises(UnsupportedOperationError):
-            await messenger.send_contact_request("Share your phone", DM)
+        assert messenger.capability(IUserDataRequests) is None
+        with pytest.raises(UnsupportedOperationError, match="IUserDataRequests"):
+            messenger.require_capability(IUserDataRequests)
     assert loc.success and contact.success and sticker.success
     bodies = [json.loads(r.content) for r in sent]
     assert bodies[0]["message"]["text"] == (
@@ -1269,4 +1277,4 @@ async def test_location_contact_and_sticker_are_adapted_requests_are_not():
     assert {"send_location", "send_contact", "send_sticker"} <= set(
         messenger.supported_operations
     )
-    assert "send_location_request" not in messenger.supported_operations
+    assert not hasattr(messenger, "send_location_request")

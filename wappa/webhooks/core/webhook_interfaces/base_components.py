@@ -49,12 +49,15 @@ class UserBase(BaseModel):
 
     Represents the end user sending messages to the business. Identity
     evidence is Platform-optional: each adapter sets what its Platform
-    supplies and leaves the rest ``None``.
+    supplies and leaves the rest ``None``. A User is identified either by
+    address evidence (``phone_number``, ``bsuid``, ``parent_bsuid``; the
+    field names follow WhatsApp, ADR-0028) or by a native ``platform_user_id``,
+    never both.
 
     Field vs Property Pattern:
-    - phone_number: Raw phone number field from webhook (WhatsApp wa_id)
-    - bsuid: Raw BSUID field from webhook (v24.0+)
-    - user_id: @property returning BSUID if available, else phone_number
+    - phone_number: Raw phone-number address from the webhook
+    - bsuid: Raw business-scoped user ID address from the webhook
+    - user_id: @property returning platform_user_id, else bsuid, else phone_number
     """
 
     model_config = ConfigDict(
@@ -70,7 +73,10 @@ class UserBase(BaseModel):
     platform_user_id: str | None = Field(
         default=None,
         min_length=1,
-        description="Native Inbox-scoped User ID for non-WhatsApp Platforms",
+        description=(
+            "Native Inbox-scoped User ID, set when the Platform identifies the "
+            "User by its own ID instead of address evidence"
+        ),
     )
 
     # BSUID support (v24.0+)
@@ -84,7 +90,7 @@ class UserBase(BaseModel):
     )
     username: str | None = Field(
         default=None,
-        description="Platform username (e.g., WhatsApp username)",
+        description="Platform username",
     )
     country_code: str | None = Field(
         default=None,
@@ -97,7 +103,7 @@ class UserBase(BaseModel):
     # Security and identity
     identity_key_hash: str | None = Field(
         default=None,
-        description="Identity key hash for security validation (WhatsApp feature)",
+        description="Identity key hash for security validation, when the Platform sends one",
     )
 
     @model_validator(mode="after")
@@ -106,7 +112,8 @@ class UserBase(BaseModel):
             self.phone_number or self.bsuid or self.parent_bsuid
         ):
             raise ValueError(
-                "Native Platform identity must not be mixed with WhatsApp address evidence"
+                "A native platform_user_id must not be mixed with address evidence "
+                "(phone_number, bsuid, parent_bsuid)"
             )
         return self
 
@@ -116,7 +123,8 @@ class UserBase(BaseModel):
         Get the recommended user identifier.
 
         Returns:
-            BSUID if available (stable, Meta v24.0+), otherwise wa_id (phone number).
+            The native ``platform_user_id`` when set, else the BSUID, else the
+            phone number.
         """
         if self.platform_user_id and self.platform_user_id.strip():
             return self.platform_user_id.strip()

@@ -24,6 +24,9 @@ from wappa.webhooks.core.webhook_interfaces import (
 )
 from wappa.webhooks.whatsapp.message_types.text import WhatsAppTextMessage
 
+# The routed Inbox the runtime passes to translate().
+INBOX_ID = "routed-inbox"
+
 
 def _metadata() -> dict[str, str]:
     return {
@@ -103,7 +106,8 @@ async def test_whatsapp_message_payload_parses_to_pydantic_universal_model() -> 
                     }
                 ],
             },
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook, InboundMessageWebhook)
@@ -157,7 +161,8 @@ async def test_whatsapp_status_ad_referral_accepts_missing_click_id() -> None:
                     }
                 ],
             },
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook, InboundMessageWebhook)
@@ -205,7 +210,7 @@ async def test_whatsapp_unknown_context_field_is_reported_as_meta_schema_drift(
     )
 
     with caplog.at_level("WARNING"), pytest.raises(ProcessorError):
-        await processor.translate(payload)
+        await processor.translate(payload, inbox_id=INBOX_ID)
 
     # Strict mode (set in conftest) turns Meta drift into an error; the drift
     # line names the field path and never the value.
@@ -243,7 +248,8 @@ async def test_whatsapp_status_payload_parses_to_pydantic_universal_model() -> N
                     }
                 ],
             },
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook, StatusWebhook)
@@ -279,7 +285,8 @@ async def test_whatsapp_group_status_exposes_participant_bsuid() -> None:
                     }
                 ],
             },
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook, StatusWebhook)
@@ -307,7 +314,8 @@ async def test_whatsapp_error_payload_parses_to_pydantic_universal_model() -> No
                     }
                 ],
             },
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook, ErrorWebhook)
@@ -335,7 +343,8 @@ async def test_whatsapp_system_payload_parses_to_pydantic_universal_model() -> N
                     }
                 ],
             },
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook, SystemWebhook)
@@ -359,6 +368,7 @@ async def test_whatsapp_custom_field_payload_parses_to_pydantic_universal_model(
         "message_template_status_update",
         parser=TemplateStatusUpdate,
         handler=handler,
+        platform=PlatformType.WHATSAPP,
     )
 
     processor = WhatsAppWebhookProcessor(registry)
@@ -485,7 +495,8 @@ async def test_whatsapp_account_offboarded_parses_to_inbox_connection_webhook() 
                 "reason": "USER_INITIATED",
                 "timestamp": 1655913600,
             },
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     from wappa.webhooks import InboxConnectionState, InboxConnectionWebhook
@@ -511,7 +522,8 @@ async def test_whatsapp_account_reconnected_parses_to_inbox_connection_webhook()
                 "phone_number_id": "123456789012345",
                 "timestamp": 1655914000,
             },
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     from wappa.webhooks import InboxConnectionState, InboxConnectionWebhook
@@ -535,5 +547,6 @@ async def test_account_event_value_is_strictly_validated() -> None:
             _payload(
                 "account_offboarded",
                 {"reason": "USER_INITIATED", "timestamp": 1655913600},
-            )
+            ),
+            inbox_id=INBOX_ID,
         )

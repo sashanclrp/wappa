@@ -9,12 +9,11 @@ from wappa.domain.interfaces.session_provider import (
 )
 from wappa.domain.results import MessageResult
 from wappa.resilience import is_transient_http_error
+from wappa.schemas.core.recipient import BSUID_ERROR_TAG
 from wappa.schemas.core.types import PlatformType
 
 # WhatsApp API error codes
 ERROR_CODE_BSUID_NOT_SUPPORTED = 131062
-# Tag surfaced on MessageResult.error_code and reused by the API layer's HTTP mapping.
-BSUID_ERROR_TAG = "BSUID_RECIPIENT_NOT_SUPPORTED"
 
 # Meta rejected the Delivery Address itself, synchronously and before any
 # delivery, so trying the User's next known address can neither duplicate a

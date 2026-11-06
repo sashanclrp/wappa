@@ -2,14 +2,14 @@ import pytest
 
 from wappa.api.models.handler_models import SetHandlerStateRequest
 from wappa.api.routes.specialized import ContactRequest
-from wappa.messaging.whatsapp.models.basic_models import BasicTextMessage
-from wappa.messaging.whatsapp.models.media_models import ImageMessage
 from wappa.schemas.core.recipient import (
     apply_recipient_to_payload,
     looks_like_bsuid,
     normalize_recipient_identifier,
     resolve_recipient,
 )
+from wappa.schemas.requests.basic_models import BasicTextMessage
+from wappa.schemas.requests.media_models import ImageMessage
 
 
 def test_normalize_recipient_identifier_compacts_phone_numbers() -> None:

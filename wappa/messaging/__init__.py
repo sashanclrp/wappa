@@ -61,6 +61,7 @@ from wappa.domain.interfaces.media_library import (
 )
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.interfaces.template_messaging import ITemplateMessaging
+from wappa.domain.interfaces.user_data_requests import IUserDataRequests
 from wappa.domain.messaging_targets import (
     CommentRef,
     DeliveryAddresses,
@@ -153,6 +154,7 @@ __all__ = [
     "ICommentControls",
     "IConversationContentReader",
     "ITemplateMessaging",
+    "IUserDataRequests",
     "IConversationHistoryReader",
     "HistoryPage",
     "IMediaLibrary",

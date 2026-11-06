@@ -3,20 +3,29 @@
 - ``POST /send-contact``: one or more contact cards
 - ``POST /send-location``: a location pin
 - ``POST /send-location-request``: ask the User to share a location
+- ``POST /send-contact-request``: ask the User to share a phone number
+
+The two requests gate on the Inbox's ``IUserDataRequests`` capability
+(WhatsApp today); another Platform answers 501.
 """
 
 from fastapi import Depends, Request
 from pydantic import Field
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
-from wappa.api.dependencies.inbox_context import get_inbox_messenger
+from wappa.api.dependencies.inbox_context import (
+    get_inbox_messenger,
+    requires_capability,
+)
 from wappa.api.routes.families import RouteFamily
 from wappa.api.utils import direct_target, dispatch_message_event, map_send_errors
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.domain.interfaces.messaging_interface import IMessenger
+from wappa.domain.interfaces.user_data_requests import IUserDataRequests
 from wappa.domain.results import MessageResult
-from wappa.messaging.whatsapp.models.specialized_models import (
+from wappa.schemas.requests.specialized_models import (
     ContactMessage,
+    ContactRequestMessage,
     LocationMessage,
     LocationRequestMessage,
 )
@@ -56,6 +65,10 @@ class LocationRequest(LocationMessage):
 
 
 class LocationRequestRequest(LocationRequestMessage):
+    model_config = {"extra": "forbid"}
+
+
+class ContactRequestRequest(ContactRequestMessage):
     model_config = {"extra": "forbid"}
 
 
@@ -104,9 +117,27 @@ async def send_location_request_message(
     request: LocationRequestRequest,
     fastapi_request: Request,
     messenger: IMessenger = Depends(get_inbox_messenger),
+    requests: IUserDataRequests = Depends(requires_capability(IUserDataRequests)),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    return await messenger.send_location_request(
+    return await requests.send_location_request(
+        body=request.body,
+        target=direct_target(messenger, request),
+        reply_to_message_id=request.reply_to_message_id,
+    )
+
+
+@send_router.post("/send-contact-request", response_model=MessageResult)
+@map_send_errors("send contact request")
+@dispatch_message_event()
+async def send_contact_request_message(
+    request: ContactRequestRequest,
+    fastapi_request: Request,
+    messenger: IMessenger = Depends(get_inbox_messenger),
+    requests: IUserDataRequests = Depends(requires_capability(IUserDataRequests)),
+    api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
+) -> MessageResult:
+    return await requests.send_contact_request(
         body=request.body,
         target=direct_target(messenger, request),
         reply_to_message_id=request.reply_to_message_id,

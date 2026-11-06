@@ -22,31 +22,32 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from wappa.domain.interfaces.media_library import MediaFamily
 from wappa.messaging.template_transport import (
     LocationTemplateTransportRequest,
     MediaTemplateTransportRequest,
     TextTemplateTransportRequest,
 )
-from wappa.messaging.whatsapp.models.basic_models import (
+from wappa.schemas.requests.basic_models import (
     BasicTextMessage,
     ReadStatusMessage,
 )
-from wappa.messaging.whatsapp.models.interactive_models import (
+from wappa.schemas.requests.interactive_models import (
     ButtonMessage,
     CTAMessage,
     ListMessage,
 )
-from wappa.messaging.whatsapp.models.media_models import (
+from wappa.schemas.requests.media_models import (
     AudioMessage,
     DocumentMessage,
     ImageMessage,
     MediaMessage,
-    MediaType,
     StickerMessage,
     VideoMessage,
 )
-from wappa.messaging.whatsapp.models.specialized_models import (
+from wappa.schemas.requests.specialized_models import (
     ContactMessage,
+    ContactRequestMessage,
     LocationMessage,
     LocationRequestMessage,
 )
@@ -82,6 +83,7 @@ class OutboundTransportSubkind(StrEnum):
     LIST = "list"
     CTA = "cta"
     LOCATION_REQUEST = "location_request"
+    CONTACT_REQUEST = "contact_request"
     # Template family — which header the Template envelope carries
     TEXT_HEADER = "text_header"
     MEDIA_HEADER = "media_header"
@@ -150,6 +152,7 @@ _BY_SCHEMA: dict[type[BaseModel], OutboundClassification] = {
     ListMessage: _interactive(OutboundTransportSubkind.LIST),
     CTAMessage: _interactive(OutboundTransportSubkind.CTA),
     LocationRequestMessage: _interactive(OutboundTransportSubkind.LOCATION_REQUEST),
+    ContactRequestMessage: _interactive(OutboundTransportSubkind.CONTACT_REQUEST),
     ContactMessage: _CONTACT,
     LocationMessage: _LOCATION,
     TextTemplateTransportRequest: _template(OutboundTransportSubkind.TEXT_HEADER),
@@ -160,12 +163,12 @@ _BY_SCHEMA: dict[type[BaseModel], OutboundClassification] = {
 }
 
 # ``MediaMessage`` carries its variant in a field instead of its class.
-_BY_MEDIA_TYPE: dict[MediaType, OutboundTransportSubkind] = {
-    MediaType.IMAGE: OutboundTransportSubkind.IMAGE,
-    MediaType.VIDEO: OutboundTransportSubkind.VIDEO,
-    MediaType.AUDIO: OutboundTransportSubkind.AUDIO,
-    MediaType.DOCUMENT: OutboundTransportSubkind.DOCUMENT,
-    MediaType.STICKER: OutboundTransportSubkind.STICKER,
+_BY_MEDIA_TYPE: dict[MediaFamily, OutboundTransportSubkind] = {
+    MediaFamily.IMAGE: OutboundTransportSubkind.IMAGE,
+    MediaFamily.VIDEO: OutboundTransportSubkind.VIDEO,
+    MediaFamily.AUDIO: OutboundTransportSubkind.AUDIO,
+    MediaFamily.DOCUMENT: OutboundTransportSubkind.DOCUMENT,
+    MediaFamily.STICKER: OutboundTransportSubkind.STICKER,
 }
 
 

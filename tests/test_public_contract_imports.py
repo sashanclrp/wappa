@@ -64,9 +64,11 @@ PUBLIC_IMPORTS: dict[str, tuple[str, ...]] = {
     "wappa.core.inbound": (
         "SIGNATURE_HEADER",
         "MetaCallbackAuthenticator",
-        "route_whatsapp_payload",
+        "PlatformAccountNotRegisteredError",
         "RoutedWebhookDelivery",
     ),
+    "wappa.webhooks.whatsapp.routing": ("route_whatsapp_payload",),
+    "wappa.webhooks.instagram.routing": ("route_instagram_payload",),
     "wappa.messaging": ("OutboundRuntime", "InboxTemplateTransport"),
     "wappa.sse": (
         "SSEHub",

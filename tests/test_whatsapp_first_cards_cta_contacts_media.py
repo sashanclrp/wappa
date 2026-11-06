@@ -16,7 +16,9 @@ from pydantic import SecretStr, ValidationError
 
 from wappa.domain.inbox import InboxRef
 from wappa.domain.interactive import (
+    CAPTION_MAX,
     CARD_TEXT_MAX,
+    TEXT_MAX,
     CardMedia,
     InteractiveHeader,
     MessageCard,
@@ -82,12 +84,20 @@ class _MediaHandler:
         self, file_data: bytes, media_type: str, filename: str
     ) -> MediaUploadResult:
         self.calls.append(("bytes", file_data, media_type, filename))
-        return MediaUploadResult(success=True, media_id="wa-bytes-1")
+        return MediaUploadResult(
+            platform=PlatformType.WHATSAPP, success=True, media_id="wa-bytes-1"
+        )
 
     async def get_media_info(self, media_id: str) -> MediaInfoResult:
         if media_id == "gone":
-            return MediaInfoResult(success=False, error="no", error_code="HTTP_404")
+            return MediaInfoResult(
+                platform=PlatformType.WHATSAPP,
+                success=False,
+                error="no",
+                error_code="HTTP_404",
+            )
         return MediaInfoResult(
+            platform=PlatformType.WHATSAPP,
             success=True,
             media_id=media_id,
             url="https://lookaside.fbsbx.com/x",
@@ -98,12 +108,22 @@ class _MediaHandler:
 
     async def delete_media(self, media_id: str) -> MediaDeleteResult:
         if media_id == "gone":
-            return MediaDeleteResult(success=False, error="no", error_code="HTTP_404")
+            return MediaDeleteResult(
+                platform=PlatformType.WHATSAPP,
+                success=False,
+                error="no",
+                error_code="HTTP_404",
+            )
         if media_id == "net":
             return MediaDeleteResult(
-                success=False, error="timeout", error_code="DELETION_FAILED"
+                platform=PlatformType.WHATSAPP,
+                success=False,
+                error="timeout",
+                error_code="DELETION_FAILED",
             )
-        return MediaDeleteResult(success=True, media_id=media_id)
+        return MediaDeleteResult(
+            platform=PlatformType.WHATSAPP, success=True, media_id=media_id
+        )
 
 
 def _wa(media: object = None) -> tuple[WhatsAppMessenger, _Client]:
@@ -152,19 +172,45 @@ def _card(header: CardMedia | None, title: str = "T") -> MessageCard:
 # ── limits at construction (minimum across WhatsApp and Instagram) ──────
 
 
+_CARD = {
+    "header": {"kind": "image", "url": IMG},
+    "title": "t",
+    "buttons": [{"id": "pick", "title": "Pick"}],
+}
+_URL = {"title": "Open", "url": "https://example.com/x"}
+
+
 @pytest.mark.parametrize(
     "fields",
     [
         {"title": "t" * 81},  # Instagram card title 80
-        {"title": "t", "subtitle": "s" * 81},  # Instagram card subtitle 80
+        {"subtitle": "s" * 81},  # Instagram card subtitle 80
         {"title": "t" * 80, "subtitle": "s" * 80},  # WhatsApp card body 160
-        {"title": "t", "buttons": [{"id": str(i), "title": "x"} for i in range(3)]},
+        {"buttons": [{"id": str(i), "title": "x"} for i in range(3)]},
+        {"header": None},  # WhatsApp card header is required
+        {"buttons": []},  # WhatsApp card needs a button
+        {"buttons": [_URL, {"id": "a", "title": "A"}]},  # URL or replies, no mix
+        {"buttons": [_URL, _URL]},  # WhatsApp card has one URL button
     ],
 )
 def test_card_limits_hold_when_the_card_is_built(fields: dict[str, Any]) -> None:
+    MessageCard.model_validate(_CARD)
     with pytest.raises(ValidationError):
-        MessageCard.model_validate(fields)
+        MessageCard.model_validate({**_CARD, **fields})
     assert CARD_TEXT_MAX == 160
+
+
+def test_carousel_cards_share_one_button_kind_and_count() -> None:
+    reply = _card(CardMedia.image(url=IMG))
+    url = MessageCard.model_validate({**_CARD, "buttons": [_URL]})
+    two = MessageCard.model_validate(
+        {**_CARD, "buttons": [{"id": "a", "title": "A"}, {"id": "b", "title": "B"}]}
+    )
+    check_carousel([reply, reply], "b")
+    check_carousel([url, url], "b")
+    for mixed in ([reply, url], [reply, two]):
+        with pytest.raises(ValueError, match="same button kind and count"):
+            check_carousel(mixed, "b")
 
 
 def test_carousel_and_cta_limits_are_checked_before_any_call() -> None:
@@ -179,6 +225,36 @@ def test_carousel_and_cta_limits_are_checked_before_any_call() -> None:
         check_cta_message("x" * 21, IMG, "b", None)  # WhatsApp display_text 20
     with pytest.raises(ValidationError):
         check_cta_message("Open", "ftp://example.com", "b", None)
+
+
+# ── free-form text keeps WhatsApp's limit on every adapter ─────────────
+
+
+async def test_text_and_caption_over_whatsapp_limits_fail_before_io_on_both() -> None:
+    wa, wa_client = _wa()
+    ig, ig_client, sent = _ig()
+    async with ig_client:
+        for messenger, target in ((wa, WA_DM), (ig, IG_DM)):
+            with pytest.raises(ValueError, match="limit is 4096"):
+                await messenger.send_text("t" * (TEXT_MAX + 1), target)
+            for send in (messenger.send_image, messenger.send_video):
+                with pytest.raises(ValueError, match="limit is 1024"):
+                    await send(IMG, target, caption="c" * (CAPTION_MAX + 1))
+            with pytest.raises(ValueError, match="limit is 1024"):
+                await messenger.send_document(
+                    IMG, target, caption="c" * (CAPTION_MAX + 1)
+                )
+    assert wa_client.posted == [] and sent == []
+    assert (TEXT_MAX, CAPTION_MAX) == (4096, 1024)
+
+
+async def test_text_at_whatsapp_limit_is_split_on_instagram() -> None:
+    ig, client, sent = _ig()
+    async with client:
+        result = await ig.send_text(" ".join(["word"] * 819), IG_DM)  # 4094 chars
+    assert result.success
+    assert len(sent) == 5
+    assert all(len(json.loads(r.content)["message"]["text"]) <= 1000 for r in sent)
 
 
 # ── F3 carousel card media ──────────────────────────────────────────────
@@ -213,6 +289,7 @@ async def test_instagram_video_card_shows_its_poster_and_opens_the_video() -> No
             header=CardMedia.video(url=VID, poster_url=POSTER),
             title="Own link",
             default_url="https://example.com/page",
+            buttons=(PICK,),
         ),
     ]
     async with client:

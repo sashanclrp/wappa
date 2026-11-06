@@ -4,7 +4,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from wappa.domain.inbox import InboxRef
 from wappa.domain.models.media_result import MediaDownloadResult
@@ -16,8 +16,10 @@ from wappa.messaging import (
     IMediaLibrary,
     IMessenger,
     ITemplateMessaging,
+    IUserDataRequests,
     MediaFamily,
     MessageCard,
+    MessageResult,
     MessengerPipeline,
     ReadOutcome,
     ReplyButton,
@@ -113,6 +115,57 @@ def test_templates_are_a_whatsapp_capability_not_a_contract_method():
     assert isinstance(pipeline.capability(ITemplateMessaging), ITemplateMessaging)
 
 
+def test_user_data_requests_are_a_whatsapp_capability_not_a_contract_method():
+    for name in ("send_location_request", "send_contact_request"):
+        assert not hasattr(IMessenger, name), name
+        assert not hasattr(MessengerPipeline, name), name
+    wa, _ = _wa()
+    assert wa.capability(IUserDataRequests) is wa
+    assert not {"send_location_request", "send_contact_request"} & set(
+        wa.supported_operations
+    )
+    pipeline = MessengerPipeline(wa)
+    assert isinstance(pipeline.capability(IUserDataRequests), IUserDataRequests)
+
+
+async def test_pipeline_user_data_requests_run_the_middleware_chain():
+    wa, _ = _wa()
+    seen: list[tuple[str, str]] = []
+    sent: list[tuple[str, str]] = []
+
+    class _Spy:
+        async def handle(self, invocation, call_next):
+            seen.append((invocation.method_name, invocation.message_type))
+            return await call_next(invocation)
+
+    def _fake(name: str):
+        async def send(body, target, reply_to_message_id=None):
+            sent.append((name, body))
+            return MessageResult(success=True, platform=PlatformType.WHATSAPP)
+
+        return send
+
+    wa.send_location_request = _fake("loc")  # type: ignore[method-assign]
+    wa.send_contact_request = _fake("phone")  # type: ignore[method-assign]
+    requests = MessengerPipeline(wa, middleware=[(_Spy(), 50)]).require_capability(
+        IUserDataRequests
+    )
+    assert (await requests.send_location_request("Where?", WA_DM)).success
+    assert (await requests.send_contact_request("Phone?", WA_DM)).success
+    assert seen == [
+        ("send_location_request", "location_request"),
+        ("send_contact_request", "request_contact_info"),
+    ]
+    assert sent == [("loc", "Where?"), ("phone", "Phone?")]
+
+
+def test_capability_resolves_by_interface_only():
+    wa, _ = _wa()
+    library = wa.capability(IMediaLibrary)
+    assert library is not None
+    assert wa.capability(type(library)) is None
+
+
 async def test_whatsapp_carousel_uses_interactive_media_carousel():
     wa, client = _wa()
     result = await wa.send_carousel(
@@ -150,20 +203,26 @@ async def test_whatsapp_carousel_url_cards_and_local_rules():
         await wa.send_carousel(
             [_card(1, url), _card(2, ReplyButton(id="a", title="A"))], WA_DM, "b"
         )
-    with pytest.raises(ValueError, match="header image or video"):
-        await wa.send_carousel([MessageCard(title="x", buttons=(url,))] * 2, WA_DM, "b")
+    with pytest.raises(ValidationError, match="header"):
+        MessageCard(title="x", buttons=(url,))  # type: ignore[call-arg]
     assert len(client.posted) == 1
 
 
 async def test_whatsapp_media_library_download_returns_the_shared_read_result():
     ok = MediaDownloadResult(
-        success=True, file_data=b"abc", mime_type="image/jpeg", file_size=3
+        platform=PlatformType.WHATSAPP,
+        success=True,
+        file_data=b"abc",
+        mime_type="image/jpeg",
+        file_size=3,
     )
     wa, _ = _wa(_Media(ok))
     got = await wa.require_capability(IMediaLibrary).download("wa-media-1")
     assert got.found and got.value and got.value.content == b"abc"
     assert got.value.content_type == "image/jpeg"
-    failed = MediaDownloadResult(success=False, error="gone", error_code="404")
+    failed = MediaDownloadResult(
+        platform=PlatformType.WHATSAPP, success=False, error="gone", error_code="404"
+    )
     wa, _ = _wa(_Media(failed))
     miss = await wa.require_capability(IMediaLibrary).download("wa-media-1")
     assert miss.outcome is ReadOutcome.UNAVAILABLE and miss.error_code == "404"
@@ -199,7 +258,9 @@ class _Uploads:
         from wappa.domain.models.media_result import MediaUploadResult
 
         self.paths.append(path)
-        return MediaUploadResult(success=True, media_id="wa-up-1")
+        return MediaUploadResult(
+            platform=PlatformType.WHATSAPP, success=True, media_id="wa-up-1"
+        )
 
 
 async def test_upload_once_then_send_by_media_id_on_both_platforms(tmp_path):

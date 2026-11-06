@@ -10,12 +10,13 @@ or document by URL or media ID, as in the WhatsApp Cloud API), and
 ``ListSection``/``ListRow`` are the options of ``send_list_message``; a row tap
 returns its ``id`` as the selection.
 
-The shape follows WhatsApp; every limit is the most restrictive one across the
+The shape follows WhatsApp; every structured limit is the most restrictive across the
 installed Platforms (the constants below) and is enforced when the value is
 built, so a value that constructs is deliverable on every Platform. Plain
 ``body``/``footer``/``sections``/``cards`` arguments are checked by
 ``check_button_message``, ``check_list_message``, ``check_cta_message`` and
-``check_carousel`` before any Platform call.
+``check_carousel`` before any Platform call, and free-form text by
+``check_text`` / ``check_caption`` (WhatsApp's limit; a stricter Platform splits).
 Nothing here is a wire format.
 """
 
@@ -57,6 +58,13 @@ CARD_TEXT_MAX = (
     160  # WhatsApp card body (title, newline, subtitle) 160; Instagram 2 slots
 )
 CARD_BUTTONS_MAX = 2  # WhatsApp 2 reply buttons (or 1 URL button); Instagram 3
+
+# ── Free-form text limits: WhatsApp's, not the minimum (ADR-0028 rule 3) ────
+# Divisible content keeps WhatsApp's limit; a stricter Platform splits it
+# (Instagram: 1000 UTF-8 bytes per message). Checked by every adapter before
+# any I/O with ``check_text`` / ``check_caption``.
+TEXT_MAX = 4096  # WhatsApp text body 4096; Instagram splits
+CAPTION_MAX = 1024  # WhatsApp media caption 1024; Instagram splits (sent as text)
 
 
 def _nonblank(value: str) -> str:
@@ -148,20 +156,21 @@ class CardMedia(BaseModel):
 class MessageCard(BaseModel):
     """One carousel card: media header, title, optional subtitle and buttons.
 
-    WhatsApp requires ``header`` and at least one button, and renders
-    ``title`` + ``subtitle`` as the card body; Instagram shows them as card
-    title and subtitle. ``default_url`` (tap on the card itself) is
-    Instagram-only presentation and is ignored where unsupported.
+    Shaped like a WhatsApp carousel card: ``header`` is required and the card
+    has one URL button or 1-``CARD_BUTTONS_MAX`` reply buttons, never a mix.
+    WhatsApp renders ``title`` + ``subtitle`` as the card body; Instagram
+    shows them as card title and subtitle. ``default_url`` (tap on the card
+    itself) is Instagram-only presentation and is ignored where unsupported.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
-    header: CardMedia | None = None
+    header: CardMedia
     title: str = Field(min_length=1, max_length=CARD_TITLE_MAX)
     subtitle: str | None = Field(
         default=None, min_length=1, max_length=CARD_SUBTITLE_MAX
     )
     default_url: HttpUrl | None = None
-    buttons: tuple[CardButton, ...] = Field(default=(), max_length=CARD_BUTTONS_MAX)
+    buttons: tuple[CardButton, ...] = Field(min_length=1, max_length=CARD_BUTTONS_MAX)
 
     _check = field_validator("title")(_nonblank)
 
@@ -169,6 +178,9 @@ class MessageCard(BaseModel):
     def _card_text(self) -> Self:
         text = "\n".join(p for p in (self.title, self.subtitle) if p)
         _check_len(text, CARD_TEXT_MAX, "Card title + subtitle")
+        url_buttons = sum(isinstance(b, UrlButton) for b in self.buttons)
+        if url_buttons and len(self.buttons) > 1:
+            raise ValueError("A carousel card has one URL button or reply buttons")
         return self
 
 
@@ -253,6 +265,16 @@ class ListSection(BaseModel):
     rows: list[ListRow] = Field(..., min_length=1, max_length=LIST_ROWS_MAX)
 
 
+def check_text(text: str) -> None:
+    """Shared limit of a ``send_text`` body; ``ValueError`` before any I/O."""
+    _check_len(text, TEXT_MAX, "Text")
+
+
+def check_caption(caption: str | None) -> None:
+    """Shared limit of a media caption; ``ValueError`` before any I/O."""
+    _check_len(caption, CAPTION_MAX, "Caption")
+
+
 def check_button_message(
     buttons: Sequence[ReplyButton], body: str, footer: str | None
 ) -> None:
@@ -283,6 +305,9 @@ def check_carousel(cards: Sequence[MessageCard], body: str) -> None:
             f"Carousels need {CAROUSEL_CARDS_MIN}–{CAROUSEL_CARDS_MAX} cards; for "
             "one card use send_button_message with a media header"
         )
+    shapes = {(isinstance(c.buttons[0], UrlButton), len(c.buttons)) for c in cards}
+    if len(shapes) != 1:
+        raise ValueError("Carousel cards must all use the same button kind and count")
     _nonblank(body)
     _check_len(body, CAROUSEL_BODY_MAX, "Carousel body")
 
@@ -321,6 +346,7 @@ __all__ = [
     "BUTTON_BODY_MAX",
     "BUTTON_ID_MAX",
     "BUTTON_TITLE_MAX",
+    "CAPTION_MAX",
     "CARD_BUTTONS_MAX",
     "CARD_SUBTITLE_MAX",
     "CARD_TEXT_MAX",
@@ -338,6 +364,7 @@ __all__ = [
     "ROW_ID_MAX",
     "ROW_TITLE_MAX",
     "SECTION_TITLE_MAX",
+    "TEXT_MAX",
     "CardButton",
     "CardMedia",
     "HeaderKind",
@@ -349,7 +376,9 @@ __all__ = [
     "ReplyButton",
     "UrlButton",
     "check_button_message",
+    "check_caption",
     "check_carousel",
     "check_cta_message",
     "check_list_message",
+    "check_text",
 ]

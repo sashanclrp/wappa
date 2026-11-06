@@ -17,6 +17,9 @@ from wappa.webhooks.core import schema_drift
 from wappa.webhooks.core.schema_drift import MetaSchemaDriftError
 from wappa.webhooks.core.webhook_interfaces import SystemEventDetail
 
+# The routed Inbox the runtime passes to translate().
+INBOX_ID = "routed-inbox"
+
 SECRET_VALUE = "personal-value-do-not-log"
 
 
@@ -107,8 +110,8 @@ async def test_lax_mode_processes_status_with_unknown_field_and_logs_once(
     processor = WhatsAppWebhookProcessor()
 
     with caplog.at_level(logging.WARNING):
-        first = await processor.translate(_wa_status_payload())
-        second = await processor.translate(_wa_status_payload())
+        first = await processor.translate(_wa_status_payload(), inbox_id=INBOX_ID)
+        second = await processor.translate(_wa_status_payload(), inbox_id=INBOX_ID)
 
     assert isinstance(first, StatusWebhook)
     assert isinstance(second, StatusWebhook)
@@ -123,7 +126,9 @@ async def test_strict_mode_raises_for_the_same_status_payload(monkeypatch):
     monkeypatch.setenv("WAPPA_STRICT_META_SCHEMA", "1")
 
     with pytest.raises(Exception) as excinfo:
-        await WhatsAppWebhookProcessor().translate(_wa_status_payload())
+        await WhatsAppWebhookProcessor().translate(
+            _wa_status_payload(), inbox_id=INBOX_ID
+        )
 
     chain = []
     exc: BaseException | None = excinfo.value
@@ -142,7 +147,7 @@ async def test_unknown_whatsapp_webhook_field_becomes_unsupported_event(
 
     with caplog.at_level(logging.WARNING):
         webhook = await WhatsAppWebhookProcessor().translate(
-            _wa_account_update_payload()
+            _wa_account_update_payload(), inbox_id=INBOX_ID
         )
 
     assert isinstance(webhook, SystemWebhook)
@@ -162,7 +167,7 @@ async def test_instagram_unknown_messaging_key_is_processed_and_reported_in_lax_
 
     with caplog.at_level(logging.WARNING):
         webhook = await InstagramWebhookProcessor().translate(
-            _ig_payload(brand_new_ig_key={"secret": SECRET_VALUE})
+            _ig_payload(brand_new_ig_key={"secret": SECRET_VALUE}), inbox_id=INBOX_ID
         )
 
     assert isinstance(webhook, InboundMessageWebhook)
@@ -177,7 +182,9 @@ async def test_instagram_unknown_key_raises_in_strict_mode(monkeypatch):
     monkeypatch.setenv("WAPPA_STRICT_META_SCHEMA", "1")
 
     with pytest.raises(Exception, match="brand_new_ig_key"):
-        await InstagramWebhookProcessor().translate(_ig_payload(brand_new_ig_key=1))
+        await InstagramWebhookProcessor().translate(
+            _ig_payload(brand_new_ig_key=1), inbox_id=INBOX_ID
+        )
 
 
 def test_universal_webhook_output_models_still_forbid_extras():

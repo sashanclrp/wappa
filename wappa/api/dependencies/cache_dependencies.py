@@ -1,8 +1,9 @@
 """
 Cache dependency injection for Inbox-dependent API routes.
 
-State Handler and Template state services read or mutate Inbox- and
-User-scoped Wappa state, so they resolve the Inbox Execution Context first.
+The State Handler service reads or mutates Inbox- and User-scoped Wappa
+state, so it resolves the Inbox Execution Context first. The WhatsApp Template
+state service is built in ``whatsapp_dependencies`` on the same helpers.
 """
 
 from fastapi import Depends, Request
@@ -12,7 +13,6 @@ from wappa.api.dependencies.inbox_context import (
     get_inbox_execution_context,
 )
 from wappa.api.services.handler_state_service import HandlerStateService
-from wappa.api.services.template_state_service import TemplateStateService
 from wappa.domain.interfaces.cache_factory import ICacheFactory
 from wappa.domain.interfaces.identity_resolver import IIdentityResolver
 from wappa.persistence.cache_factory import create_cache_factory
@@ -36,18 +36,8 @@ def build_cache_factory(
     )
 
 
-def _get_identity_resolver(request: Request) -> IIdentityResolver | None:
+def get_identity_resolver(request: Request) -> IIdentityResolver | None:
     return getattr(request.app.state, "identity_resolver", None)
-
-
-async def get_template_state_service(
-    request: Request,
-    context: InboxExecutionContext = Depends(get_inbox_execution_context),
-) -> TemplateStateService:
-    cache_factory = build_cache_factory(request, context, recipient="template-api")
-    return TemplateStateService(
-        cache_factory, identity_resolver=_get_identity_resolver(request)
-    )
 
 
 async def get_handler_state_service(
@@ -56,5 +46,5 @@ async def get_handler_state_service(
 ) -> HandlerStateService:
     cache_factory = build_cache_factory(request, context, recipient="handler-api")
     return HandlerStateService(
-        cache_factory, identity_resolver=_get_identity_resolver(request)
+        cache_factory, identity_resolver=get_identity_resolver(request)
     )

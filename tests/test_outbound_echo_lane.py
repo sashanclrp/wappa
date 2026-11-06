@@ -49,7 +49,8 @@ async def test_whatsapp_text_echo_is_typed_with_the_inbound_model():
                 "type": "text",
                 "text": {"body": "I'll take it from here"},
             }
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
     assert isinstance(echo, OutboundEchoWebhook)
     assert echo.origin is EchoOrigin.BUSINESS_APP and echo.is_from_business_app
@@ -70,7 +71,8 @@ async def test_whatsapp_outbound_only_shape_keeps_native_type_without_raw_dict()
                 "type": "interactive",
                 "interactive": {"type": "button", "body": {"text": "Pick one"}},
             }
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
     assert isinstance(echo, OutboundEchoWebhook)
     assert echo.native_type == "interactive"
@@ -97,7 +99,8 @@ async def test_instagram_echo_starts_unknown_until_the_runtime_proves_it():
                     ],
                 }
             ],
-        }
+        },
+        inbox_id=INBOX_ID,
     )
     assert isinstance(echo, OutboundEchoWebhook)
     assert echo.origin is EchoOrigin.UNKNOWN  # proven by the runtime
@@ -126,6 +129,9 @@ from wappa.webhooks.core.webhook_interfaces.base_components import (  # noqa: E4
     InboxBase,
     UserBase,
 )
+
+# The routed Inbox the runtime passes to translate().
+INBOX_ID = "routed-inbox"
 
 
 class _Registry(ISentMessageRegistry):

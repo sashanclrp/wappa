@@ -2,10 +2,12 @@
 Wappa API — public convenience re-exports.
 
 Canonical import surface for host applications:
-    from wappa.api import TemplateStateService, convert_body_parameters
+    from wappa.api import convert_body_parameters, raise_for_failed_result
+
+``TemplateStateService`` is WhatsApp-only and imports from
+``wappa.messaging.whatsapp.services``.
 """
 
-from .services.template_state_service import TemplateStateService
 from .utils import (
     convert_body_parameters,
     dispatch_message_event,
@@ -16,7 +18,6 @@ from .utils import (
 from .utils.event_decorators import resolve_event_user_id
 
 __all__ = [
-    "TemplateStateService",
     "convert_body_parameters",
     "dispatch_message_event",
     "fire_api_event",

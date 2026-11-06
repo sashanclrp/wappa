@@ -13,9 +13,7 @@ from wappa import WappaEventHandler
 from wappa.api.routes.webhooks import create_webhook_router
 from wappa.core.config.meta_application import MetaApplicationConfig
 from wappa.core.events import WappaEventDispatcher
-from wappa.core.inbound import MetaCallbackAuthenticator
-from wappa.core.inbound.instagram_routing import route_instagram_payload
-from wappa.core.inbound.webhook_routing import PayloadRoutingError
+from wappa.core.inbound import MetaCallbackAuthenticator, PayloadRoutingError
 from wappa.core.lifecycle import BackgroundWorkTracker, SessionLifecycle
 from wappa.core.security import CredentialCodec
 from wappa.domain.inbox import (
@@ -26,6 +24,7 @@ from wappa.domain.inbox import (
 )
 from wappa.domain.inbox.errors import InboxNotFoundError
 from wappa.domain.inbox.ports import IInboxCredentialResolver, ResolvedInboxCredentials
+from wappa.domain.interfaces.user_data_requests import IUserDataRequests
 from wappa.messaging import (
     DeliveryAddresses,
     DirectMessage,
@@ -41,6 +40,10 @@ from wappa.webhooks import (
     SystemEventType,
     SystemWebhook,
 )
+from wappa.webhooks.instagram.routing import route_instagram_payload
+
+# The routed Inbox the runtime passes to translate().
+INBOX_ID = "routed-inbox"
 
 SECRET = SecretStr("test-meta-secret")
 ACCOUNT = "17890001"
@@ -207,7 +210,9 @@ async def test_real_http_callback_routes_each_user_and_does_not_reply_to_echo_or
 
 @pytest.mark.asyncio
 async def test_processor_has_native_identity_and_preserves_text():
-    parsed = await InstagramWebhookProcessor().translate(payload(event()))
+    parsed = await InstagramWebhookProcessor().translate(
+        payload(event()), inbox_id=INBOX_ID
+    )
     assert isinstance(parsed, InboundMessageWebhook)
     assert parsed.user.user_id == "12345"
     assert parsed.user.phone_number == "" and parsed.user.bsuid is None
@@ -231,7 +236,7 @@ async def test_processor_has_native_identity_and_preserves_text():
 )
 async def test_nontext_events_never_enter_echo_lane(message, expected):
     parsed = await InstagramWebhookProcessor().translate(
-        payload(event(message=message))
+        payload(event(message=message)), inbox_id=INBOX_ID
     )
     assert type(parsed).__name__ == expected
     if isinstance(parsed, SystemWebhook):
@@ -285,8 +290,9 @@ async def test_target_and_unsupported_operations_make_no_http_call():
         with pytest.raises(ValueError, match="different Inbox"):
             await messenger.send_text("hello", target=other)
         target = DirectMessage(inbox_ref=ref, addresses=DeliveryAddresses.of("12345"))
-        with pytest.raises(UnsupportedOperationError):
-            await messenger.send_location_request("Share your location", target=target)
+        with pytest.raises(UnsupportedOperationError, match="IUserDataRequests"):
+            messenger.require_capability(IUserDataRequests)
+        assert target.inbox_ref == ref
         assert calls == []
 
 

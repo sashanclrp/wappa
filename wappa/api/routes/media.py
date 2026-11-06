@@ -35,7 +35,7 @@ from wappa.domain.models.media_result import (
     MediaUploadResult,
 )
 from wappa.domain.results import MessageResult, OperationOutcome
-from wappa.messaging.whatsapp.models.media_models import (
+from wappa.schemas.requests.media_models import (
     AudioMessage,
     DocumentMessage,
     ImageMessage,

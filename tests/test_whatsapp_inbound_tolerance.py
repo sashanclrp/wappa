@@ -14,6 +14,9 @@ from wappa.webhooks.whatsapp.message_types.interactive import (
     WhatsAppInteractiveMessage,
 )
 
+# The routed Inbox the runtime passes to translate().
+INBOX_ID = "routed-inbox"
+
 
 def _payload(message: dict) -> dict:
     return {
@@ -63,7 +66,9 @@ def _interactive(interactive: dict) -> dict:
 
 
 async def _parse(message: dict):
-    return await WhatsAppWebhookProcessor().translate(_payload(message))
+    return await WhatsAppWebhookProcessor().translate(
+        _payload(message), inbox_id=INBOX_ID
+    )
 
 
 @pytest.mark.asyncio
@@ -325,7 +330,9 @@ async def test_played_status_is_a_status_webhook() -> None:
     from wappa.schemas.core.types import MessageStatus
     from wappa.webhooks.core.webhook_interfaces import StatusWebhook
 
-    webhook = await WhatsAppWebhookProcessor().translate(_status_payload("played"))
+    webhook = await WhatsAppWebhookProcessor().translate(
+        _status_payload("played"), inbox_id=INBOX_ID
+    )
 
     assert isinstance(webhook, StatusWebhook)
     assert webhook.status is MessageStatus.PLAYED
@@ -336,7 +343,9 @@ async def test_unknown_status_is_unsupported_not_400(monkeypatch) -> None:
     from wappa.webhooks.core.webhook_interfaces import SystemEventType, SystemWebhook
 
     monkeypatch.delenv("WAPPA_STRICT_META_SCHEMA", raising=False)
-    webhook = await WhatsAppWebhookProcessor().translate(_status_payload("archived"))
+    webhook = await WhatsAppWebhookProcessor().translate(
+        _status_payload("archived"), inbox_id=INBOX_ID
+    )
 
     assert isinstance(webhook, SystemWebhook)
     assert webhook.system_event_type is SystemEventType.UNSUPPORTED_EVENT

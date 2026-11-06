@@ -485,7 +485,7 @@ class Wappa:
         *,
         parser: type[BaseModel] | Callable[[dict[str, Any]], BaseModel],
         handler: Callable[["CustomWebhook"], Awaitable[None]],
-        platform: PlatformType = PlatformType.WHATSAPP,
+        platform: PlatformType,
     ) -> "Wappa":
         """
         Register a typed handler for a non-built-in Meta webhook field.

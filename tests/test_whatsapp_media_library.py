@@ -14,6 +14,7 @@ from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
     WhatsAppMediaHandler,
 )
 from wappa.messaging.whatsapp.media_library import WhatsAppMediaLibrary
+from wappa.schemas.core.types import PlatformType
 
 
 async def _chunks(data: bytes, size: int = 512):
@@ -40,7 +41,10 @@ def _library(body: bytes) -> WhatsAppMediaLibrary:
     )
     handler.get_media_info = AsyncMock(  # type: ignore[method-assign]
         return_value=MediaInfoResult(
-            success=True, media_id="m1", url="https://cdn.example/m1"
+            platform=PlatformType.WHATSAPP,
+            success=True,
+            media_id="m1",
+            url="https://cdn.example/m1",
         )
     )
     return WhatsAppMediaLibrary(handler, "555")
@@ -90,7 +94,10 @@ async def test_download_failure_says_whether_a_retry_can_help(
     handler = MagicMock()
     handler.get_media_as_bytes = AsyncMock(
         return_value=MediaDownloadResult(
-            success=False, error="boom", error_code=error_code
+            platform=PlatformType.WHATSAPP,
+            success=False,
+            error="boom",
+            error_code=error_code,
         )
     )
 

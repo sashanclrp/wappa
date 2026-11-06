@@ -10,7 +10,6 @@ from pydantic import SecretStr
 from wappa.core.inbound import (
     PayloadRoutingError,
     PlatformAccountNotRegisteredError,
-    route_whatsapp_payload,
 )
 from wappa.domain.inbox import (
     IInboxCredentialResolver,
@@ -22,6 +21,7 @@ from wappa.domain.inbox import (
     ResolvedInboxCredentials,
 )
 from wappa.schemas.core.types import PlatformType
+from wappa.webhooks.whatsapp.routing import route_whatsapp_payload
 
 WABA_1 = PlatformAccountRef.whatsapp("waba-1")
 WABA_2 = PlatformAccountRef.whatsapp("waba-2")

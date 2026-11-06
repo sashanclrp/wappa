@@ -8,6 +8,9 @@ from wappa.processors.errors import ProcessorError
 from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.webhooks.whatsapp.status_models import WhatsAppMessageStatus
 
+# The routed Inbox the runtime passes to translate().
+INBOX_ID = "routed-inbox"
+
 
 def _status_payload(pricing: dict) -> dict:
     return {
@@ -66,7 +69,7 @@ async def test_status_webhook_accepts_pricing_subtype(
 ) -> None:
     with caplog.at_level(logging.CRITICAL):
         webhook = await WhatsAppWebhookProcessor().translate(
-            _status_payload(_pricing(**extra))
+            _status_payload(_pricing(**extra)), inbox_id=INBOX_ID
         )
 
     assert webhook.message_id == "wamid.status-pricing-001"
@@ -91,7 +94,7 @@ async def test_universal_conversation_exposes_pricing_subtype(
         "origin": {"type": "service"},
     }
 
-    webhook = await WhatsAppWebhookProcessor().translate(payload)
+    webhook = await WhatsAppWebhookProcessor().translate(payload, inbox_id=INBOX_ID)
 
     assert webhook.conversation is not None
     assert webhook.conversation.pricing_type == "free_customer_service"
@@ -120,5 +123,5 @@ async def test_pricing_schema_still_rejects_unknown_fields(
     """``subtype`` is an addition, not a relaxation of ``extra="forbid"``."""
     with caplog.at_level(logging.CRITICAL), pytest.raises(ProcessorError):
         await WhatsAppWebhookProcessor().translate(
-            _status_payload(_pricing(surprise_field="anything"))
+            _status_payload(_pricing(surprise_field="anything")), inbox_id=INBOX_ID
         )

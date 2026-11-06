@@ -14,13 +14,16 @@ from wappa.domain.interactive import (
     ReplyButton,
     UrlButton,
     check_button_message,
+    check_caption,
     check_carousel,
     check_cta_message,
     check_list_message,
+    check_text,
 )
 from wappa.domain.interfaces.media_library import IMediaLibrary
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.interfaces.template_messaging import ITemplateMessaging
+from wappa.domain.interfaces.user_data_requests import IUserDataRequests
 from wappa.domain.media_renditions import MediaRenditions, pick_rendition
 from wappa.domain.messaging_targets import (
     DirectMessage,
@@ -55,10 +58,10 @@ from wappa.messaging.whatsapp.payload_builders import (
 )
 from wappa.messaging.whatsapp.utils.error_helpers import (
     ADDRESS_REJECTION_CODES,
-    BSUID_ERROR_TAG,
     handle_whatsapp_error,
 )
 from wappa.schemas.core.recipient import (
+    BSUID_ERROR_TAG,
     apply_recipient_to_payload,
     whatsapp_delivery_order,
 )
@@ -66,7 +69,7 @@ from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
 
 
-class WhatsAppMessenger(IMessenger, ITemplateMessaging):
+class WhatsAppMessenger(IMessenger, ITemplateMessaging, IUserDataRequests):
     def __init__(
         self,
         client: WhatsAppClient,
@@ -85,9 +88,11 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         self._message_payloads = WhatsAppMessagePayloadBuilder()
         self._media_payloads = WhatsAppMediaPayloadBuilder()
         self.logger = get_logger(__name__)
-        # Focused capabilities: Templates (WhatsApp-only) and the Media Library.
+        # Focused capabilities: Templates and user-data requests (WhatsApp-only)
+        # and the Media Library.
         self._capabilities = {
             ITemplateMessaging: self,
+            IUserDataRequests: self,
             IMediaLibrary: WhatsAppMediaLibrary(self.media_handler, self._inbox_id),
         }
 
@@ -106,10 +111,8 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
                 "send_list_message",
                 "send_cta_message",
                 "send_carousel",
-                "send_contact_request",
                 "send_contact",
                 "send_location",
-                "send_location_request",
                 "resolve_platform_user_profile",
             ]
         )
@@ -242,6 +245,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         reply_to_message_id: str | None = None,
         disable_preview: bool = False,
     ) -> MessageResult:
+        check_text(text)
         return await self._deliver(
             require_direct_message(target, "WhatsApp send_text"),
             lambda recipient: self._send_text_to(
@@ -353,6 +357,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         caption: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
+        check_caption(caption)
         media_cache: dict[str, Any] = {}  # upload once across fallback attempts
         return await self._deliver(
             target,
@@ -374,6 +379,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         reply_to_message_id: str | None = None,
         transcript: str | None = None,
     ) -> MessageResult:
+        check_caption(caption)
         media_cache: dict[str, Any] = {}  # upload once across fallback attempts
         return await self._deliver(
             target,
@@ -424,6 +430,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         caption: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
+        check_caption(caption)
         media_cache: dict[str, Any] = {}  # upload once across fallback attempts
         return await self._deliver(
             target,
@@ -934,31 +941,12 @@ WHATSAPP_VOICE_SUFFIXES = frozenset({".ogg"})
 
 
 def _wa_cards(cards: Sequence[MessageCard]) -> list[dict[str, Any]]:
-    """Card count and text limits are checked by the neutral values."""
-    shapes = {
-        (
-            isinstance(c.buttons[0], UrlButton) if c.buttons else None,
-            len(c.buttons),
-        )
-        for c in cards
-    }
-    if len(shapes) != 1:
-        raise ValueError(
-            "WhatsApp carousel cards must all use the same button kind and count"
-        )
+    """Card count, text, header and button rules are checked by the neutral values."""
     out: list[dict[str, Any]] = []
     for index, card in enumerate(cards):
-        if card.header is None:
-            raise ValueError("WhatsApp carousel cards need a header image or video")
         text = "\n".join(p for p in (card.title, card.subtitle) if p)
         url_buttons = [b for b in card.buttons if isinstance(b, UrlButton)]
         replies = [b for b in card.buttons if isinstance(b, ReplyButton)]
-        if url_buttons and (replies or len(url_buttons) > 1):
-            raise ValueError(
-                "A WhatsApp carousel card has one URL button or reply buttons"
-            )
-        if not card.buttons:
-            raise ValueError("WhatsApp carousel cards need at least one button")
         element: dict[str, Any] = {
             "card_index": index,
             # Meta requires type on every card and documents "cta_url" for

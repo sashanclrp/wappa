@@ -12,6 +12,7 @@ new Platform branches.
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 from datetime import UTC, datetime
@@ -572,7 +573,6 @@ _ADAPTER_PATHS = re.compile(
     r"|domain/inbox/credentials\.py"
     r"|(messaging|webhooks)/(whatsapp|instagram)/"
     r"|processors/(whatsapp|instagram)_processor\.py"
-    r"|core/inbound/(whatsapp|instagram)_routing\.py"
     r"|connections/(whatsapp|instagram|meta_login)\.py"
     r"|api/routes/whatsapp/"
     r"|cli/)"
@@ -613,4 +613,55 @@ def test_shared_code_does_not_branch_on_a_platform() -> None:
         f"the Platform Registry: {unexpected}"
     )
     stale = set(_ALLOWED_BRANCHES) - set(found)
+    assert stale == set(), f"Allow-list entries no longer needed: {stale}"
+
+
+# Shared files that may import an adapter package, each with its reason.
+_ALLOWED_ADAPTER_IMPORTS: dict[str, str] = {
+    "api/dependencies/whatsapp_dependencies.py": (
+        "dependencies of the WhatsApp extension router, which only WhatsApp mounts"
+    ),
+}
+
+_ADAPTER_MODULE = re.compile(
+    r"^wappa\.(messaging|webhooks)\.(whatsapp|instagram)(\.|$)"
+)
+
+
+def _imported_modules(path: Path) -> list[tuple[int, str]]:
+    tree = ast.parse(path.read_text())
+    package = ".".join(("wappa", *path.relative_to(WAPPA).parent.parts))
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found += [(node.lineno, alias.name) for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            base = node.module or ""
+            if node.level:
+                parent = package.rsplit(".", node.level - 1)[0]
+                base = f"{parent}.{base}" if base else parent
+            found.append((node.lineno, base))
+    return found
+
+
+def test_shared_code_does_not_import_an_adapter_package() -> None:
+    found: dict[str, list[str]] = {}
+    for path in sorted(WAPPA.rglob("*.py")):
+        rel = path.relative_to(WAPPA).as_posix()
+        if _ADAPTER_PATHS.match(rel):
+            continue
+        for number, module in _imported_modules(path):
+            if _ADAPTER_MODULE.match(module):
+                found.setdefault(rel, []).append(f"{number}: {module}")
+
+    unexpected = {
+        rel: lines
+        for rel, lines in found.items()
+        if rel not in _ALLOWED_ADAPTER_IMPORTS
+    }
+    assert unexpected == {}, (
+        "Shared code imports a Platform adapter; move the shape into a neutral "
+        f"module or the code into the adapter: {unexpected}"
+    )
+    stale = set(_ALLOWED_ADAPTER_IMPORTS) - set(found)
     assert stale == set(), f"Allow-list entries no longer needed: {stale}"

@@ -67,7 +67,7 @@ class FieldHandlerRegistry:
         *,
         parser: type[BaseModel] | ParserFn,
         handler: HandlerFn,
-        platform: PlatformType = PlatformType.WHATSAPP,
+        platform: PlatformType,
     ) -> None:
         """
         Register a typed handler for a custom webhook field.
@@ -80,6 +80,7 @@ class FieldHandlerRegistry:
                 instance. Mandatory — handlers always receive typed models.
             handler: Async callable invoked with the resulting
                 :class:`CustomWebhook`.
+            platform: The Platform whose webhook carries the field (required).
 
         Raises:
             ValueError: If ``field_name`` is empty, collides with a built-in

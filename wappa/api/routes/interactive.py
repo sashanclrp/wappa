@@ -47,12 +47,12 @@ from wappa.domain.interactive import (
 )
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.results import MessageResult
-from wappa.messaging.whatsapp.models.interactive_models import (
+from wappa.schemas.core.recipient import DeliveryRequest
+from wappa.schemas.requests.interactive_models import (
     ButtonMessage,
     CTAMessage,
     ListMessage,
 )
-from wappa.schemas.core.recipient import DeliveryRequest
 
 # Interactive sends are omissible outbound mutations; the limits endpoint
 # is a read an embedding host still uses for admission checks.

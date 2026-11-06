@@ -46,7 +46,8 @@ wappa/webhooks/
 │       └── conversation_webhooks.py  # update, comment, mention, echo, history, connection lanes
 │
 ├── instagram/
-│   └── models.py               # Instagram envelope (messaging[] + changes[]) and typed message families
+│   ├── models.py               # Instagram envelope (messaging[] + changes[]) and typed message families
+│   └── routing.py              # route_instagram_payload: whole-batch Inbox admission
 │
 └── whatsapp/
     ├── base_models.py          # WhatsAppMetadata, WhatsAppContact, ContactProfile,
@@ -61,6 +62,7 @@ wappa/webhooks/
     ├── coexistence_events.py   # History, SMB echo, and app-state sync models
     ├── system_events.py        # user_preferences and user_id_update event models
     ├── validators.py           # WhatsApp-specific field validators
+    ├── routing.py              # route_whatsapp_payload: WABA membership, one delivery per change
     └── message_types/
         ├── text.py             # WhatsAppTextMessage
         ├── interactive.py      # WhatsAppInteractiveMessage (button_reply, list_reply)
@@ -94,7 +96,7 @@ wappa/webhooks/
 ## Relationship to `wappa/schemas`
 
 `wappa/schemas` is not an inbound schema owner. It keeps shared primitives used
-across Wappa, currently `wappa/schemas/core/types.py` and `wappa/schemas/core/recipient.py`. (`wappa/core/types.py` is unrelated: it holds runtime enums such as `CacheType`.)
+across Wappa, currently `wappa/schemas/core/types.py` and `wappa/schemas/core/recipient.py`, and the neutral outbound send request models in `wappa/schemas/requests/`. (`wappa/core/types.py` is unrelated: it holds runtime enums such as `CacheType`.)
 
 Inbound schemas belong here:
 
@@ -159,9 +161,9 @@ HTTP POST (raw JSON)
 
 ## Instagram messaging intake
 
-`wappa/webhooks/instagram/models.py` owns the Instagram envelope and typed message families. `wappa/processors/instagram_processor.py` is pure translation (its docstring holds the lane table): text, media, shares, story mentions, quick replies and postbacks become `InboundMessageWebhook` (one selection shape with WhatsApp button/list replies, ADR-0025); reactions and unreacts become `InboundMessageWebhook` carrying an `InstagramReactionMessage` (`MessageType.REACTION`, a `BaseReactionMessage` from `wappa/webhooks/core/base_message.py`), the same inbound shape as WhatsApp reactions; deletions and edits become `MessageUpdateWebhook`; `read` becomes `StatusWebhook(READ)`; echoes become `OutboundEchoWebhook` (ADR-0023); standalone referrals become `SystemWebhook(REFERRAL)`; unknown events become `SystemWebhook(UNSUPPORTED_EVENT)`; comments and mentions get their own lanes. Inbound media `media_id` is the CDN attachment URL; Hosts read it through `IMediaLibrary.download` unchanged. Sending a reaction is still a missing core Messenger method (deprioritized by the user on 2026-11-06).
+`wappa/webhooks/instagram/models.py` owns the Instagram envelope and typed message families, and `wappa/webhooks/instagram/routing.py` its batch admission. `wappa/processors/instagram_processor.py` is pure translation (its docstring holds the lane table): text, media, shares, story mentions, quick replies and postbacks become `InboundMessageWebhook` (one selection shape with WhatsApp button/list replies, ADR-0025); reactions and unreacts become `InboundMessageWebhook` carrying an `InstagramReactionMessage` (`MessageType.REACTION`, a `BaseReactionMessage` from `wappa/webhooks/core/base_message.py`), the same inbound shape as WhatsApp reactions; deletions and edits become `MessageUpdateWebhook`; `read` becomes `StatusWebhook(READ)`; echoes become `OutboundEchoWebhook` (ADR-0023); standalone referrals become `SystemWebhook(REFERRAL)`; unknown events become `SystemWebhook(UNSUPPORTED_EVENT)`; comments and mentions get their own lanes. Inbound media `media_id` is the CDN attachment URL; Hosts read it through `IMediaLibrary.download` unchanged. Sending a reaction is still a missing core Messenger method (deprioritized by the user on 2026-11-06).
 
-UserBase carries `platform_user_id` for native non-WhatsApp identity; it cannot be mixed with WA phone/BSUID evidence. InboxBase permits an absent display address rather than inventing a phone. StatusWebhook carries `recipient_platform_id`; it never stores an IGSID in phone or BSUID fields. Runtime SSE identity is read from these evidence fields (`UserBase.bsuid`/`phone_number`, `CallWebhook.bsuid`/`phone_number`, `StatusWebhook.recipient_bsuid`/`recipient_phone_id`), never from a Platform check or an identifier's shape, so Instagram events carry `None` for both. All provider parsing happens after signature verification, and processors perform no I/O.
+UserBase carries `platform_user_id` for a Platform that identifies Users by its own ID; it cannot be mixed with address evidence (`phone_number`, `bsuid`, `parent_bsuid`, WhatsApp-shaped names per ADR-0028). InboxBase permits an absent display address rather than inventing a phone. StatusWebhook carries `recipient_platform_id`; it never stores an IGSID in phone or BSUID fields. Runtime SSE identity is read from these evidence fields (`UserBase.bsuid`/`phone_number`, `CallWebhook.bsuid`/`phone_number`, `StatusWebhook.recipient_bsuid`/`recipient_phone_id`), never from a Platform check or an identifier's shape, so Instagram events carry `None` for both. All provider parsing happens after signature verification, and processors perform no I/O.
 
 ## Adding a message family or event lane
 

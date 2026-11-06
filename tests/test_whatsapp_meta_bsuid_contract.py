@@ -20,6 +20,9 @@ from wappa.webhooks.whatsapp.message_types.interactive import (
     WhatsAppInteractiveMessage,
 )
 
+# The routed Inbox the runtime passes to translate().
+INBOX_ID = "routed-inbox"
+
 
 def _payload(value: dict) -> dict:
     return {
@@ -78,7 +81,8 @@ async def test_contact_request_webhook_accepts_origin_and_vcard_without_name() -
                     }
                 ],
             }
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook.message, WhatsAppContactMessage)
@@ -110,7 +114,8 @@ async def test_system_user_id_change_accepts_meta_and_parent_bsuids() -> None:
                     }
                 ],
             }
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook, SystemWebhook)
@@ -194,7 +199,8 @@ async def test_call_permission_reply_accepts_username_only_user() -> None:
                     }
                 ],
             }
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook.message, WhatsAppInteractiveMessage)
@@ -272,7 +278,8 @@ async def test_group_participant_update_preserves_bsuid_without_phone() -> None:
                     ],
                 }
             ],
-        }
+        },
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook, SystemWebhook)
@@ -326,7 +333,8 @@ async def test_business_initiated_call_uses_to_bsuid_without_phone() -> None:
                     ],
                 }
             ],
-        }
+        },
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook, CallWebhook)
@@ -403,7 +411,7 @@ async def test_history_sync_preserves_thread_identity_companions() -> None:
         ],
     }
 
-    webhook = await WhatsAppWebhookProcessor().translate(payload)
+    webhook = await WhatsAppWebhookProcessor().translate(payload, inbox_id=INBOX_ID)
 
     from wappa.webhooks import HistoryDirection, HistorySyncWebhook
 
@@ -457,7 +465,7 @@ async def test_smb_echo_and_app_state_sync_accept_username_only_user() -> None:
             }
         ],
     }
-    echo = await processor.translate(echo_payload)
+    echo = await processor.translate(echo_payload, inbox_id=INBOX_ID)
 
     assert isinstance(echo, OutboundEchoWebhook)
     assert echo.origin is EchoOrigin.BUSINESS_APP
@@ -497,7 +505,7 @@ async def test_smb_echo_and_app_state_sync_accept_username_only_user() -> None:
             }
         ],
     }
-    app_state = await processor.translate(app_state_payload)
+    app_state = await processor.translate(app_state_payload, inbox_id=INBOX_ID)
 
     assert isinstance(app_state, SystemWebhook)
     assert app_state.system_event_type == SystemEventType.SMB_APP_STATE_SYNC
@@ -546,7 +554,8 @@ async def test_consumer_lifecycle_messages_preserve_bsuid(
                     }
                 ],
             }
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     from wappa.webhooks import MessageUpdateKind, MessageUpdateWebhook
@@ -595,7 +604,8 @@ async def test_call_status_accepts_recipient_bsuid_without_phone() -> None:
                     ],
                 }
             ],
-        }
+        },
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook, CallWebhook)
@@ -640,7 +650,8 @@ async def test_user_preferences_preserves_parent_bsuid_without_phone() -> None:
                     ],
                 }
             ],
-        }
+        },
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook, SystemWebhook)
@@ -685,7 +696,8 @@ async def test_user_id_update_accepts_missing_phone_and_parent_transition() -> N
                     ],
                 }
             ],
-        }
+        },
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook, SystemWebhook)
@@ -722,7 +734,8 @@ async def test_system_user_id_change_maps_observed_previous_user_id() -> None:
                     }
                 ],
             }
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook, SystemWebhook)
@@ -758,7 +771,8 @@ async def test_system_schema_reports_unobserved_fields_as_drift() -> None:
                         }
                     ],
                 }
-            )
+            ),
+            inbox_id=INBOX_ID,
         )
 
 
@@ -792,7 +806,8 @@ async def test_blank_contact_name_normalizes_to_none_and_keeps_identity() -> Non
                     }
                 ],
             }
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     assert isinstance(webhook, InboundMessageWebhook)
@@ -834,7 +849,8 @@ async def test_real_contact_name_is_still_preserved() -> None:
                     }
                 ],
             }
-        )
+        ),
+        inbox_id=INBOX_ID,
     )
 
     assert webhook.user is not None
@@ -888,5 +904,5 @@ async def test_status_with_pricing_subtype_free_tier_is_accepted() -> None:
             }
         ],
     }
-    webhook = await WhatsAppWebhookProcessor().translate(payload)
+    webhook = await WhatsAppWebhookProcessor().translate(payload, inbox_id=INBOX_ID)
     assert isinstance(webhook, StatusWebhook)
