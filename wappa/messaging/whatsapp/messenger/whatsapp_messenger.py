@@ -8,11 +8,13 @@ from wappa.core.logging.logger import get_logger
 from wappa.domain.contacts import ContactCard
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interactive import (
-    ButtonHeader,
+    InteractiveHeader,
     ListSection,
     MessageCard,
     ReplyButton,
     UrlButton,
+    check_button_message,
+    check_list_message,
 )
 from wappa.domain.interfaces.media_library import IMediaLibrary
 from wappa.domain.interfaces.messaging_interface import IMessenger
@@ -555,6 +557,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
                         media_reference=media_reference,
                         recipient=recipient,
                         filename=filename,
+                        caption=caption,
                         reply_to_message_id=reply_to_message_id,
                         is_url=is_url,
                     )
@@ -605,10 +608,11 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         buttons: list[ReplyButton],
         target: DirectMessage,
         body: str,
-        header: ButtonHeader | None = None,
+        header: InteractiveHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
+        check_button_message(buttons, body, footer)
         return await self._deliver(
             target,
             lambda recipient: self.interactive_handler.send_buttons_menu(
@@ -627,10 +631,11 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         target: DirectMessage,
         body: str,
         button_text: str,
-        header: ButtonHeader | None = None,
+        header: str | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
+        check_list_message(sections, body, button_text, header, footer)
         return await self._deliver(
             target,
             lambda recipient: self.interactive_handler.send_list_menu(

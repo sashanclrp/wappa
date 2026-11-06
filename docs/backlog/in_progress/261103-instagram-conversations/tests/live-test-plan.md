@@ -49,10 +49,10 @@ Run each command on both Platforms against the same server and code. Expect the 
 
 | ID | Command | WhatsApp renders | Instagram renders | Same handler result |
 | --- | --- | --- | --- | --- |
-| P-01 | `/form` (full run) | list for service, reply buttons for budget, image + buttons for confirm | quick replies, button template, generic card | submission saved under the Inbox's own Redis keys |
+| P-01 | `/form` (full run) | list for service, reply buttons for budget, image + buttons for confirm | quick replies, button template, the image as its own attachment then the button template | submission saved under the Inbox's own Redis keys |
 | P-02 | `/quick` | list menu | quick replies | "You selected color:… via list_reply / quick_reply" |
 | P-03 | `/buttons`, tap Ping | reply buttons | postback buttons | "You selected ping via button_reply" |
-| P-04 | `/card`, `/carousel` (tap Choose) | image header + button; media carousel | generic card; intro text + carousel | "You selected plan:…" |
+| P-04 | `/card`, `/carousel` (tap Choose) | image header + button; media carousel | the image as its own attachment then the button template; intro text + carousel | "You selected plan:…" |
 | P-05 | `/cta` | URL button | `web_url` button | link opens; no webhook |
 | P-06 | `/image` `/audio` `/video` `/file` `/image-upload` | media by URL; `/image-upload` = `IMediaLibrary.upload` to the Media API, then `send_image` by Media ID | media by URL; `/image-upload` = `IMediaLibrary.upload` to `message_attachments`, then `send_image` by attachment_id | accepted |
 | P-07 | send a photo / voice note / PDF | `IMediaLibrary.download` by Media ID, echo by ID | `IMediaLibrary.download` by CDN URL, echo by URL | "Downloaded N bytes" + echo |

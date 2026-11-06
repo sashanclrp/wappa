@@ -46,7 +46,7 @@ from ...domain.messaging_targets import DirectMessage, MessageTarget
 from ...schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
-    from wappa.domain.interactive import ButtonHeader, ListSection, ReplyButton
+    from wappa.domain.interactive import InteractiveHeader, ListSection, ReplyButton
     from wappa.domain.results import MessageResult
 
     from ...domain.interactive import MessageCard
@@ -424,7 +424,7 @@ class MessengerPipeline(IMessenger):
         buttons: list[ReplyButton],
         target: DirectMessage,
         body: str,
-        header: ButtonHeader | None = None,
+        header: InteractiveHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
@@ -448,7 +448,7 @@ class MessengerPipeline(IMessenger):
         target: DirectMessage,
         body: str,
         button_text: str,
-        header: ButtonHeader | None = None,
+        header: str | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:

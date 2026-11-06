@@ -200,7 +200,7 @@ async def send_audio_message(
     "/send-document",
     response_model=MessageResult,
     summary="Send Document Message",
-    description="Send a document message with optional filename and reply context",
+    description="Send a document message with optional caption, filename and reply context",
 )
 @map_send_errors("send document")
 @dispatch_message_event()

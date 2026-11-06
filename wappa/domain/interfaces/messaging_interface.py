@@ -19,7 +19,7 @@ from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
     from wappa.domain.interactive import (
-        ButtonHeader,
+        InteractiveHeader,
         ListSection,
         MessageCard,
         ReplyButton,
@@ -212,7 +212,7 @@ class IMessenger(ABC):
         buttons: list[ReplyButton],
         target: DirectMessage,
         body: str,
-        header: ButtonHeader | None = None,
+        header: InteractiveHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
@@ -226,7 +226,7 @@ class IMessenger(ABC):
         target: DirectMessage,
         body: str,
         button_text: str,
-        header: ButtonHeader | None = None,
+        header: str | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:

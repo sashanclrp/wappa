@@ -3,18 +3,13 @@
 from typing import Any
 
 from wappa.core.logging.logger import get_logger
-from wappa.domain.interactive import ButtonHeader, ListSection, ReplyButton
+from wappa.domain.interactive import InteractiveHeader, ListSection, ReplyButton
 from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.models.basic_models import message_result_from_payload
-from wappa.messaging.whatsapp.models.interactive_models import (
-    validate_buttons_menu_limits,
-)
 from wappa.messaging.whatsapp.utils.error_helpers import handle_whatsapp_error
 from wappa.schemas.core.recipient import apply_recipient_to_payload
 from wappa.schemas.core.types import PlatformType
-
-_HEADER_TEXT_MAX = 60
 
 
 class WhatsAppInteractiveHandler:
@@ -76,15 +71,19 @@ class WhatsAppInteractiveHandler:
         )
 
     @staticmethod
-    def _build_header_dict(header: ButtonHeader) -> dict[str, Any]:
-        if header.text is not None:
+    def _build_header_dict(header: InteractiveHeader) -> dict[str, Any]:
+        """``InteractiveHeader`` maps 1:1 onto the Cloud API header object."""
+        if header.kind == "text":
             return {"type": "text", "text": header.text}
-        image = (
-            {"link": str(header.image_url)}
-            if header.image_url is not None
-            else {"id": header.image_media_id}
+        assert header.media is not None  # guaranteed by InteractiveHeader
+        media: dict[str, Any] = (
+            {"link": str(header.media.url)}
+            if header.media.url is not None
+            else {"id": header.media.media_id}
         )
-        return {"type": "image", "image": image}
+        if header.filename is not None:
+            media["filename"] = header.filename
+        return {"type": header.kind, header.kind: media}
 
     @property
     def platform(self) -> PlatformType:
@@ -99,73 +98,31 @@ class WhatsAppInteractiveHandler:
         recipient: str,
         body: str,
         buttons: list[ReplyButton],
-        header: ButtonHeader | None = None,
+        header: InteractiveHeader | None = None,
         footer_text: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
+        """Limits are checked by the neutral values and ``check_button_message``."""
         try:
-            validate_buttons_menu_limits(buttons)
-
-            basic_validations: list[tuple[bool, str, str]] = [
-                (
-                    len(body) > 1024,
-                    "Body text cannot exceed 1024 characters",
-                    "BODY_TOO_LONG",
-                ),
-                (
-                    footer_text is not None and len(footer_text) > 60,
-                    "Footer text cannot exceed 60 characters",
-                    "FOOTER_TOO_LONG",
-                ),
-            ]
-            if error := self._check_validations(basic_validations, recipient):
-                return error
-
-            if header and header.text is not None:
-                header_validations: list[tuple[bool, str, str]] = [
-                    (
-                        len(header.text) > _HEADER_TEXT_MAX,
-                        f"Header text cannot exceed {_HEADER_TEXT_MAX} characters",
-                        "HEADER_TOO_LONG",
-                    ),
-                ]
-                if error := self._check_validations(header_validations, recipient):
-                    return error
-
-            formatted_buttons = []
-            for button in buttons:
-                button_validations: list[tuple[bool, str, str]] = [
-                    (
-                        len(button.title) > 20,
-                        f"Button title '{button.title}' exceeds 20 characters",
-                        "BUTTON_TITLE_TOO_LONG",
-                    ),
-                    (
-                        len(button.id) > 256,
-                        f"Button ID '{button.id}' exceeds 256 characters",
-                        "BUTTON_ID_TOO_LONG",
-                    ),
-                ]
-                if error := self._check_validations(button_validations, recipient):
-                    return error
-                formatted_buttons.append(
-                    {"type": "reply", "reply": {"id": button.id, "title": button.title}}
-                )
-
             interactive_data: dict[str, Any] = {
                 "type": "button",
                 "body": {"text": body},
-                "action": {"buttons": formatted_buttons},
+                "action": {
+                    "buttons": [
+                        {"type": "reply", "reply": {"id": b.id, "title": b.title}}
+                        for b in buttons
+                    ]
+                },
             }
+            if header:
+                interactive_data["header"] = self._build_header_dict(header)
+            if footer_text:
+                interactive_data["footer"] = {"text": footer_text}
             payload = self._build_interactive_payload(
                 recipient=recipient,
                 interactive_data=interactive_data,
                 reply_to_message_id=reply_to_message_id,
             )
-            if header:
-                payload["interactive"]["header"] = self._build_header_dict(header)
-            if footer_text:
-                payload["interactive"]["footer"] = {"text": footer_text}
 
             self.logger.debug(
                 f"Sending interactive button menu to {recipient} with {len(buttons)} buttons"
@@ -192,127 +149,39 @@ class WhatsAppInteractiveHandler:
         body: str,
         button_text: str,
         sections: list[ListSection],
-        header: ButtonHeader | None = None,
+        header: str | None = None,
         footer_text: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
+        """Limits are checked by the neutral values and ``check_list_message``."""
         try:
-            # Emit explicit error log for oversized button_text before validation short-circuits.
-            if len(button_text) > 20:
-                self.logger.error(
-                    f"WhatsApp List Button Text Validation Failed: '{button_text}' "
-                    f"({len(button_text)} chars) exceeds 20 character limit. "
-                    f"Please shorten the button text in your configuration."
-                )
-
-            basic_validations: list[tuple[bool, str, str]] = [
-                (
-                    len(body) > 4096,
-                    "Body text cannot exceed 4096 characters",
-                    "BODY_TOO_LONG",
-                ),
-                (
-                    len(button_text) > 20,
-                    f"Button text '{button_text}' ({len(button_text)} chars) exceeds 20 character limit",
-                    "BUTTON_TEXT_TOO_LONG",
-                ),
-                (
-                    len(sections) > 10,
-                    "Maximum of 10 sections allowed",
-                    "TOO_MANY_SECTIONS",
-                ),
-                (
-                    header is not None and header.text is None,
-                    "WhatsApp list messages accept only a text header",
-                    "INVALID_HEADER_TYPE",
-                ),
-                (
-                    header is not None
-                    and header.text is not None
-                    and len(header.text) > _HEADER_TEXT_MAX,
-                    f"Header text cannot exceed {_HEADER_TEXT_MAX} characters",
-                    "HEADER_TOO_LONG",
-                ),
-                (
-                    footer_text is not None and len(footer_text) > 60,
-                    "Footer text cannot exceed 60 characters",
-                    "FOOTER_TOO_LONG",
-                ),
-            ]
-            if error := self._check_validations(basic_validations, recipient):
-                return error
-
-            formatted_sections = []
-            all_row_ids: list[str] = []
-
+            formatted_sections: list[dict[str, Any]] = []
             for section in sections:
-                section_validations: list[tuple[bool, str, str]] = [
-                    (
-                        len(section.title) > 24,
-                        f"Section title '{section.title}' exceeds 24 characters",
-                        "SECTION_TITLE_TOO_LONG",
-                    ),
-                    (
-                        len(section.rows) > 10,
-                        f"Section '{section.title}' has more than 10 rows",
-                        "TOO_MANY_ROWS",
-                    ),
-                ]
-                if error := self._check_validations(section_validations, recipient):
-                    return error
-
-                formatted_rows = []
+                rows: list[dict[str, Any]] = []
                 for row in section.rows:
-                    row_validations: list[tuple[bool, str, str]] = [
-                        (
-                            len(row.id) > 200,
-                            f"Row ID '{row.id}' exceeds 200 characters",
-                            "ROW_ID_TOO_LONG",
-                        ),
-                        (
-                            len(row.title) > 24,
-                            f"Row title '{row.title}' exceeds 24 characters",
-                            "ROW_TITLE_TOO_LONG",
-                        ),
-                        (
-                            row.description is not None and len(row.description) > 72,
-                            f"Row description for '{row.title}' exceeds 72 characters",
-                            "ROW_DESCRIPTION_TOO_LONG",
-                        ),
-                        (
-                            row.id in all_row_ids,
-                            f"Row ID '{row.id}' is not unique",
-                            "DUPLICATE_ROW_ID",
-                        ),
-                    ]
-                    if error := self._check_validations(row_validations, recipient):
-                        return error
-
-                    all_row_ids.append(row.id)
                     formatted_row = {"id": row.id, "title": row.title}
                     if row.description:
                         formatted_row["description"] = row.description
-                    formatted_rows.append(formatted_row)
+                    rows.append(formatted_row)
+                formatted: dict[str, Any] = {"rows": rows}
+                if section.title is not None:
+                    formatted["title"] = section.title
+                formatted_sections.append(formatted)
 
-                formatted_sections.append(
-                    {"title": section.title, "rows": formatted_rows}
-                )
-
-            interactive_data = {
+            interactive_data: dict[str, Any] = {
                 "type": "list",
                 "body": {"text": body},
                 "action": {"button": button_text, "sections": formatted_sections},
             }
+            if header:
+                interactive_data["header"] = {"type": "text", "text": header}
+            if footer_text:
+                interactive_data["footer"] = {"text": footer_text}
             payload = self._build_interactive_payload(
                 recipient=recipient,
                 interactive_data=interactive_data,
                 reply_to_message_id=reply_to_message_id,
             )
-            if header:
-                payload["interactive"]["header"] = self._build_header_dict(header)
-            if footer_text:
-                payload["interactive"]["footer"] = {"text": footer_text}
-
             self.logger.debug(
                 f"Sending list menu message to {recipient} with {len(sections)} sections"
             )

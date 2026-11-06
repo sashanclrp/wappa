@@ -64,9 +64,9 @@ One method per step on every Platform (ADR-0016); the adapter maps it.
 | Step | Method | Instagram renders | WhatsApp renders |
 | --- | --- | --- | --- |
 | choose one of ≤ 3 | `send_button_message` with `ReplyButton`s | button template (postbacks) | reply buttons |
-| choose one of ≤ 13 | `send_list_message` with `ListSection`/`ListRow` | quick replies (descriptions dropped) | list (≤ 10 rows) |
+| choose one of ≤ 10 | `send_list_message` with `ListSection`/`ListRow` (row title ≤ 20) | quick replies (descriptions dropped) | list |
 | open a URL | `send_cta_message` | button template with one URL button | CTA URL button |
-| summary + confirm | `send_button_message` with two `ReplyButton`s (image header for a card) | button template or one-card generic template | reply buttons |
+| summary + confirm | `send_button_message` with two `ReplyButton`s (optional `InteractiveHeader` image) | the image first, then the button template | reply buttons with an image header |
 | email/phone | ask for typed text | typed text | typed text, or `send_contact_request` if `supported_operations` lists it |
 
 Selections from every row come back through `event.get_interactive_selection()`. Check `messenger.supported_operations` once for WhatsApp-only extras; don't try operations and catch exceptions as a control flow.

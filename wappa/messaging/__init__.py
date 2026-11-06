@@ -27,10 +27,11 @@ from wappa.domain.contacts import (
     ContactUrl,
 )
 from wappa.domain.interactive import (
-    ButtonHeader,
     CardButton,
+    InteractiveHeader,
     ListRow,
     ListSection,
+    MediaRef,
     MessageCard,
     ReplyButton,
     UrlButton,
@@ -129,10 +130,11 @@ __all__ = [
     "ReplyButton",
     "UrlButton",
     "CardButton",
+    "InteractiveHeader",
     "MessageCard",
     "ListSection",
+    "MediaRef",
     "ListRow",
-    "ButtonHeader",
     # Results
     "MessageResult",
     "CommentResult",

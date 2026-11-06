@@ -287,10 +287,6 @@ async def test_target_and_unsupported_operations_make_no_http_call():
         target = DirectMessage(inbox_ref=ref, addresses=DeliveryAddresses.of("12345"))
         with pytest.raises(UnsupportedOperationError):
             await messenger.send_location_request("Share your location", target=target)
-        with pytest.raises(ValueError, match="UTF-8 bytes"):
-            await messenger.send_text("x" * 1001, target=target)
-        with pytest.raises(ValueError, match="UTF-8 bytes"):
-            await messenger.send_text("🌎" * 251, target=target)
         assert calls == []
 
 

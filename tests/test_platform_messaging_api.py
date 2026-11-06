@@ -67,7 +67,7 @@ class _Resolver(IInboxCredentialResolver):
 
 
 # send_text body → failed-result error_code the fake messenger returns.
-_FAILURES: dict[str, str | None] = {"reject": None, "too-long": "BODY_TOO_LONG"}
+_FAILURES: dict[str, str | None] = {"reject": None, "too-long": "FILE_SIZE_EXCEEDED"}
 
 
 class _Messenger:

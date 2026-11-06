@@ -21,7 +21,7 @@ One Messenger method per action, identical on WhatsApp and Instagram (ADR-0016).
 
 ```python
 from wappa.messaging import (
-    ButtonHeader, ListRow, ListSection, MessageCard, ReplyButton, UrlButton,
+    InteractiveHeader, ListRow, ListSection, MessageCard, ReplyButton, UrlButton,
 )
 
 await m.send_list_message(
@@ -32,9 +32,9 @@ await m.send_button_message(
     buttons=[ReplyButton(id="form:budget:small", title="< $1k"), ReplyButton(id="form:budget:large", title="$1k+")],
     target=target, body="Budget?", footer="Tap one",
 )
-await m.send_button_message(  # one card: image header
+await m.send_button_message(  # media header: Instagram sends the image, then the buttons
     buttons=[ReplyButton(id="plan:pro", title="Choose")], target=target, body="Pro", footer="$29/mo",
-    header=ButtonHeader(image_url="https://example.com/pro.png"),
+    header=InteractiveHeader.of_image(url="https://example.com/pro.png"),
 )
 await m.send_cta_message(button_text="Pricing", button_url="https://example.com/pricing", target=target, body="See plans")
 await m.send_carousel(
@@ -44,10 +44,11 @@ await m.send_carousel(
 )
 ```
 
-Instagram mappings and limits (checked before any provider call):
+Interactive limits are the minimum across WhatsApp and Instagram and hold when you build the value, so a message that builds is deliverable on both: button title ≤ 20, 1–3 buttons, button body ≤ 640, list body ≤ 1000, ≤ 10 rows in total, row title ≤ 20, header text and footer ≤ 60 (constants in `wappa.domain.interactive`). Instagram mappings:
 
-- `send_list_message` → quick replies. All rows are flattened, at most 13, row title 20 characters or fewer, and the row `id` is the payload. Section titles, row descriptions and `button_text` are dropped; a text header (`ButtonHeader(text=...)`) and footer fold into the text, and an image header raises `UnsupportedOperationError`.
-- `send_button_message` → button template: text at most 640 characters, 1–3 `ReplyButton`s with titles of 20 or fewer. A text header and footer fold into the text. An image header (`ButtonHeader(image_url=...)`) turns it into a one-card generic template (body = title, footer = subtitle, each at most 80). A `ButtonHeader(image_media_id=...)` raises `UnsupportedOperationError`, because Instagram cannot reference a media ID in a header.
+- `send_list_message` → quick replies. All rows are flattened and the row `id` is the payload. Section titles, row descriptions and `button_text` are dropped; the text `header` and footer fold into the text, which is split over 1000 UTF-8 bytes with the quick replies on the last message.
+- `send_button_message` → button template with postback buttons. A text header (`InteractiveHeader.of_text(...)`) and footer fold into the text; over 640 characters the header (then the body) is sent first as text. A media header (`of_image`, `of_video`, `of_document`, by `url` or by an `attachment_id` from `IMediaLibrary.upload` as `media_id`) is sent first as its own attachment, then the buttons with the full body.
+- `send_text` over 1000 UTF-8 bytes, and long media captions, are split into several messages; a `PrivateReply` is one message per comment and cannot be split.
 - `send_cta_message` → button template with one URL button.
 - `send_carousel` → 2–10 cards; `body` is sent first as a text message, then a generic template (title/subtitle at most 80, up to 3 buttons). On WhatsApp every card needs `image_url`, title + subtitle become a 160-character card body, and every card carries the same buttons kind and count (one `UrlButton` or 1–2 `ReplyButton`s). For a single card, use `send_button_message` with an image header.
 

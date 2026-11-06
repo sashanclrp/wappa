@@ -40,15 +40,15 @@ await self.messenger.send_image("https://cdn.example.com/menu.png", target)
 await self.messenger.send_document(Path("assets/menu.pdf"), target)  # uploaded first
 ```
 
-| Operation | Limits checked before I/O |
+| Operation | Limits and emulation |
 | --- | --- |
-| `send_text` | 1000 UTF-8 bytes |
+| `send_text` | text over 1000 UTF-8 bytes is sent as several messages, cut on a word boundary when possible, with the reply context on the first; a `PrivateReply` over the limit raises `ValueError` (one reply per comment) |
 | `send_image` | https URL or local png/jpeg/gif ≤ 8 MB |
 | `send_audio` | aac/m4a/wav/mp4 ≤ 25 MB |
 | `send_video` | mp4/ogg/avi/mov/webm ≤ 25 MB |
 | `send_document` | pdf ≤ 25 MB |
 
-Instagram attachments carry no caption: a `caption` is sent as a follow-up text after the media, and `filename` and `transcript` are ignored. A media source is an https URL Meta can fetch, an attachment_id from `IMediaLibrary.upload`, or a local `Path` (uploaded first, then sent by attachment_id). Meta documents the upload only on the Page path, so verify it live on your setup and treat a refusal as data, not a bug to retry. Error codes come back as `code/subcode`: `10/2534022` means outside the messaging window, and `100/2018008` means Meta could not fetch the URL.
+Instagram attachments carry no caption: a `caption` is sent as a follow-up text after the media (a long caption is split the same way as `send_text`), and `filename` and `transcript` are ignored. A media source is an https URL Meta can fetch, an attachment_id from `IMediaLibrary.upload`, or a local `Path` (uploaded first, then sent by attachment_id). Meta documents the upload only on the Page path, so verify it live on your setup and treat a refusal as data, not a bug to retry. Error codes come back as `code/subcode`: `10/2534022` means outside the messaging window, and `100/2018008` means Meta could not fetch the URL.
 
 ## Location, contact and sticker
 

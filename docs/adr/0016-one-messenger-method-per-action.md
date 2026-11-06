@@ -8,7 +8,7 @@ Wappa's value is that a Host writes a conversation once and runs it on any conne
 
 1. **One action, one method.** When an action exists on more than one Platform, it has exactly one `IMessenger` method. Each Platform adapter maps that method onto its native API, even when the mapping takes several provider calls or loses presentation detail. Examples:
    - `mark_as_read(message_id, typing, target)` is a message read plus typing indicator on WhatsApp, and `mark_seen` then `typing_on` on Instagram.
-   - `send_button_message` is interactive reply buttons on WhatsApp, and a button template (or a generic card when the header is an image) on Instagram.
+   - `send_button_message` is interactive reply buttons on WhatsApp, and a button template on Instagram, with a media header sent first as its own attachment (see ADR draft 0023 in `docs/backlog/in_progress/261106-architecture-hardening/adr-drafts/`).
    - `send_list_message` is a list on WhatsApp, and quick replies on Instagram.
    - `send_carousel` is an interactive media carousel on WhatsApp, and a generic template on Instagram.
    - `send_location` / `send_contact` are native on WhatsApp, and text (name, address and maps link / contact card) on Instagram; `send_sticker` is an image on Instagram.

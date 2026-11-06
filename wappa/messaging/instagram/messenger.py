@@ -8,10 +8,12 @@ Native wire formats (``POST /{ig-account-id}/messages``):
   "payload": {"url"}}`` or ``{"attachment_id"}`` after upload
 Contract mappings (ADR-0016: one Messenger method per action):
 
+- ``send_text`` → text over 1000 UTF-8 bytes is split into several messages,
+  on a word boundary when possible
 - ``send_button_message`` → ``template_type = button`` with ``postback``
-  buttons (text ≤ 640, 1–3), or a one-element ``generic`` card for an image
-  header
-- ``send_list_message`` → ``message.quick_replies[]`` (≤ 13, title ≤ 20)
+  buttons (text ≤ 640, 1–3); a media header is sent first as its own
+  attachment
+- ``send_list_message`` → ``message.quick_replies[]`` on the (last) text
 - ``send_cta_message`` → ``template_type = button`` with one ``web_url``
 - ``send_carousel`` → intro text, then ``template_type = generic`` (2–10)
 - ``mark_as_read`` → ``sender_action`` ``mark_seen`` then ``typing_on``
@@ -39,12 +41,14 @@ from pydantic import SecretStr
 from wappa.domain.contacts import ContactCard
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interactive import (
-    ButtonHeader,
     CardButton,
+    InteractiveHeader,
     ListSection,
     MessageCard,
     ReplyButton,
     UrlButton,
+    check_button_message,
+    check_list_message,
 )
 from wappa.domain.interfaces.conversation_capabilities import (
     ICommentControls,
@@ -76,16 +80,13 @@ from .media import (
 from .media_library import InstagramMediaLibrary
 
 TEXT_MAX_BYTES = 1000
-QUICK_REPLY_MAX = 13
-QUICK_REPLY_TITLE_MAX = 20
 BUTTON_TEXT_MAX = 640
-BUTTON_TITLE_MAX = 20
 BUTTONS_MAX = 3
 CARD_TEXT_MAX = 80
 CAROUSEL_MIN = 2
 CAROUSEL_MAX = 10
-PAYLOAD_MAX = 1000
-COMMENT_REPLY_MAX = 2200
+# Interactive titles, IDs and counts need no check here: the neutral values
+# already enforce the minimum across Platforms (wappa.domain.interactive).
 
 
 def _check_text(text: str, *, what: str = "Instagram text") -> str:
@@ -95,6 +96,28 @@ def _check_text(text: str, *, what: str = "Instagram text") -> str:
     if size > TEXT_MAX_BYTES:
         raise ValueError(f"{what} is {size} UTF-8 bytes; limit is {TEXT_MAX_BYTES}")
     return text
+
+
+def _split_text(text: str, limit: int = TEXT_MAX_BYTES) -> list[str]:
+    """Split ``text`` into chunks of at most ``limit`` UTF-8 bytes.
+
+    Cuts on the last newline or space that fits, and mid-word only when a
+    single word is longer than the limit.
+    """
+    if len(text.encode("utf-8")) <= limit:
+        return [text]
+    chunks: list[str] = []
+    rest = text.strip()
+    while len(rest.encode("utf-8")) > limit:
+        cut = len(rest.encode("utf-8")[:limit].decode("utf-8", "ignore"))
+        space = max(rest.rfind("\n", 0, cut + 1), rest.rfind(" ", 0, cut + 1))
+        if space > 0:
+            cut = space
+        chunks.append(rest[:cut].rstrip())
+        rest = rest[cut:].lstrip()
+    if rest:
+        chunks.append(rest)
+    return chunks
 
 
 def _check_len(value: str, limit: int, what: str) -> str:
@@ -109,13 +132,10 @@ def _fold(*parts: str | None) -> str:
 
 
 def _reply(button: ReplyButton) -> dict[str, Any]:
-    _check_len(button.title, BUTTON_TITLE_MAX, "Instagram button title")
-    _check_len(button.id, PAYLOAD_MAX, "Instagram button id")
     return {"type": "postback", "title": button.title, "payload": button.id}
 
 
 def _url_button(button: UrlButton) -> dict[str, Any]:
-    _check_len(button.title, BUTTON_TITLE_MAX, "Instagram button title")
     return {"type": "web_url", "title": button.title, "url": str(button.url)}
 
 
@@ -123,13 +143,22 @@ def _card_button(button: CardButton) -> dict[str, Any]:
     return _url_button(button) if isinstance(button, UrlButton) else _reply(button)
 
 
-def _header_image_url(header: ButtonHeader) -> str:
-    if header.image_url is None:
-        raise UnsupportedOperationError(
-            "Instagram image headers need image_url; Platform media IDs from "
-            "another Platform do not exist on Instagram"
-        )
-    return validate_media_url(str(header.image_url))
+def _button_texts(
+    header: str | None, body: str, footer: str | None
+) -> tuple[str | None, str]:
+    """Plan (lead text, button template text) so the template fits 640 chars.
+
+    Header, body and footer fold into the template text when they fit;
+    otherwise the header, then the body too, go first as a plain text message.
+    The neutral limits (body ≤ 640, footer ≤ 60) make the last case fit.
+    """
+    full = _fold(header, body, footer)
+    if len(full) <= BUTTON_TEXT_MAX:
+        return None, full
+    tail = _fold(body, footer)
+    if len(tail) <= BUTTON_TEXT_MAX:
+        return header, tail
+    return _fold(header, body), footer or ""
 
 
 def _check_carousel(cards: Sequence[MessageCard]) -> None:
@@ -317,22 +346,61 @@ class InstagramMessenger(IMessenger):
         reply_to_message_id: str | None = None,
         disable_preview: bool = False,
     ) -> MessageResult:
-        if disable_preview:
-            raise UnsupportedOperationError(
-                "Instagram preview suppression is not implemented"
-            )
+        """Text over 1000 UTF-8 bytes goes out as several messages.
+
+        ``disable_preview`` is ignored: Instagram has no preview switch. A
+        ``PrivateReply`` is one message per comment, so it cannot be split and
+        an over-limit private reply raises ``ValueError``. For a split text
+        the reply context goes on the first message, and the last result
+        returns unless one is refused; that refusal returns and later chunks
+        are not sent (nothing retries).
+        """
+        _ = disable_preview
         if not isinstance(target, DirectMessage | PrivateReply):
             raise TypeError("send_text requires a DirectMessage or PrivateReply")
         # Validate target scope before content so wrong-Inbox fails first.
         target.resolve(self._inbox_ref)
-        return await self._send(
-            target,
-            {"text": _check_text(text)},
-            operation="Instagram private reply"
-            if isinstance(target, PrivateReply)
-            else "Instagram text send",
-            reply_to_message_id=reply_to_message_id,
-        )
+        if isinstance(target, PrivateReply):
+            return await self._send(
+                target,
+                {"text": _check_text(text)},
+                operation="Instagram private reply",
+                reply_to_message_id=reply_to_message_id,
+            )
+        return await self._send_texts(text, target, reply_to_message_id)
+
+    async def _send_texts(
+        self,
+        text: str,
+        direct: DirectMessage,
+        reply_to_message_id: str | None,
+        last: dict[str, Any] | None = None,
+        operation: str = "Instagram text send",
+    ) -> MessageResult:
+        """Send ``text`` in ≤ 1000-byte chunks; ``last`` extends the final one.
+
+        ``last`` carries extra message fields (quick replies) on the final
+        chunk. The first refusal returns; otherwise the final result returns.
+        """
+        if not text or not text.strip():
+            raise ValueError("Instagram text must not be empty")
+        chunks = _split_text(text)
+        result: MessageResult | None = None
+        for index, chunk in enumerate(chunks):
+            final = index == len(chunks) - 1
+            message: dict[str, Any] = {"text": chunk}
+            if final and last:
+                message.update(last)
+            result = await self._send(
+                direct,
+                message,
+                operation=operation if final else "Instagram text send",
+                reply_to_message_id=reply_to_message_id if index == 0 else None,
+            )
+            if not result.success:
+                return result
+        assert result is not None
+        return result
 
     # ── media ───────────────────────────────────────────────────────────
 
@@ -548,44 +616,45 @@ class InstagramMessenger(IMessenger):
         buttons: list[ReplyButton],
         target: DirectMessage,
         body: str,
-        header: ButtonHeader | None = None,
+        header: InteractiveHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        """Reply buttons → Instagram postback buttons.
+        """Reply buttons → Instagram postback buttons (button template).
 
         A tap returns as an ``InboundMessageWebhook`` whose selection is the
         button ``id``, exactly like a WhatsApp ``button_reply``. A text header
-        and the footer fold into the text. An image header (``image_url``)
-        makes it a generic card: image, ``body`` as title (≤ 80), ``footer`` as
-        subtitle. An ``image_media_id`` header has no Instagram equivalent.
+        and the footer fold into the template text; when the folded text is
+        over 640 characters the header (then the body) goes first as plain
+        text. A media header (image, video or document; by URL or by an
+        ``attachment_id`` from ``IMediaLibrary.upload``) is sent first as its
+        own attachment, then the buttons with the full body; a document
+        ``filename`` has no Instagram slot. The reply context goes on the
+        first message. The buttons result returns unless an earlier message is
+        refused; that refusal returns and the buttons are not sent.
         """
+        check_button_message(buttons, body, footer)
         direct = self._direct(target, "send_button_message")
         converted = [_reply(b) for b in buttons]
-        if header is not None and header.kind == "image":
-            if not 1 <= len(converted) <= BUTTONS_MAX:
-                raise ValueError(f"Instagram buttons: 1–{BUTTONS_MAX} allowed")
-            element: dict[str, Any] = {
-                "title": _check_len(body, CARD_TEXT_MAX, "Instagram card title"),
-                "image_url": _header_image_url(header),
-                "buttons": converted,
-            }
-            if footer:
-                element["subtitle"] = _check_len(
-                    footer, CARD_TEXT_MAX, "Instagram card subtitle"
-                )
-            return await self._send(
-                direct,
-                {
-                    "attachment": {
-                        "type": "template",
-                        "payload": {"template_type": "generic", "elements": [element]},
-                    }
-                },
-                operation="Instagram button card send",
-                reply_to_message_id=reply_to_message_id,
+        text_header = header.text if header and header.kind == "text" else None
+        if header is not None and header.media is not None:
+            source = (
+                str(header.media.url)
+                if header.media.url is not None
+                else str(header.media.media_id)
             )
-        text = _fold(header.text if header else None, body, footer)
+            media = await self._send_media(
+                header.kind, source, direct, reply_to_message_id
+            )
+            if not media.success:
+                return media
+            reply_to_message_id = None
+        lead, text = _button_texts(text_header, body, footer)
+        if lead:
+            intro = await self._send_texts(lead, direct, reply_to_message_id)
+            if not intro.success:
+                return intro
+            reply_to_message_id = None
         return await self._button_template(
             direct,
             text,
@@ -600,50 +669,33 @@ class InstagramMessenger(IMessenger):
         target: DirectMessage,
         body: str,
         button_text: str,
-        header: ButtonHeader | None = None,
+        header: str | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
         """List rows → Instagram quick replies (Instagram has no list UI).
 
-        Every row becomes one quick reply (≤ 13, title ≤ 20). A tap returns as
-        an ``InboundMessageWebhook`` whose selection is the row ``id``, like a
+        Every row becomes one quick reply. A tap returns as an
+        ``InboundMessageWebhook`` whose selection is the row ``id``, like a
         WhatsApp ``list_reply``. Section titles, row descriptions and
-        ``button_text`` are presentation Instagram cannot show; a text header
-        and the footer fold into the text. Image headers are rejected.
+        ``button_text`` are presentation Instagram cannot show; the header and
+        footer fold into the text, and a folded text over 1000 UTF-8 bytes is
+        split, with the quick replies on the last message.
         """
+        check_list_message(sections, body, button_text, header, footer)
         direct = self._direct(target, "send_list_message")
-        if header is not None and header.text is None:
-            raise UnsupportedOperationError(
-                "Instagram list messages accept only a text header"
-            )
-        rows = [row for section in sections for row in section.rows]
-        if not 1 <= len(rows) <= QUICK_REPLY_MAX:
-            raise ValueError(
-                f"Instagram list (quick replies) allows 1–{QUICK_REPLY_MAX} rows; "
-                f"got {len(rows)}"
-            )
         options = [
-            {
-                "content_type": "text",
-                "title": _check_len(
-                    row.title, QUICK_REPLY_TITLE_MAX, "Instagram list row title"
-                ),
-                "payload": _check_len(row.id, PAYLOAD_MAX, "Instagram list row id"),
-            }
-            for row in rows
+            {"content_type": "text", "title": row.title, "payload": row.id}
+            for section in sections
+            for row in section.rows
         ]
         _ = button_text  # WhatsApp list-opener label; no Instagram equivalent
-        return await self._send(
+        return await self._send_texts(
+            _fold(header, body, footer),
             direct,
-            {
-                "text": _check_text(
-                    _fold(header.text if header else None, body, footer)
-                ),
-                "quick_replies": options,
-            },
+            reply_to_message_id,
+            last={"quick_replies": options},
             operation="Instagram list (quick replies) send",
-            reply_to_message_id=reply_to_message_id,
         )
 
     async def send_cta_message(

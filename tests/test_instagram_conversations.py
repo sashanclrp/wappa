@@ -25,13 +25,13 @@ from wappa.domain.inbox import InboxRef, PlatformAccountRef
 from wappa.domain.inbox.errors import InboxNotFoundError
 from wappa.domain.inbox.ports import IInboxCredentialResolver, ResolvedInboxCredentials
 from wappa.messaging import (
-    ButtonHeader,
     CommentRef,
     ContactCard,
     DeliveryAddresses,
     DirectMessage,
     ICommentControls,
     IConversationContentReader,
+    InteractiveHeader,
     ListRow,
     ListSection,
     MessageCard,
@@ -693,7 +693,7 @@ async def test_every_dm_operation_uses_native_wire_format():
                 DM,
                 "Pick",
                 "Open",
-                header=ButtonHeader(text="Head"),
+                header="Head",
                 footer="Foot",
             )
         ).success
@@ -724,9 +724,9 @@ async def test_every_dm_operation_uses_native_wire_format():
             await pipeline.send_button_message(
                 [ReplyButton(id="ok", title="OK")],
                 DM,
-                "Card title",
-                header=ButtonHeader(image_url="https://example.com/c.png"),
-                footer="Card subtitle",
+                "Buttons body",
+                header=InteractiveHeader.of_image(url="https://example.com/c.png"),
+                footer="Footer",
             )
         ).success
         assert (await pipeline.mark_as_read("m9", typing=True, target=DM)).success
@@ -753,12 +753,16 @@ async def test_every_dm_operation_uses_native_wire_format():
     assert (
         bodies[8]["message"]["attachment"]["payload"]["buttons"][0]["type"] == "web_url"
     )
-    card = bodies[9]["message"]["attachment"]["payload"]
-    assert card["template_type"] == "generic"
-    assert card["elements"][0]["title"] == "Card title"
-    assert card["elements"][0]["subtitle"] == "Card subtitle"
-    assert bodies[10] == {"recipient": {"id": USER}, "sender_action": "mark_seen"}
-    assert bodies[11]["sender_action"] == "typing_on"
+    # A media header goes first as its own attachment, then the buttons.
+    assert bodies[9]["message"]["attachment"] == {
+        "type": "image",
+        "payload": {"url": "https://example.com/c.png"},
+    }
+    buttons = bodies[10]["message"]["attachment"]["payload"]
+    assert buttons["template_type"] == "button"
+    assert buttons["text"] == "Buttons body\n\nFooter"
+    assert bodies[11] == {"recipient": {"id": USER}, "sender_action": "mark_seen"}
+    assert bodies[12]["sender_action"] == "typing_on"
     assert all(r.headers["Authorization"] == "Bearer tkn" for r in sent)
 
 
@@ -850,17 +854,14 @@ async def test_local_limits_reject_before_io():
     sent = []
     messenger, client = _messenger(_ok(sent))
     async with client:
-        many = [ListRow(id=str(i), title=str(i)) for i in range(7)]
-        with pytest.raises(ValueError, match="1–13 rows"):
+        first = [ListRow(id=f"a{i}", title=str(i)) for i in range(6)]
+        second = [ListRow(id=f"b{i}", title=str(i)) for i in range(6)]
+        with pytest.raises(ValueError, match="10 rows in total"):
             await messenger.send_list_message(
-                [ListSection(title="a", rows=many), ListSection(title="b", rows=many)],
-                DM,
-                "x",
-                "Open",
-            )
-        with pytest.raises(ValueError, match="row title"):
-            await messenger.send_list_message(
-                [ListSection(title="a", rows=[ListRow(id="1", title="t" * 21)])],
+                [
+                    ListSection(title="a", rows=first),
+                    ListSection(title="b", rows=second),
+                ],
                 DM,
                 "x",
                 "Open",
@@ -879,21 +880,6 @@ async def test_local_limits_reject_before_io():
             )
         with pytest.raises(ValueError, match="need a subtitle"):
             await messenger.send_carousel([MessageCard(title="only")] * 2, DM, "x")
-        with pytest.raises(UnsupportedOperationError, match="image_url"):
-            await messenger.send_button_message(
-                [ReplyButton(id="a", title="A")],
-                DM,
-                "x",
-                header=ButtonHeader(image_media_id="wa-media-1"),
-            )
-        with pytest.raises(UnsupportedOperationError, match="only a text header"):
-            await messenger.send_list_message(
-                [ListSection(title="a", rows=[ListRow(id="1", title="t")])],
-                DM,
-                "x",
-                "Open",
-                header=ButtonHeader(image_url="https://example.com/c.png"),
-            )
         with pytest.raises(ValueError, match="https"):
             await messenger.send_image("http://insecure.example/a.png", DM)
     assert sent == []

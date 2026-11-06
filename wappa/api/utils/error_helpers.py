@@ -27,24 +27,8 @@ from wappa.messaging.whatsapp.utils.error_helpers import BSUID_ERROR_TAG
 # Error code to HTTP status code mapping
 ERROR_CODE_MAPPING: dict[str, int] = {
     # Content size errors (413 Payload Too Large)
-    "BODY_TOO_LONG": 413,
-    "FOOTER_TOO_LONG": 413,
-    "BUTTON_TITLE_TOO_LONG": 413,
-    "BUTTON_ID_TOO_LONG": 413,
-    "BUTTON_TEXT_TOO_LONG": 413,
-    "HEADER_TOO_LONG": 413,
     "FILE_SIZE_EXCEEDED": 413,
     # Validation errors (400 Bad Request)
-    "INVALID_HEADER_TYPE": 400,
-    "INVALID_TEXT_HEADER": 400,
-    "INVALID_MEDIA_HEADER": 400,
-    "TOO_MANY_SECTIONS": 400,
-    "TOO_MANY_ROWS": 400,
-    "SECTION_TITLE_TOO_LONG": 400,
-    "ROW_TITLE_TOO_LONG": 400,
-    "ROW_ID_TOO_LONG": 400,
-    "ROW_DESCRIPTION_TOO_LONG": 400,
-    "DUPLICATE_ROW_ID": 400,
     "MISSING_REQUIRED_PARAMS": 400,
     "INVALID_URL_FORMAT": 400,
     "INVALID_PARAMETERS": 400,

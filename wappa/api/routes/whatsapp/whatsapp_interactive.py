@@ -25,7 +25,23 @@ from wappa.api.utils import (
     map_send_errors,
 )
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
-from wappa.domain.interactive import ButtonHeader, MessageCard
+from wappa.domain.interactive import (
+    BUTTON_BODY_MAX,
+    BUTTON_ID_MAX,
+    BUTTON_TITLE_MAX,
+    BUTTONS_MAX,
+    FOOTER_MAX,
+    HEADER_TEXT_MAX,
+    LIST_BODY_MAX,
+    LIST_BUTTON_TEXT_MAX,
+    LIST_ROWS_MAX,
+    LIST_SECTIONS_MAX,
+    ROW_DESCRIPTION_MAX,
+    ROW_ID_MAX,
+    ROW_TITLE_MAX,
+    SECTION_TITLE_MAX,
+    MessageCard,
+)
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.models.interactive_models import (
@@ -69,8 +85,8 @@ async def send_button_message(
 ) -> MessageResult:
     """Send interactive button message via WhatsApp.
 
-    Supports up to 3 quick reply buttons with optional header and footer.
-    Based on WhatsApp Cloud API 2025 interactive button specifications.
+    1–3 reply buttons, an optional text, image, video or document header and
+    an optional footer; limits are the shared minimum across Platforms.
     """
     return await messenger.send_button_message(
         buttons=request.buttons,
@@ -98,15 +114,15 @@ async def send_list_message(
 ) -> MessageResult:
     """Send interactive list message via WhatsApp.
 
-    Supports sectioned lists with up to 10 sections and 10 rows per section.
-    Based on WhatsApp Cloud API 2025 interactive list specifications.
+    Up to 10 sections and 10 rows in total; limits are the shared minimum
+    across Platforms.
     """
     return await messenger.send_list_message(
         sections=request.sections,
         target=direct_target(messenger, request),
         body=request.body,
         button_text=request.button_text,
-        header=ButtonHeader(text=request.header) if request.header else None,
+        header=request.header,
         footer=request.footer,
         reply_to_message_id=request.reply_to_message_id,
     )
@@ -180,41 +196,42 @@ async def send_carousel_message(
     description="Get platform-specific interactive message limits and constraints",
 )
 async def get_interactive_limits() -> dict:
-    """Get WhatsApp interactive message limits and constraints.
+    """The interactive limits Wappa enforces before any Platform call.
 
-    Returns supported interactive types, size limits, and platform constraints.
+    Each limit is the most restrictive one across the installed Platforms, so a
+    message within them is deliverable on WhatsApp and Instagram alike.
     """
     return {
         "button_messages": {
-            "max_buttons": 3,
-            "max_button_title_length": 20,
-            "max_button_id_length": 256,
-            "max_body_length": 1024,
-            "max_footer_length": 60,
-            "supported_header_types": ["text", "image", "video", "document"],
+            "min_buttons": 1,
+            "max_buttons": BUTTONS_MAX,
+            "max_button_title_length": BUTTON_TITLE_MAX,
+            "max_button_id_length": BUTTON_ID_MAX,
+            "max_body_length": BUTTON_BODY_MAX,
+            "max_header_text_length": HEADER_TEXT_MAX,
+            "max_footer_length": FOOTER_MAX,
+            "supported_header_kinds": ["text", "image", "video", "document"],
         },
         "list_messages": {
-            "max_sections": 10,
-            "max_rows_per_section": 10,
-            "max_button_text_length": 20,
-            "max_body_length": 4096,
-            "max_header_length": 60,
-            "max_footer_length": 60,
-            "max_section_title_length": 24,
-            "max_row_title_length": 24,
-            "max_row_description_length": 72,
-            "max_row_id_length": 200,
+            "max_sections": LIST_SECTIONS_MAX,
+            "max_rows_total": LIST_ROWS_MAX,
+            "section_title_required_when_several_sections": True,
+            "row_ids_unique_across_sections": True,
+            "max_button_text_length": LIST_BUTTON_TEXT_MAX,
+            "max_body_length": LIST_BODY_MAX,
+            "max_header_length": HEADER_TEXT_MAX,
+            "max_footer_length": FOOTER_MAX,
+            "max_section_title_length": SECTION_TITLE_MAX,
+            "max_row_title_length": ROW_TITLE_MAX,
+            "max_row_description_length": ROW_DESCRIPTION_MAX,
+            "max_row_id_length": ROW_ID_MAX,
         },
         "cta_messages": {
             "required_url_protocols": ["http://", "https://"],
-            "max_body_length": 4096,
-            "max_button_text_length": 256,
-            "max_header_length": 60,
-            "max_footer_length": 60,
         },
         "general": {
-            "supported_platforms": ["whatsapp"],
+            "length_unit": "characters",
+            "supported_platforms": ["whatsapp", "instagram"],
             "requires_authentication": True,
-            "rate_limits": "Per WhatsApp Business API terms",
         },
     }

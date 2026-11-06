@@ -162,6 +162,7 @@ class WhatsAppMediaPayloadBuilder:
         filename: str | None = None,
         reply_to_message_id: str | None = None,
         is_url: bool = False,
+        caption: str | None = None,
     ) -> dict[str, Any]:
         return self._build_media_payload(
             "document",
@@ -169,6 +170,7 @@ class WhatsAppMediaPayloadBuilder:
             recipient,
             reply_to_message_id,
             is_url,
+            caption=caption,
             filename=filename,
         )
 
