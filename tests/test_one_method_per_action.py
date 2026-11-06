@@ -343,8 +343,8 @@ async def test_voice_note_flag_reaches_whatsapp_through_the_pipeline():
     assert "voice" not in client.posted[1]["audio"]
 
 
-async def test_whatsapp_voice_note_by_media_id_must_be_ogg():
-    """Live: MP3/M4A/AAC with ``voice: true`` showed no waveform; only OGG/Opus does."""
+async def test_whatsapp_voice_and_sticker_by_media_id_check_the_mime_type():
+    """Live: non-OGG voice notes showed no waveform; a PNG sticker failed 131053."""
     from types import SimpleNamespace
 
     class _Media:
@@ -368,6 +368,12 @@ async def test_whatsapp_voice_note_by_media_id_must_be_ogg():
 
     wa, client = _wa(_Media("audio/mpeg", success=False))  # lookup failed: Meta decides
     assert (await wa.send_audio("777", WA_DM, is_voice=True)).success
+
+    wa, client = _wa(_Media("image/png"))  # live: PNG sticker failed 131053
+    with pytest.raises(ValueError, match="sticker accepts WebP"):
+        await wa.send_sticker("888", WA_DM)
+    wa, client = _wa(_Media("image/webp"))
+    assert (await wa.send_sticker("888", WA_DM)).success
 
 
 async def test_voice_note_renditions_serve_both_platforms_from_one_call():

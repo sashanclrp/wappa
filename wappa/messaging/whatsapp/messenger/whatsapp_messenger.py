@@ -409,7 +409,9 @@ class WhatsAppMessengerAdapter(IMessenger, ITemplateMessaging, IUserDataRequests
             what="WhatsApp voice note" if is_voice else "WhatsApp audio",
         )
         if is_voice:
-            await self._check_voice_media_id(audio_source)
+            await self._check_media_id_mime(
+                audio_source, "audio/ogg", what="voice note", fix="OGG/Opus"
+            )
         media_cache: dict[str, Any] = {}  # upload once across fallback attempts
         return await self._deliver(
             target,
@@ -424,24 +426,25 @@ class WhatsAppMessengerAdapter(IMessenger, ITemplateMessaging, IUserDataRequests
             ),
         )
 
-    async def _check_voice_media_id(self, source: str | Path) -> None:
-        """Refuse a voice note by Media ID unless the stored file is OGG.
+    async def _check_media_id_mime(
+        self, source: str | Path, expected: str, *, what: str, fix: str
+    ) -> None:
+        """Refuse a send by Media ID whose stored file is not ``expected``.
 
         A Media ID has no suffix, so ``pick_rendition`` passes it through. Live
-        (2026-11-06): MP3, M4A and AAC sent with ``voice: true`` were delivered
-        as a voice bubble with no waveform; only OGG/Opus renders one. Ask Meta
-        for the ID's MIME type and refuse anything but ``audio/ogg``. A failed
-        lookup passes the send through, leaving the verdict to Meta.
+        (2026-11-06): MP3, M4A and AAC sent as voice notes arrived with no
+        waveform, and a PNG sticker failed with 131053 after acceptance. Ask
+        Meta for the ID's MIME type and refuse a mismatch before sending. A
+        failed lookup passes the send through, leaving the verdict to Meta.
         """
         if isinstance(source, Path) or source.startswith(("http://", "https://")):
             return
         info = await self.media_handler.get_media_info(source)
         mime = (info.mime_type or "").split(";", 1)[0].strip().lower()
-        if info.success and mime and mime != "audio/ogg":
+        if info.success and mime and mime != expected:
             raise ValueError(
-                f"WhatsApp voice note accepts OGG/Opus (audio/ogg); Media ID "
-                f"{source} is {mime}. Send it as audio (is_voice=False) or "
-                f"upload an OGG/Opus file"
+                f"WhatsApp {what} accepts {fix} ({expected}); Media ID "
+                f"{source} is {mime}"
             )
 
     async def send_document(
@@ -477,6 +480,9 @@ class WhatsAppMessengerAdapter(IMessenger, ITemplateMessaging, IUserDataRequests
         # only fails later (status 131053), so pick or reject up front.
         sticker_source = pick_rendition(
             sticker_source, WHATSAPP_STICKER_SUFFIXES, what="WhatsApp sticker"
+        )
+        await self._check_media_id_mime(
+            sticker_source, "image/webp", what="sticker", fix="WebP"
         )
         media_cache: dict[str, Any] = {}  # upload once across fallback attempts
         return await self._deliver(
