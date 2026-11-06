@@ -13,7 +13,7 @@ from pydantic import SecretStr
 from wappa.domain.inbox import InboxRef
 from wappa.domain.results import OperationOutcome, message_outcome
 from wappa.messaging import DeliveryAddresses, DirectMessage
-from wappa.messaging.instagram.graph import InstagramGraphClient
+from wappa.messaging.instagram.client import InstagramClient
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
     WhatsAppMessengerAdapter,
@@ -62,7 +62,7 @@ def _ig_client(responses: list[httpx.Response], calls: list[httpx.Request]):
         return responses.pop(0) if len(responses) > 1 else responses[0]
 
     session = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    return InstagramGraphClient(
+    return InstagramClient(
         inbox_ref=InboxRef(platform=PlatformType.INSTAGRAM, inbox_id="1784"),
         access_token=SecretStr("EAAtoken"),
         session_provider=lambda: session,
@@ -82,7 +82,7 @@ async def test_instagram_app_limit_blocks_every_account_without_calling_meta(
     assert len(calls) == 1  # a long limit is never retried in the call
 
     other = _ig_client([httpx.Response(200, json={"message_id": "m"})], calls)
-    other.inbox_ref = InboxRef(platform=PlatformType.INSTAGRAM, inbox_id="9999")
+    other.graph.inbox_ref = InboxRef(platform=PlatformType.INSTAGRAM, inbox_id="9999")
     blocked = await other.request("POST", "9999/messages", json={}, operation="send")
     assert blocked.outcome is OperationOutcome.RATE_LIMITED
     assert "still active" in (blocked.error or "")
@@ -153,7 +153,7 @@ async def test_retried_upload_sends_the_file_again(fake_time):
         return responses.pop(0)
 
     session = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    graph = InstagramGraphClient(
+    graph = InstagramClient(
         inbox_ref=InboxRef(platform=PlatformType.INSTAGRAM, inbox_id="1784"),
         access_token=SecretStr("t"),
         session_provider=lambda: session,

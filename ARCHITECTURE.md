@@ -310,14 +310,15 @@ Event lanes beyond message/status/error/system (message updates, comments, menti
 | `wappa/webhooks/instagram/models.py` | Pure envelope (`messaging[]` + `changes[]`) and typed message-family models. |
 | `wappa/processors/instagram_processor.py` | Pure lane translation (see the table in its docstring); extension fields via the Platform-qualified `FieldHandlerRegistry`. No I/O. |
 | `wappa/webhooks/instagram/routing.py` | Signature-first, whole-batch admission: resolve every entry's Inbox before returning one delivery per event/change. Authors never select an Inbox. |
-| `wappa/messaging/instagram/graph.py` | Inbox-bound Graph HTTP, outcome classification (accepted/rejected/indeterminate), credential-free error text. |
+| `wappa/messaging/meta/graph.py` | `MetaGraphClient`, the Meta Graph transport both Meta Platforms call through (ADR-0029): versioned URL, Bearer auth, outcome classification (accepted/rejected/indeterminate/rate_limited), Meta's error code parsed once, error logging without the token, and the shared rate-limit governor. |
+| `wappa/messaging/instagram/client.py` | `InstagramClient`: Instagram's paths (`messages_path`, `attachments_path`) and Messenger-family error wording over `MetaGraphClient`; the Instagram counterpart of `WhatsAppClient`. |
 | `wappa/messaging/instagram/messenger.py` | `IMessenger` facade: maps the shared contract (`mark_as_read`, button/list/CTA messages, carousels, captions as follow-up text, location/contact as text, sticker as image, `resolve_platform_user_profile` as a Graph profile lookup) onto Instagram APIs, PrivateReply, local limit checks, capability lookup. |
 | `wappa/messaging/instagram/media_library.py` | `IMediaLibrary`: reusable `message_attachments` upload of a file or bytes (attachment_id; a sticker as an image) and CDN download through the attachment reader; `info`/`delete` raise `UnsupportedOperationError`. |
 | `wappa/messaging/instagram/content.py` | `ICommentControls` (including public `reply_comment`) and `IConversationContentReader` (Focused Capabilities). |
 | `wappa/messaging/instagram/media.py` | Media rules and the credential-free, host-restricted `InstagramAttachmentReader`, private to `InstagramMediaLibrary.download`. |
 | `wappa/connections/contract.py` | `IInboxConnector` (ADR-0026): begin / complete / activate / disconnect, grant, readiness and activation results (typed `ActiveInboxCredentialRecord`), and `require_platform`, the precondition both `activate` methods call first. |
 | `wappa/connections/meta_login.py` | Meta Business Login core shared by both Meta connectors: state binding, code exchange, `debug_token`, `signed_request`, and the one `authorize` prelude both `complete` methods call before discovery. |
-| `wappa/connections/instagram.py` | `InstagramConnector` (Unified Login discovery, field subscriptions through the Instagram `graph_request`); the Host owns routes, intent storage and commit. |
+| `wappa/connections/instagram.py` | `InstagramConnector` (Unified Login discovery, field subscriptions through the Meta `graph_request`); the Host owns routes, intent storage and commit. |
 | `wappa/connections/whatsapp.py` | `WhatsAppConnector` (Embedded Signup: WABA + phone-number discovery, WABA `subscribed_apps`). |
 | `wappa/domain/inbox/access.py` | `InboxCredentialAccess`: the supported trusted-adapter credential seam (ADR-0025). |
 

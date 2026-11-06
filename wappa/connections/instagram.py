@@ -24,7 +24,8 @@ from wappa.domain.inbox.credentials import CredentialRecord
 from wappa.domain.inbox.identity import InboxRef, PlatformAccountRef
 from wappa.domain.inbox.services import InboxCredentialService
 from wappa.domain.results import OperationOutcome
-from wappa.messaging.instagram.graph import GraphResponse, graph_request
+from wappa.messaging.instagram.client import describe_error
+from wappa.messaging.meta.graph import GraphResponse, graph_request
 from wappa.schemas.core.types import PlatformType
 
 from .contract import (
@@ -112,7 +113,7 @@ def _outcome(response: GraphResponse) -> FieldSubscriptionOutcome:
 class InstagramSubscriptions:
     """Account-level webhook field subscription (``/{ig-id}/subscribed_apps``).
 
-    Every call goes through the shared Instagram ``graph_request``, so the
+    Every call goes through the shared Meta ``graph_request``, so the
     accepted / rejected / indeterminate classification matches messaging.
     ``graph_base`` is the versioned Graph root (``MetaLoginConfig.graph_base``).
     """
@@ -145,6 +146,7 @@ class InstagramSubscriptions:
             operation="Instagram subscribed_apps",
             params=params,
             timeout=20.0,
+            describe=describe_error,
         )
 
     async def _subscribe_call(

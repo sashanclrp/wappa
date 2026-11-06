@@ -1,4 +1,4 @@
-"""An Instagram rejection logs Meta's error fields; the result stays credential-free."""
+"""A Meta rejection logs Meta's error fields; the result stays credential-free."""
 
 from unittest.mock import MagicMock
 
@@ -7,7 +7,7 @@ import pytest
 from pydantic import SecretStr
 
 from wappa.domain.results import OperationOutcome
-from wappa.messaging.instagram import graph
+from wappa.messaging.meta import graph
 
 
 @pytest.mark.asyncio

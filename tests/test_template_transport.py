@@ -281,7 +281,7 @@ async def test_success_without_message_identity_is_indeterminate() -> None:
             MessageResult(
                 platform=PlatformType.WHATSAPP,
                 success=False,
-                error_code="platform_outcome_indeterminate",
+                error_code="INDETERMINATE",
                 error="Bearer secret-token",
             ),
             TemplateTransportOutcome.INDETERMINATE,
@@ -327,7 +327,7 @@ async def test_unexpected_pipeline_exception_is_indeterminate() -> None:
     ).send(_text_request())
 
     assert result.outcome is TemplateTransportOutcome.INDETERMINATE
-    assert result.error_code == "platform_outcome_indeterminate"
+    assert result.error_code == "INDETERMINATE"
     assert "secret" not in (result.error_message or "")
 
 

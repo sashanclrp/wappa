@@ -10,6 +10,8 @@ import pytest
 from wappa.domain.interfaces.conversation_capabilities import ReadOutcome
 from wappa.domain.interfaces.media_library import MediaFamily
 from wappa.domain.models.media_result import MediaDownloadResult, MediaInfoResult
+from wappa.domain.results import OperationOutcome
+from wappa.messaging.meta.graph import GraphResponse, MetaGraphError
 from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
     WhatsAppMediaHandler,
 )
@@ -116,10 +118,18 @@ def _info_failing_library(error: Exception) -> WhatsAppMediaLibrary:
     return WhatsAppMediaLibrary(handler, "555")
 
 
-def _graph_error(status: int) -> httpx.HTTPStatusError:
-    request = httpx.Request("GET", "https://graph.example/dead/")
-    return httpx.HTTPStatusError(
-        "graph error", request=request, response=httpx.Response(status, request=request)
+def _graph_error(status: int) -> MetaGraphError:
+    """What WhatsAppClient raises after MetaGraphClient classified the call."""
+    server = status >= 500
+    return MetaGraphError(
+        GraphResponse(
+            outcome=OperationOutcome.INDETERMINATE
+            if server
+            else OperationOutcome.REJECTED,
+            status_code=status,
+            error_code="INDETERMINATE" if server else str(status),
+            error="graph error",
+        )
     )
 
 

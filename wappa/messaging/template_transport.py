@@ -432,7 +432,7 @@ class InboxTemplateTransport:
         except Exception:
             return failure(
                 TemplateTransportOutcome.INDETERMINATE,
-                "platform_outcome_indeterminate",
+                "INDETERMINATE",
                 "The platform outcome could not be determined.",
             )
         return _normalize_result(
@@ -588,7 +588,7 @@ def _normalize_result(
         TemplateTransportOutcome.TRANSPORT_UNAVAILABLE
         if code in {"runtime_unavailable", "transport_unavailable"}
         else TemplateTransportOutcome.INDETERMINATE
-        if code == "platform_outcome_indeterminate"
+        if code == "INDETERMINATE"
         else TemplateTransportOutcome.REJECTED
     )
     message = {

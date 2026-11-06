@@ -2,12 +2,12 @@
 
 from typing import NoReturn
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from wappa.api.dependencies.whatsapp_dependencies import (
     get_whatsapp_template_info_service,
 )
+from wappa.messaging.meta.graph import MetaGraphError
 from wappa.messaging.whatsapp.models.template_info_models import (
     TemplateByIdRequest,
     TemplateByNameRequest,
@@ -32,14 +32,12 @@ router = APIRouter(
 )
 
 
-def _raise_info_http_error(exc: httpx.HTTPStatusError) -> NoReturn:
+def _raise_info_http_error(exc: MetaGraphError) -> NoReturn:
     """Translate Meta Graph API errors into FastAPI HTTP responses."""
     raise HTTPException(
-        status_code=exc.response.status_code,
-        detail=(
-            f"Meta Graph API returned HTTP {exc.response.status_code} "
-            f"for template info request: {exc}"
-        ),
+        status_code=exc.status_code or 502,  # transport failure: no Meta status
+        detail=f"Meta Graph API returned HTTP {exc.status_code} "
+        f"for template info request: {exc}",
     ) from exc
 
 
@@ -117,7 +115,7 @@ async def get_template_by_id(
     request_model = TemplateByIdRequest(template_id=template_id, fields=fields)
     try:
         return await service.get_template_by_id(request_model)
-    except httpx.HTTPStatusError as exc:
+    except MetaGraphError as exc:
         _raise_info_http_error(exc)
 
 
@@ -142,7 +140,7 @@ async def get_template_by_name(
     )
     try:
         return await service.get_template_by_name(request_model)
-    except httpx.HTTPStatusError as exc:
+    except MetaGraphError as exc:
         _raise_info_http_error(exc)
 
 
@@ -187,7 +185,7 @@ async def list_templates(
     )
     try:
         return await service.list_templates(request_model)
-    except httpx.HTTPStatusError as exc:
+    except MetaGraphError as exc:
         _raise_info_http_error(exc)
 
 
@@ -203,5 +201,5 @@ async def get_template_namespace(
     """Fetch WABA namespace metadata used for template management."""
     try:
         return await service.get_template_namespace()
-    except httpx.HTTPStatusError as exc:
+    except MetaGraphError as exc:
         _raise_info_http_error(exc)

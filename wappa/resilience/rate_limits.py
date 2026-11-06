@@ -4,8 +4,8 @@ Meta answers an over-budget call with an error code, and a call made while
 blocked still counts against the budget, so retrying in a loop extends the
 block (live evidence and sources: the Instagram conversations PRD,
 ``references/rate-limits.md``). The governor sits at each adapter's transport
-choke point (Instagram ``InstagramGraphClient.request``, WhatsApp
-``WhatsAppClient``) so sends, uploads, comment actions and reads all obey it:
+choke point (``wappa.messaging.meta.MetaGraphClient.request``, which both
+WhatsApp and Instagram call through) so sends, uploads, comment actions and reads all obey it:
 
 - **Short limits** (per second, per recipient pair): the call waits with
   ``asyncio.sleep`` and retries, bounded by ``RateLimitPolicy.max_wait``. A

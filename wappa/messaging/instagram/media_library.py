@@ -35,7 +35,7 @@ from wappa.domain.messaging_targets import UnsupportedOperationError
 from wappa.domain.results import OperationOutcome
 from wappa.schemas.core.types import PlatformType
 
-from .graph import InstagramGraphClient
+from .client import InstagramClient
 from .media import (
     InstagramAttachmentReader,
     ascii_name,
@@ -48,7 +48,7 @@ from .media import (
 
 class InstagramMediaLibrary(IMediaLibrary):
     def __init__(
-        self, graph: InstagramGraphClient, reader: InstagramAttachmentReader
+        self, graph: InstagramClient, reader: InstagramAttachmentReader
     ) -> None:
         self._graph = graph
         self._reader = reader
@@ -77,7 +77,7 @@ class InstagramMediaLibrary(IMediaLibrary):
         with opened as content:
             response = await self._graph.request(
                 "POST",
-                f"{self._graph.account_id}/message_attachments",
+                self._graph.attachments_path,
                 data={"platform": "instagram", "message": json.dumps(message)},
                 files={"filedata": (name, content, mime_type or mime_for(name))},
                 operation=f"Instagram {family.value} upload",

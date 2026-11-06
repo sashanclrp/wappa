@@ -81,11 +81,12 @@ from wappa.domain.messaging_targets import (
 )
 from wappa.domain.results import MessageResult, OperationOutcome
 from wappa.domain.user_profile import PlatformUserProfile
+from wappa.messaging.meta.graph import GraphResponse
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
 
+from .client import InstagramClient
 from .content import InstagramCommentControls, InstagramContentReader, _read_failure
-from .graph import GraphResponse, InstagramGraphClient
 from .history import InstagramHistoryReader
 from .media import (
     MEDIA_ADAPTATION_DRAFT,
@@ -341,7 +342,7 @@ class InstagramMessengerAdapter(IMessenger):
         # Instagram echoes Wappa's own sends; recording them lets the Inbound
         # Runtime drop those echoes (ADR-0023).
         self._sent_registry = sent_registry
-        self._graph = InstagramGraphClient(
+        self._graph = InstagramClient(
             inbox_ref=inbox_ref,
             access_token=access_token,
             session_provider=session_provider,
@@ -442,7 +443,7 @@ class InstagramMessengerAdapter(IMessenger):
         if reply_to_message_id:
             body["reply_to"] = {"mid": reply_to_message_id}
         response = await self._graph.request(
-            "POST", f"{self.inbox_id}/messages", json=body, operation=operation
+            "POST", self._graph.messages_path, json=body, operation=operation
         )
         result = self._result(response, address, operation)
         if result.success and result.message_id and self._sent_registry is not None:
@@ -968,7 +969,7 @@ class InstagramMessengerAdapter(IMessenger):
         recipient = target.resolve(self._inbox_ref)
         return await self._graph.request(
             "POST",
-            f"{self.inbox_id}/messages",
+            self._graph.messages_path,
             json={"recipient": {"id": recipient}, "sender_action": action},
             operation=f"Instagram {action}",
         )

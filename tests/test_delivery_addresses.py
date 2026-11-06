@@ -6,13 +6,14 @@ next one only when Meta rejects the address itself.
 
 from __future__ import annotations
 
-import httpx
 import pytest
 
 from wappa.core.messaging.middleware.pubsub_notification import _destination_user
 from wappa.core.messaging.pipeline import SendInvocation
 from wappa.domain.inbox import InboxRef
+from wappa.domain.results import OperationOutcome
 from wappa.messaging import DeliveryAddresses, DirectMessage
+from wappa.messaging.meta.graph import GraphResponse, MetaGraphError
 from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
     WhatsAppMessengerAdapter,
 )
@@ -25,12 +26,16 @@ BSUID = "CO.862165913565991"
 WA = InboxRef.whatsapp("pnid")
 
 
-def _rejection(code: int) -> httpx.HTTPStatusError:
-    request = httpx.Request("POST", "https://graph.facebook.com/v26.0/pnid/messages")
-    response = httpx.Response(
-        400, request=request, json={"error": {"code": code, "message": "rejected"}}
+def _rejection(code: int) -> MetaGraphError:
+    """What WhatsAppClient raises for a Meta 4xx (classified by MetaGraphClient)."""
+    return MetaGraphError(
+        GraphResponse(
+            outcome=OperationOutcome.REJECTED,
+            status_code=400,
+            error_code=str(code),
+            error="rejected",
+        )
     )
-    return httpx.HTTPStatusError("400", request=request, response=response)
 
 
 class _Client:

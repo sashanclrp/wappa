@@ -1,23 +1,25 @@
-import json
-from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+"""WhatsApp Cloud API URL shapes and payload transport for one phone number.
+
+Every call goes through the shared Meta transport
+(``wappa.messaging.meta.MetaGraphClient``, ADR-0029): outcome classification,
+Meta error logging and rate limits live there. This client keeps WhatsApp's
+URL shapes and multipart form and raises on failure, because the WhatsApp
+handlers map exceptions to results: ``MetaGraphError`` (rejected or
+indeterminate, with the classified ``GraphResponse``) or ``RateLimitedError``.
+"""
+
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any
 
 import httpx
+from pydantic import SecretStr
 
 from wappa.core.config.settings import settings
 from wappa.core.logging.logger import get_logger
-from wappa.resilience.rate_limits import (
-    RateLimited,
-    RateLimitedError,
-    RateLimitHit,
-    RateTarget,
-    rate_governor,
-    rate_limit_rule,
-    rewind,
-    usage_headers,
-)
+from wappa.domain.inbox.identity import InboxRef
+from wappa.messaging.meta.graph import MetaGraphClient
 
 
 class WhatsAppUrlBuilder:
@@ -93,7 +95,7 @@ class WhatsAppFormDataBuilder:
 
 
 class WhatsAppClient:
-    """WhatsApp Business API client with dependency-injected httpx session."""
+    """One phone number's Cloud API calls over the shared ``MetaGraphClient``."""
 
     def __init__(
         self,
@@ -112,6 +114,13 @@ class WhatsAppClient:
 
         self.url_builder = WhatsAppUrlBuilder(base_url, api_version, phone_number_id)
         self.form_builder = WhatsAppFormDataBuilder()
+        self.graph = MetaGraphClient(
+            inbox_ref=InboxRef.whatsapp(phone_number_id),
+            access_token=SecretStr(access_token),
+            session_provider=lambda: session,
+            graph_api_version=api_version,
+            graph_base_url=base_url,
+        )
 
         self.logger.info(
             f"WhatsApp client initialized for inbox/phone_id: {self.phone_number_id}, "
@@ -131,211 +140,31 @@ class WhatsAppClient:
     def _update_activity(self) -> None:
         self.last_activity = datetime.now(UTC)
 
-    def _mask_headers(self, headers: dict[str, str]) -> dict[str, str]:
-        masked = dict(headers)
-        authorization = masked.get("Authorization")
-        if authorization:
-            parts = authorization.split(" ", 1)
-            token = parts[1] if len(parts) == 2 else parts[0]
-            token = f"{token[:8]}...{token[-4:]}" if len(token) > 10 else "***"
-            masked["Authorization"] = (
-                f"{parts[0]} {token}" if len(parts) == 2 else token
-            )
-        return masked
-
-    def _parse_response_text(self, response_text: str) -> dict[str, Any] | None:
-        if not response_text:
-            return None
-        try:
-            parsed = json.loads(response_text)
-        except json.JSONDecodeError:
-            return None
-        return parsed if isinstance(parsed, dict) else {"data": parsed}
-
-    def _extract_meta_error_summary(
-        self, response_payload: dict[str, Any] | None
-    ) -> dict[str, Any] | None:
-        if not isinstance(response_payload, dict):
-            return None
-        error = response_payload.get("error")
-        if not isinstance(error, dict):
-            return None
-
-        summary = {
-            "message": error.get("message"),
-            "type": error.get("type"),
-            "code": error.get("code"),
-            "error_subcode": error.get("error_subcode"),
-            "fbtrace_id": error.get("fbtrace_id"),
-        }
-
-        error_data = error.get("error_data")
-        if isinstance(error_data, dict) and error_data.get("details"):
-            summary["details"] = error_data["details"]
-
-        return {key: value for key, value in summary.items() if value is not None}
-
-    def _log_outbound_request(
-        self,
-        *,
-        method: str,
-        url: str,
-        headers: dict[str, str],
-        payload: dict[str, Any] | None = None,
-        files: dict[str, Any] | None = None,
-    ) -> None:
-        self.logger.debug("%s request to %s for inbox %s", method, url, self.inbox_id)
-        self.logger.debug("Headers: %s", self._mask_headers(headers))
-
-        if payload is not None:
-            self.logger.debug("Payload: %s", payload)
-            if "to" in payload:
-                self.logger.debug("Recipient routing: to=%s", payload["to"])
-            elif "recipient" in payload:
-                self.logger.debug(
-                    "Recipient routing: recipient=%s", payload["recipient"]
-                )
-
-        if files is not None:
-            self.logger.debug("Files: %s", list(files.keys()))
-
-    def _log_http_error(
-        self,
-        *,
-        method: str,
-        url: str,
-        headers: dict[str, str],
-        status: int,
-        payload: dict[str, Any] | None = None,
-        response_text: str | None = None,
-    ) -> None:
-        response_payload = self._parse_response_text(response_text or "")
-        meta_error = self._extract_meta_error_summary(response_payload)
-
-        self.logger.error(
-            "HTTP %s error for inbox %s: status=%s url=%s",
-            method,
-            self.inbox_id,
-            status,
-            url,
-        )
-        self.logger.debug("Failed headers: %s", self._mask_headers(headers))
-        if payload is not None:
-            self.logger.debug("Failed payload: %s", payload)
-        if response_text:
-            self.logger.error("Meta raw response: %s", response_text)
-        if meta_error is not None:
-            self.logger.error("Meta error summary: %s", meta_error)
-
-    async def _governed(
-        self,
-        call: Callable[[], Awaitable[httpx.Response]],
-        *,
-        recipient: str | None = None,
-        files: Mapping[str, Any] | None = None,
-    ) -> httpx.Response:
-        """Run one HTTP call under Meta's limits (``wappa.resilience.rate_limits``).
-
-        Short limits (130429 throughput, 131056 pair rate) wait and retry
-        inside the call; long ones block this number (or the app) and raise
-        ``RateLimitedError`` without calling Meta again.
-        """
-        target = RateTarget("whatsapp", self.phone_number_id, recipient=recipient)
-        governor = rate_governor()
-
-        async def attempt() -> httpx.Response:
-            rewind(files)
-            return await call()
-
-        def hit_of(response: httpx.Response) -> RateLimitHit | None:
-            regain = governor.observe_usage(target, usage_headers(response.headers))
-            if response.status_code < 400:
-                return None
-            code = _meta_error_code(response)
-            if rate_limit_rule("whatsapp", code):
-                return RateLimitHit(code or "", regain)
-            return None
-
-        outcome = await governor.run(target, attempt, hit_of)
-        if isinstance(outcome, RateLimited):
-            self.logger.warning(
-                "WhatsApp call not sent for inbox %s: %s", self.inbox_id, outcome.error
-            )
-            raise RateLimitedError(outcome)
-        return outcome
-
     async def post_request(
         self,
         payload: dict[str, Any],
         custom_url: str | None = None,
         files: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        """POST JSON (or a multipart form with ``files``); the accepted body.
+
+        Raises ``MetaGraphError`` or ``RateLimitedError``.
+        """
         self._update_activity()
         url = custom_url or self.url_builder.get_messages_url()
-        headers: dict[str, str] = {}
-        response_text = ""
-
-        try:
-            if files:
-                headers = self._get_headers(include_content_type=False)
-                form_data, form_files = self.form_builder.build_form_data(
-                    payload, files
-                )
-                self._log_outbound_request(
-                    method="POST multipart",
-                    url=url,
-                    headers=headers,
-                    payload=payload,
-                    files=files,
-                )
-                response = await self._governed(
-                    lambda: self.session.post(
-                        url, headers=headers, data=form_data, files=form_files
-                    ),
-                    files=form_files,
-                )
-            else:
-                headers = self._get_headers()
-                self._log_outbound_request(
-                    method="POST",
-                    url=url,
-                    headers=headers,
-                    payload=payload,
-                )
-                response = await self._governed(
-                    lambda: self.session.post(url, headers=headers, json=payload),
-                    recipient=payload.get("to"),
-                )
-
-            response_text = response.text
-            response.raise_for_status()
-            response_data = self._parse_response_text(response_text) or {}
-            self.logger.debug("Response: %s", response_data)
-            return response_data
-
-        except httpx.HTTPStatusError as http_err:
-            if http_err.response.status_code == 401:
-                self.logger.error(
-                    "CRITICAL: WhatsApp access token expired or invalid for inbox %s "
-                    "(401 Unauthorized). URL: %s. "
-                    "ACTION REQUIRED: Update the WhatsApp access token in environment variables.",
-                    self.inbox_id,
-                    url,
-                )
-            self._log_http_error(
-                method="POST",
-                url=url,
-                headers=headers,
-                status=http_err.response.status_code,
-                payload=payload,
-                response_text=response_text,
+        self.logger.debug("POST %s for inbox %s: %s", url, self.inbox_id, payload)
+        if files:
+            form_data, form_files = self.form_builder.build_form_data(payload, files)
+            return await self.graph.call(
+                "POST",
+                url,
+                data=form_data,
+                files=form_files,
+                operation="WhatsApp upload",
             )
-            raise
-        except RateLimitedError:
-            raise  # logged by _governed; callers map it to rate_limited
-        except Exception as err:
-            self.logger.error("Unexpected error for inbox %s: %s", self.inbox_id, err)
-            raise
+        return await self.graph.call(
+            "POST", url, json=payload, operation=_operation(payload)
+        )
 
     async def get_request(
         self,
@@ -343,36 +172,12 @@ class WhatsAppClient:
         params: dict[str, Any] | None = None,
         custom_url: str | None = None,
     ) -> dict[str, Any]:
+        """GET; the accepted body. Raises ``MetaGraphError`` or ``RateLimitedError``."""
         self._update_activity()
         url = custom_url or self.url_builder.get_endpoint_url(endpoint or "")
-
-        try:
-            response = await self._governed(
-                lambda: self.session.get(
-                    url, headers=self._get_headers(), params=params
-                )
-            )
-            response.raise_for_status()
-            response_data = response.json()
-            self.logger.debug(
-                "GET %s params=%s returned: %s", url, params, response_data
-            )
-            return cast(dict[str, Any], response_data)
-        except httpx.HTTPStatusError as http_err:
-            self.logger.error(
-                "HTTP GET error for inbox %s: %s - %s",
-                self.inbox_id,
-                http_err,
-                http_err.response.text,
-            )
-            raise
-        except RateLimitedError:
-            raise  # logged by _governed; callers map it to rate_limited
-        except Exception as err:
-            self.logger.error(
-                "Unexpected GET error for inbox %s: %s", self.inbox_id, err
-            )
-            raise
+        return await self.graph.call(
+            "GET", url, params=params, operation="WhatsApp read"
+        )
 
     async def delete_request(
         self,
@@ -380,36 +185,12 @@ class WhatsAppClient:
         params: dict[str, Any] | None = None,
         custom_url: str | None = None,
     ) -> dict[str, Any]:
+        """DELETE; the accepted body. Raises ``MetaGraphError`` or ``RateLimitedError``."""
         self._update_activity()
         url = custom_url or self.url_builder.get_endpoint_url(endpoint or "")
-
-        try:
-            response = await self._governed(
-                lambda: self.session.delete(
-                    url, headers=self._get_headers(), params=params
-                )
-            )
-            response.raise_for_status()
-            response_data = response.json()
-            self.logger.debug(
-                "DELETE %s params=%s returned: %s", url, params, response_data
-            )
-            return cast(dict[str, Any], response_data)
-        except httpx.HTTPStatusError as http_err:
-            self.logger.error(
-                "HTTP DELETE error for inbox %s: %s - %s",
-                self.inbox_id,
-                http_err,
-                http_err.response.text,
-            )
-            raise
-        except RateLimitedError:
-            raise  # logged by _governed; callers map it to rate_limited
-        except Exception as err:
-            self.logger.error(
-                "Unexpected DELETE error for inbox %s: %s", self.inbox_id, err
-            )
-            raise
+        return await self.graph.call(
+            "DELETE", url, params=params, operation="WhatsApp delete"
+        )
 
     @asynccontextmanager
     async def stream_get(
@@ -429,11 +210,6 @@ class WhatsAppClient:
             raise
 
 
-def _meta_error_code(response: httpx.Response) -> str | None:
-    try:
-        body = response.json()
-    except ValueError:
-        return None
-    error = body.get("error") if isinstance(body, dict) else None
-    code = error.get("code") if isinstance(error, dict) else None
-    return str(code) if code is not None else None
+def _operation(payload: dict[str, Any]) -> str:
+    kind = payload.get("type")
+    return f"WhatsApp {kind} send" if isinstance(kind, str) else "WhatsApp send"

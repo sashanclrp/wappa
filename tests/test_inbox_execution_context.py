@@ -70,6 +70,12 @@ class _RecordingSession:
 
     is_closed = False
 
+    async def request(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        """httpx.AsyncClient.request shape: the shared Meta transport calls it."""
+        kwargs.pop("timeout", None)
+        kwargs = {k: v for k, v in kwargs.items() if v is not None or k == "headers"}
+        return await getattr(self, method.lower())(url, **kwargs)
+
     def __init__(self) -> None:
         self.requests: list[dict[str, Any]] = []
 

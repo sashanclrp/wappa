@@ -37,9 +37,10 @@ from wappa.domain.results import (
     ControlResult,
     OperationOutcome,
 )
+from wappa.messaging.meta.graph import GraphResponse
 from wappa.schemas.core.types import PlatformType
 
-from .graph import GraphResponse, InstagramGraphClient
+from .client import InstagramClient
 
 POST_FIELDS = (
     "id,caption,media_type,media_product_type,media_url,permalink,thumbnail_url,"
@@ -169,7 +170,7 @@ COMMENT_REPLY_MAX = 2200
 
 
 class InstagramCommentControls(ICommentControls):
-    def __init__(self, graph: InstagramGraphClient) -> None:
+    def __init__(self, graph: InstagramClient) -> None:
         self._graph = graph
 
     async def reply_comment(self, comment_ref: CommentRef, text: str) -> CommentResult:
@@ -278,7 +279,7 @@ class InstagramCommentControls(ICommentControls):
 
 
 class InstagramContentReader(IConversationContentReader):
-    def __init__(self, graph: InstagramGraphClient) -> None:
+    def __init__(self, graph: InstagramClient) -> None:
         self._graph = graph
 
     async def get_post(self, post_ref: PostRef) -> ReadResult[PostContent]:

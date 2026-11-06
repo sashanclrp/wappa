@@ -16,6 +16,7 @@ from wappa.domain.models.media_result import (
     MediaInfoResult,
     MediaUploadResult,
 )
+from wappa.messaging.meta.graph import MetaGraphError
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.models.media_models import MediaType
 from wappa.resilience.rate_limits import RateLimitedError
@@ -389,7 +390,7 @@ class WhatsAppMediaHandler:
                 inbox_id=self._inbox_id,
             )
 
-        except httpx.HTTPStatusError as e:
+        except MetaGraphError as e:
             # Keep Graph's status so a caller can tell an unknown Media ID
             # (400/404) or a refused token (401/403) from an outage (5xx).
             self.logger.warning(f"Media info for ID {media_id} failed: {e}")
@@ -397,7 +398,9 @@ class WhatsAppMediaHandler:
                 platform=PlatformType.WHATSAPP,
                 success=False,
                 error=str(e),
-                error_code=f"HTTP_{e.response.status_code}",
+                error_code=f"HTTP_{e.status_code}"
+                if e.status_code
+                else "INDETERMINATE",
                 inbox_id=self._inbox_id,
             )
         except Exception as e:
@@ -655,15 +658,18 @@ class WhatsAppMediaHandler:
                 inbox_id=self._inbox_id,
             )
 
-        except httpx.HTTPStatusError as e:
+        except MetaGraphError as e:
             # Keep Graph's status: an unknown Media ID (400/404) or a refused
-            # token (401/403) is a refusal, not an unknown outcome.
+            # token (401/403) is a refusal, not an unknown outcome; a 5xx or
+            # transport failure is (DELETION_FAILED → indeterminate).
             self.logger.warning(f"Deleting media ID {media_id} failed: {e}")
             return MediaDeleteResult(
                 success=False,
                 media_id=media_id,
                 error=str(e),
-                error_code=f"HTTP_{e.response.status_code}",
+                error_code="DELETION_FAILED"
+                if e.indeterminate
+                else f"HTTP_{e.status_code}",
                 platform=PlatformType.WHATSAPP,
                 inbox_id=self._inbox_id,
             )

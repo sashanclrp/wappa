@@ -35,8 +35,8 @@ from wappa.webhooks.instagram.models import (
     InstagramTextMessage,
 )
 
+from .client import InstagramClient
 from .content import _read_failure
-from .graph import InstagramGraphClient
 
 MAX_HISTORY_PAGE = 20
 MESSAGE_FIELDS = "id,created_time,from,to,message,attachments"
@@ -69,7 +69,7 @@ def _attachment(raw: dict[str, Any]) -> InstagramAttachment | None:
 
 
 class InstagramHistoryReader(IConversationHistoryReader):
-    def __init__(self, graph: InstagramGraphClient) -> None:
+    def __init__(self, graph: InstagramClient) -> None:
         self._graph = graph
 
     @property

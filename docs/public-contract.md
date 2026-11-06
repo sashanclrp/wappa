@@ -651,7 +651,7 @@ Public surface:
 
 ### Meta rate limits
 
-Every Meta call Wappa makes (sends, uploads, comment actions, reads, on both Platforms) goes through one process-wide `RateLimitGovernor` at the adapter's transport (Instagram `InstagramGraphClient.request`, WhatsApp `WhatsAppClient`). Hosts do not call it; it decides by Meta's error code, never by HTTP status, because Meta reports rate limits as 400/403 with a code in the body.
+Every Meta call Wappa makes (sends, uploads, comment actions, reads, on both Platforms) goes through one process-wide `RateLimitGovernor` inside `MetaGraphClient`, the Meta transport both Platform clients call through ([ADR-0029](adr/0029-meta-graph-transport.md)). Hosts do not call it; it decides by Meta's error code, never by HTTP status, because Meta reports rate limits as 400/403 with a code in the body.
 
 - **Short limits** (Instagram `613`; WhatsApp `130429` throughput, `131056` pair rate with Meta's 4^X backoff, `131057`): the call sleeps (`asyncio.sleep`, so only that task waits) and retries, at most `max_retries` times and `max_wait` seconds in total. A rate-limit refusal means Meta did not process the call, so the retry cannot send twice; an uploaded file is rewound first.
 - **Long limits** (Instagram `4` for the whole app, `17`, `32`, `80002`, `80006`; WhatsApp `4`, `80007`, `133016`): no retry. The scope (the app on that Platform, one Inbox, or one Inbox and recipient) is blocked for Meta's `estimated_time_to_regain_access` when given, else 300 s doubling per consecutive block up to `cooldown_max`; calls in the scope return `rate_limited` at once without calling Meta, because a blocked call still counts.
@@ -659,7 +659,7 @@ Every Meta call Wappa makes (sends, uploads, comment actions, reads, on both Pla
 - **Usage:** `x-app-usage` and `X-Business-Use-Case-Usage` are read on every response, and crossing `usage_warning_percent` (80) logs a warning per Inbox at most once a minute.
 - WhatsApp quality restrictions (`131048`, `131064`) are rejections, not rate limits.
 
-State lives in process memory, so each worker keeps its own view. `RateLimitPolicy(max_wait=30.0, max_retries=3, cooldown_max=3600.0, usage_warning_percent=80.0, send_rates={...})` configures it: `use_rate_governor(RateLimitGovernor(policy))` replaces the shared governor at startup, `rate_governor()` returns it, and `rate_limit_rule(platform, code)` tells whether a Meta code is a rate limit. `RateLimitedError` is what `WhatsAppClient` raises to its handlers; Host-facing results never raise it. Retrying a `rate_limited` result later is the Host's choice (the Crons domain is the planned home for delayed retries).
+State lives in process memory, so each worker keeps its own view. `RateLimitPolicy(max_wait=30.0, max_retries=3, cooldown_max=3600.0, usage_warning_percent=80.0, send_rates={...})` configures it: `use_rate_governor(RateLimitGovernor(policy))` replaces the shared governor at startup, `rate_governor()` returns it, and `rate_limit_rule(platform, code)` tells whether a Meta code is a rate limit. `RateLimitedError` is what `MetaGraphClient.call` (and so `WhatsAppClient`) raises to the WhatsApp handlers; Host-facing results never raise it. Retrying a `rate_limited` result later is the Host's choice (the Crons domain is the planned home for delayed retries).
 
 Classification contract:
 

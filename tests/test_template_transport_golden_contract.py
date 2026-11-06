@@ -13,10 +13,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-import httpx
 import pytest
 
 from wappa.domain.inbox import InboxRef
+from wappa.domain.results import OperationOutcome
+from wappa.messaging.meta.graph import GraphResponse, MetaGraphError, meta_error_code
 from wappa.messaging.whatsapp.handlers.whatsapp_template_handler import (
     WhatsAppTemplateHandler,
 )
@@ -127,13 +128,15 @@ async def test_golden_authentication_copy_code_request() -> None:
 
 
 def test_golden_bsuid_error_keeps_stable_provider_code() -> None:
-    response = httpx.Response(
-        400,
-        json=_fixture("bsuid_unsupported_error.json"),
-        request=httpx.Request("POST", "https://graph.facebook.com"),
-    )
-    error = httpx.HTTPStatusError(
-        "rejected", request=response.request, response=response
+    body = _fixture("bsuid_unsupported_error.json")
+    error = MetaGraphError(
+        GraphResponse(
+            outcome=OperationOutcome.REJECTED,
+            status_code=400,
+            body=body,
+            error_code=meta_error_code(body),
+            error="rejected",
+        )
     )
 
     result = handle_whatsapp_error(

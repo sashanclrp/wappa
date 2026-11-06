@@ -105,6 +105,12 @@ This release is a clean cut: no aliases or compatibility shims are kept. Step-by
   - **HTTP:** a rate-limited send, upload, comment action or read answers **429** with a `Retry-After` header; it answered 400 (or 503 for reads) before.
   - Before, a rate-limited Instagram call was `rejected` with code `4` and every later call went to Meta and extended the block; WhatsApp's `130429` and `131056` failed without a retry.
 
+- **One Meta Graph transport, `MetaGraphClient`, makes every WhatsApp and Instagram API call ([ADR-0029](docs/adr/0029-meta-graph-transport.md)).** New `wappa.messaging.meta` (`MetaGraphClient`, `MetaGraphError`, `GraphResponse`, `graph_request`, `meta_error_code`) owns Bearer auth, outcome classification, Meta's error code (parsed once instead of three times), error logging and the rate-limit governor (wired once instead of twice). The Platform clients keep their own concerns and delegate every call: `WhatsAppClient` (URL shapes, multipart form, download stream) and the new `InstagramClient` (paths, error wording).
+  - **Removed, no alias:** `wappa.messaging.instagram.graph` (`InstagramGraphClient`, `graph_request`); use `wappa.messaging.instagram.client.InstagramClient` and `wappa.messaging.meta.graph_request`.
+  - **`WhatsAppClient` raises `MetaGraphError` instead of `httpx.HTTPStatusError`**, carrying the classified `GraphResponse` (`status_code`, `code`, `indeterminate`); a rate limit raises `RateLimitedError`. Code that caught `httpx.HTTPStatusError` from it catches `MetaGraphError`.
+  - **A WhatsApp 5xx or transport failure is `indeterminate`**, error code `INDETERMINATE` (it was a rejection with the Meta code or `http_5xx`, and transport failures used `platform_outcome_indeterminate`). `InboxTemplateTransport` reports `INDETERMINATE` too. `message_outcome` now classifies WhatsApp's unknown outcomes as `indeterminate`, as it already did for Instagram.
+  - WhatsApp's Meta error log is the shared field summary (`message`, `type`, `code`, `error_subcode`, `error_user_title`, `error_user_msg`, `error_data`, `fbtrace_id`) instead of the raw body; template info routes answer 502 when no Meta status exists.
+
 ### Breaking: WhatsApp Templates moved off `IMessenger` ([ADR-0025](docs/adr/0025-messenger-contract.md))
 
 Templates are a WhatsApp-only message family, so they are now a focused capability instead of contract methods that every Platform had to reject.

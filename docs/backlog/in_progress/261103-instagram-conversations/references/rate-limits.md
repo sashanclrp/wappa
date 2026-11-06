@@ -56,11 +56,14 @@ Conversation replies inside the 24-hour customer service window do not count tow
 
 ## Second block (13:45) and what it adds
 
+Instagram calls per 10 minutes before the block (lab log): 12:30 46, 12:40-13:20 2, 13:20 20, 13:30 17, 13:40 47. That is about 85-130 calls in the rolling hour, under the 200 one daily user should give, so the documented formula does not describe this development app, and a person who DMs the business does not add budget the same day. For production, assume the Instagram app budget does not grow with conversations until `x-app-usage` under real traffic proves otherwise.
+
+
 After the limit cleared at about 13:29, the image family (16 files) and half the video family used the budget again by 13:45:26. A second Instagram account messaging the same business got `(#4)` on its very first call at 13:46:53: code 4 counts the whole Meta app, not each conversing user or account. The `x-app-usage` header on the last accepted call (13:44:56) read `call_count: 23`, so the header understates the Instagram budget and cannot be the only warning signal. Meta also answered MOV and WebM uploads with HTTP 500 instead of a rejection.
 
 ## What Wappa does (since the rate-limit governor)
 
-`wappa.resilience.rate_limits.RateLimitGovernor`, one per process, sits at each adapter's transport: `InstagramGraphClient.request` and `WhatsAppClient` (`post_request`, `get_request`, `delete_request`). Every Meta call goes through it, sends, uploads, comment actions and reads alike, and it decides by Meta's error code, never by HTTP status.
+`wappa.resilience.rate_limits.RateLimitGovernor`, one per process, sits in `MetaGraphClient` (ADR-0029), the Meta transport under both `WhatsAppClient` and `InstagramClient`. Every Meta call goes through it, sends, uploads, comment actions and reads alike, and it decides by Meta's error code, never by HTTP status.
 
 | Kind | Codes | Scope | What happens |
 | --- | --- | --- | --- |
@@ -78,7 +81,6 @@ Hosts see `OperationOutcome.RATE_LIMITED` and `retry_after` (seconds) on every r
 1. Shared state across worker processes (Redis), so one worker's code 4 blocks the others.
 2. A Host-side delayed retry of a `rate_limited` result: the Crons domain is its natural home.
 3. Proactive slowing as usage nears 100 % (today the warning only logs), once production numbers show the headers are trustworthy for Instagram.
-4. One `MetaGraphClient` for both Platforms: the governor is wired into two transports that duplicate the Graph call, error parsing and logging (architecture-hardening follow-up).
 
 ## What the skills teach
 
