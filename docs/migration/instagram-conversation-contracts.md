@@ -70,13 +70,13 @@ Every action that exists on both Platforms has one `IMessenger` method; the Inst
 | --- | --- | --- |
 | acknowledge | `mark_as_read(message_id, target, *, typing=False)` | thread seen, then `typing_on` |
 | up to 3 choices | `send_button_message(buttons: list[ReplyButton], target, body, header=None, footer=None)` | button template with postbacks; image header becomes a one-card generic template |
-| up to 13 choices | `send_list_message(sections, target, body, button_text, ...)` | quick replies (rows flattened; section titles, descriptions and `button_text` dropped) |
+| up to 13 choices | `send_list_message(sections, target, body, button_text, ...)` | quick replies (rows flattened); section titles and row descriptions fold into the text as a numbered menu (`1. title — description` lines under each section title), split like `send_text` with one result; only `button_text` has no slot |
 | open a URL | `send_cta_message(...)` | button template with one `web_url` |
 | 2–10 cards | `send_carousel(cards: Sequence[MessageCard], target, body, reply_to_message_id=None)` | `body` as text, then a generic template; a video card shows its `poster_url` |
 | share a location | `send_location(latitude, longitude, target, name=None, address=None)` | text: name, address and a `📍` maps link |
 | share contacts | `send_contact(contacts, target)` | one text block per card (name, organization, phones, emails, urls) |
 | send a sticker | `send_sticker(source, target)` | sent as an image (png/jpeg/gif; `.webp` rejected before I/O) |
-| send media with a caption | `send_image/video/document(..., caption=...)` | media, then the caption as a follow-up text; `filename`/`transcript` ignored |
+| send media with a caption | `send_image/video/document(..., caption=...)` | media (http(s) URL, attachment_id or local `Path`), then the caption as a follow-up text, one result; a document, audio or video URL in a format Instagram cannot attach is sent as a text with the file name and the link; `filename` names a `Path` upload (transliterated to ASCII) or that link text; `transcript` is middleware-only metadata on every Platform |
 
 Location and phone-number requests are the WhatsApp-only `IUserDataRequests` capability: Instagram does not provide it because a text prompt cannot return the data, so gate on `messenger.capability(IUserDataRequests)`. Reactions have no send method yet (`send_reaction` is a recorded gap: deprioritized by the user on 2026-11-06).
 
@@ -134,7 +134,7 @@ consumers:
 - Instagram error codes are `code/subcode` strings (e.g. `10/2534022`).
 - Instagram text limits are 1000 **UTF-8 bytes** and raise `ValueError` before
   I/O (previously a Pydantic `ValidationError` on 1000 characters).
-- Media captions are sent as a follow-up text; `transcript` and `filename` are ignored (Instagram attachments carry none). `send_location`, `send_contact` and `send_sticker` are adapted instead of raising.
+- Media captions are sent as a follow-up text and the send returns one result. Media URLs may be http or https (Meta documents no scheme rule). A document, audio or video URL in a format Instagram cannot attach (`.docx`, `.mp3` …) is sent as a text with the file name and the link. `filename` names a `Path` upload (transliterated to ASCII, extension kept) or that link text; an attachable URL or attachment_id has no name slot. A local file in a format Instagram does not take raises `ValueError` before I/O. `transcript` is middleware-only metadata on every Platform. `send_location`, `send_contact` and `send_sticker` are adapted instead of raising.
 
 Comment handlers must distinguish source, placement and available parent
 evidence (`parent_comment_ref is None` is *unknown*, not top-level); Live and

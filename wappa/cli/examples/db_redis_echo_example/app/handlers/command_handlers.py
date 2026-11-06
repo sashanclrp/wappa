@@ -256,7 +256,7 @@ class CommandHandlers:
                     chat_id=chat_uuid,
                     actor=MessageActor(cached_msg.actor),
                     kind=MessageKind(cached_msg.kind),
-                    platform=Platform.WHATSAPP,
+                    platform=Platform(conversation.platform),
                     platform_message_id=cached_msg.platform_message_id,
                     platform_timestamp=(
                         datetime.fromisoformat(cached_msg.platform_timestamp)

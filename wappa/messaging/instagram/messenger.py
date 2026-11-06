@@ -13,7 +13,8 @@ Contract mappings (ADR-0025: one Messenger method per action):
 - ``send_button_message`` → ``template_type = button`` with ``postback``
   buttons (text ≤ 640, 1–3); a media header is sent first as its own
   attachment
-- ``send_list_message`` → ``message.quick_replies[]`` on the (last) text
+- ``send_list_message`` → ``message.quick_replies[]`` on the (last) text;
+  section titles and row descriptions fold into the text as a numbered menu
 - ``send_cta_message`` → ``template_type = button`` with one ``web_url``; a
   media header is sent first as its own attachment
 - ``send_carousel`` → intro text, then ``template_type = generic`` (2–10); a
@@ -22,8 +23,10 @@ Contract mappings (ADR-0025: one Messenger method per action):
 - ``resolve_platform_user_profile`` → ``GET /{igsid}?fields=name,username,
   profile_pic`` merged over the webhook evidence; a failure returns the
   evidence with the failure outcome
-- media by https URL, by ``IMediaLibrary.upload`` attachment_id, or a ``Path``
-  (uploaded first)
+- media by http(s) URL, by ``IMediaLibrary.upload`` attachment_id, or a
+  ``Path`` (uploaded first, under ``filename`` for a document); a document,
+  audio or video URL whose format Instagram does not take is sent as a text
+  with the file name and the link
 - ``send_location`` / ``send_contact`` → text (maps link / one block per card);
   ``send_sticker`` → image
 - ``IUserDataRequests`` (location / phone-number requests) → not provided
@@ -37,8 +40,9 @@ unknown outcomes are returned, never retried.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
+from urllib.parse import unquote, urlsplit
 
 import httpx
 from pydantic import SecretStr
@@ -84,8 +88,10 @@ from .content import InstagramCommentControls, InstagramContentReader, _read_fai
 from .graph import GraphResponse, InstagramGraphClient
 from .history import InstagramHistoryReader
 from .media import (
+    MEDIA_ADAPTATION_DRAFT,
     MEDIA_RULES,
     InstagramAttachmentReader,
+    url_format_accepted,
     validate_media_url,
 )
 from .media_library import InstagramMediaLibrary
@@ -247,6 +253,42 @@ def _card(card: MessageCard) -> dict[str, Any]:
         element["default_action"] = {"type": "web_url", "url": str(default_url)}
     element["buttons"] = [_card_button(b) for b in card.buttons]
     return element
+
+
+def _list_menu(sections: Sequence[ListSection]) -> str | None:
+    """Section titles and row descriptions as a numbered text menu.
+
+    Quick replies show a row title only, so when a list carries more (a
+    section title or a row description) the whole list is written out:
+    ``"1. title — description"`` lines, numbered across sections, under their
+    section titles. ``None`` when the quick replies already say everything.
+    """
+    if not any(
+        section.title or any(row.description for row in section.rows)
+        for section in sections
+    ):
+        return None
+    blocks: list[str] = []
+    number = 0
+    for section in sections:
+        lines = [section.title] if section.title else []
+        for row in section.rows:
+            number += 1
+            line = f"{number}. {row.title}"
+            lines.append(f"{line} — {row.description}" if row.description else line)
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
+
+
+# A media family whose URL may point at a format Instagram does not take; the
+# file is then shared as a link (images and stickers keep their own rules).
+_LINK_ICONS = {"document": "📄", "audio": "🎵", "video": "🎬"}
+
+
+def _media_link(family: str, url: str, filename: str | None) -> str:
+    """The text that shares a file Instagram cannot attach: its name and link."""
+    name = filename or unquote(PurePosixPath(urlsplit(url).path).name) or url
+    return f"{_LINK_ICONS[family]} {name}\n{url}"
 
 
 def _contact_text(card: ContactCard) -> str:
@@ -490,13 +532,25 @@ class InstagramMessenger(IMessenger):
         source: str | Path,
         target: DirectMessage,
         reply_to_message_id: str | None,
+        *,
+        filename: str | None = None,
     ) -> MessageResult:
+        """One attachment, or a text with the file's name and link.
+
+        A document, audio or video URL whose extension Instagram does not take
+        (WhatsApp's ``.docx``, ``.mp3``, ``.3gp`` …) is sent as a text naming
+        the file (``filename``, else the URL's last path segment) with its
+        link. A ``Path`` uploads under ``filename``; one in a format Instagram
+        does not take raises ``ValueError`` before any call.
+        """
         direct = require_direct_message(target, f"Instagram send_{family}")
         direct.resolve(self._inbox_ref)
         rule_type = {"document": "file"}.get(family, family)
         payload: dict[str, Any]
         if isinstance(source, Path):
-            uploaded = await self._media.upload(source, MediaFamily(family))
+            uploaded = await self._media.upload(
+                source, MediaFamily(family), filename=filename
+            )
             if not uploaded.success or not uploaded.media_id:
                 return MessageResult(
                     success=False,
@@ -508,13 +562,21 @@ class InstagramMessenger(IMessenger):
                 )
             payload = {"attachment_id": uploaded.media_id}
         elif isinstance(source, str) and "://" in source:
-            payload = {"url": validate_media_url(source)}
+            url = validate_media_url(source)
+            if family in _LINK_ICONS and not url_format_accepted(url, family):
+                return await self._send_texts(
+                    _media_link(family, url, filename),
+                    direct,
+                    reply_to_message_id,
+                    operation=f"Instagram {family} link send",
+                )
+            payload = {"url": url}
         elif isinstance(source, str) and source.strip():
             # A reusable attachment_id from IMediaLibrary.upload.
             payload = {"attachment_id": source}
         else:
             raise TypeError(
-                "media source must be an https URL, an uploaded media_id or a Path"
+                "media source must be an http(s) URL, an uploaded media_id or a Path"
             )
         return await self._send(
             direct,
@@ -530,6 +592,8 @@ class InstagramMessenger(IMessenger):
         target: DirectMessage,
         caption: str | None,
         reply_to_message_id: str | None,
+        *,
+        filename: str | None = None,
     ) -> MessageResult:
         """Instagram attachments carry no caption: send it as a follow-up text.
 
@@ -538,7 +602,9 @@ class InstagramMessenger(IMessenger):
         result saying the media was already delivered (nothing retries).
         """
         check_caption(caption)
-        result = await self._send_media(family, source, target, reply_to_message_id)
+        result = await self._send_media(
+            family, source, target, reply_to_message_id, filename=filename
+        )
         if not (caption and caption.strip()):
             return result
         parts = _Parts()
@@ -584,13 +650,30 @@ class InstagramMessenger(IMessenger):
 
         ``is_voice`` therefore changes nothing here; the rendition is picked
         from Instagram's audio formats (no OGG), so ``[note.ogg, note.m4a]``
-        serves a WhatsApp voice note and Instagram from one call.
+        serves a WhatsApp voice note and Instagram from one call. When no
+        rendition fits, a URL rendition (WhatsApp's ``.mp3``, ``.amr``, ``.ogg``)
+        is shared as a text with its name and link; local files only raise
+        ``ValueError``.
         """
         _ = transcript  # Host metadata, never shown to the User (as on WhatsApp)
         _ = is_voice
-        source = pick_rendition(
-            audio_source, MEDIA_RULES["audio"].extensions, what="Instagram audio"
-        )
+        try:
+            source = pick_rendition(
+                audio_source, MEDIA_RULES["audio"].extensions, what="Instagram audio"
+            )
+        except ValueError as exc:
+            sources = (
+                [audio_source]
+                if isinstance(audio_source, str | Path)
+                else list(audio_source)
+            )
+            url = next((s for s in sources if isinstance(s, str) and "://" in s), None)
+            if url is None:
+                raise ValueError(
+                    f"{exc} (format conversion is the Media Adaptation backlog "
+                    f"draft, {MEDIA_ADAPTATION_DRAFT})"
+                ) from exc
+            source = url
         return await self._send_media("audio", source, target, reply_to_message_id)
 
     async def send_document(
@@ -601,11 +684,19 @@ class InstagramMessenger(IMessenger):
         caption: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        # Instagram shows the uploaded/source file name; ``filename`` is
-        # WhatsApp display presentation with no Instagram slot.
-        _ = filename
+        """A ``Path`` uploads under ``filename``; a URL Instagram cannot attach
+        (anything but PDF) is shared as a text with ``filename`` and the link.
+
+        An accepted URL or an attachment_id has no name slot on Instagram, so
+        ``filename`` shows only on WhatsApp there.
+        """
         return await self._media_with_caption(
-            "document", document_source, target, caption, reply_to_message_id
+            "document",
+            document_source,
+            target,
+            caption,
+            reply_to_message_id,
+            filename=filename,
         )
 
     # ── specialized sends, adapted (ADR-0025) ──────────────────────────
@@ -709,10 +800,11 @@ class InstagramMessenger(IMessenger):
         over 640 characters the header (then the body) goes first as plain
         text. A media header (image, video or document; by URL or by an
         ``attachment_id`` from ``IMediaLibrary.upload``) is sent first as its
-        own attachment, then the buttons with the full body; a document
-        ``filename`` has no Instagram slot. The reply context goes on the
-        first message. The buttons result returns unless an earlier message is
-        refused; that refusal returns and the buttons are not sent.
+        own attachment (a document URL Instagram cannot attach is shared as a
+        text naming ``filename`` with the link), then the buttons with the
+        full body. The reply context goes on the first message. The buttons
+        result returns unless an earlier message is refused; that refusal
+        returns and the buttons are not sent.
         """
         check_button_message(buttons, body, footer)
         return await self._headed_button_template(
@@ -744,12 +836,6 @@ class InstagramMessenger(IMessenger):
         and nothing after it is sent.
         """
         text_header = header.text if header and header.kind == "text" else None
-        if header is not None and header.media is not None:
-            source = (
-                str(header.media.url)
-                if header.media.url is not None
-                else str(header.media.media_id)
-            )
         parts = _Parts()
         if header is not None and header.media is not None:
             source = (
@@ -758,7 +844,11 @@ class InstagramMessenger(IMessenger):
                 else str(header.media.media_id)
             )
             media = await self._send_media(
-                header.kind, source, direct, reply_to_message_id
+                header.kind,
+                source,
+                direct,
+                reply_to_message_id,
+                filename=header.filename,
             )
             if not parts.add(media):
                 return parts.result(media)
@@ -791,10 +881,13 @@ class InstagramMessenger(IMessenger):
 
         Every row becomes one quick reply. A tap returns as an
         ``InboundMessageWebhook`` whose selection is the row ``id``, like a
-        WhatsApp ``list_reply``. Section titles, row descriptions and
-        ``button_text`` are presentation Instagram cannot show; the header and
-        footer fold into the text, and a folded text over 1000 UTF-8 bytes is
-        split, with the quick replies on the last message.
+        WhatsApp ``list_reply``. Quick replies show row titles only, so when a
+        section has a title or a row a description, the list is also written
+        into the text as a numbered menu (``"1. title — description"`` under
+        each section title) after the body. The header and footer fold into
+        the text, and a text over 1000 UTF-8 bytes is split, with the quick
+        replies on the last message and one result listing every part.
+        ``button_text`` (WhatsApp's list-opener label) has no Instagram slot.
         """
         check_list_message(sections, body, button_text, header, footer)
         direct = self._direct(target, "send_list_message")
@@ -805,7 +898,7 @@ class InstagramMessenger(IMessenger):
         ]
         _ = button_text  # WhatsApp list-opener label; no Instagram equivalent
         return await self._send_texts(
-            _fold(header, body, footer),
+            _fold(header, body, _list_menu(sections), footer),
             direct,
             reply_to_message_id,
             last={"quick_replies": options},

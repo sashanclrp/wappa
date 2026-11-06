@@ -40,6 +40,7 @@ class APIEventDispatcher:
             response_success=True,
             message_id="wamid.xxx",
             inbox_id="inbox-123",
+            platform="whatsapp",
         )
         await dispatcher.dispatch(event, request)  # Pass request for DB access
     """
@@ -95,7 +96,7 @@ class APIEventDispatcher:
                 user_id=canonical_user_id,
                 bsuid=bsuid,
                 phone_number=phone,
-                platform=event.platform or "whatsapp",
+                platform=event.platform,
                 tracker=_tracker,
             ):
                 await request_handler.handle_api_message(event)

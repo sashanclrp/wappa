@@ -53,7 +53,7 @@ class SSEEventContext:
     user_id: str = "unknown"
     bsuid: str | None = None
     phone_number: str | None = None
-    platform: str = "whatsapp"
+    platform: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     _pending_incoming: dict[str, Any] | None = None
     _pending_flush: Callable[[dict[str, Any]], Coroutine[Any, Any, None]] | None = None

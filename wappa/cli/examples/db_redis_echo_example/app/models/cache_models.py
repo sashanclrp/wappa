@@ -68,6 +68,9 @@ class ConversationCache(BaseModel):
 
     conversation_id: str = Field(..., description="Unique conversation identifier")
     chat_id: str = Field(..., description="Chat/user identifier")
+    platform: str = Field(
+        ..., description="Platform the conversation runs on (webhook.platform)"
+    )
     started_at: str = Field(
         default_factory=_get_utc_isoformat,
         description="Conversation start time",

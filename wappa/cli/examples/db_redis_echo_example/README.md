@@ -363,7 +363,7 @@ async def process_message(self, webhook):
         chat = result.scalars().first()
 
         # Create new record
-        new_chat = Chat(platform=Platform.WHATSAPP, ...)
+        new_chat = Chat(platform=Platform(webhook.platform.value), ...)
         session.add(new_chat)
         # Auto-commits on context exit (non-blocking)
 ```
@@ -392,6 +392,8 @@ await self.user_cache.delete()
 # Define enum
 class Platform(str, Enum):
     WHATSAPP = "whatsapp"
+    INSTAGRAM = "instagram"
+    TELEGRAM = "telegram"
 
 # Use in model
 platform: Platform = Field(

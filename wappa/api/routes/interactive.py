@@ -86,7 +86,7 @@ async def send_button_message(
     messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    """Send interactive button message via WhatsApp.
+    """Send reply buttons on the path Platform (adapted where needed).
 
     1–3 reply buttons, an optional text, image, video or document header and
     an optional footer; limits are the shared minimum across Platforms.
@@ -115,7 +115,7 @@ async def send_list_message(
     messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    """Send interactive list message via WhatsApp.
+    """Send a list message on the path Platform (adapted where needed).
 
     Up to 10 sections and 10 rows in total; limits are the shared minimum
     across Platforms.

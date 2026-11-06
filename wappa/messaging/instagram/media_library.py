@@ -9,8 +9,12 @@
 - ``info`` / ``delete``: ``UnsupportedOperationError``; Instagram has no
   endpoint to describe or delete an uploaded attachment.
 
-Instagram's rules key off the file suffix: a ``Path`` keeps its name, and
-``bytes`` take ``filename`` or, failing that, a name built from ``mime_type``.
+Instagram's rules key off the file suffix of the name the file goes out
+with: ``filename`` when given (a ``Path`` lends its suffix to a ``filename``
+without one), else the ``Path``'s own name, else for ``bytes`` a name built
+from ``mime_type``. The name is transliterated to ASCII with its extension
+kept, and ``mime_type`` (else the type guessed from the name) is the upload's
+content type.
 """
 
 from __future__ import annotations
@@ -34,6 +38,7 @@ from wappa.schemas.core.types import PlatformType
 from .graph import InstagramGraphClient
 from .media import (
     InstagramAttachmentReader,
+    ascii_name,
     mime_for,
     upload_name,
     validate_local_file,
@@ -62,8 +67,9 @@ class InstagramMediaLibrary(IMediaLibrary):
             name = upload_name(filename, mime_type)
             rule = validate_upload(name, len(source), kind)
         else:
-            name = source.name
-            rule = validate_local_file(source, kind)
+            name = upload_name(filename, mime_type, path=source)
+            rule = validate_local_file(source, kind, name=name)
+        name = ascii_name(name)
         message = {
             "attachment": {"type": rule.wire_type, "payload": {"is_reusable": True}}
         }
@@ -73,7 +79,7 @@ class InstagramMediaLibrary(IMediaLibrary):
                 "POST",
                 f"{self._graph.account_id}/message_attachments",
                 data={"platform": "instagram", "message": json.dumps(message)},
-                files={"filedata": (name, content, mime_for(name))},
+                files={"filedata": (name, content, mime_type or mime_for(name))},
                 operation=f"Instagram {family.value} upload",
                 timeout=120.0,
             )

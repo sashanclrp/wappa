@@ -239,6 +239,7 @@ async def test_api_event_dispatcher_binds_db_through_the_shared_builder() -> Non
         response_success=True,
         message_id="wamid.1",
         inbox_id="111",
+        platform="whatsapp",
     )
 
     bound = dispatcher._create_api_request_handler(event, request)  # type: ignore[arg-type]

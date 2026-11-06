@@ -81,10 +81,10 @@ class APIMessageEvent(BaseModel):
         description="Inbox identifier for message routing and scoping",
     )
 
-    # Platform context (future-proof for Instagram, Telegram, etc.)
+    # Platform context: the Platform that sent (``result.platform``)
     platform: str = Field(
-        default="whatsapp",
-        description="Messaging platform this event originated from",
+        ...,
+        description="Platform that sent the message",
     )
 
     model_config = {"extra": "forbid"}

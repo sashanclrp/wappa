@@ -82,7 +82,7 @@ async def publish_api_notification(event: APIMessageEvent) -> int:
         event_type="outgoing_message",
         inbox_id=event.inbox_id or "unknown",
         user_id=event.user_id or event.recipient,
-        platform=event.platform or "whatsapp",
+        platform=event.platform,
         data={
             "message_id": event.message_id or "",
             "message_type": event.message_type,
@@ -125,7 +125,7 @@ class PubSubMessageHandler(DefaultMessageHandler):
 
         inbox_id = webhook.inbox.get_inbox_key() if webhook.inbox else "unknown"
         user_id = webhook.user.user_id if webhook.user else "unknown"
-        platform = webhook.platform.value if webhook.platform else "whatsapp"
+        platform = webhook.platform.value
 
         await publish_notification(
             event_type="incoming_message",
@@ -165,7 +165,7 @@ class PubSubStatusHandler(DefaultStatusHandler):
         result = await super().handle_status(webhook)
 
         inbox_id = webhook.inbox.get_inbox_key() if webhook.inbox else "unknown"
-        platform = webhook.platform.value if webhook.platform else "whatsapp"
+        platform = webhook.platform.value
 
         await publish_notification(
             event_type="status_change",

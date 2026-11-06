@@ -115,9 +115,10 @@ async def send_image_message(
     messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    """Send image message via WhatsApp.
+    """Send an image on the path Platform, with an optional caption.
 
-    Supports JPEG and PNG images up to 5MB with optional captions.
+    Formats and sizes are the Platform's own (WhatsApp JPEG/PNG up to 5 MB;
+    Instagram PNG/JPEG/GIF up to 8 MB); a wrong local format answers 400.
     """
     return await messenger.send_image(
         image_source=request.media_source,
@@ -141,9 +142,11 @@ async def send_video_message(
     messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    """Send video message via WhatsApp.
+    """Send a video on the path Platform, with an optional caption.
 
-    Supports MP4 and 3GP videos up to 16MB with optional captions.
+    Formats and sizes are the Platform's own (WhatsApp MP4/3GP up to 16 MB;
+    Instagram MP4/OGG/AVI/MOV/WebM up to 25 MB, another format by URL shared
+    as a link).
     """
     return await messenger.send_video(
         video_source=request.media_source,
@@ -196,9 +199,11 @@ async def send_document_message(
     messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    """Send document message via WhatsApp.
+    """Send a document on the path Platform, with optional filename and caption.
 
-    Supports TXT, PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX up to 100MB.
+    Formats and sizes are the Platform's own (WhatsApp TXT, PDF and Office
+    files up to 100 MB; Instagram PDF up to 25 MB, another format by URL
+    shared as a text with the file name and link).
     """
     return await messenger.send_document(
         document_source=request.media_source,
@@ -214,10 +219,11 @@ async def send_document_message(
     response_model=MessageResult,
     summary="Send Sticker Message",
     description=(
-        "Send a WhatsApp sticker. Format: WebP only (image/webp; 512x512, up to "
-        "100 KB static or 500 KB animated). `media_source` is a `.webp` URL, a "
-        "`.webp` file path or an uploaded media ID; any other extension is "
-        "rejected with 400 before Meta is called."
+        "Send a sticker. WhatsApp: WebP only (image/webp; 512x512, up to "
+        "100 KB static or 500 KB animated). Instagram has no stickers and sends "
+        "it as a png/jpeg/gif image. `media_source` is a URL, a file path or an "
+        "uploaded media ID; an extension the Platform does not take is "
+        "rejected with 400 before the Platform is called."
     ),
 )
 @map_send_errors("send sticker")
@@ -228,11 +234,11 @@ async def send_sticker_message(
     messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    """Send sticker message via WhatsApp.
+    """Send a sticker on the path Platform; stickers take no caption.
 
-    WhatsApp stickers are WebP only (512x512; 100 KB static, 500 KB animated).
-    A non-WebP source is a 400 here: Meta would accept a PNG link and only
-    fail later with status 131053. Stickers do not support captions.
+    WhatsApp stickers are WebP only (512x512; 100 KB static, 500 KB animated):
+    a non-WebP source is a 400 there, since Meta would accept a PNG link and
+    only fail later with status 131053. Instagram sends the sticker as an image.
     """
     return await messenger.send_sticker(
         sticker_source=request.media_source,

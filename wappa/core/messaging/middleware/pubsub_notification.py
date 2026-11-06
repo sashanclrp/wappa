@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ....domain.messaging_targets import DirectMessage
+from ....schemas.core.types import PlatformType
 from ...pubsub.handlers import publish_notification
 from ...sse.context import get_sse_context
 from ..pipeline import MessengerMiddleware, SendInvocation, SendNext
@@ -54,7 +55,7 @@ class PubSubNotificationMiddleware(MessengerMiddleware):
             event_type="bot_reply",
             inbox_id=ctx.inbox_id,
             user_id=_destination_user(invocation, ctx.user_id),
-            platform=ctx.platform,
+            platform=PlatformType(result.platform).value,
             data={
                 "message_id": result.message_id or "",
                 "message_type": invocation.message_type,

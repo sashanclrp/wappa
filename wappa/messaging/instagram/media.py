@@ -1,8 +1,10 @@
 """Instagram media constraints and a credential-free attachment downloader.
 
 Outbound limits come from the Instagram messaging guide (Graph v26.0,
-fetched 2026-11-03): image png/jpeg(/gif) ≤ 8 MB; audio aac/m4a/wav/mp4,
-video mp4/ogg/avi/mov/webm and file pdf ≤ 25 MB.
+fetched 2026-11-03, rechecked 2026-11-06): image png/jpeg(/gif) ≤ 8 MB; audio
+aac/m4a/wav/mp4, video mp4/ogg/avi/mov/webm and file pdf ≤ 25 MB. The guide
+states no URL scheme and no file-name rule, so an http(s) URL passes through
+(as on WhatsApp) and an upload name is transliterated to ASCII.
 
 Inbound attachment URLs are signed Meta CDN URLs
 (``lookaside.fbsbx.com/ig_messaging_cdn/...``) that may expire within minutes.
@@ -12,9 +14,11 @@ over HTTPS, with bounded redirects, time and size.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import urljoin, urlsplit
 
 import httpx
@@ -26,6 +30,8 @@ from wappa.domain.interfaces.conversation_capabilities import (
 )
 
 MB = 1024 * 1024
+
+MEDIA_ADAPTATION_DRAFT = "docs/backlog/drafts/261106-mid-media-adaptation-service.md"
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,49 +77,91 @@ def mime_for(name: str) -> str:
     return _MIME_BY_SUFFIX.get(Path(name).suffix.lower(), "application/octet-stream")
 
 
-def upload_name(filename: str | None, mime_type: str | None) -> str:
-    """The file name an upload of raw bytes goes out with.
+def upload_name(
+    filename: str | None, mime_type: str | None, *, path: Path | None = None
+) -> str:
+    """The file name an upload goes out with, before ASCII transliteration.
 
-    Instagram's rules key off the suffix, so bytes need a ``filename`` or a
-    ``mime_type`` Instagram knows (``upload`` plus its suffix).
+    ``filename`` wins; a ``path`` upload falls back to the file's own name and
+    lends its suffix to a ``filename`` without one; for bytes a known
+    ``mime_type`` lends its suffix instead. Instagram's rules key off the
+    suffix, so bytes need a suffixed ``filename`` or a ``mime_type``
+    Instagram knows (``upload`` plus its suffix when there is no name).
     """
-    if filename:
-        return Path(filename).name
     suffix = next((k for k, v in _MIME_BY_SUFFIX.items() if v == mime_type), None)
+    if filename:
+        name = PurePosixPath(filename.replace("\\", "/")).name
+        if not PurePosixPath(name).suffix:
+            name += path.suffix if path is not None else suffix or ""
+        return name
+    if path is not None:
+        return path.name
     if suffix is None:
         raise ValueError("Instagram byte uploads need a filename or a known mime_type")
     return f"upload{suffix}"
 
 
+def ascii_name(name: str) -> str:
+    """Transliterate a file name to ASCII, keeping its extension.
+
+    ``"Reseña año.pdf"`` → ``"Resena ano.pdf"``; characters with no ASCII
+    form become ``_``, and an empty stem becomes ``file``.
+    """
+    path = PurePosixPath(name)
+
+    def fold(text: str) -> str:
+        plain = unicodedata.normalize("NFKD", text).encode("ascii", "ignore")
+        return re.sub(r"[^A-Za-z0-9._ ()-]+", "_", plain.decode()).strip()
+
+    return (fold(path.stem) or "file") + fold(path.suffix)
+
+
 def validate_upload(name: str, size: int, family: str) -> MediaRule:
     rule = MEDIA_RULES[family]
-    suffix = Path(name).suffix
+    suffix = PurePosixPath(name).suffix
     if suffix.lower() not in rule.extensions:
         raise ValueError(
             f"Instagram {family} supports {sorted(rule.extensions)}, not "
-            f"{suffix or 'no extension'}"
+            f"{suffix or 'no extension'}; a file must already be in an accepted "
+            f"format (format conversion is the Media Adaptation backlog draft, "
+            f"{MEDIA_ADAPTATION_DRAFT}), or send it by URL to share it as a link"
         )
     if size > rule.max_bytes:
         raise ValueError(
-            f"Instagram {family} is {size} bytes; limit is {rule.max_bytes}"
+            f"Instagram {family} is {size} bytes; limit is {rule.max_bytes} "
+            f"(compression is the Media Adaptation backlog draft, "
+            f"{MEDIA_ADAPTATION_DRAFT})"
         )
-    if not name.isascii():
-        raise ValueError("Instagram attachment file names must be ASCII")
     return rule
 
 
-def validate_local_file(path: Path, family: str) -> MediaRule:
+def validate_local_file(
+    path: Path, family: str, *, name: str | None = None
+) -> MediaRule:
+    """Check a local file under the ``name`` it is uploaded as (default its own)."""
+    name = name or path.name
     if not path.is_file():
-        validate_upload(path.name, 0, family)  # a wrong format reports first
+        validate_upload(name, 0, family)  # a wrong format reports first
         raise ValueError(f"Instagram {family} file does not exist: {path.name}")
-    return validate_upload(path.name, path.stat().st_size, family)
+    return validate_upload(name, path.stat().st_size, family)
 
 
 def validate_media_url(url: str) -> str:
+    """An absolute http(s) URL; Meta documents no scheme rule, as on WhatsApp."""
     parts = urlsplit(url)
-    if parts.scheme != "https" or not parts.hostname:
-        raise ValueError("Instagram media URLs must be absolute https URLs")
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError("Instagram media URLs must be absolute http(s) URLs")
     return url
+
+
+def url_format_accepted(url: str, family: str) -> bool:
+    """Whether Instagram takes ``url`` as a ``family`` attachment.
+
+    Judged by the URL path's extension; an extension-less URL passes through,
+    since its format cannot be told from its name.
+    """
+    suffix = PurePosixPath(urlsplit(url).path).suffix.lower()
+    return not suffix or suffix in MEDIA_RULES[family].extensions
 
 
 def is_allowed_cdn_host(host: str | None) -> bool:

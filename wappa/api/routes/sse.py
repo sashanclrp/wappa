@@ -179,13 +179,16 @@ async def debug_publish_event(request: Request) -> dict[str, str]:
     payload = body.get("payload", {})
     inbox_id = body.get("inbox_id", "")
     user_id = body.get("user_id", "")
+    platform = body.get("platform")
+    if not platform:
+        raise HTTPException(status_code=400, detail="platform is required")
 
     async with sse_event_scope(
         inbox_id=inbox_id,
         user_id=user_id,
         bsuid=user_id,
         phone_number=body.get("phone_number", ""),
-        platform=body.get("platform", "whatsapp"),
+        platform=platform,
     ):
         event_hub = _get_event_hub(request)
         result = await event_hub.publish(

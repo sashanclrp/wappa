@@ -84,6 +84,7 @@ class CacheHelper:
         conversation = ConversationCache(
             conversation_id=str(uuid4()),
             chat_id=chat_id,
+            platform=webhook.platform.value,
             started_at=now,
             last_activity_at=now,
         )
@@ -109,10 +110,11 @@ class CacheHelper:
             # If no database session factory, generate a temporary chat_id
             return str(uuid4())
 
+        platform = Platform(webhook.platform.value)
         async with self.db() as session:
-            # Try to find existing chat
+            # Try to find existing chat on the webhook's Platform
             statement = select(Chat).where(
-                Chat.platform == Platform.WHATSAPP,
+                Chat.platform == platform,
                 Chat.platform_user_id == user_id,
             )
             result = await session.execute(statement)
@@ -123,7 +125,7 @@ class CacheHelper:
 
             # Create new chat
             chat = Chat(
-                platform=Platform.WHATSAPP,
+                platform=platform,
                 platform_user_id=user_id,
                 phone_e164=webhook.user.phone_number or user_id,
                 first_name=webhook.user.profile_name or None,

@@ -23,7 +23,7 @@ class SSEEventEnvelope:
     user_id: str
     bsuid: str | None
     phone_number: str | None
-    platform: str
+    platform: str | None
     source: str
     payload: Mapping[str, Any]
     metadata: Mapping[str, Any] | None

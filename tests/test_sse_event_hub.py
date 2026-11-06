@@ -271,6 +271,7 @@ async def test_publish_outside_a_scope_uses_context_defaults() -> None:
     defaults = SSEEventContext()
     assert event["inbox_id"] == defaults.inbox_id
     assert event["user_id"] == defaults.user_id
+    assert event["platform"] is None  # no scope, no guessed Platform
 
 
 def test_queue_size_must_be_positive() -> None:

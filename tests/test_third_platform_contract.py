@@ -566,7 +566,8 @@ async def test_the_connector_round_trips_and_rejects_another_platforms_grant() -
 WAPPA = Path(__file__).resolve().parents[1] / "wappa"
 
 # Platform vocabulary, the composition root, the credential union and every
-# adapter folder may name a Platform.
+# adapter folder may name a Platform. Every other path is listed file by file;
+# the CLI scaffolds are Host code and get no exemption.
 _ADAPTER_PATHS = re.compile(
     r"^(platforms\.py"
     r"|schemas/core/types\.py"
@@ -574,8 +575,7 @@ _ADAPTER_PATHS = re.compile(
     r"|(messaging|webhooks)/(whatsapp|instagram)/"
     r"|processors/(whatsapp|instagram)_processor\.py"
     r"|connections/(whatsapp|instagram|meta_login)\.py"
-    r"|api/routes/whatsapp/"
-    r"|cli/)"
+    r"|api/routes/whatsapp/)"
 )
 
 # Known legitimate shared-code sites, each with its reason.
@@ -665,3 +665,100 @@ def test_shared_code_does_not_import_an_adapter_package() -> None:
     )
     stale = set(_ALLOWED_ADAPTER_IMPORTS) - set(found)
     assert stale == set(), f"Allow-list entries no longer needed: {stale}"
+
+
+# Every Platform, installed or reserved: rule 6 forbids any Platform default.
+_PLATFORMS = frozenset(PlatformType.__members__)
+_PLATFORM_VALUES = frozenset(member.value for member in PlatformType)
+
+
+def _names_a_platform(node: ast.AST | None) -> bool:
+    """``PlatformType.<MEMBER>`` or a string equal to a Platform value."""
+    if isinstance(node, ast.Constant):
+        return isinstance(node.value, str) and node.value in _PLATFORM_VALUES
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr in _PLATFORMS
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "PlatformType"
+    )
+
+
+def _platform_defaults(path: Path) -> list[int]:
+    """Lines where shared code falls back to a Platform.
+
+    Covers parameter defaults, class-body field values, ``default=`` keywords,
+    ``x or <platform>`` fallbacks, ``a if b else <platform>`` fallbacks and
+    ``.get(key, <platform>)`` fallbacks, each with ``PlatformType.<MEMBER>``
+    or the Platform's string value.
+    """
+    lines: list[int] = []
+    for node in ast.walk(ast.parse(path.read_text())):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            defaults = [*node.args.defaults, *node.args.kw_defaults]
+            lines += [d.lineno for d in defaults if _names_a_platform(d)]
+        elif isinstance(node, ast.ClassDef):
+            lines += [
+                item.lineno
+                for item in node.body
+                if isinstance(item, ast.AnnAssign) and _names_a_platform(item.value)
+            ]
+        elif isinstance(node, ast.Call):
+            lines += [
+                kw.value.lineno
+                for kw in node.keywords
+                if kw.arg == "default" and _names_a_platform(kw.value)
+            ]
+            if (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr == "get"
+                and len(node.args) == 2
+                and _names_a_platform(node.args[1])
+            ):
+                lines.append(node.args[1].lineno)
+        elif isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
+            lines += [v.lineno for v in node.values[1:] if _names_a_platform(v)]
+        elif isinstance(node, ast.IfExp) and _names_a_platform(node.orelse):
+            lines.append(node.orelse.lineno)
+    return sorted(lines)
+
+
+def test_shared_code_has_no_platform_defaults() -> None:
+    """ADR-0028 rule 6: a shared API takes the Platform, never defaults it."""
+    found: dict[str, list[int]] = {}
+    for path in sorted(WAPPA.rglob("*.py")):
+        rel = path.relative_to(WAPPA).as_posix()
+        if _ADAPTER_PATHS.match(rel):
+            continue
+        if lines := _platform_defaults(path):
+            found[rel] = lines
+    assert found == {}, (
+        "Shared code defaults to a Platform; make the Platform a required "
+        f"argument: {found}"
+    )
+
+
+def test_the_default_guard_sees_parameters_fields_and_field_defaults(
+    tmp_path: Path,
+) -> None:
+    sample = tmp_path / "sample.py"
+    sample.write_text(
+        "def send(x, platform=PlatformType.WHATSAPP): ...\n"
+        "async def read(*, platform=PlatformType.INSTAGRAM): ...\n"
+        "class Result:\n"
+        "    platform: PlatformType = PlatformType.WHATSAPP\n"
+        "    other: PlatformType = Field(default=PlatformType.INSTAGRAM)\n"
+        "def reserved(platform: PlatformType = PlatformType.TELEGRAM): ...\n"
+        "def fine(platform: PlatformType | None = None): ...\n"
+        "def text(platform: str = 'whatsapp'): ...\n"
+        "class Ctx:\n"
+        "    platform: str = 'instagram'\n"
+        "    other: str = Field(default='whatsapp')\n"
+        "a = event.platform or 'whatsapp'\n"
+        "b = payload.get('platform', 'instagram')\n"
+        "c = w.platform.value if w.platform else 'whatsapp'\n"
+        "d = payload.get('platform', '')\n"
+        "e = 'whatsapp' in record.name\n"
+        "f = report(x, platform='whatsapp')\n"
+    )
+    assert _platform_defaults(sample) == [1, 2, 4, 5, 6, 8, 10, 11, 12, 13, 14]

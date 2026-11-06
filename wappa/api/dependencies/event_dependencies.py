@@ -17,6 +17,7 @@ from wappa.api.utils.event_decorators import resolve_event_user_id
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.context import require_inbox_context
 from wappa.domain.events.api_message_event import APIMessageEvent
+from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
     from wappa.domain.results import MessageResult
@@ -47,7 +48,6 @@ async def dispatch_api_message_event(
     request_payload: dict,
     recipient: str,
     request: Request,
-    platform: str = "whatsapp",
     user_id: str | None = None,
 ) -> None:
     """
@@ -66,6 +66,8 @@ async def dispatch_api_message_event(
         request_payload: Original API request payload
         recipient: Recipient phone number
         request: FastAPI Request for runtime and database dependencies
+
+    The event's Platform is ``result.platform``, the Platform that sent.
     """
     if dispatcher is None:
         return
@@ -89,7 +91,7 @@ async def dispatch_api_message_event(
         response_error=result.error,
         meta_response=getattr(result, "raw_response", None),
         inbox_id=inbox_id,
-        platform=platform,
+        platform=PlatformType(result.platform).value,
     )
 
     tracker = getattr(request.app.state, "background_work_tracker", None)

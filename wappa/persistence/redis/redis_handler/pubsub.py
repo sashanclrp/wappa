@@ -30,7 +30,7 @@ class RedisPubSubPublisher(BaseModel, IPubSubPublisher):
 
     inbox: str = Field(..., min_length=1)
     user_id: str = Field(..., min_length=1)
-    platform: str = Field(default="whatsapp")
+    platform: str = Field(..., min_length=1)
     keys: KeyFactory = Field(default_factory=KeyFactory)
 
     model_config = {"arbitrary_types_allowed": True}

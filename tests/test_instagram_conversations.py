@@ -691,7 +691,7 @@ async def test_every_dm_operation_uses_native_wire_format():
                     ListSection(
                         title="Menu",
                         rows=[
-                            ListRow(id="a", title="A", description="dropped"),
+                            ListRow(id="a", title="A", description="first"),
                             ListRow(id="b", title="B"),
                         ],
                     )
@@ -748,7 +748,10 @@ async def test_every_dm_operation_uses_native_wire_format():
     }
     assert bodies[0]["reply_to"] == {"mid": "m0"}
     assert bodies[3]["message"]["attachment"]["type"] == "file"
-    assert bodies[4]["message"]["text"] == "Head\n\nPick\n\nFoot"
+    # Section title and row description fold in as a numbered menu.
+    assert bodies[4]["message"]["text"] == (
+        "Head\n\nPick\n\nMenu\n1. A — first\n2. B\n\nFoot"
+    )
     assert bodies[4]["message"]["quick_replies"][0] == {
         "content_type": "text",
         "title": "A",
@@ -890,8 +893,8 @@ async def test_local_limits_reject_before_io():
             await messenger.send_carousel([card] * 11, DM, "x")
         with pytest.raises(ValueError, match="2–10 cards"):
             await messenger.send_carousel([card], DM, "x")
-        with pytest.raises(ValueError, match="https"):
-            await messenger.send_image("http://insecure.example/a.png", DM)
+        with pytest.raises(ValueError, match="http"):
+            await messenger.send_image("ftp://files.example/a.png", DM)
     assert sent == []
     assert {
         "send_button_message",

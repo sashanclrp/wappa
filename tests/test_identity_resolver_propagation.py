@@ -330,6 +330,7 @@ async def test_publish_api_notification_uses_event_user_id(monkeypatch):
         request_payload={"message": "hi", "recipient": "573168227670"},
         response_success=True,
         inbox_id="inbox-1",
+        platform="whatsapp",
     )
 
     await pubsub_handlers.publish_api_notification(event)

@@ -100,7 +100,7 @@ async def subscribe(
                     event=payload.get("event", "unknown"),
                     inbox=payload.get("inbox", ""),
                     user_id=payload.get("user_id", ""),
-                    platform=payload.get("platform", "whatsapp"),
+                    platform=payload["platform"],
                     data=payload.get("data", {}),
                     timestamp=payload.get("timestamp", ""),
                     channel=channel_name,

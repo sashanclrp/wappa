@@ -50,6 +50,7 @@ class DatabaseHelper:
     async def get_or_create_chat(
         self,
         user_id: str,
+        platform: Platform,
         phone_number: str | None = None,
         profile_name: str | None = None,
     ) -> str:
@@ -58,6 +59,7 @@ class DatabaseHelper:
 
         Args:
             user_id: User identifier (platform_user_id)
+            platform: The webhook's Platform (Platform(webhook.platform.value))
             phone_number: Optional phone number in E.164 format
             profile_name: Optional profile name
 
@@ -67,7 +69,7 @@ class DatabaseHelper:
         async with self.db() as session:
             # Try to find existing chat
             statement = select(Chat).where(
-                Chat.platform == Platform.WHATSAPP,
+                Chat.platform == platform,
                 Chat.platform_user_id == user_id,
             )
             result = await session.execute(statement)
@@ -78,7 +80,7 @@ class DatabaseHelper:
 
             # Create new chat
             chat = Chat(
-                platform=Platform.WHATSAPP,
+                platform=platform,
                 platform_user_id=user_id,
                 phone_e164=phone_number or user_id,
                 first_name=profile_name,
@@ -131,7 +133,7 @@ class DatabaseHelper:
                         chat_id=chat_uuid,
                         actor=MessageActor(cached_msg.actor),
                         kind=MessageKind(cached_msg.kind),
-                        platform=Platform.WHATSAPP,
+                        platform=Platform(conversation.platform),
                         platform_message_id=cached_msg.platform_message_id,
                         platform_timestamp=(
                             datetime.fromisoformat(cached_msg.platform_timestamp)
@@ -180,19 +182,22 @@ class DatabaseHelper:
                 self.logger.error(f"Error persisting conversation: {e}", exc_info=True)
             return False
 
-    async def get_chat_by_user_id(self, user_id: str) -> Chat | None:
+    async def get_chat_by_user_id(
+        self, user_id: str, platform: Platform
+    ) -> Chat | None:
         """
-        Get chat record by user ID.
+        Get chat record by user ID on one Platform.
 
         Args:
             user_id: User identifier (platform_user_id)
+            platform: The webhook's Platform (Platform(webhook.platform.value))
 
         Returns:
             Chat record or None if not found
         """
         async with self.db() as session:
             statement = select(Chat).where(
-                Chat.platform == Platform.WHATSAPP,
+                Chat.platform == platform,
                 Chat.platform_user_id == user_id,
             )
             result = await session.execute(statement)
