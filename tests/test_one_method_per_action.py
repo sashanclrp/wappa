@@ -343,6 +343,33 @@ async def test_voice_note_flag_reaches_whatsapp_through_the_pipeline():
     assert "voice" not in client.posted[1]["audio"]
 
 
+async def test_whatsapp_voice_note_by_media_id_must_be_ogg():
+    """Live: MP3/M4A/AAC with ``voice: true`` showed no waveform; only OGG/Opus does."""
+    from types import SimpleNamespace
+
+    class _Media:
+        def __init__(self, mime: str | None, success: bool = True) -> None:
+            self.mime, self.success, self.asked = mime, success, []
+
+        async def get_media_info(self, media_id: str):
+            self.asked.append(media_id)
+            return SimpleNamespace(success=self.success, mime_type=self.mime)
+
+    wa, client = _wa(_Media("audio/mpeg"))
+    with pytest.raises(ValueError, match="audio/mpeg"):
+        await wa.send_audio("1234567890", WA_DM, is_voice=True)
+    assert (await wa.send_audio("1234567890", WA_DM)).success  # plain audio: no lookup
+    assert wa.media_handler.asked == ["1234567890"]
+
+    for mime, ok in (("audio/ogg; codecs=opus", True), (None, True)):
+        wa, client = _wa(_Media(mime))
+        assert (await wa.send_audio("555", WA_DM, is_voice=True)).success is ok
+        assert client.posted[0]["audio"] == {"id": "555", "voice": True}
+
+    wa, client = _wa(_Media("audio/mpeg", success=False))  # lookup failed: Meta decides
+    assert (await wa.send_audio("777", WA_DM, is_voice=True)).success
+
+
 async def test_voice_note_renditions_serve_both_platforms_from_one_call():
     """Live: an OGG voice note sent to Instagram failed with 100/2534080.
 

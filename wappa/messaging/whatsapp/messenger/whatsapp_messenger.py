@@ -408,6 +408,8 @@ class WhatsAppMessengerAdapter(IMessenger, ITemplateMessaging, IUserDataRequests
             WHATSAPP_VOICE_SUFFIXES if is_voice else WHATSAPP_AUDIO_SUFFIXES,
             what="WhatsApp voice note" if is_voice else "WhatsApp audio",
         )
+        if is_voice:
+            await self._check_voice_media_id(audio_source)
         media_cache: dict[str, Any] = {}  # upload once across fallback attempts
         return await self._deliver(
             target,
@@ -421,6 +423,26 @@ class WhatsAppMessengerAdapter(IMessenger, ITemplateMessaging, IUserDataRequests
                 is_voice=is_voice,
             ),
         )
+
+    async def _check_voice_media_id(self, source: str | Path) -> None:
+        """Refuse a voice note by Media ID unless the stored file is OGG.
+
+        A Media ID has no suffix, so ``pick_rendition`` passes it through. Live
+        (2026-11-06): MP3, M4A and AAC sent with ``voice: true`` were delivered
+        as a voice bubble with no waveform; only OGG/Opus renders one. Ask Meta
+        for the ID's MIME type and refuse anything but ``audio/ogg``. A failed
+        lookup passes the send through, leaving the verdict to Meta.
+        """
+        if isinstance(source, Path) or source.startswith(("http://", "https://")):
+            return
+        info = await self.media_handler.get_media_info(source)
+        mime = (info.mime_type or "").split(";", 1)[0].strip().lower()
+        if info.success and mime and mime != "audio/ogg":
+            raise ValueError(
+                f"WhatsApp voice note accepts OGG/Opus (audio/ogg); Media ID "
+                f"{source} is {mime}. Send it as audio (is_voice=False) or "
+                f"upload an OGG/Opus file"
+            )
 
     async def send_document(
         self,
