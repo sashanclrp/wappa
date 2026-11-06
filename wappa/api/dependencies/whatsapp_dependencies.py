@@ -1,26 +1,46 @@
-"""
-WhatsApp messaging dependency injection.
+"""Dependencies of the WhatsApp extension router.
 
-Every Inbox-dependent capability derives from one ``InboxExecutionContext``
-resolved per request. Dependencies never repeat the directory lookup and
-never see a raw header.
+Everything here serves routes that exist only on WhatsApp (limits, validators,
+Template info, ``/health``). The router mounts :func:`whatsapp_only` once, so
+every route behind it answers 501 under another Platform's path; the client
+is built here from the Inbox's resolved credentials, never in the shared
+Inbox Execution Context.
 """
 
-from fastapi import Depends
+from typing import Annotated
+
+from fastapi import Depends, HTTPException
 
 from wappa.api.dependencies.inbox_context import (
     InboxExecutionContext,
+    RoutePlatform,
     get_inbox_execution_context,
+    route_platform,
 )
+from wappa.core.logging.logger import get_logger
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
-from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
-    WhatsAppMediaHandler,
-)
 from wappa.messaging.whatsapp.payload_builders import (
     WhatsAppMediaPayloadBuilder,
     WhatsAppMessagePayloadBuilder,
 )
 from wappa.messaging.whatsapp.services import WhatsAppTemplateInfoService
+from wappa.schemas.core.types import PlatformType
+
+
+async def whatsapp_only(
+    platform: Annotated[RoutePlatform, Depends(route_platform)],
+) -> None:
+    """Router dependency of the WhatsApp extension router: 501 off WhatsApp.
+
+    The one Platform-name gate in the HTTP API. It reads only the path
+    Platform, so a static route answers 501 under ``/api/instagram`` without
+    resolving an Inbox. Shared routes gate on ``requires_capability`` instead.
+    """
+    if platform.value != PlatformType.WHATSAPP.value:
+        raise HTTPException(
+            status_code=501,
+            detail=f"{platform.value} does not provide this route (WhatsApp-only)",
+        )
 
 
 async def get_whatsapp_message_payloads() -> WhatsAppMessagePayloadBuilder:
@@ -36,18 +56,18 @@ async def get_whatsapp_media_payloads() -> WhatsAppMediaPayloadBuilder:
 async def get_whatsapp_client(
     context: InboxExecutionContext = Depends(get_inbox_execution_context),
 ) -> WhatsAppClient:
-    """WhatsApp client for the selected Inbox Execution Context."""
-    return context.whatsapp_client()
-
-
-async def get_whatsapp_media_handler(
-    context: InboxExecutionContext = Depends(get_inbox_execution_context),
-    client: WhatsAppClient = Depends(get_whatsapp_client),
-) -> WhatsAppMediaHandler:
-    return WhatsAppMediaHandler(
-        client=client,
-        inbox_id=context.inbox_id,
-        media_download_client=context.media_download_client_provider(),
+    """WhatsApp client for the selected Inbox's resolved credentials."""
+    client_kwargs: dict[str, str] = {}
+    if context.graph_api_version is not None:
+        client_kwargs["api_version"] = context.graph_api_version
+    if context.graph_base_url is not None:
+        client_kwargs["base_url"] = context.graph_base_url
+    return WhatsAppClient(
+        session=context.session,
+        access_token=context.credentials.access_token.get_secret_value(),
+        phone_number_id=context.inbox_id,
+        logger=get_logger("wappa.api.whatsapp"),
+        **client_kwargs,
     )
 
 

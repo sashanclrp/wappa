@@ -10,34 +10,25 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable
 from enum import StrEnum
 from time import monotonic
-from typing import TYPE_CHECKING, Annotated, Literal, TypedDict, cast
+from typing import TYPE_CHECKING, Annotated, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from wappa.core.messaging.pipeline import MessengerPipeline, MiddlewareEntry
 from wappa.domain.inbox.identity import InboxRef
-from wappa.domain.inbox.ports import (
-    IInboxCredentialResolver,
-    ResolvedInboxCredentials,
-)
 from wappa.domain.interfaces.session_provider import (
     HTTPSessionClosedError,
     RuntimeDrainingError,
 )
+from wappa.domain.interfaces.template_messaging import ITemplateMessaging
 from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.domain.results import MessageResult
 from wappa.schemas.core.recipient import RecipientKind, resolve_recipient
 
 if TYPE_CHECKING:
-    import httpx
-    from fastapi import FastAPI
-
-    from wappa.domain.factories import MessengerFactory
     from wappa.domain.interfaces.messaging_interface import IMessenger
-from wappa.domain.interfaces.template_messaging import ITemplateMessaging
 
 
 class TemplateTransportOutcome(StrEnum):
@@ -367,17 +358,17 @@ class InboxTemplateTransport:
     def __init__(
         self,
         *,
-        runtime: OutboundRuntime,
-        inbox_id: str,
-        credentials: ResolvedInboxCredentials | None = None,
+        inbox_ref: InboxRef,
+        messenger_provider: Callable[[], Awaitable[IMessenger]],
     ) -> None:
-        if not inbox_id:
-            raise ValueError("inbox_id is required")
-        self._runtime = runtime
-        self.inbox_id = inbox_id
-        # Credentials an HTTP boundary already resolved for this request.
-        # Reusing them keeps one Inbox-dependent request to one directory lookup.
-        self._credentials = credentials
+        self.inbox_ref = inbox_ref
+        # Builds this Inbox's Messenger (with app middleware) on each send;
+        # ``OutboundRuntime.templates`` binds it to ``OutboundRuntime.messenger``.
+        self._messenger_provider = messenger_provider
+
+    @property
+    def inbox_id(self) -> str:
+        return self.inbox_ref.inbox_id
 
     async def send(self, request: TemplateTransportRequest) -> TemplateTransportResult:
         digest = _request_digest(request)
@@ -402,9 +393,7 @@ class InboxTemplateTransport:
             )
 
         try:
-            messenger = await self._runtime._messenger(
-                self.inbox_id, credentials=self._credentials
-            )
+            messenger = await self._messenger_provider()
         except (RuntimeDrainingError, HTTPSessionClosedError):
             return failure(
                 TemplateTransportOutcome.TRANSPORT_UNAVAILABLE,
@@ -416,6 +405,14 @@ class InboxTemplateTransport:
                 TemplateTransportOutcome.TRANSPORT_UNAVAILABLE,
                 "transport_unavailable",
                 "The Inbox transport could not be prepared.",
+            )
+
+        if messenger.capability(ITemplateMessaging) is None:
+            # Nothing was sent, so the outcome is a proven rejection.
+            return failure(
+                TemplateTransportOutcome.REJECTED,
+                "capability_unsupported",
+                f"{messenger.platform.value} does not provide Template messaging.",
             )
 
         try:
@@ -447,123 +444,6 @@ class InboxTemplateTransport:
             endpoint=endpoint,
             routing_reason=routing_reason,
         )
-
-
-class OutboundRuntime:
-    """Build Inbox-scoped outbound capabilities from Wappa-owned resources."""
-
-    def __init__(
-        self,
-        *,
-        session_provider: Callable[[], httpx.AsyncClient],
-        media_download_client_provider: Callable[[], httpx.AsyncClient],
-        credential_resolver: IInboxCredentialResolver,
-        messenger_middleware: Sequence[MiddlewareEntry] = (),
-        graph_api_version: str | None = None,
-        graph_base_url: str | None = None,
-    ) -> None:
-        # Local import prevents the public ``wappa.messaging`` package from
-        # cycling while MessengerFactory imports its WhatsApp adapter modules.
-        from wappa.domain.factories import MessengerFactory
-
-        self._messenger_factory: MessengerFactory = MessengerFactory(
-            session_provider=session_provider,
-            credential_resolver=credential_resolver,
-            media_download_client_provider=media_download_client_provider,
-            graph_api_version=graph_api_version,
-            graph_base_url=graph_base_url,
-        )
-        self._messenger_middleware = tuple(messenger_middleware)
-
-    @classmethod
-    def from_app(cls, app: FastAPI) -> OutboundRuntime:
-        """Resolve Wappa's active resources from a configured FastAPI app."""
-        existing = getattr(app.state, "outbound_runtime", None)
-        if isinstance(existing, cls):
-            return existing
-
-        lifecycle = getattr(app.state, "session_lifecycle", None)
-        if lifecycle is None:
-            raise RuntimeError(
-                "SessionLifecycle is not available; Wappa startup is incomplete"
-            )
-        inbox_runtime = getattr(app.state, "inbox_runtime", None)
-        if inbox_runtime is None:
-            raise RuntimeError("Inbox routing is not configured on this application")
-
-        runtime = cls(
-            session_provider=lifecycle.get_session,
-            credential_resolver=cast(
-                IInboxCredentialResolver, inbox_runtime.credential_resolver
-            ),
-            messenger_middleware=getattr(app.state, "messenger_middleware", ()),
-            media_download_client_provider=lifecycle.get_media_download_client,
-            graph_api_version=(
-                app.state.meta_application_config.graph_api_version
-                if getattr(app.state, "meta_application_config", None) is not None
-                else None
-            ),
-            graph_base_url=(
-                str(app.state.meta_application_config.graph_base_url)
-                if getattr(app.state, "meta_application_config", None) is not None
-                else None
-            ),
-        )
-        app.state.outbound_runtime = runtime
-        return runtime
-
-    def templates(
-        self,
-        inbox_id: str,
-        *,
-        credentials: ResolvedInboxCredentials | None = None,
-    ) -> InboxTemplateTransport:
-        """Return a Template transport capability scoped to ``inbox_id``.
-
-        ``credentials`` lets a caller that already resolved this Inbox — an
-        HTTP route holding an ``InboxExecutionContext`` — hand the resolved
-        record over instead of making the directory answer twice.
-        """
-        return InboxTemplateTransport(
-            runtime=self, inbox_id=inbox_id, credentials=credentials
-        )
-
-    async def messenger(
-        self,
-        inbox_ref: InboxRef,
-        *,
-        credentials: ResolvedInboxCredentials | None = None,
-    ) -> IMessenger:
-        """Inbox-bound Messenger (with app middleware) for Host-initiated sends.
-
-        Use it for agent replies, delayed jobs or human-takeover sends outside
-        a webhook dispatch. The Host authorizes the caller and enforces its own
-        takeover/pause policy before sending.
-        """
-        raw = await self._messenger_factory.create_messenger(
-            inbox_ref, credentials=credentials
-        )
-        return MessengerPipeline(raw=raw, middleware=self._messenger_middleware)
-
-    def evict_inbox(self, inbox_ref: InboxRef) -> None:
-        """Drop the cached Messenger for one Inbox.
-
-        The Inbox Directory evicts automatically after ``refresh_inbox`` and
-        ``deactivate_inbox``; this hook exists for hosts that rotate a token
-        out of band.
-        """
-        self._messenger_factory.evict(inbox_ref)
-
-    async def _messenger(
-        self,
-        inbox_id: str,
-        *,
-        credentials: ResolvedInboxCredentials | None = None,
-    ) -> IMessenger:
-        raw = await self._messenger_factory.create_messenger(
-            InboxRef.whatsapp(inbox_id), credentials=credentials
-        )
-        return MessengerPipeline(raw=raw, middleware=self._messenger_middleware)
 
 
 async def _send_request(

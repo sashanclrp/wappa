@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 from fastapi import FastAPI
 
-from wappa.api.routes.whatsapp_combined import create_messaging_router
+from wappa.api.routes.messaging_router import create_messaging_router
 
 # ── capability groups, by what an unauthenticated caller could do ────────────
 

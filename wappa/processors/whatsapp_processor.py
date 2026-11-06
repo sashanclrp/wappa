@@ -157,8 +157,8 @@ class WhatsAppWebhookProcessor:
         interactive = message_data.get("interactive") or {}
         reply_type = interactive.get("type")
         if reply_type not in KNOWN_INTERACTIVE_REPLY_TYPES:
-            # e.g. a Flow reply (nfm_reply): deliver it as Unsupported with a
-            # 200 instead of a 400 that Meta retries and drops (ADR-0010).
+            # A reply type Wappa does not model: deliver it as Unsupported with
+            # a 200 instead of a 400 that Meta retries and drops (ADR-0010).
             report_unmodelled(
                 [f"InteractiveContent.type={reply_type}"],
                 platform="whatsapp",

@@ -57,7 +57,7 @@ async def test_api_notifications_publish_on_the_event_platform(monkeypatch) -> N
 
 
 def test_evict_inbox_targets_the_given_platform() -> None:
-    from wappa.messaging.template_transport import OutboundRuntime
+    from wappa.messaging.outbound_runtime import OutboundRuntime
 
     evicted: list[InboxRef] = []
     runtime = OutboundRuntime.__new__(OutboundRuntime)

@@ -10,7 +10,7 @@ Implemented (unreleased); see the [migration guide](migration/instagram-conversa
 
 ### Event lanes (`from wappa.webhooks import ...`)
 
-A User's choice uses the same shape on every Platform (ADR-0016): an `InboundMessageWebhook` whose `get_interactive_selection()` returns the chosen `ReplyButton.id` / `ListRow.id`. There is no separate interaction lane.
+A User's choice uses the same shape on every Platform (ADR-0016): an `InboundMessageWebhook` whose `get_interactive_selection()` returns the chosen `ReplyButton.id` / `ListRow.id`. There is no separate interaction lane. A completed WhatsApp Flow arrives the same way: `interactive_type` is `InteractiveType.FLOW_REPLY`, `message.is_flow_reply` is true, `message.interactive.nfm_reply` is a `FlowReply` (`name`, `body`, `response_json`, decoded `response`, `flow_token`), and `get_interactive_selection()` returns the `flow_token`.
 
 | Native Instagram evidence | Universal Model | Hook |
 | --- | --- | --- |
@@ -170,7 +170,7 @@ See [ADR-0014](adr/0014-instagram-text-and-explicit-messenger-targets.md) and th
 
 Wappa's messaging HTTP API is mounted at `/api/{platform}` (`whatsapp` or `instagram`; [ADR-0021](adr/0021-platform-messaging-http-api.md)). It has no Meta payload to route from, so an authorized caller selects the Inbox with the Platform in the path plus `X-Wappa-Inbox-ID: <inbox_id>` (`phone_number_id` for WhatsApp, the Instagram professional account ID for Instagram). **The header selects runtime scope and proves only that Wappa knows an active Inbox. It is not a credential and grants no permission.** Host authentication and authorization (for example `AuthPlugin`) decide whether the caller may operate that Inbox, and they run before Inbox resolution.
 
-Resolution happens once per request through `get_inbox_execution_context` (`from wappa.api.dependencies import ...`): Host auth → read the header → combine with the path's Platform → legacy default when the header is absent (only for the default Inbox's own Platform) → resolve the active record through the credential resolver → build the required capabilities → share the `InboxExecutionContext` with every dependency in the route. The context exposes `inbox_ref`, `inbox_id`, `account_ref`, `platform_account_id`, and `routing_mode`; it never exposes the decrypted token.
+Resolution happens once per request through `get_inbox_execution_context` (`from wappa.api.dependencies import ...`): Host auth → read the header → combine with the path's Platform → legacy default when the header is absent (only for the default Inbox's own Platform) → resolve the active record through the credential resolver → build the required capabilities → share the `InboxExecutionContext` with every dependency in the route. The context exposes `inbox_ref`, `inbox_id`, `account_ref`, `platform_account_id`, `routing_mode`, and `credentials` (the resolved record, its token a `SecretStr` that `repr` never shows) for a Platform extension's own client; shared routes reach the Platform only through the Messenger. It builds no Platform client itself: WhatsApp-only routes depend on `get_whatsapp_client` (`wappa.api.dependencies.whatsapp_dependencies`).
 
 | Operation family | Inbox required |
 | --- | ---: |
@@ -183,15 +183,15 @@ Resolution happens once per request through `get_inbox_execution_context` (`from
 | Get Template by ID/name, list Templates, get namespace | yes (WABA comes from the record; no caller-supplied WABA) |
 | Inbox-specific WhatsApp health (`/api/whatsapp/health`) | yes |
 | State Handler set, get, delete | yes |
-| Validate contact or coordinates | no |
-| Text, media, interactive, Template limits | no |
+| Validate contact or coordinates (WhatsApp only) | no |
+| Text, media, Template limits (WhatsApp only); interactive limits (every Platform) | no |
 | Root health, docs, OpenAPI | no |
 
 Platform behaviour of the same routes:
 
 - Send routes call the Inbox's own Messenger through `OutboundRuntime` (with app Messenger middleware), so `/api/instagram/messages/send-text` and `/api/whatsapp/messages/send-text` are the same call. `POST /interactive/send-carousel` maps to `send_carousel`.
 - Send bodies (`DeliveryRequest`) take `recipient` plus optional `addresses` (the User's other known addresses; WhatsApp falls back between phone and BSUID, ADR-0019). `mark-as-read` requires `recipient` (the User who sent the message) on every Platform. `send-buttons` takes `header` as an `InteractiveHeader` object (`{"kind": "text", "text": ...}` or `{"kind": "image" | "video" | "document", "media": {"url": ...} | {"media_id": ...}, "filename": ...}`); `send-cta` takes the same `header` object; `send-list` keeps a plain-text `header`. `send-carousel` cards take `header` as a `CardMedia` object (`{"kind": "image" | "video", "url": ..., "poster_url": ...}`) and the body an optional `reply_to_message_id`. `send-contact` takes `contacts`, a list of one or more contact cards. Interactive request bodies enforce the shared limits (422).
-- Every Platform gap answers **501** `"<platform> does not provide <capability>"`. Capability routes gate on what the Inbox's Messenger provides (`requires_capability(kind)`): comments and post reads (`ICommentControls`, `IConversationContentReader`), history (`IConversationHistoryReader`), media upload, download, info and delete (`IMediaLibrary`; `GET /media/download/{media_id}` takes the webhook's `media_id` URL-encoded, so an Instagram attachment URL works, and answers with the `MediaBytes.content_type`; an oversize read is 413; `GET /media/info/{media_id}` and `DELETE /media/{media_id}` answer 501 on Instagram, whose library raises `UnsupportedOperationError`). Routes with no capability interface yet (Templates, Template info, media limits, validators, `/health`) are WhatsApp-only.
+- Every Platform gap answers **501** `"<platform> does not provide <capability>"`. Capability routes gate on what the Inbox's Messenger provides (`requires_capability(kind)`): comments and post reads (`ICommentControls`, `IConversationContentReader`), history (`IConversationHistoryReader`), media upload, download, info and delete (`IMediaLibrary`; `GET /media/download/{media_id}` takes the webhook's `media_id` URL-encoded, so an Instagram attachment URL works, and answers with the `MediaBytes.content_type`; an oversize read is 413; `GET /media/info/{media_id}` and `DELETE /media/{media_id}` answer 501 on Instagram, whose library raises `UnsupportedOperationError`). Template sends gate on `requires_capability(ITemplateMessaging)`. Routes that exist only on WhatsApp (text and media limits, the contact and coordinate validators, Template info and limits, `/health`) are mounted from one WhatsApp extension router (`wappa.api.routes.whatsapp.whatsapp_extension_router`) whose router dependency `whatsapp_only` answers 501 under any other Platform's path before any Inbox lookup. `GET /interactive/limits` reports the shared limits and answers on every Platform. `GET /api/whatsapp/health` answers `status`, `platform`, `inbox_id` and `api_version`.
 - Capability routes: `POST /comments/{id}/reply|hide|unhide`, `DELETE /comments/{id}`, `POST /posts/{media_id}/comments-enabled` (group `comment_controls`), `GET /posts/{media_id}`, `/posts/{media_id}/comments`, `/comments/{id}`, `/comments/{id}/replies`, `/conversations/{user_id}/messages` (always mounted), `POST /messages/send-private-reply` (outbound transport).
 - A Host route that depends on `get_inbox_execution_context` must declare a `{platform}` path parameter.
 - An action the Platform cannot perform (`UnsupportedOperationError`, e.g. `send-location-request` on Instagram) answers **501**; a local rule violation (`ValueError`, e.g. a non-WebP WhatsApp sticker) answers **400**; an unexpected error answers **500**.
@@ -704,8 +704,8 @@ Host Applications that send Templates use the shallow `wappa.messaging`
 contract instead of constructing Wappa clients, handlers, factories, sessions,
 or Messenger Pipelines:
 
-- `OutboundRuntime.from_app(app).templates(inbox_id)`
-- `InboxTemplateTransport.send(request)`
+- `OutboundRuntime.from_app(app).templates(inbox_ref, credentials=None)`
+- `InboxTemplateTransport.send(request)`; an Inbox whose Messenger lacks `ITemplateMessaging` gets `outcome=REJECTED`, `error_code="capability_unsupported"` before any I/O
 - `TextTemplateTransportRequest`, `MediaTemplateTransportRequest`,
   `LocationTemplateTransportRequest`
 - `TemplateTransportMediaHeader`, `TemplateTransportLocationHeader`,
@@ -786,8 +786,7 @@ receive no raw Template mutation routes unless they make that choice.
 
 ## HTTP route composition
 
-Wappa's WhatsApp surface is grouped by **what an unauthenticated caller could
-do**, not by which module a route lives in. See
+Wappa's shared `/api/{platform}` surface is grouped by **what an unauthenticated caller could do**, not by which module a route lives in. See
 [ADR-0007](adr/0007-embedded-outbound-route-control.md) and
 [ADR-0009](adr/0009-route-capability-groups.md).
 
@@ -827,9 +826,7 @@ Route composition never gates sending. `IMessenger`, `OutboundRuntime`, and
 `InboxTemplateTransport` behave identically under every profile; what a profile
 removes is the *unauthenticated HTTP path* to them.
 
-`create_messaging_router(profile=..., include_*=...)` is the underlying
-composition function for hosts assembling routers directly; it mounts at
-`/api/{platform}`.
+`create_messaging_router(profile=..., include_*=...)` (`wappa.api.routes`) is the underlying composition function for hosts assembling routers directly; it mounts at `/api/{platform}`. Profiles and groups are `MessagingRouteProfile` and `MessagingRouteCapabilities` in `wappa.api.routes.families`; groups apply to every Platform at once. The WhatsApp extension router (limits, validators, Template info, `/health`) is a read and mounts under every profile.
 
 **Upgrade note.** Standalone applications need no action. Hosts already passing
 `include_outbound_transport_api=False` get the wider gating automatically and

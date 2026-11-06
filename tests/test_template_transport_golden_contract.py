@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 import pytest
 
+from wappa.domain.inbox import InboxRef
 from wappa.messaging.whatsapp.handlers.whatsapp_template_handler import (
     WhatsAppTemplateHandler,
 )
@@ -202,17 +203,17 @@ async def test_adapter_phone_evidence_reaches_template_transport(phone: str) -> 
         inbox_id="inbox-test",
     )
 
-    class Runtime:
-        async def _messenger(self, inbox_id: str, *, credentials=None):
-            assert inbox_id == "inbox-test"
-            return messenger
+    async def provide_messenger():
+        return messenger
 
     request = TextTemplateTransportRequest(
         recipient=PhoneNumberTemplateRecipient(value="988391070925723"),
         template_name="welcome",
         category=TemplateCategory.MARKETING,
     )
-    transport = InboxTemplateTransport(runtime=Runtime(), inbox_id="inbox-test")
+    transport = InboxTemplateTransport(
+        inbox_ref=InboxRef.whatsapp("inbox-test"), messenger_provider=provide_messenger
+    )
     result = await transport.send(request)
 
     expected_phone = None if phone == "988391070925723" else phone

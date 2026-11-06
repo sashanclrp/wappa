@@ -1,7 +1,7 @@
 import pytest
 
 from wappa.api.models.handler_models import SetHandlerStateRequest
-from wappa.api.routes.whatsapp.whatsapp_specialized import ContactRequest
+from wappa.api.routes.specialized import ContactRequest
 from wappa.messaging.whatsapp.models.basic_models import BasicTextMessage
 from wappa.messaging.whatsapp.models.media_models import ImageMessage
 from wappa.schemas.core.recipient import (

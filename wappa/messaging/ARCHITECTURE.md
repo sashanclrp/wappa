@@ -41,7 +41,8 @@
 ```
 messaging/
   classification.py             # Pure outbound payload -> transport family classifier
-  template_transport.py         # Public OutboundRuntime + Inbox Template capability
+  outbound_runtime.py           # Public OutboundRuntime: the outbound Messenger factory for every Platform
+  template_transport.py         # Inbox Template capability (InboxTemplateTransport) and its request/result values
   instagram/
     messenger.py                # InstagramMessenger: IMessenger impl, _OPERATIONS, capability lookup
     graph.py                    # Inbox-bound Graph HTTP + outcome classification
@@ -84,7 +85,7 @@ One action touches this chain, in order. Each hop is a real edit or a deliberate
 3. Media rules, for media actions: `wappa/domain/media_renditions.py` (`pick_rendition`, which rendition each Platform accepts), the WhatsApp suffix sets (`WHATSAPP_STICKER_SUFFIXES` and siblings) at the bottom of `wappa/messaging/whatsapp/messenger/whatsapp_messenger.py`, and `wappa/messaging/instagram/media.py` (Instagram formats and size limits).
 4. WhatsApp payload builders: `wappa/messaging/whatsapp/payload_builders.py` (`WhatsAppMessagePayloadBuilder` for text, read status and text limits; `WhatsAppMediaPayloadBuilder` for media payloads and media limits), private to the adapter. Interactive, template and specialized payloads are built in the handlers under `wappa/messaging/whatsapp/handlers/`.
 5. `wappa/core/messaging/pipeline.py`: the matching `MessengerPipeline` method, so middleware sees the call. Template methods live on `_PipelineTemplates` in the same file.
-6. HTTP API: the request model (a `DeliveryRequest` subclass from `wappa/schemas/core/recipient.py`, kept in `wappa/messaging/whatsapp/models/`), the route under `wappa/api/routes/whatsapp/` or `wappa/api/routes/conversations.py`, and `classify_outbound_payload` in `wappa/messaging/classification.py` when the request model is new. See `wappa/api/ARCHITECTURE.md`.
+6. HTTP API: the request model (a `DeliveryRequest` subclass from `wappa/schemas/core/recipient.py`, kept in `wappa/messaging/whatsapp/models/`), the shared route under `wappa/api/routes/` (or `wappa/api/routes/conversations.py`), and `classify_outbound_payload` in `wappa/messaging/classification.py` when the request model is new. See `wappa/api/ARCHITECTURE.md`.
 7. Tests: `tests/test_one_method_per_action.py` (both adapters, unsupported paths), `tests/test_messenger_parity.py` (pipeline and adapter signatures, forwarded arguments, `supported_operations` against overridden methods; it fails until steps 1, 2 and 5 agree), `tests/test_messenger_pipeline.py` (pipeline delegation), `tests/test_platform_messaging_api.py` (route, 501/400/failed-result mapping).
 8. `docs/public-contract.md` ("Messenger operations" and "Messenger") and `CHANGELOG.md`, listing every break.
 
@@ -137,10 +138,11 @@ Host application
 
 ```
 Host Application use case
-  → OutboundRuntime.from_app(app).templates(inbox_id)
+  → OutboundRuntime.from_app(app).templates(inbox_ref)
   → InboxTemplateTransport.send(typed platform-facing request)
-      → Inbox credential resolution + active SessionLifecycle client
-      → WhatsApp Messenger construction + registered Messenger Pipeline
+      → OutboundRuntime.messenger(inbox_ref): credential resolution, active
+        SessionLifecycle client, Platform Messenger + registered Messenger Pipeline
+      → capability(ITemplateMessaging), else REJECTED capability_unsupported before I/O
       → WhatsAppTemplateHandler endpoint/payload/media work
       → normalized TemplateTransportResult
   ← Host Application applies its own durability and lifecycle policy
@@ -184,12 +186,7 @@ WhatsAppMessenger._resolve_media_object(path, ...)
 | `upload_media_from_url()` — download from public URL | Unauthenticated pooled client | None | SessionLifecycle media pool (20 conn) |
 
 The media download client is injected via `media_download_client` and remains
-separate from the authenticated platform client. The pooled client is wired
-through both construction paths:
-
-1. **API routes**: `get_whatsapp_media_handler()` acquires the media client from
-   `app.state.session_lifecycle`
-2. **Inbound dispatch**: `MessengerFactory` receives `media_download_client_provider` via `InboundRuntimeDependencies`
+separate from the authenticated platform client. Every Messenger, from inbound dispatch or from `OutboundRuntime` (Host sends and the HTTP API), is built by `MessengerFactory`, which receives `media_download_client_provider` (`SessionLifecycle.get_media_download_client`) and hands it to the WhatsApp media handler.
 
 **Invariant:** The media download client must never carry `Authorization` headers. Tests enforce this.
 

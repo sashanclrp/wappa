@@ -8,7 +8,7 @@ import pytest
 from fastapi import FastAPI
 from pydantic import ValidationError
 
-from wappa.api.routes.whatsapp_combined import create_messaging_router
+from wappa.api.routes.messaging_router import create_messaging_router
 from wappa.domain.inbox import InboxRef
 from wappa.domain.interfaces.session_provider import RuntimeDrainingError
 from wappa.domain.results import MessageResult
@@ -19,6 +19,7 @@ from wappa.messaging import (
     InboxTemplateTransport,
     LocationTemplateTransportRequest,
     MediaTemplateTransportRequest,
+    OutboundRuntime,
     PhoneNumberTemplateRecipient,
     TemplateAddressKind,
     TemplateAuthenticationMethod,
@@ -51,18 +52,18 @@ def _text_request(**overrides: Any) -> TextTemplateTransportRequest:
 
 class _Runtime:
     def __init__(self, messenger: object | None = None, error: Exception | None = None):
-        self.messenger = messenger
+        self._built = messenger
         self.error = error
         self.credentials_seen: list[Any] = []
 
-    async def _messenger(self, inbox_id: str, *, credentials: Any = None):
-        assert inbox_id == "inbox-1"
+    async def messenger(self, inbox_ref: InboxRef, *, credentials: Any = None):
+        assert inbox_ref == InboxRef.whatsapp("inbox-1")
         # Record what the transport forwarded so a caller-supplied record is
         # visibly reused instead of forcing a second directory lookup.
         self.credentials_seen.append(credentials)
         if self.error:
             raise self.error
-        return self.messenger
+        return self._built
 
 
 class _Messenger:
@@ -95,8 +96,13 @@ class _Messenger:
         return await self._call("location", values)
 
 
-def _transport(runtime: _Runtime) -> InboxTemplateTransport:
-    return InboxTemplateTransport(runtime=runtime, inbox_id="inbox-1")  # type: ignore[arg-type]
+def _transport(runtime: _Runtime, credentials: Any = None) -> InboxTemplateTransport:
+    # The real ``OutboundRuntime.templates`` factory over a fake ``messenger``.
+    return OutboundRuntime.templates(
+        runtime,  # type: ignore[arg-type]
+        InboxRef.whatsapp("inbox-1"),
+        credentials=credentials,
+    )
 
 
 def test_transport_request_forbids_host_application_fields() -> None:
@@ -413,12 +419,7 @@ async def test_transport_reuses_credentials_the_caller_already_resolved() -> Non
     runtime = _Runtime(messenger)
     resolved = object()
 
-    transport = InboxTemplateTransport(
-        runtime=runtime,  # type: ignore[arg-type]
-        inbox_id="inbox-1",
-        credentials=resolved,  # type: ignore[arg-type]
-    )
-    result = await transport.send(_text_request())
+    result = await _transport(runtime, credentials=resolved).send(_text_request())
 
     assert result.outcome is TemplateTransportOutcome.ACCEPTED
     assert runtime.credentials_seen == [resolved]
@@ -436,8 +437,25 @@ async def test_transport_without_caller_credentials_resolves_through_the_runtime
     )
     runtime = _Runtime(messenger)
 
-    transport = InboxTemplateTransport(runtime=runtime, inbox_id="inbox-1")  # type: ignore[arg-type]
-    result = await transport.send(_text_request())
+    result = await _transport(runtime).send(_text_request())
 
     assert result.outcome is TemplateTransportOutcome.ACCEPTED
     assert runtime.credentials_seen == [None]
+
+
+@pytest.mark.asyncio
+async def test_template_send_without_the_capability_is_rejected_before_io() -> None:
+    """Nothing was sent, so the outcome is REJECTED, never INDETERMINATE."""
+
+    class _NoTemplates(_Messenger):
+        platform = PlatformType.INSTAGRAM
+
+        def capability(self, kind):  # noqa: ANN001, ANN201 - test double
+            return None
+
+    messenger = _NoTemplates(AssertionError("must not send"))
+    result = await _transport(_Runtime(messenger)).send(_text_request())
+
+    assert result.outcome is TemplateTransportOutcome.REJECTED
+    assert result.error_code == "capability_unsupported"
+    assert messenger.calls == []

@@ -94,13 +94,16 @@ Embedding applications send Templates through Wappa's public runtime capability;
 they do not construct WhatsApp clients, handlers, sessions, or pipelines:
 
 ```python
+from wappa import InboxRef
 from wappa.messaging import (
     OutboundRuntime,
     PhoneNumberTemplateRecipient,
     TextTemplateTransportRequest,
 )
 
-transport = OutboundRuntime.from_app(fastapi_app).templates(inbox_id)
+transport = OutboundRuntime.from_app(fastapi_app).templates(
+    InboxRef.whatsapp(phone_number_id)
+)
 result = await transport.send(
     TextTemplateTransportRequest(
         recipient=PhoneNumberTemplateRecipient(value="573001112233"),

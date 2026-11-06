@@ -1,14 +1,15 @@
-"""Composition of Wappa's messaging HTTP capabilities.
+"""Composition of Wappa's Messaging HTTP API under ``/api/{platform}``.
 
-Wappa mounts several separable things under ``/api/{platform}`` (``whatsapp``
-or ``instagram``). The Platform in the path plus ``X-Wappa-Inbox-ID`` select
-the Inbox; send routes call that Inbox's own Messenger (one method per action,
-ADR-0016), so ``/api/whatsapp/...`` URLs are unchanged and the same routes
-serve Instagram. Routes that only exist on WhatsApp (Templates, the Media API,
-limits and validators) answer 404 for other Platforms; an action a Platform
-cannot perform answers 501. They are grouped
-by what an unauthenticated caller could *do* with them, not by which module
-they live in:
+The Platform in the path plus ``X-Wappa-Inbox-ID`` select the Inbox. Shared
+routes call that Inbox's own Messenger (one method per action, ADR-0016) or
+gate on a Focused Capability (``requires_capability``), so the same route
+serves every Platform and answers 501 where the Platform cannot perform it.
+Routes that exist only on WhatsApp (text and media limits, validators,
+Template info, ``/health``) sit behind ``whatsapp_extension_router``, whose
+one router dependency answers 501 under any other Platform's path.
+
+Shared routes are grouped by what an unauthenticated caller could *do* with
+them, not by which module they live in:
 
 - **outbound transport** — sends a message to a User
 - **template transport** — sends a Template to a User
@@ -16,7 +17,8 @@ they live in:
 - **media upload** — creates a platform media asset
 - **state handler API** — reads, overwrites, or deletes any recipient's
   cached conversational state
-- everything else — reads: limits, validation, lookups, downloads, health
+- **comment controls** — replies to, hides or deletes public comments
+- everything else — reads: limits, lookups, downloads, health
 
 Each group is chosen explicitly. See ADR-0007 for the outbound split and
 ADR-0009 for why "mutation" had to mean more than "send".
@@ -30,35 +32,30 @@ from .conversations import (
     conversation_reads_router,
     private_reply_router,
 )
-from .whatsapp import (
-    whatsapp_health_router,
-    whatsapp_interactive_info_router,
-    whatsapp_interactive_send_router,
-    whatsapp_media_management_router,
-    whatsapp_media_router,
-    whatsapp_media_send_router,
-    whatsapp_media_upload_router,
-    whatsapp_message_info_router,
-    whatsapp_messages_send_router,
-    whatsapp_specialized_send_router,
-    whatsapp_specialized_validation_router,
-    whatsapp_state_handlers_router,
-    whatsapp_template_info_router,
-    whatsapp_templates_router,
-)
-from .whatsapp.route_families import WhatsAppRouteCapabilities, WhatsAppRouteProfile
+from .families import MessagingRouteCapabilities, MessagingRouteProfile
+from .interactive import router as interactive_info_router
+from .interactive import send_router as interactive_send_router
+from .media import management_router as media_management_router
+from .media import router as media_router
+from .media import send_router as media_send_router
+from .media import upload_router as media_upload_router
+from .messages import send_router as messages_send_router
+from .specialized import send_router as specialized_send_router
+from .state_handlers import router as state_handlers_router
+from .templates import router as templates_router
+from .whatsapp import whatsapp_extension_router
 
 
 def resolve_capabilities(
     *,
-    profile: WhatsAppRouteProfile | str | None = None,
+    profile: MessagingRouteProfile | str | None = None,
     include_template_transport: bool | None = None,
     include_outbound_transport: bool | None = None,
     include_media_management: bool | None = None,
     include_media_upload: bool | None = None,
     include_state_handler_api: bool | None = None,
     include_comment_controls: bool | None = None,
-) -> WhatsAppRouteCapabilities:
+) -> MessagingRouteCapabilities:
     """Turn a profile plus explicit overrides into one capability set.
 
     When no profile is named, ejecting outbound transport is taken as the
@@ -68,14 +65,14 @@ def resolve_capabilities(
     """
     if profile is None:
         resolved = (
-            WhatsAppRouteProfile.EMBEDDED
+            MessagingRouteProfile.EMBEDDED
             if include_outbound_transport is False
-            else WhatsAppRouteProfile.STANDALONE
+            else MessagingRouteProfile.STANDALONE
         )
     else:
-        resolved = WhatsAppRouteProfile(profile)
+        resolved = MessagingRouteProfile(profile)
 
-    return WhatsAppRouteCapabilities.for_profile(resolved).override(
+    return MessagingRouteCapabilities.for_profile(resolved).override(
         outbound_transport=include_outbound_transport,
         template_transport=include_template_transport,
         media_management=include_media_management,
@@ -87,7 +84,7 @@ def resolve_capabilities(
 
 def create_messaging_router(
     *,
-    profile: WhatsAppRouteProfile | str | None = None,
+    profile: MessagingRouteProfile | str | None = None,
     include_template_transport: bool | None = None,
     include_outbound_transport: bool | None = None,
     include_media_management: bool | None = None,
@@ -137,32 +134,29 @@ def create_messaging_router(
     )
 
     # Reads and lookups: always mounted, under every profile.
-    router.include_router(whatsapp_health_router)
-    router.include_router(whatsapp_media_router)
-    router.include_router(whatsapp_message_info_router)
-    router.include_router(whatsapp_interactive_info_router)
-    router.include_router(whatsapp_specialized_validation_router)
-    router.include_router(whatsapp_template_info_router)
+    router.include_router(whatsapp_extension_router)
+    router.include_router(media_router)
+    router.include_router(interactive_info_router)
     router.include_router(conversation_reads_router)
 
     if capabilities.outbound_transport:
-        router.include_router(whatsapp_messages_send_router)
-        router.include_router(whatsapp_media_send_router)
-        router.include_router(whatsapp_interactive_send_router)
-        router.include_router(whatsapp_specialized_send_router)
+        router.include_router(messages_send_router)
+        router.include_router(media_send_router)
+        router.include_router(interactive_send_router)
+        router.include_router(specialized_send_router)
         router.include_router(private_reply_router)
 
     if capabilities.template_transport:
-        router.include_router(whatsapp_templates_router)
+        router.include_router(templates_router)
 
     if capabilities.media_upload:
-        router.include_router(whatsapp_media_upload_router)
+        router.include_router(media_upload_router)
 
     if capabilities.media_management:
-        router.include_router(whatsapp_media_management_router)
+        router.include_router(media_management_router)
 
     if capabilities.state_handler_api:
-        router.include_router(whatsapp_state_handlers_router)
+        router.include_router(state_handlers_router)
 
     if capabilities.comment_controls:
         router.include_router(comment_controls_router)

@@ -1,4 +1,4 @@
-"""Splitting one WhatsApp HTTP surface into independently mountable capabilities.
+"""Splitting the shared Messaging HTTP API into independently mountable groups.
 
 An embedding Host Application owns its own authenticated boundary, so it needs
 Wappa's unauthenticated *mutation* routes gone — but not the read, upload, and
@@ -20,7 +20,7 @@ from typing import Any
 from fastapi import APIRouter
 
 
-class WhatsAppRouteProfile(StrEnum):
+class MessagingRouteProfile(StrEnum):
     """A named starting point for which capability groups get mounted.
 
     A profile sets defaults only; any capability passed explicitly to
@@ -38,8 +38,8 @@ class WhatsAppRouteProfile(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class WhatsAppRouteCapabilities:
-    """Which groups of Wappa's WhatsApp HTTP surface are mounted."""
+class MessagingRouteCapabilities:
+    """Which groups of the shared ``/api/{platform}`` surface are mounted."""
 
     outbound_transport: bool
     """Ordinary sends: text, media sends, interactive, contact, location,
@@ -67,8 +67,8 @@ class WhatsAppRouteCapabilities:
     answers 501 (today only Instagram provides it)."""
 
     @classmethod
-    def for_profile(cls, profile: WhatsAppRouteProfile) -> WhatsAppRouteCapabilities:
-        if profile is WhatsAppRouteProfile.EMBEDDED:
+    def for_profile(cls, profile: MessagingRouteProfile) -> MessagingRouteCapabilities:
+        if profile is MessagingRouteProfile.EMBEDDED:
             return cls(
                 outbound_transport=False,
                 template_transport=False,
@@ -86,7 +86,7 @@ class WhatsAppRouteCapabilities:
             comment_controls=True,
         )
 
-    def override(self, **explicit: bool | None) -> WhatsAppRouteCapabilities:
+    def override(self, **explicit: bool | None) -> MessagingRouteCapabilities:
         """Apply the capabilities a caller named, ignoring the ones it did not."""
         named = {field: value for field, value in explicit.items() if value is not None}
         return replace(self, **named)

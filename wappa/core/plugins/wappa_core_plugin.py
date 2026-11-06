@@ -9,7 +9,7 @@ from wappa.api.middleware.inbox import InboxMiddleware
 from wappa.api.middleware.request_id import RequestIdMiddleware
 from wappa.api.middleware.request_logging import RequestLoggingMiddleware
 from wappa.api.routes.health import router as health_router
-from wappa.api.routes.whatsapp_combined import create_messaging_router
+from wappa.api.routes.messaging_router import create_messaging_router
 from wappa.core.lifecycle import BackgroundWorkTracker, SessionLifecycle
 from wappa.domain.inbox.routing import InboxRoutingMode
 from wappa.schemas.core.types import PlatformType

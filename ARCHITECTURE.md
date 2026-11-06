@@ -193,7 +193,7 @@ Embedding hosts that only need Template delivery use a smaller public capability
 
 ```
 Host Application
-    │ OutboundRuntime.from_app(app).templates(inbox_id).send(request)
+    │ OutboundRuntime.from_app(app).templates(inbox_ref).send(request)
     ▼
 InboxTemplateTransport
     │ validates Delivery Address, category, authentication method,

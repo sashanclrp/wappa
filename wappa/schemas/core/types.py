@@ -69,6 +69,7 @@ class InteractiveType(StrEnum):
     BUTTON_REPLY = "button_reply"
     LIST_REPLY = "list_reply"
     CALL_PERMISSION_REPLY = "call_permission_reply"
+    FLOW_REPLY = "nfm_reply"  # a completed WhatsApp Flow
     QUICK_REPLY = "quick_reply"
     INLINE_KEYBOARD = "inline_keyboard"  # Telegram inline keyboards
     CAROUSEL = "carousel"

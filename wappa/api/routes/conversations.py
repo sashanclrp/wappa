@@ -31,7 +31,7 @@ from wappa.api.dependencies.inbox_context import (
     get_inbox_messenger,
     requires_capability,
 )
-from wappa.api.routes.whatsapp.route_families import RouteFamily
+from wappa.api.routes.families import RouteFamily
 from wappa.api.utils import map_send_errors
 from wappa.domain.interfaces.conversation_capabilities import (
     ICommentControls,

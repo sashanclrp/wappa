@@ -16,7 +16,7 @@ from wappa.api.dependencies.inbox_context import (
     get_inbox_execution_context,
 )
 from wappa.api.middleware import InboxMiddleware
-from wappa.api.routes.whatsapp_combined import create_messaging_router
+from wappa.api.routes.messaging_router import create_messaging_router
 from wappa.core.auth.middleware import AuthMiddleware
 from wappa.core.auth.strategies.bearer_token import BearerTokenStrategy
 from wappa.core.factory.inbox_assembly import InboxRuntimeConfiguration

@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 from wappa.api.dependencies.inbox_context import INBOX_ID_HEADER
-from wappa.api.routes.whatsapp_combined import create_messaging_router
+from wappa.api.routes.messaging_router import create_messaging_router
 from wappa.core.factory.inbox_assembly import InboxRuntimeConfiguration
 from wappa.core.lifecycle import BackgroundWorkTracker, SessionLifecycle
 from wappa.domain.inbox import (
@@ -30,7 +30,7 @@ from wappa.domain.inbox import (
 )
 from wappa.domain.messaging_targets import UnsupportedOperationError
 from wappa.domain.results import MessageResult
-from wappa.messaging.template_transport import OutboundRuntime
+from wappa.messaging.outbound_runtime import OutboundRuntime
 from wappa.schemas.core.types import PlatformType
 
 IG_INBOX = "17841457247424017"
@@ -229,20 +229,88 @@ def test_an_action_the_platform_lacks_is_501() -> None:
     assert "instagram" in response.json()["detail"]
 
 
-@pytest.mark.parametrize(
-    ("method", "path"),
-    [
-        ("GET", "/api/instagram/templates/info"),
-        ("GET", "/api/instagram/health"),
-    ],
-)
-def test_whatsapp_only_routes_are_501_for_instagram(method: str, path: str) -> None:
-    app, _, _ = _app()
+_WHATSAPP_EXTENSION_ROUTES = [
+    ("GET", "/messages/limits"),
+    ("GET", "/media/limits"),
+    ("POST", "/specialized/validate-contact"),
+    ("POST", "/specialized/validate-coordinates"),
+    ("GET", "/templates/limits"),
+    ("GET", "/templates/info"),
+    ("GET", "/health"),
+]
 
-    response = TestClient(app).request(method, path, headers=IG_HEADERS)
+
+@pytest.mark.parametrize(("method", "path"), _WHATSAPP_EXTENSION_ROUTES)
+def test_whatsapp_extension_routes_are_501_for_instagram(
+    method: str, path: str
+) -> None:
+    app, resolver, _ = _app()
+
+    response = TestClient(app).request(
+        method, f"/api/instagram{path}", headers=IG_HEADERS, json={}
+    )
 
     assert response.status_code == 501
     assert "instagram does not provide" in response.json()["detail"]
+    assert resolver.calls == [], "the one router gate runs before any Inbox lookup"
+
+
+@pytest.mark.parametrize(
+    "path", ["/messages/limits", "/media/limits", "/templates/limits"]
+)
+def test_static_whatsapp_extension_routes_serve_whatsapp(path: str) -> None:
+    app, _, _ = _app()
+
+    response = TestClient(app).get(f"/api/whatsapp{path}")
+
+    assert response.status_code == 200
+
+
+def test_whatsapp_health_reports_only_the_inbox_and_api_version() -> None:
+    app, _, _ = _app()
+
+    response = TestClient(app).get(
+        "/api/whatsapp/health", headers={INBOX_ID_HEADER: WA_INBOX}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {"status", "platform", "inbox_id", "api_version"}
+    assert body["platform"] == "whatsapp"
+    assert body["inbox_id"] == WA_INBOX
+
+
+@pytest.mark.parametrize("platform", ["whatsapp", "instagram"])
+def test_shared_interactive_limits_serve_every_platform(platform: str) -> None:
+    app, _, _ = _app()
+
+    response = TestClient(app).get(f"/api/{platform}/interactive/limits")
+
+    assert response.status_code == 200
+    assert response.json()["general"]["supported_platforms"] == [
+        "whatsapp",
+        "instagram",
+    ]
+
+
+def test_template_send_is_501_where_the_inbox_has_no_template_capability() -> None:
+    app, _, runtime = _app()
+    ig = InboxRef(platform=PlatformType.INSTAGRAM, inbox_id=IG_INBOX)
+    runtime.messengers[ig] = _Messenger(ig)
+    runtime.messengers[ig].capability = lambda kind: None  # type: ignore[attr-defined]
+
+    response = TestClient(app).post(
+        "/api/instagram/templates/send-text",
+        json={
+            "recipient": {"kind": "phone_number", "value": "573001112233"},
+            "template_name": "welcome",
+            "category": "utility",
+        },
+        headers=IG_HEADERS,
+    )
+
+    assert response.status_code == 501
+    assert "ITemplateMessaging" in response.json()["detail"]
 
 
 def test_unknown_platform_is_rejected() -> None:

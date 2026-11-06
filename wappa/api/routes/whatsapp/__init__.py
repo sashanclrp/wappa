@@ -1,39 +1,26 @@
-"""WhatsApp API routes package.
+"""The WhatsApp extension router: routes that exist only on WhatsApp.
 
-Modules holding more than one capability group export one router per group:
-``*_send_router`` sends, ``*_management_router`` destroys, ``*_upload_router``
-creates, and the plain ``*_router`` reads. ``whatsapp_combined`` decides which
-groups get mounted — see ADR-0009.
+Text and media limits, the contact and coordinate validators, Template info
+and ``/health`` sit behind one router whose dependency, ``whatsapp_only``,
+answers 501 under any other Platform's path. Every route that serves more than
+one Platform lives one level up in ``wappa/api/routes/`` and gates on a
+capability instead. Media info and delete are ``IMediaLibrary`` methods, so
+they are shared routes, not extension routes.
 """
 
-from .whatsapp_health import router as whatsapp_health_router
-from .whatsapp_interactive import router as whatsapp_interactive_info_router
-from .whatsapp_interactive import send_router as whatsapp_interactive_send_router
-from .whatsapp_media import management_router as whatsapp_media_management_router
-from .whatsapp_media import router as whatsapp_media_router
-from .whatsapp_media import send_router as whatsapp_media_send_router
-from .whatsapp_media import upload_router as whatsapp_media_upload_router
-from .whatsapp_messages import router as whatsapp_message_info_router
-from .whatsapp_messages import send_router as whatsapp_messages_send_router
-from .whatsapp_specialized import router as whatsapp_specialized_validation_router
-from .whatsapp_specialized import send_router as whatsapp_specialized_send_router
-from .whatsapp_state_handlers import router as whatsapp_state_handlers_router
-from .whatsapp_template_info import router as whatsapp_template_info_router
-from .whatsapp_templates import router as whatsapp_templates_router
+from fastapi import APIRouter, Depends
 
-__all__ = [
-    "whatsapp_health_router",
-    "whatsapp_interactive_info_router",
-    "whatsapp_interactive_send_router",
-    "whatsapp_media_management_router",
-    "whatsapp_media_router",
-    "whatsapp_media_send_router",
-    "whatsapp_media_upload_router",
-    "whatsapp_message_info_router",
-    "whatsapp_messages_send_router",
-    "whatsapp_specialized_send_router",
-    "whatsapp_specialized_validation_router",
-    "whatsapp_state_handlers_router",
-    "whatsapp_template_info_router",
-    "whatsapp_templates_router",
-]
+from wappa.api.dependencies.whatsapp_dependencies import whatsapp_only
+
+from .health import router as _health_router
+from .limits import router as _limits_router
+from .template_info import router as _template_info_router
+from .validators import router as _validators_router
+
+whatsapp_extension_router = APIRouter(dependencies=[Depends(whatsapp_only)])
+whatsapp_extension_router.include_router(_health_router)
+whatsapp_extension_router.include_router(_limits_router)
+whatsapp_extension_router.include_router(_validators_router)
+whatsapp_extension_router.include_router(_template_info_router)
+
+__all__ = ["whatsapp_extension_router"]

@@ -23,6 +23,7 @@ from .errors import WhatsAppWebhookError, create_webhook_error_from_raw
 from .image import ImageContent, WhatsAppImageMessage
 from .interactive import (
     ButtonReply,
+    FlowReply,
     InteractiveContent,
     ListReply,
     WhatsAppInteractiveMessage,
@@ -65,6 +66,7 @@ __all__ = [
     # Interactive message schemas
     "ButtonReply",
     "ListReply",
+    "FlowReply",
     "InteractiveContent",
     "WhatsAppInteractiveMessage",
     # Location message schemas

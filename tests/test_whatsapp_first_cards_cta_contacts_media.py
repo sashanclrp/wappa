@@ -410,7 +410,7 @@ async def test_instagram_library_uploads_bytes_and_stickers_as_images(
 
 
 async def test_limits_endpoint_reports_the_shared_cta_and_card_limits() -> None:
-    from wappa.api.routes.whatsapp.whatsapp_interactive import get_interactive_limits
+    from wappa.api.routes.interactive import get_interactive_limits
 
     limits = await get_interactive_limits()
 

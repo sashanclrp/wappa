@@ -1,20 +1,14 @@
-"""WhatsApp media messaging API endpoints.
+"""Shared media routes under ``/api/{platform}/media``.
 
-Provides REST API endpoints for WhatsApp media operations:
-- POST /api/whatsapp/media/upload: Upload media files
-- POST /api/whatsapp/media/send-image: Send image messages
-- POST /api/whatsapp/media/send-video: Send video messages
-- POST /api/whatsapp/media/send-audio: Send audio messages
-- POST /api/whatsapp/media/send-document: Send document messages
-- POST /api/whatsapp/media/send-sticker: Send sticker messages
-- GET /api/whatsapp/media/info/{media_id}: Get media information
-- GET /api/whatsapp/media/download/{media_id}: Download media
-- DELETE /api/whatsapp/media/{media_id}: Delete media
+- ``POST /upload``: upload a file through the Inbox's ``IMediaLibrary``
+- ``POST /send-image``, ``/send-video``, ``/send-audio``, ``/send-document``,
+  ``/send-sticker``: send media by URL or Media ID
+- ``GET /info/{media_id}``, ``GET /download/{media_id}``,
+  ``DELETE /{media_id}``: ``IMediaLibrary`` reads and delete (501 where the
+  Platform has no such endpoint)
 
-Router configuration:
-- Prefix: /media
-- Tags: ["WhatsApp - Media"]
-- Full URL: /api/whatsapp/media/
+WhatsApp's media limits are a WhatsApp extension route
+(``GET /api/whatsapp/media/limits``).
 """
 
 from fastapi import Depends, File, Form, HTTPException, Request, UploadFile
@@ -29,8 +23,7 @@ from wappa.api.dependencies.media_transfer import (
     LibraryMediaUploader,
     get_media_uploader,
 )
-from wappa.api.dependencies.whatsapp_dependencies import get_whatsapp_media_payloads
-from wappa.api.routes.whatsapp.route_families import RouteFamily
+from wappa.api.routes.families import RouteFamily
 from wappa.api.utils import direct_target, dispatch_message_event, map_send_errors
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.domain.interfaces.conversation_capabilities import ReadOutcome
@@ -49,13 +42,12 @@ from wappa.messaging.whatsapp.models.media_models import (
     StickerMessage,
     VideoMessage,
 )
-from wappa.messaging.whatsapp.payload_builders import WhatsAppMediaPayloadBuilder
 
 # One prefix, four capability groups. `DELETE /media/{id}` destroys a platform
 # asset, so it is gated apart from the reads it sits next to — see ADR-0009.
 _family = RouteFamily(
     prefix="/media",
-    tags=["WhatsApp - Media"],
+    tags=["Media"],
     responses={
         400: {"description": "Bad Request - Invalid media format or size"},
         401: {"description": "Unauthorized - Invalid inbox credentials"},
@@ -69,7 +61,7 @@ _family = RouteFamily(
 send_router = _family.router()  # sends media to a User
 upload_router = _family.router()  # creates a platform media asset
 management_router = _family.router()  # destroys a platform media asset
-router = _family.router()  # reads: download, info, limits
+router = _family.router()  # reads: download, info
 
 
 @upload_router.post(
@@ -362,18 +354,3 @@ async def delete_media(
         media_id=result.media_id,
         inbox_id=result.inbox_id,
     )
-
-
-@router.get(
-    "/limits",
-    summary="Get Media Limits",
-    description="Get platform-specific media limits and supported types",
-)
-async def get_media_limits(
-    payloads: WhatsAppMediaPayloadBuilder = Depends(get_whatsapp_media_payloads),
-) -> dict:
-    """Get WhatsApp media limits and constraints.
-
-    Returns supported MIME types, file size limits, and platform constraints.
-    """
-    return payloads.get_media_limits()

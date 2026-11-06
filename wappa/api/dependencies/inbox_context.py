@@ -36,7 +36,6 @@ from wappa.domain.inbox.identity import (
 )
 from wappa.domain.inbox.ports import ResolvedInboxCredentials
 from wappa.domain.inbox.routing import InboxRoutingMode
-from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.platforms import PLATFORMS
 from wappa.schemas.core.types import PlatformType
 
@@ -92,22 +91,6 @@ def _request_platform(request: Request) -> PlatformType:
         ) from exc
 
 
-def whatsapp_only(inbox_ref: InboxRef, feature: str = "this route") -> None:
-    """Reject a WhatsApp-only operation for another Platform's Inbox (501).
-
-    Used where no capability interface exists yet (Templates info, the
-    WhatsApp Media API, limits). Prefer :func:`requires_capability`.
-    """
-    if inbox_ref.platform is not PlatformType.WHATSAPP:
-        raise HTTPException(
-            status_code=501,
-            detail=(
-                f"{inbox_ref.platform.value} does not provide {feature} "
-                "(WhatsApp-only route)"
-            ),
-        )
-
-
 @dataclass(frozen=True)
 class InboxExecutionContext:
     """One validated, per-request bundle of Inbox capabilities.
@@ -136,17 +119,25 @@ class InboxExecutionContext:
     def platform_account_id(self) -> str:
         return self._credentials.platform_account_id
 
+    @property
+    def credentials(self) -> ResolvedInboxCredentials:
+        """The resolved credentials, for a Platform extension's own client.
+
+        Only the WhatsApp extension router's dependencies read it; shared
+        routes reach the Platform through the Messenger.
+        """
+        return self._credentials
+
     def template_transport(self, app: FastAPI) -> InboxTemplateTransport:
         """Return this Inbox's Template transport, reusing resolved credentials.
 
         Routes call this instead of ``OutboundRuntime.from_app(app).templates(...)``
         so an Inbox-dependent request resolves the directory exactly once.
         """
-        from wappa.messaging.template_transport import OutboundRuntime
+        from wappa.messaging.outbound_runtime import OutboundRuntime
 
-        whatsapp_only(self.inbox_ref, "Templates")
         return OutboundRuntime.from_app(app).templates(
-            self.inbox_id, credentials=self._credentials
+            self.inbox_ref, credentials=self._credentials
         )
 
     async def messenger(self, app: FastAPI) -> IMessenger:
@@ -155,26 +146,10 @@ class InboxExecutionContext:
         Built by ``OutboundRuntime`` (the same path as Host-initiated sends),
         reusing the credentials this request already resolved.
         """
-        from wappa.messaging.template_transport import OutboundRuntime
+        from wappa.messaging.outbound_runtime import OutboundRuntime
 
         return await OutboundRuntime.from_app(app).messenger(
             self.inbox_ref, credentials=self._credentials
-        )
-
-    def whatsapp_client(self) -> WhatsAppClient:
-        """Build the WhatsApp client for this Inbox's credentials."""
-        whatsapp_only(self.inbox_ref)
-        client_kwargs: dict[str, str] = {}
-        if self.graph_api_version is not None:
-            client_kwargs["api_version"] = self.graph_api_version
-        if self.graph_base_url is not None:
-            client_kwargs["base_url"] = self.graph_base_url
-        return WhatsAppClient(
-            session=self.session,
-            access_token=self._credentials.access_token.get_secret_value(),
-            phone_number_id=self.inbox_id,
-            logger=get_logger("wappa.api.whatsapp"),
-            **client_kwargs,
         )
 
 
@@ -354,5 +329,4 @@ __all__ = [
     "requires_capability",
     "route_platform",
     "select_inbox_ref",
-    "whatsapp_only",
 ]

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from wappa.api.dependencies.media_transfer import get_media_uploader
-from wappa.api.routes.whatsapp.whatsapp_media import upload_router
+from wappa.api.routes.media import upload_router
 from wappa.domain.models.media_result import MediaUploadResult
 
 

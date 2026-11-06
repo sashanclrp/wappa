@@ -2,9 +2,11 @@
 WhatsApp interactive message schema.
 
 This module contains Pydantic models for processing WhatsApp interactive
-message replies, including button replies and list selection replies.
+message replies: button and list selections, call permission replies and Flow
+replies (``nfm_reply``).
 """
 
+import json
 from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -19,7 +21,7 @@ from wappa.webhooks.core.base_message import BaseInteractiveMessage, BaseMessage
 from wappa.webhooks.whatsapp.base_models import MessageContext, WhatsAppMessageIdentity
 
 KNOWN_INTERACTIVE_REPLY_TYPES = frozenset(
-    {"button_reply", "list_reply", "call_permission_reply"}
+    {"button_reply", "list_reply", "call_permission_reply", "nfm_reply"}
 )
 
 
@@ -73,6 +75,40 @@ class CallPermissionReply(BaseModel):
     response_source: str = Field(..., description="Source of the permission response")
 
 
+class FlowReply(BaseModel):
+    """A completed WhatsApp Flow (``interactive.nfm_reply``).
+
+    Meta sends the Flow's answers as a JSON string in ``response_json``;
+    ``response`` is that object decoded, and ``flow_token`` is the token the
+    business set when it sent the Flow (``None`` if the Flow carried none).
+    """
+
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
+
+    name: str = Field("flow", description="Reply name; 'flow' for a Flow")
+    body: str = Field("", description="Text WhatsApp shows for the reply")
+    response_json: str = Field(..., description="The Flow's answers as JSON text")
+    response: dict[str, Any] = Field(
+        default_factory=dict, description="``response_json`` decoded"
+    )
+
+    @model_validator(mode="after")
+    def _decode_response(self) -> Self:
+        # Inbound is tolerant (ADR-0010): undecodable answers leave
+        # ``response`` empty rather than failing the webhook.
+        try:
+            decoded = json.loads(self.response_json)
+        except json.JSONDecodeError:
+            decoded = None
+        self.response = decoded if isinstance(decoded, dict) else {}
+        return self
+
+    @property
+    def flow_token(self) -> str | None:
+        token = self.response.get("flow_token")
+        return str(token) if token is not None else None
+
+
 class InteractiveContent(BaseModel):
     """
     Interactive message content.
@@ -82,9 +118,9 @@ class InteractiveContent(BaseModel):
 
     model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
-    type: Literal["button_reply", "list_reply", "call_permission_reply"] = Field(
-        ..., description="Type of interactive reply"
-    )
+    type: Literal[
+        "button_reply", "list_reply", "call_permission_reply", "nfm_reply"
+    ] = Field(..., description="Type of interactive reply")
     button_reply: ButtonReply | None = Field(
         None, description="Button reply data (only if type='button_reply')"
     )
@@ -94,6 +130,9 @@ class InteractiveContent(BaseModel):
     call_permission_reply: CallPermissionReply | None = Field(
         None,
         description="Call permission reply data",
+    )
+    nfm_reply: FlowReply | None = Field(
+        None, description="Flow reply data (only if type='nfm_reply')"
     )
 
     @model_validator(mode="after")
@@ -117,6 +156,13 @@ class InteractiveContent(BaseModel):
             if self.button_reply is not None or self.list_reply is not None:
                 raise ValueError(
                     "button_reply and list_reply must be None for call permission replies"
+                )
+        elif self.type == "nfm_reply":
+            if self.nfm_reply is None:
+                raise ValueError("nfm_reply is required when type='nfm_reply'")
+            if self.button_reply is not None or self.list_reply is not None:
+                raise ValueError(
+                    "button_reply and list_reply must be None for Flow replies"
                 )
 
         return self
@@ -234,6 +280,11 @@ class WhatsAppInteractiveMessage(WhatsAppMessageIdentity, BaseInteractiveMessage
         return self.interactive.type == "call_permission_reply"
 
     @property
+    def is_flow_reply(self) -> bool:
+        """Check if this is a completed WhatsApp Flow (``nfm_reply``)."""
+        return self.interactive.type == "nfm_reply"
+
+    @property
     def sender_phone(self) -> str:
         """Get the sender's phone number (clean accessor)."""
         return self.from_
@@ -292,6 +343,8 @@ class WhatsAppInteractiveMessage(WhatsAppMessageIdentity, BaseInteractiveMessage
             return self.interactive.list_reply.id
         elif self.is_call_permission_reply and self.interactive.call_permission_reply:
             return self.interactive.call_permission_reply.response
+        elif self.is_flow_reply and self.interactive.nfm_reply:
+            return self.interactive.nfm_reply.flow_token
         return None
 
     def get_selected_option_title(self) -> str | None:
@@ -307,6 +360,8 @@ class WhatsAppInteractiveMessage(WhatsAppMessageIdentity, BaseInteractiveMessage
             return self.interactive.list_reply.title
         elif self.is_call_permission_reply and self.interactive.call_permission_reply:
             return self.interactive.call_permission_reply.response
+        elif self.is_flow_reply and self.interactive.nfm_reply:
+            return self.interactive.nfm_reply.body or None
         return None
 
     def to_summary_dict(self) -> dict[str, str | bool | int | None]:
@@ -329,6 +384,7 @@ class WhatsAppInteractiveMessage(WhatsAppMessageIdentity, BaseInteractiveMessage
             "is_button_reply": self.is_button_reply,
             "is_list_reply": self.is_list_reply,
             "is_call_permission_reply": self.is_call_permission_reply,
+            "is_flow_reply": self.is_flow_reply,
         }
 
         # Add type-specific data
@@ -430,6 +486,8 @@ class WhatsAppInteractiveMessage(WhatsAppMessageIdentity, BaseInteractiveMessage
             return InteractiveType.LIST_REPLY
         elif self.interactive.type == "call_permission_reply":
             return InteractiveType.CALL_PERMISSION_REPLY
+        elif self.interactive.type == "nfm_reply":
+            return InteractiveType.FLOW_REPLY
         else:
             return InteractiveType.BUTTON_REPLY  # Default fallback
 

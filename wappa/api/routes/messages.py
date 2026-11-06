@@ -1,24 +1,17 @@
-"""
-WhatsApp messaging API endpoints.
+"""Shared message send routes under ``/api/{platform}/messages``.
 
-Provides REST API endpoints for WhatsApp messaging operations:
-- POST /api/whatsapp/messages/send-text: Send text messages
-- POST /api/whatsapp/messages/mark-as-read: Mark messages as read with optional typing
+- ``POST /send-text``: text with optional reply and link preview
+- ``POST /mark-as-read``: mark an inbound message read, optionally with typing
 
-Router configuration:
-- Prefix: /messages
-- Tags: ["WhatsApp - Messages"]
-- Full URL: /api/whatsapp/messages/
+Text keeps WhatsApp's length limit; Instagram splits a longer text into
+several messages.
 """
 
 from fastapi import Depends, Request
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.inbox_context import get_inbox_messenger
-from wappa.api.dependencies.whatsapp_dependencies import (
-    get_whatsapp_message_payloads,
-)
-from wappa.api.routes.whatsapp.route_families import RouteFamily
+from wappa.api.routes.families import RouteFamily
 from wappa.api.utils import (
     direct_target,
     dispatch_message_event,
@@ -31,12 +24,10 @@ from wappa.messaging.whatsapp.models.basic_models import (
     BasicTextMessage,
     ReadStatusMessage,
 )
-from wappa.messaging.whatsapp.payload_builders import WhatsAppMessagePayloadBuilder
 
-# Outbound mutations (`send_router`) are omissible; message limits are not.
 _family = RouteFamily(
     prefix="/messages",
-    tags=["WhatsApp - Messages"],
+    tags=["Messages"],
     responses={
         400: {"description": "Bad Request - Invalid message format"},
         401: {"description": "Unauthorized - Invalid inbox credentials"},
@@ -45,7 +36,6 @@ _family = RouteFamily(
     },
 )
 send_router = _family.router()
-router = _family.router()
 
 
 @send_router.post(
@@ -93,30 +83,3 @@ async def mark_message_as_read(
         direct_target(messenger, request),
         typing=request.typing,
     )
-
-
-@router.get(
-    "/limits",
-    summary="Get Text Message Limits",
-    description="Get WhatsApp text message limits. Other limits at separate endpoints.",
-)
-async def get_message_limits(
-    payloads: WhatsAppMessagePayloadBuilder = Depends(get_whatsapp_message_payloads),
-) -> dict:
-    """Get WhatsApp text message limits.
-
-    Returns current WhatsApp Business API limits for text message validation.
-    This endpoint follows Single Responsibility Principle - returns only text limits.
-
-    For other domain limits, use:
-    - /api/whatsapp/media/limits for media limits
-    - /api/whatsapp/interactive/limits for button/list/CTA limits
-    - /api/whatsapp/templates/limits for template limits
-
-    Args:
-        payloads: WhatsApp text payload builder (injected)
-
-    Returns:
-        Dictionary containing text message limits (max_text_length, etc.)
-    """
-    return payloads.get_message_limits()

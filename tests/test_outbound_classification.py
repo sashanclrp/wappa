@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from wappa.api.routes.whatsapp.whatsapp_specialized import (
+from wappa.api.routes.specialized import (
     ContactRequest,
     LocationRequest,
     LocationRequestRequest,

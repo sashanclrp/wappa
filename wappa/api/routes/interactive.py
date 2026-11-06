@@ -1,17 +1,9 @@
-"""
-WhatsApp interactive messaging API endpoints.
+"""Shared interactive routes under ``/api/{platform}/interactive``.
 
-Provides REST API endpoints for WhatsApp interactive operations:
-- POST /api/whatsapp/interactive/send-buttons: Send button messages
-- POST /api/whatsapp/interactive/send-list: Send list messages
-- POST /api/whatsapp/interactive/send-cta: Send call-to-action messages
-- GET /api/{platform}/interactive/limits: The shared interactive limits
-- POST /api/{platform}/interactive/send-carousel: Send a card carousel
-
-Router configuration:
-- Prefix: /interactive
-- Tags: ["WhatsApp - Interactive"]
-- Full URL: /api/whatsapp/interactive/
+- ``POST /send-buttons``, ``/send-list``, ``/send-cta``, ``/send-carousel``
+- ``GET /limits``: the interactive limits Wappa enforces at construction, each
+  the most restrictive across the installed Platforms, so it is the same on
+  every Platform path
 """
 
 from typing import Self
@@ -21,7 +13,7 @@ from pydantic import Field, model_validator
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.inbox_context import get_inbox_messenger
-from wappa.api.routes.whatsapp.route_families import RouteFamily
+from wappa.api.routes.families import RouteFamily
 from wappa.api.utils import (
     direct_target,
     dispatch_message_event,
@@ -66,7 +58,7 @@ from wappa.schemas.core.recipient import DeliveryRequest
 # is a read an embedding host still uses for admission checks.
 _family = RouteFamily(
     prefix="/interactive",
-    tags=["WhatsApp - Interactive"],
+    tags=["Interactive"],
     responses={
         400: {"description": "Bad Request - Invalid interactive message format"},
         401: {"description": "Unauthorized - Invalid inbox credentials"},

@@ -181,27 +181,70 @@ async def test_inbound_does_not_enforce_send_side_length_limits(message) -> None
     assert webhook.message is not None
 
 
+_UNMODELLED_REPLY = {
+    "type": "product_reply",
+    "product_reply": {"id": "sku-1"},
+}
+
 _FLOW_REPLY = {
     "type": "nfm_reply",
-    "nfm_reply": {"name": "flow", "body": "Sent", "response_json": '{"a": 1}'},
+    "nfm_reply": {
+        "name": "flow",
+        "body": "Sent",
+        "response_json": '{"flow_token": "intake:42", "plan": "team"}',
+    },
 }
 
 
 @pytest.mark.asyncio
+async def test_flow_reply_arrives_typed_with_its_token_as_selection() -> None:
+    from wappa.schemas.core.types import InteractiveType, MessageType
+    from wappa.webhooks.whatsapp.message_types.interactive import (
+        WhatsAppInteractiveMessage,
+    )
+
+    webhook = await _parse(_interactive(_FLOW_REPLY))
+
+    message = webhook.message
+    assert isinstance(message, WhatsAppInteractiveMessage)
+    assert message.message_type is MessageType.INTERACTIVE
+    assert message.is_flow_reply
+    assert message.interactive_type is InteractiveType.FLOW_REPLY
+    reply = message.interactive.nfm_reply
+    assert reply is not None
+    assert reply.response == {"flow_token": "intake:42", "plan": "team"}
+    assert reply.flow_token == "intake:42"
+    assert webhook.get_interactive_selection() == "intake:42"
+
+
+@pytest.mark.asyncio
+async def test_flow_reply_with_undecodable_answers_is_still_delivered() -> None:
+    broken = {
+        "type": "nfm_reply",
+        "nfm_reply": {"name": "flow", "body": "Sent", "response_json": "{oops"},
+    }
+
+    webhook = await _parse(_interactive(broken))
+
+    assert webhook.message.interactive.nfm_reply.response == {}
+    assert not webhook.get_interactive_selection()
+
+
+@pytest.mark.asyncio
 async def test_unmodelled_interactive_type_is_unsupported_not_400(monkeypatch) -> None:
-    """A Flow reply (nfm_reply) is delivered as Unsupported, never a 400."""
+    """An interactive reply type Wappa does not model is Unsupported, never a 400."""
     from wappa.schemas.core.types import MessageType
     from wappa.webhooks.whatsapp.message_types.unsupported import (
         WhatsAppUnsupportedMessage,
     )
 
     monkeypatch.delenv("WAPPA_STRICT_META_SCHEMA", raising=False)
-    webhook = await _parse(_interactive(_FLOW_REPLY))
+    webhook = await _parse(_interactive(_UNMODELLED_REPLY))
 
     assert isinstance(webhook.message, WhatsAppUnsupportedMessage)
     assert webhook.message.message_type is MessageType.UNSUPPORTED
     assert webhook.message.is_unknown_message_type()
-    assert webhook.message.unsupported["interactive"] == _FLOW_REPLY
+    assert webhook.message.unsupported["interactive"] == _UNMODELLED_REPLY
 
 
 @pytest.mark.asyncio
@@ -209,8 +252,8 @@ async def test_unmodelled_interactive_type_fails_in_strict_mode(monkeypatch) -> 
     from wappa.processors.errors import ProcessorError
 
     monkeypatch.setenv("WAPPA_STRICT_META_SCHEMA", "1")
-    with pytest.raises(ProcessorError, match="InteractiveContent.type=nfm_reply"):
-        await _parse(_interactive(_FLOW_REPLY))
+    with pytest.raises(ProcessorError, match="InteractiveContent.type=product_reply"):
+        await _parse(_interactive(_UNMODELLED_REPLY))
 
 
 @pytest.mark.asyncio
