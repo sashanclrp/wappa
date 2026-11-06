@@ -322,6 +322,10 @@ This inventory records missing implementations and provider applicability. Edit 
 
 ## 10. Additional findings and unresolved verification
 
+### Rate limits
+
+Meta's limits for both Platforms, the live code `4` block of 2026-11-06, Wappa's current handling and the gaps: [rate-limits.md](rate-limits.md).
+
 ### Shared Meta callback versus Platform identity
 
 Dashboard evidence supplied during setup: Instagram exposes its own Configure webhooks section with Callback URL and Verify token fields. The user reports that the use cases can have separate URLs. This supports separate callback configuration; it does not establish that shared URLs are forbidden. The screen also states that receiving webhooks requires a published app. The preceding screen recommends Unified Login and labels Instagram Login legacy; verify the selected login path before implementing onboarding.

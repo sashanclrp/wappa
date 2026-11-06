@@ -33,6 +33,7 @@ The three skills (`wappa-instagram-apps`, `wappa-conversational-scores`, `wappa-
 11. **HTTP.** `/api/{platform}/...` routes take the same neutral request models; a capability the Inbox's Platform lacks answers 501; failed sends answer 4xx.
 12. **State.** Caches are scoped per Inbox through `InboxRef.cache_namespace`; never build keys by hand (runtime-state skill).
 13. **What never to do.** Call the Graph API directly (Wappa owns credentials), branch on Platform for a shared action, catch and swallow `ValueError` from limits, put comment logic in `process_message`, or teach anything listed as proposed.
+14. **Rate limits.** A rate-limit code means wait, not fix: stop that kind of send for the Inbox (or that recipient on WhatsApp `131056`) and retry later, never in a loop. Instagram: 10/s for audio and video, 750 private replies per hour on posts, 2/s history reads, and an app-level budget of 200 calls per hour per daily user (code `4`). WhatsApp: about 1 message per 6 s per recipient, 80 mps per number, Templates outside the window bounded by the portfolio's messaging limit. Source: [rate-limits.md](../references/rate-limits.md).
 
 Sequencing: the skills are defined from this checklist now and built only after Gate A passes on the hardened code (Platform Messengers included), so every example is verified against shipped behaviour.
 
@@ -40,7 +41,7 @@ Sequencing: the skills are defined from this checklist now and built only after 
 
 | Skill | Refresh |
 | --- | --- |
-| `wappa-instagram-apps` | Items 1-11 for Instagram and WhatsApp side by side: Platform Messengers, lanes, comment and mention lanes with `self.instagram`, emulations and `wappa_parts`, headers, cards with `poster_url`, profile resolution, media library |
+| `wappa-instagram-apps` | Items 1-11 and 14 for Instagram and WhatsApp side by side: Platform Messengers, lanes, comment and mention lanes with `self.instagram`, emulations and `wappa_parts`, headers, cards with `poster_url`, profile resolution, media library |
 | `wappa-conversational-scores` | Items 1-6 and 10 inside Scores: Scores receive the prebuilt Messengers, use `InteractiveHeader` / list values within the shared limits, and handle selections identically on both Platforms |
 | `wappa-runtime-state` | Item 12, plus storing message IDs and profile facts per User and Inbox |
 
