@@ -1,0 +1,5 @@
+# Exact findings only, so the scan still catches anything new. Each entry is a
+# fake token in test_whatsapp_client_logging.py, which asserts tokens never reach
+# the logs. It is a plain 36-character sequence, not a Meta token.
+5731ea4019ef51b49b80dfafe227cf107f48ec9f:tests/test_whatsapp_client_logging.py:generic-api-key:11
+1d8bd4ffbb82dadd2eb04705c1da67c7ca1b46b2:tests/test_whatsapp_client_logging.py:generic-api-key:63
