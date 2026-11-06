@@ -121,49 +121,83 @@ class InstagramGraphClient:
         operation: str = "Instagram operation",
         timeout: float | None = None,
     ) -> GraphResponse:
-        headers = {"Authorization": f"Bearer {self._token.get_secret_value()}"}
-        try:
-            response = await self._session_provider().request(
-                method,
-                self.url(path),
-                json=json,
-                params=params,
-                data=data,
-                files=files,
-                headers=headers,
-                timeout=timeout if timeout is not None else httpx.USE_CLIENT_DEFAULT,
-            )
-        except httpx.RequestError:
-            return GraphResponse(
-                outcome=OperationOutcome.INDETERMINATE,
-                error_code="INDETERMINATE",
-                error=f"{operation} outcome is unknown (transport failure); "
-                "do not automatically repeat it",
-            )
-        try:
-            parsed = response.json()
-        except ValueError:
-            parsed = None
-        body = parsed if isinstance(parsed, dict) else {}
-        if response.is_success and isinstance(parsed, dict) and "error" not in body:
-            return GraphResponse(
-                outcome=OperationOutcome.ACCEPTED,
-                status_code=response.status_code,
-                body=body,
-            )
-        if response.is_success or response.status_code >= 500:
-            return GraphResponse(
-                outcome=OperationOutcome.INDETERMINATE,
-                status_code=response.status_code,
-                error_code="INDETERMINATE",
-                error=f"{operation} outcome is unknown "
-                f"(HTTP {response.status_code}); do not automatically repeat it",
-            )
-        code = _error_code(body) or str(response.status_code)
-        return GraphResponse(
-            outcome=OperationOutcome.REJECTED,
-            status_code=response.status_code,
-            error_code=code,
-            error=f"{operation} rejected: "
-            + describe_error(code, f"provider error {code}"),
+        return await graph_request(
+            self._session_provider(),
+            self._base,
+            path,
+            self._token,
+            method=method,
+            operation=operation,
+            json=json,
+            params=params,
+            data=data,
+            files=files,
+            timeout=timeout,
         )
+
+
+async def graph_request(
+    client: httpx.AsyncClient,
+    base: str,
+    path: str,
+    token: SecretStr,
+    *,
+    method: str = "GET",
+    operation: str,
+    json: Mapping[str, Any] | None = None,
+    params: Mapping[str, Any] | None = None,
+    data: Mapping[str, Any] | None = None,
+    files: Mapping[str, Any] | None = None,
+    timeout: float | None = None,
+) -> GraphResponse:
+    """One bearer Graph call, classified as accepted / rejected / indeterminate.
+
+    ``base`` is the versioned Graph root (``https://graph.facebook.com/v26.0``).
+    A transport failure, a 5xx, or a 2xx that is not an error-free JSON object
+    is ``INDETERMINATE``; any other 4xx is ``REJECTED`` with Meta's error code.
+    """
+    try:
+        response = await client.request(
+            method,
+            f"{base}/{path.lstrip('/')}",
+            json=json,
+            params=params,
+            data=data,
+            files=files,
+            headers={"Authorization": f"Bearer {token.get_secret_value()}"},
+            timeout=timeout if timeout is not None else httpx.USE_CLIENT_DEFAULT,
+        )
+    except httpx.RequestError:
+        return GraphResponse(
+            outcome=OperationOutcome.INDETERMINATE,
+            error_code="INDETERMINATE",
+            error=f"{operation} outcome is unknown (transport failure); "
+            "do not automatically repeat it",
+        )
+    try:
+        parsed = response.json()
+    except ValueError:
+        parsed = None
+    body = parsed if isinstance(parsed, dict) else {}
+    if response.is_success and isinstance(parsed, dict) and "error" not in body:
+        return GraphResponse(
+            outcome=OperationOutcome.ACCEPTED,
+            status_code=response.status_code,
+            body=body,
+        )
+    if response.is_success or response.status_code >= 500:
+        return GraphResponse(
+            outcome=OperationOutcome.INDETERMINATE,
+            status_code=response.status_code,
+            error_code="INDETERMINATE",
+            error=f"{operation} outcome is unknown "
+            f"(HTTP {response.status_code}); do not automatically repeat it",
+        )
+    code = _error_code(body) or str(response.status_code)
+    return GraphResponse(
+        outcome=OperationOutcome.REJECTED,
+        status_code=response.status_code,
+        error_code=code,
+        error=f"{operation} rejected: "
+        + describe_error(code, f"provider error {code}"),
+    )

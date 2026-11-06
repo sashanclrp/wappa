@@ -2,16 +2,10 @@
 
 from __future__ import annotations
 
-import base64
-import hashlib
-import hmac
-import json
-
 import httpx
 import pytest
 from pydantic import SecretStr
 
-from wappa.connections import ConnectionStateError, deauthorization_event
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.conversation_capabilities import ReadOutcome
 from wappa.messaging import IConversationHistoryReader
@@ -23,8 +17,6 @@ from wappa.webhooks import (
     HistoryDirection,
     HistorySyncWebhook,
     InboundMessageWebhook,
-    InboxConnectionState,
-    InboxConnectionWebhook,
     MessageUpdateKind,
     MessageUpdateWebhook,
 )
@@ -159,29 +151,6 @@ async def test_media_history_sync_builds_one_typed_thread():
         HistoryDirection.OUTBOUND,
     ]
     assert thread.messages[1].message.text_content == "old answer"
-
-
-def _signed(payload: dict, secret: str) -> str:
-    body = base64.urlsafe_b64encode(json.dumps(payload).encode()).rstrip(b"=")
-    sig = hmac.new(secret.encode(), body, hashlib.sha256).digest()
-    return base64.urlsafe_b64encode(sig).rstrip(b"=").decode() + "." + body.decode()
-
-
-def test_instagram_deauthorization_is_the_same_connection_event():
-    event = deauthorization_event(
-        _signed(
-            {"algorithm": "HMAC-SHA256", "user_id": ACCOUNT, "issued_at": 1793710000},
-            "s3cret",
-        ),
-        SecretStr("s3cret"),
-    )
-    assert isinstance(event, InboxConnectionWebhook)
-    assert event.state is InboxConnectionState.DISCONNECTED
-    assert event.inbox.inbox_id == ACCOUNT and event.platform is PlatformType.INSTAGRAM
-    with pytest.raises(ConnectionStateError):
-        deauthorization_event(
-            _signed({"algorithm": "HMAC-SHA256"}, "x"), SecretStr("y")
-        )
 
 
 async def test_instagram_history_reader_returns_the_shared_thread_shape():

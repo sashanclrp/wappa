@@ -347,9 +347,10 @@ class InboxConnectionState(StrEnum):
 class InboxConnectionWebhook(BaseModel):
     """An Inbox's connection to Wappa changed (ADR-0016, ADR-0017).
 
-    WhatsApp Coexistence ``account_offboarded`` / ``account_reconnected`` and
-    the Instagram deauthorize callback (``InstagramConnector``) both arrive
-    here, so a Host deactivates or restores the Inbox the same way.
+    WhatsApp Coexistence ``account_offboarded`` / ``account_reconnected``
+    arrive here, so a Host deactivates or restores the Inbox the same way.
+    Instagram has no emitter: Meta sends no deauthorize callback for the
+    Unified Login grants ``InstagramConnector`` creates.
     """
 
     model_config = _MODEL_CONFIG

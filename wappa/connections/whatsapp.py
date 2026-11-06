@@ -27,6 +27,7 @@ from typing import Any
 import httpx
 from pydantic import SecretStr
 
+from wappa.domain.inbox.credentials import CredentialRecord
 from wappa.domain.inbox.identity import InboxRef, PlatformAccountRef
 from wappa.domain.inbox.services import InboxCredentialService
 from wappa.schemas.core.types import PlatformType
@@ -41,6 +42,7 @@ from .contract import (
     IInboxConnector,
     InboxReadiness,
     build_record,
+    require_platform,
 )
 from .meta_login import MetaBusinessLogin, MetaLoginConfig
 
@@ -112,34 +114,23 @@ class WhatsAppConnector(IInboxConnector):
         error: str | None = None,
         error_reason: str | None = None,
     ) -> ConnectionGrant:
-        intent, code = await self._login.consume(
+        grant, debug = await self._login.authorize(
+            PlatformType.WHATSAPP,
             state=state,
             host_subject=host_subject,
             code=code,
             error=error,
             error_reason=error_reason,
         )
-        token, expires_at = await self._login.exchange_code(code)
-        debug = await self._login.token_debug(token)
-        scopes, targets = MetaBusinessLogin.scopes_of(debug)
         wabas = shared_waba_ids(debug)
         if not wabas:
             raise ConnectionProviderError(
                 "Embedded Signup shared no WhatsApp Business Account", "NO_WABA"
             )
-        grant = ConnectionGrant(
-            platform=PlatformType.WHATSAPP,
-            intent_subject=intent.host_subject,
-            access_token=token,
-            inboxes=(),
-            granted_scopes=scopes,
-            scope_targets=targets,
-            expires_at=expires_at,
-        )
         inboxes: list[DiscoveredInbox] = []
         for waba_id in wabas:
             readiness = whatsapp_readiness(grant.scopes_for(waba_id))
-            for number in await self._phone_numbers(waba_id, token):
+            for number in await self._phone_numbers(waba_id, grant.access_token):
                 inboxes.append(
                     DiscoveredInbox(
                         inbox_ref=InboxRef.whatsapp(str(number["id"])),
@@ -171,9 +162,10 @@ class WhatsAppConnector(IInboxConnector):
         inbox_ref: InboxRef,
         *,
         credentials: InboxCredentialService,
-        previous: Any | None = None,
+        previous: CredentialRecord | None = None,
     ) -> ActivationResult:
         """Subscribe the app to the number's WABA, then build the encrypted record."""
+        require_platform(self.platform, grant, inbox_ref)
         inbox = grant.inbox(inbox_ref)
         waba_id = inbox.account_ref.platform_account_id
         ok, code = await self._login.success_call(

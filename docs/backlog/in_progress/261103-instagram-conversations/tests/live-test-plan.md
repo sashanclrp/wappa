@@ -62,7 +62,7 @@ Run each command on both Platforms against the same server and code. Expect the 
 | P-11 | Bot sends `/help`; check logs | no `OutboundEchoWebhook` (Coexistence never echoes API sends) | echo dropped (`Dropped echo of Wappa's own send` debug log); record whether the raw echo carries `app_id` and whether its `mid` equals the send's `message_id` | fixed own-send filter |
 | P-12 | React ❤️ to a bot message, then remove it | `InboundMessageWebhook(REACTION)` add + removal | same, `InstagramReactionMessage` | one reaction shape |
 | P-13 | Edit a sent message (WhatsApp edit / Instagram edit) | `process_message_update` EDITED, typed text | same | one update lane |
-| P-14 | Inbox connection lane (offline under Unified Login) | — | Not run live: Unified Login issues business-owned `SYSTEM_USER` tokens (no expiry), removing a person's integration revokes nothing and Meta sends no deauthorize. Covered offline: signed_request → `InboxConnectionWebhook(DISCONNECTED)` (`tests/test_adr0016_unified_lanes.py` and the lab's `test_deauthorize_lane.py`). A live callback applies only to an Instagram Login grant removed under Instagram → Apps and websites | one connection lane |
+| P-14 | Inbox connection lane (offline under Unified Login) | — | Not run live: Unified Login issues business-owned `SYSTEM_USER` tokens (no expiry), removing a person's integration revokes nothing and Meta sends no deauthorize. Wappa removed the Instagram deauthorize route and `deauthorization_event` on 2026-11-06 (architecture hardening H-28), so this lane has no Instagram emitter; WhatsApp `account_offboarded` keeps it covered. A callback would apply only to an Instagram Login grant, which the adapter does not support | one connection lane |
 
 ## WhatsApp inbound rerun (every interactive and webhook)
 
@@ -101,7 +101,7 @@ Sent with `messenger.capability(ITemplateMessaging)` to the `DirectMessage` targ
 
 ## Gate B: self-service Unified Login
 
-Set `META_APP_ID`, `IG_LOGIN_CONFIG_ID` and `CONNECT_OPERATOR_TOKEN`, and register `https://<tunnel>/connect/instagram/callback` as a valid OAuth redirect URI. Register the **Deauthorize callback URL** as `https://<tunnel>/webhook/inboxes/instagram/deauthorize` (Wappa verifies the `signed_request` and dispatches `InboxConnectionWebhook(DISCONNECTED)`; the lab's `process_inbox_connection` deactivates the record) and the **Data Deletion Request URL** as `https://<tunnel>/connect/instagram/data-deletion` (host-owned; returns a confirmation code). The app no longer has its own `/connect/instagram/deauthorize`.
+Set `META_APP_ID`, `IG_LOGIN_CONFIG_ID` and `CONNECT_OPERATOR_TOKEN`, and register `https://<tunnel>/connect/instagram/callback` as a valid OAuth redirect URI. Leave the **Deauthorize callback URL** unset (Wappa mounts no deauthorize route; Unified Login grants never trigger it) and register the **Data Deletion Request URL** as `https://<tunnel>/connect/instagram/data-deletion` (host-owned; returns a confirmation code). The app no longer has its own `/connect/instagram/deauthorize`.
 
 | ID | Step | Expect |
 | --- | --- | --- |
@@ -111,7 +111,7 @@ Set `META_APP_ID`, `IG_LOGIN_CONFIG_ID` and `CONNECT_OPERATOR_TOKEN`, and regist
 | B-04 | start, then cancel the dialog | "Connection cancelled", nothing changed |
 | B-05 | deselect messaging permission during consent | account reported "missing instagram_manage_messages", not connected |
 | B-06 | connect again | record rotated (`credential_version` +1), Messenger evicted |
-| B-07 | revocation | not applicable to Unified Login: no per-user deauthorize fires for business-owned `SYSTEM_USER` tokens; revocation is a business-portfolio action (system user or app/asset removal). For an Instagram Login grant: Wappa's deauthorize route → `process_inbox_connection` DISCONNECTED → record inactive in `inbox_records.json`, directory refreshed; later webhooks for that Inbox are rejected |
+| B-07 | revocation | not applicable to Unified Login: no per-user deauthorize fires for business-owned `SYSTEM_USER` tokens; revocation is a business-portfolio action (system user or app/asset removal). Revocation is the Host's job: deactivate the record, refresh the directory, call `connector.disconnect`; later webhooks for that Inbox are rejected |
 | B-08 | Creator account | record whether a bootstrap is needed |
 
 App-role-only testing doesn't satisfy an independent-customer audience. App Review/Advanced Access is an external gate.

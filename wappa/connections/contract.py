@@ -23,10 +23,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from wappa.domain.inbox.credentials import (
+    ActiveInboxCredentialRecord,
+    CredentialRecord,
+)
 from wappa.domain.inbox.identity import InboxRef, PlatformAccountRef
 from wappa.domain.inbox.services import InboxCredentialService
 from wappa.schemas.core.types import PlatformType
@@ -158,9 +162,11 @@ class ConnectionGrant(BaseModel):
 class ActivationResult(BaseModel):
     """Activation evidence plus the record the Host must persist, then refresh."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
     inbox_ref: InboxRef
-    record: Any = Field(description="Wappa-encrypted active CredentialRecord")
+    record: ActiveInboxCredentialRecord = Field(
+        description="Wappa-encrypted active credential record"
+    )
     webhooks_subscribed: bool
     details: dict[str, str] = Field(
         default_factory=dict,
@@ -204,9 +210,13 @@ class IInboxConnector(ABC):
         inbox_ref: InboxRef,
         *,
         credentials: InboxCredentialService,
-        previous: Any | None = None,
+        previous: CredentialRecord | None = None,
     ) -> ActivationResult:
-        """Subscribe webhooks and build the encrypted record (rotating ``previous``)."""
+        """Subscribe webhooks and build the encrypted record (rotating ``previous``).
+
+        Raises ``ValueError`` before any Platform call when ``grant`` or
+        ``inbox_ref`` belongs to another Platform (``require_platform``).
+        """
 
     @abstractmethod
     async def disconnect(
@@ -220,13 +230,25 @@ class IInboxConnector(ABC):
         """
 
 
+def require_platform(
+    platform: PlatformType, grant: ConnectionGrant, inbox_ref: InboxRef
+) -> None:
+    """Reject a grant or Inbox of another Platform before any Platform call."""
+    if grant.platform is not platform:
+        raise ValueError(
+            f"{platform} connector cannot activate a {grant.platform} grant"
+        )
+    if inbox_ref.platform is not platform:
+        raise ValueError(f"{platform} connector cannot activate {inbox_ref}")
+
+
 def build_record(
     credentials: InboxCredentialService,
     inbox: DiscoveredInbox,
     token: SecretStr,
     *,
-    previous: Any | None = None,
-) -> Any:
+    previous: CredentialRecord | None = None,
+) -> ActiveInboxCredentialRecord:
     """Wappa-encrypted canonical record; rotates when a previous record exists."""
     if previous is not None:
         if previous.inbox_ref != inbox.inbox_ref:
@@ -258,4 +280,5 @@ __all__ = [
     "InboxConnectionError",
     "InboxReadiness",
     "build_record",
+    "require_platform",
 ]

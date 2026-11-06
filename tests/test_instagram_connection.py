@@ -8,10 +8,12 @@ from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 
 from wappa.connections import (
+    ActivationResult,
     ConnectionCancelledError,
+    ConnectionGrant,
     ConnectionProviderError,
     ConnectionStateError,
     DiscoveredInbox,
@@ -19,6 +21,7 @@ from wappa.connections import (
     InboxReadiness,
     InMemoryConnectionIntentStore,
     InstagramConnector,
+    InstagramSubscriptions,
     MetaLoginConfig,
     WhatsAppConnector,
     parse_signed_request,
@@ -408,3 +411,134 @@ async def test_whatsapp_without_shared_waba_is_an_explicit_provider_error():
         with pytest.raises(ConnectionProviderError) as exc:
             await connector.complete(state=request.state, host_subject="op", code="c")
     assert exc.value.code == "NO_WABA"
+
+
+# ── shared Platform precondition and typed record (H-29) ────────────────
+
+
+def _grant(platform, inbox_ref, account_ref):
+    return ConnectionGrant(
+        platform=platform,
+        intent_subject="op",
+        access_token=SecretStr("t"),
+        inboxes=(
+            DiscoveredInbox(
+                inbox_ref=inbox_ref,
+                account_ref=account_ref,
+                readiness=InboxReadiness(conversation_ready=True),
+            ),
+        ),
+    )
+
+
+@pytest.mark.parametrize("connector_type", [InstagramConnector, WhatsAppConnector])
+async def test_activate_rejects_another_platforms_grant_before_any_graph_call(
+    connector_type,
+):
+    requests = []
+    service = InboxCredentialService(CredentialCodec(CredentialCodec.generate_key()))
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(provider(requests))
+    ) as client:
+        connector = connector_type(
+            CONFIG,
+            client_provider=lambda: client,
+            intent_store=InMemoryConnectionIntentStore(),
+        )
+        other = (
+            PlatformType.WHATSAPP
+            if connector.platform is PlatformType.INSTAGRAM
+            else PlatformType.INSTAGRAM
+        )
+        foreign_ref = InboxRef(platform=other, inbox_id="1701")
+        foreign_account = PlatformAccountRef(platform=other, platform_account_id="1701")
+        with pytest.raises(ValueError, match="grant"):
+            await connector.activate(
+                _grant(other, foreign_ref, foreign_account),
+                foreign_ref,
+                credentials=service,
+            )
+        own_ref = InboxRef(platform=connector.platform, inbox_id="1701")
+        own_account = PlatformAccountRef(
+            platform=connector.platform, platform_account_id="1701"
+        )
+        with pytest.raises(ValueError, match="cannot activate"):
+            await connector.activate(
+                _grant(connector.platform, own_ref, own_account),
+                foreign_ref,
+                credentials=service,
+            )
+    assert requests == []
+
+
+def test_activation_result_record_is_a_typed_active_credential_record():
+    with pytest.raises(ValidationError):
+        ActivationResult(
+            inbox_ref=InboxRef(platform=PlatformType.INSTAGRAM, inbox_id="1701"),
+            record={"not": "a record"},
+            webhooks_subscribed=True,
+        )
+
+
+# ── subscriptions share the Instagram Graph classification (H-30) ───────
+
+
+async def _subscriptions_against(handler):
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        subscriptions = InstagramSubscriptions(
+            client_provider=lambda: client,
+            graph_base=CONFIG.graph_base,
+            app_id="111",
+        )
+        token = SecretStr("bisu-token")
+        result = await subscriptions.subscribe("1701", token, try_unverified=())
+        unsubscribed = await subscriptions.unsubscribe("1701", token)
+        try:
+            fields = await subscriptions.subscribed_fields("1701", token)
+        except ConnectionProviderError as exc:
+            fields = exc.code
+    return result, unsubscribed, fields
+
+
+async def test_subscription_outcomes_follow_the_shared_graph_classification():
+    def server_error(request):
+        return httpx.Response(503, json={"error": {"code": 2}})
+
+    result, unsubscribed, fields = await _subscriptions_against(server_error)
+    assert set(result.fields.values()) == {FieldSubscriptionOutcome.UNKNOWN}
+    assert result.error_code == "INDETERMINATE"
+    assert unsubscribed is False and fields == "INDETERMINATE"
+
+    def transport_down(request):
+        raise httpx.ConnectError("down", request=request)
+
+    result, unsubscribed, fields = await _subscriptions_against(transport_down)
+    assert set(result.fields.values()) == {FieldSubscriptionOutcome.UNKNOWN}
+    assert unsubscribed is False and fields == "INDETERMINATE"
+
+    def rejected(request):
+        return httpx.Response(400, json={"error": {"code": 100, "error_subcode": 33}})
+
+    result, unsubscribed, fields = await _subscriptions_against(rejected)
+    assert set(result.fields.values()) == {FieldSubscriptionOutcome.REJECTED}
+    assert result.error_code == "100/33"
+    assert unsubscribed is False and fields == "100/33"
+
+    def accepted(request):
+        assert request.url.path == "/v26.0/1701/subscribed_apps"
+        assert request.headers["Authorization"] == "Bearer bisu-token"
+        if request.method == "GET":
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {"id": "111", "subscribed_fields": ["messages"]},
+                        {"id": "999", "subscribed_fields": ["comments"]},
+                    ]
+                },
+            )
+        return httpx.Response(200, json={"success": True})
+
+    result, unsubscribed, fields = await _subscriptions_against(accepted)
+    assert result.core_subscribed and result.error_code is None
+    assert unsubscribed is True and fields == ("messages",)

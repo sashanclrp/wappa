@@ -11,7 +11,7 @@ Wappa's HTTP edge: the Meta webhook callback and the optional Messaging HTTP API
 /webhook                  wappa/api/routes/webhooks.py          create_webhook_router
   /inboxes/{platform}       GET verify, POST callback -> api/controllers/webhook_controller.py
                             (400 unless {platform} is in wappa.platforms.PLATFORMS)
-  /inboxes/instagram/deauthorize, /inboxes/{platform}/status, /platforms
+  /inboxes/{platform}/status, /platforms
 /api/{platform}           wappa/api/routes/messaging_router.py create_messaging_router
   reads (always)            whatsapp_extension_router (routes/whatsapp/, 501 off WhatsApp),
                             media reads, interactive limits,

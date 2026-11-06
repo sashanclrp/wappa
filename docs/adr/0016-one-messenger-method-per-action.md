@@ -40,7 +40,7 @@ Wappa's value is that a Host writes a conversation once and runs it on any conne
 | Inbound (one shape) | `MessageUpdateWebhook` (`process_message_update`): edits and deletions, typed replacement | `edit` / `revoke` | `message_edit` / unsend |
 | Inbound (one shape) | `EntryReferral` (`entry_referral`): what brought the User here (ad, post, link) | Click-to-WhatsApp `referral` | ad / ig.me `referral` |
 | Backfill (one shape) | `HistoryThread` of `HistoryMessage`: pushed as `HistorySyncWebhook` (`process_history_sync`), pulled through `IConversationHistoryReader` | push (Coexistence `history`) | pull (Conversations API) |
-| Inbound (one shape) | `InboxConnectionWebhook` (`process_inbox_connection`): an Inbox stopped or resumed | `account_offboarded` / `account_reconnected` | deauthorize callback (`/webhook/inboxes/instagram/deauthorize`) |
+| Inbound (one shape) | `InboxConnectionWebhook` (`process_inbox_connection`): an Inbox stopped or resumed | `account_offboarded` / `account_reconnected` | no Instagram emitter under Unified Login (amended 2026-11-06, ADR draft 0026: the deauthorize route was removed because Meta never sends it for Unified Login grants) |
 | Inbound, one Platform emits | `CallWebhook`, `ErrorWebhook`, `SystemWebhook` contact sync / group / user action (WhatsApp); `IncomingCommentWebhook`, `MentionWebhook` (Instagram) | | |
 
 Hosts check `messenger.supported_operations` or `capability()`, never the Platform name.

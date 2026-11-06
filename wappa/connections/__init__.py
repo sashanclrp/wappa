@@ -21,16 +21,11 @@ from .contract import (
     InboxReadiness,
     InMemoryConnectionIntentStore,
 )
-from .instagram import (
-    InstagramConnector,
-    InstagramSubscriptions,
-    deauthorization_event,
-)
+from .instagram import InstagramConnector, InstagramSubscriptions
 from .meta_login import MetaLoginConfig, parse_signed_request
 from .whatsapp import WhatsAppConnector
 
 __all__ = [
-    "deauthorization_event",
     "ActivationResult",
     "AuthorizationRequest",
     "ConnectionCancelledError",

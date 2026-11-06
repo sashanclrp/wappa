@@ -114,7 +114,7 @@ WhatsApp uses the Media API (Media ID). Instagram uploads to `message_attachment
 | `process_mention` | `MentionWebhook` (`media`/`comment` subject) | `mentions` |
 | `process_outbound_echo` | `OutboundEchoWebhook`: messages sent outside Wappa (typed); Wappa's own sends are filtered out | `message_echoes` |
 | `process_history_sync` | `HistorySyncWebhook` (typed threads); Instagram reads the same shape through `IConversationHistoryReader` | WhatsApp Coexistence `history` |
-| `process_inbox_connection` | `InboxConnectionWebhook` | `/webhook/inboxes/instagram/deauthorize`; WhatsApp `account_offboarded` / `account_reconnected` |
+| `process_inbox_connection` | `InboxConnectionWebhook` | WhatsApp `account_offboarded` / `account_reconnected` (Instagram Unified Login sends no deauthorize) |
 
 `UniversalWebhook` gains these six members. `IncomingCommentWebhook` and `MentionWebhook` are Instagram-only; the others come from both Platforms. WhatsApp Hosts move consumer edits/revokes to `process_message_update`, Coexistence echoes to `process_outbound_echo`, history to `process_history_sync` and account offboarding to `process_inbox_connection` (see `CHANGELOG.md`). Instagram reactions now reach `process_message` as `InstagramReactionMessage`. Exhaustive `match`/`isinstance`
 code over the union must add cases. Behavior changes for existing Instagram

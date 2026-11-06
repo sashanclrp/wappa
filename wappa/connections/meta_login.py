@@ -33,10 +33,12 @@ from wappa.core.config.meta_application import (
     DEFAULT_GRAPH_API_VERSION,
     DEFAULT_GRAPH_BASE_URL,
 )
+from wappa.schemas.core.types import PlatformType
 
 from .contract import (
     AuthorizationRequest,
     ConnectionCancelledError,
+    ConnectionGrant,
     ConnectionIntent,
     ConnectionProviderError,
     ConnectionStateError,
@@ -56,6 +58,11 @@ class MetaLoginConfig(BaseModel):
     graph_api_version: str = DEFAULT_GRAPH_API_VERSION
     graph_base_url: str = DEFAULT_GRAPH_BASE_URL
     dialog_base_url: str = "https://www.facebook.com"
+
+    @property
+    def graph_base(self) -> str:
+        """Versioned Graph root, e.g. ``https://graph.facebook.com/v26.0``."""
+        return f"{self.graph_base_url.rstrip('/')}/{self.graph_api_version}"
 
 
 def error_code(body: Any) -> str | None:
@@ -87,7 +94,7 @@ class MetaBusinessLogin:
         self._store = intent_store
         self._clock = clock
         self._ttl = state_ttl_seconds
-        self._graph = f"{config.graph_base_url.rstrip('/')}/{config.graph_api_version}"
+        self._graph = config.graph_base
 
     # ── authorization ────────────────────────────────────────────────────
 
@@ -149,6 +156,43 @@ class MetaBusinessLogin:
                 f"authorization not completed ({error_reason or error or 'no code'})"
             )
         return intent, code.removesuffix("#_")
+
+    async def authorize(
+        self,
+        platform: PlatformType,
+        *,
+        state: str | None,
+        host_subject: str,
+        code: str | None,
+        error: str | None,
+        error_reason: str | None,
+    ) -> tuple[ConnectionGrant, dict[str, Any]]:
+        """The ``complete`` prelude every Meta connector shares.
+
+        Consumes the state, exchanges the code and reads the token's grants.
+        Returns a grant with no Inboxes yet (the connector adds its discovery)
+        and the raw ``/debug_token`` data for Platform-specific evidence.
+        """
+        intent, code = await self.consume(
+            state=state,
+            host_subject=host_subject,
+            code=code,
+            error=error,
+            error_reason=error_reason,
+        )
+        token, expires_at = await self.exchange_code(code)
+        debug = await self.token_debug(token)
+        scopes, targets = self.scopes_of(debug)
+        grant = ConnectionGrant(
+            platform=platform,
+            intent_subject=intent.host_subject,
+            access_token=token,
+            inboxes=(),
+            granted_scopes=scopes,
+            scope_targets=targets,
+            expires_at=expires_at,
+        )
+        return grant, debug
 
     async def exchange_code(self, code: str) -> tuple[SecretStr, int | None]:
         params = {
@@ -266,7 +310,7 @@ def _b64decode(value: str) -> bytes:
 
 
 def parse_signed_request(signed_request: str, app_secret: SecretStr) -> dict[str, Any]:
-    """Verify a Meta ``signed_request`` (deauthorize / data deletion callbacks)."""
+    """Verify a Meta ``signed_request`` (for example a data deletion callback)."""
     try:
         encoded_sig, payload = signed_request.split(".", 1)
         signature = _b64decode(encoded_sig)

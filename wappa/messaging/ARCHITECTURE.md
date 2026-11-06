@@ -45,7 +45,7 @@ messaging/
   template_transport.py         # Inbox Template capability (InboxTemplateTransport) and its request/result values
   instagram/
     messenger.py                # InstagramMessenger: IMessenger impl, _OPERATIONS, capability lookup
-    graph.py                    # Inbox-bound Graph HTTP + outcome classification
+    graph.py                    # graph_request: the one bearer Graph call + outcome classification (also used by connections.InstagramSubscriptions)
     media.py                    # Instagram media rules + credential-free InstagramAttachmentReader (private)
     media_library.py            # IMediaLibrary: message_attachments upload (file or bytes), CDN download
     content.py                  # ICommentControls + IConversationContentReader

@@ -313,9 +313,9 @@ Event lanes beyond message/status/error/system (message updates, comments, menti
 | `wappa/messaging/instagram/media_library.py` | `IMediaLibrary`: reusable `message_attachments` upload of a file or bytes (attachment_id; a sticker as an image) and CDN download through the attachment reader; `info`/`delete` raise `UnsupportedOperationError`. |
 | `wappa/messaging/instagram/content.py` | `ICommentControls` (including public `reply_comment`) and `IConversationContentReader` (Focused Capabilities). |
 | `wappa/messaging/instagram/media.py` | Media rules and the credential-free, host-restricted `InstagramAttachmentReader`, private to `InstagramMediaLibrary.download`. |
-| `wappa/connections/contract.py` | `IInboxConnector` (ADR-0017): begin / complete / activate / disconnect, grant, readiness and activation results. |
-| `wappa/connections/meta_login.py` | Meta Business Login core shared by both Meta connectors: state binding, code exchange, `debug_token`, `signed_request`. |
-| `wappa/connections/instagram.py` | `InstagramConnector` (Unified Login discovery, field subscriptions); the Host owns routes, intent storage and commit. |
+| `wappa/connections/contract.py` | `IInboxConnector` (ADR-0017): begin / complete / activate / disconnect, grant, readiness and activation results (typed `ActiveInboxCredentialRecord`), and `require_platform`, the precondition both `activate` methods call first. |
+| `wappa/connections/meta_login.py` | Meta Business Login core shared by both Meta connectors: state binding, code exchange, `debug_token`, `signed_request`, and the one `authorize` prelude both `complete` methods call before discovery. |
+| `wappa/connections/instagram.py` | `InstagramConnector` (Unified Login discovery, field subscriptions through the Instagram `graph_request`); the Host owns routes, intent storage and commit. |
 | `wappa/connections/whatsapp.py` | `WhatsAppConnector` (Embedded Signup: WABA + phone-number discovery, WABA `subscribed_apps`). |
 | `wappa/domain/inbox/access.py` | `InboxCredentialAccess`: the supported trusted-adapter credential seam (ADR-0015). |
 

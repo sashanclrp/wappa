@@ -72,14 +72,7 @@ Responsibilities other than sending conversation messages, and actions with no r
   Messenger with app middleware for Host-initiated sends.
 - `register_webhook_field(..., platform=PlatformType.INSTAGRAM)` on `Wappa`
   and `WappaBuilder`; Instagram built-in fields are reserved.
-- `wappa.connections` (ADR-0017): the `IInboxConnector` contract (`begin` →
-  `AuthorizationRequest`, `complete` → `ConnectionGrant` with `DiscoveredInbox`
-  + `InboxReadiness`, `activate` → `ActivationResult` with the encrypted
-  record, `disconnect(inbox_ref, account_ref, token)`), implemented by
-  `InstagramConnector` and `WhatsAppConnector` on `MetaLoginConfig`; plus
-  `IConnectionIntentStore`/`InMemoryConnectionIntentStore`,
-  `InstagramSubscriptions`, `parse_signed_request` and the
-  `InboxConnectionError` hierarchy.
+- `wappa.connections` (ADR-0017): the `IInboxConnector` contract (`begin` → `AuthorizationRequest`, `complete` → `ConnectionGrant` with `DiscoveredInbox` + `InboxReadiness`, `activate(grant, inbox_ref, *, credentials, previous: CredentialRecord | None)` → `ActivationResult` whose `record` is the encrypted `ActiveInboxCredentialRecord`, `disconnect(inbox_ref, account_ref, token)`), implemented by `InstagramConnector` and `WhatsAppConnector` on `MetaLoginConfig`; plus `IConnectionIntentStore`/`InMemoryConnectionIntentStore`, `InstagramSubscriptions(client_provider=..., graph_base=..., app_id=None)` (`graph_base` is `MetaLoginConfig.graph_base`, the versioned Graph root), `parse_signed_request` and the `InboxConnectionError` hierarchy. `activate` raises `ValueError` before any Platform call when the grant or `inbox_ref` belongs to another Platform.
 
 ## Instagram text adapter and explicit send targets
 
@@ -316,9 +309,9 @@ One event, one lane, on every Platform (ADR-0016), all typed:
 | Entry point | `InboundMessageWebhook.entry_referral: EntryReferral` (`EntryPointKind`); standalone Instagram referral → `SystemWebhook(REFERRAL)` with `event_detail.entry_referral` | Click-to-WhatsApp `referral`  | ad / ig.me `referral` |
 | Business message sent outside Wappa | `OutboundEchoWebhook` → `process_outbound_echo` (Wappa's own sends filtered out) | Coexistence `smb_message_echoes` | `message_echoes` |
 | History backfill | `HistorySyncWebhook` → `process_history_sync` (push) or `IConversationHistoryReader.read_history` (pull), both `HistoryThread` | Coexistence `history` | Conversations API |
-| Inbox connection | `InboxConnectionWebhook` → `process_inbox_connection` | `account_offboarded`, `account_reconnected` | `POST /webhook/inboxes/instagram/deauthorize` |
+| Inbox connection | `InboxConnectionWebhook` → `process_inbox_connection` | `account_offboarded`, `account_reconnected` | none (Unified Login sends no deauthorize) |
 
-The Instagram deauthorize callback fires only for grants made through Instagram Login. Unified Login (Facebook Login for Business) issues business-owned `SYSTEM_USER` tokens that never expire, and Meta sends no per-user deauthorize for them; revoke those through the business portfolio's system user or the Host's connector (deactivate the record, then `IInboxConnector.disconnect`).
+Wappa mounts no Instagram deauthorize route. That callback fires only for grants made through Instagram Login, which the adapter does not support. Unified Login (Facebook Login for Business) issues business-owned `SYSTEM_USER` tokens that never expire, and Meta sends no per-user deauthorize for them; revoke those through the business portfolio's system user or the Host's connector (deactivate the record, then `IInboxConnector.disconnect`).
 
 `OutboundEchoWebhook` carries only messages sent outside Wappa; the filter is fixed (ADR-0018). WhatsApp Coexistence needs none. Instagram echoes carry no sender-app evidence, so Wappa drops an echo whose `message_id` is in its `ISentMessageRegistry` (IDs of messages it sent, one key per send: 10-minute TTL, cut to a 2-minute grace when its echo is claimed; Table Cache `<inbox>:df:wappa_sent_messages:pkid:<message_id>`; shared across workers only on Redis). `origin=UNKNOWN` means the registry could not answer and the echo was delivered rather than lost. Hosts store what arrives. `SystemEventDetail` payloads are typed: `contact_sync: ContactSync` (Coexistence `smb_app_state_sync`), `group_update: GroupUpdate`, `user_action: UserAction`, `entry_referral: EntryReferral`. `platform_event` is set only for `UNSUPPORTED_EVENT`. The `SystemEventType` members `SMB_MESSAGE_ECHO`, `HISTORY_SYNC`, `ACCOUNT_OFFBOARDED` and `ACCOUNT_RECONNECTED` are no longer emitted, and `coexistence_payload` is removed.
 A WhatsApp `change.field` that Wappa does not model and the Host did not register with `register_webhook_field` is answered `200` and reaches `process_system_webhook` as `SystemWebhook(UNSUPPORTED_EVENT)` with `event_detail.platform_event = {"field", "value"}`, the same as Instagram. It was HTTP 400 before 0.34.
