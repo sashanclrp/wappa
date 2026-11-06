@@ -4,9 +4,8 @@
 third-party dependency. It answers the questions the live format matrix
 (2026-11-06) showed a file name cannot: animated or static WebP, Opus or
 Vorbis inside OGG, HEVC or H.264 inside MP4, and image dimensions. Platform
-rules live with each adapter; the Media Adaptation draft
-(``docs/backlog/drafts/261106-mid-media-adaptation-service.md``) builds
-conversion on top of these facts.
+rules live with each adapter and refuse a non-conforming file before any
+call; Wappa never converts media.
 """
 
 from __future__ import annotations

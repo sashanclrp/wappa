@@ -4,8 +4,8 @@
   shared as a text with the file name and the link;
 - http URLs pass through (Meta documents no scheme rule);
 - uploads honour ``filename`` and ``mime_type`` and go out with an ASCII name;
-- a local file in an unattachable format is still a ``ValueError`` naming the
-  Media Adaptation backlog draft;
+- a local file in an unattachable format is still a ``ValueError`` telling the
+  Host to convert it (Wappa does not convert media);
 - list section titles and row descriptions fold into the text as a menu.
 """
 
@@ -116,7 +116,7 @@ async def test_a_local_file_in_an_unattachable_format_is_rejected_before_io(
     doc = tmp_path / "plan.docx"
     doc.write_bytes(b"PK")
     graph = _Graph()
-    with pytest.raises(ValueError, match="Media Adaptation backlog draft"):
+    with pytest.raises(ValueError, match="Wappa does not convert media"):
         await _messenger(graph).send_document(doc, DM)
     assert graph.requests == []
 

@@ -1,14 +1,14 @@
 """WhatsApp media rules, enforced before any Cloud API call.
 
-Built from Meta's docs and the live format matrix of 2026-11-06 (see the
-Media Adaptation draft, "WhatsApp results"): a link Meta cannot use is still
+Built from Meta's docs and the live format matrix of 2026-11-06 (Instagram
+conversations PRD, ``references/media-formats.md``): a link Meta cannot use is still
 accepted with 200 and fails later as a ``failed`` status (131053), so Wappa
 refuses what it can tell up front. A name's suffix is checked when it has one;
 a local file or bytes are also probed (``wappa.domain.media_probe``) for what
 a suffix cannot show: animated WebP, OGG Vorbis, HEVC, sticker size.
 
-Every refusal is ``ValueError``; conversion to an accepted format is the
-Media Adaptation backlog draft.
+Every refusal is ``ValueError``. Wappa never converts media: the Host prepares
+files in a format that fits (the reference lists the recommended ones).
 """
 
 from __future__ import annotations
@@ -21,8 +21,6 @@ from wappa.domain.media_renditions import media_suffix
 
 MB = 1024 * 1024
 KB = 1024
-
-ADAPTATION_DRAFT = "docs/backlog/drafts/261106-mid-media-adaptation-service.md"
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +68,7 @@ def check_name(name: str, use: str) -> None:
         return
     raise ValueError(
         f"WhatsApp {use} accepts {', '.join(sorted(rule.suffixes))}; got {suffix}"
-        f" (format conversion is the Media Adaptation draft, {ADAPTATION_DRAFT})"
+        "; convert it before sending (Wappa does not convert media)"
     )
 
 
@@ -90,7 +88,7 @@ def check_bytes(data: bytes, use: str, *, name: str | None = None) -> MediaProbe
         raise ValueError(
             f"WhatsApp {use} accepts {', '.join(sorted(rule.mimes))}; "
             f"this file is {found.mime}"
-            f" (format conversion is the Media Adaptation draft, {ADAPTATION_DRAFT})"
+            "; convert it before sending (Wappa does not convert media)"
         )
     _check_content(found, use)
     return found

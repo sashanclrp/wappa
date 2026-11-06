@@ -60,7 +60,7 @@ The remaining work is final documentation/ADR work under H-32, H-33 and final se
 - Template catalog management and lifecycle handling remain Host-owned. Symphonai has create/delete catalog operations in `backend/symphonai/services/wappa/template_catalog/application.py` and the extension handler in `backend/symphonai/engine/system/meta_template_status_webhook.py`. Its generic update coverage was not established by this review; that does not create a Wappa implementation obligation.
 - Outbound reactions were deprioritized by the user and their standalone draft was removed. Inbound reactions remain implemented.
 - Inbox business-profile configuration and Platform conversation entry points have no equivalent Symphonai implementation in the inspected tree. Their drafts remain. H-26 User profile reading and H-27 proposal naming do not absorb Inbox profile implementation.
-- H-25 owns the completed inbound Flow slice. The Flows draft retains outbound and unresolved phase-2 scope. Merely naming future Calling/Commerce/Media Adaptation capabilities here does not absorb those drafts.
+- H-25 owns the completed inbound Flow slice. The Flows draft retains outbound and unresolved phase-2 scope. Merely naming future Calling/Commerce capabilities here does not absorb those drafts.
 - Provider delivery identity remains separate. Echo filtering and Inbox/User/address routing do not implement webhook redelivery identity or deduplication.
 
 ## Target architecture

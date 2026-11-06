@@ -411,7 +411,7 @@ async def test_voice_note_renditions_serve_both_platforms_from_one_call():
     async with http:
         assert (await ig.send_audio(both, ig_dm, is_voice=True)).success
         # A local OGG cannot be attached or linked: rejected before any call.
-        with pytest.raises(ValueError, match="Instagram audio.*Media Adaptation"):
+        with pytest.raises(ValueError, match="Instagram audio.*does not convert media"):
             await ig.send_audio(Path("v.ogg"), ig_dm)
         assert len(sent) == 1
         # An OGG URL alone is shared as a link instead of failing.

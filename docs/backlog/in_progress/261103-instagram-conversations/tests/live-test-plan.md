@@ -208,7 +208,7 @@ Reading the logs: see `../wappa_examples/instagram_conversations_example/README.
 | 2026-11-06 | @mention (Instagram) | pass | 12:23:05 comment mention on media 18041598575646756, `get_mentioned_comment` returned the text |
 | 2026-11-06 | `/post`, `/comments` (Instagram) | pass (send) | 12:26:36 and 12:26:47 on media 17985939194362301. WhatsApp "not available" guard not yet rerun |
 | 2026-11-06 | Concurrency | pass | `/formats image` dispatch ran 46.8 s; its webhook answered 200 in 19.6 ms, and status webhooks for the same User were handled in 3–5 ms during the run. A first WhatsApp `/formats video` never reached the server (no webhook POST between 12:28:19 and 12:30:02) |
-| 2026-11-06 | Format matrix image + video (first run) | partial | Results in the Media Adaptation PRD matrix; rerun pending after 2e5fd84 (code= visible, Instagram rejection reasons logged) and ef05128 (WhatsApp `.3gp` video as `video/3gpp`). WhatsApp HEIC link failed 6 min later: 131053, Meta could not fetch the URL (503). Instagram video links other than MP4 answered 403 |
+| 2026-11-06 | Format matrix image + video (first run) | partial | Results in `references/media-formats.md`; rerun pending after 2e5fd84 (code= visible, Instagram rejection reasons logged) and ef05128 (WhatsApp `.3gp` video as `video/3gpp`). WhatsApp HEIC link failed 6 min later: 131053, Meta could not fetch the URL (503). Instagram video links other than MP4 answered 403 |
 
 ### Echo filter evidence (2026-11-05, 08:06)
 

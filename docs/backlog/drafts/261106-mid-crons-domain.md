@@ -165,7 +165,7 @@ Every backend fires through one internal entry point, also public for external s
 
 ### Other backends
 
-- **Memory and JSON** (Hosts without Redis): an in-process scheduler with the same API and semantics on one process; the JSON backend persists Schedules to the server folder so they survive restarts on one host. Startup logs say Redis is recommended for multi-worker and multi-host, like the Media Adaptation store.
+- **Memory and JSON** (Hosts without Redis): an in-process scheduler with the same API and semantics on one process; the JSON backend persists Schedules to the server folder so they survive restarts on one host. Startup logs say Redis is recommended for multi-worker and multi-host.
 - **External schedulers** (Symphonai's Scheduler on APScheduler, Celery beat, cloud schedulers): the Host keeps its scheduler for recurrence and calls `fire(...)` from the job body; Wappa supplies context and dispatch only, and exactly-once is the external scheduler's job. Job arguments must be serializable (`InboxRef.cache_namespace`, User ID, payload), never Wappa objects.
 - **Static registration:** `CronPlugin.add_cron(...)` stays as declarative sugar that upserts recurring Schedules at startup (idempotent by `action` and `key`), so build-time crons and runtime Schedules share one store and one firing path. fastapi-crons is no longer needed as the engine; whether it stays for its `/crons` monitoring router is an open question.
 
@@ -258,7 +258,7 @@ Who may create, see or cancel a Schedule (admin authorization), what an action m
 7. **`owner` is not a Wappa field.** The first draft had an opaque `owner`; the user asked whether the owner is the Host's concern. It is: Wappa only needs a way to find Schedules again, so the field became generic indexed `labels`, and who owns a Schedule is a label the Host chooses.
 8. **External schedulers stay first-class.** Symphonai may keep its Scheduler and fire through the seam; Wappa does not force a backend on a Host that already has one.
 9. **Requirements found in the Symphonai inventory:** a debounce ceiling (`max_delay`), a cheap `get` for reading a Timer as state, filter-based `cancel`, wake-on-earliest firing so short debounces add no latency, User canonicalization and the SSE scope on Run dispatch, drain on shutdown, and a cutover for armed keys.
-10. **Sequencing.** Implemented after Instagram Gate C, together with the Media Adaptation draft; Symphonai needs both.
+10. **Sequencing.** Implemented after Instagram Gate C; Symphonai needs it.
 
 ## Open questions
 

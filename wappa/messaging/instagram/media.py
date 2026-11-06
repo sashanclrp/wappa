@@ -36,7 +36,7 @@ from wappa.domain.media_probe import probe
 
 MB = 1024 * 1024
 
-MEDIA_ADAPTATION_DRAFT = "docs/backlog/drafts/261106-mid-media-adaptation-service.md"
+CONVERT_HINT = "convert it before sending (Wappa does not convert media)"
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,21 +135,18 @@ def validate_upload(name: str, size: int, family: str) -> MediaRule:
         raise ValueError(
             f"Instagram renders a {suffix} {family} sent by URL, but its upload "
             "endpoint fails on it (HTTP 500); send it by URL, or upload a PNG or "
-            f"JPEG (conversion is the Media Adaptation backlog draft, "
-            f"{MEDIA_ADAPTATION_DRAFT})"
+            f"JPEG ({CONVERT_HINT})"
         )
     if suffix.lower() not in rule.extensions:
         raise ValueError(
             f"Instagram {family} supports {sorted(rule.extensions)}, not "
             f"{suffix or 'no extension'}; a file must already be in an accepted "
-            f"format (format conversion is the Media Adaptation backlog draft, "
-            f"{MEDIA_ADAPTATION_DRAFT}), or send it by URL to share it as a link"
+            f"format ({CONVERT_HINT}), or send it by URL to share it as a link"
         )
     if size > rule.max_bytes:
         raise ValueError(
             f"Instagram {family} is {size} bytes; limit is {rule.max_bytes} "
-            f"(compression is the Media Adaptation backlog draft, "
-            f"{MEDIA_ADAPTATION_DRAFT})"
+            "(compress it before sending; Wappa does not convert media)"
         )
     return rule
 
@@ -167,7 +164,7 @@ def check_image_content(data: bytes) -> None:
         raise ValueError(
             "Instagram shows only the first frame of an animated WebP; send the "
             "animation as a GIF (it animates on Instagram) or a static image "
-            f"(conversion is the Media Adaptation backlog draft, {MEDIA_ADAPTATION_DRAFT})"
+            f"({CONVERT_HINT})"
         )
 
 

@@ -26,7 +26,6 @@ Each retained draft contains scope that has not been fully absorbed by an active
 - [261106-low-whatsapp-first-remaining-gaps.md](./drafts/261106-low-whatsapp-first-remaining-gaps.md): retained at the user's request. Outbound reactions are deprioritized; remaining interactive types, address-message scope and result/Template details stay open.
 - [261106-mid-crons-domain.md](./drafts/261106-mid-crons-domain.md): Crons domain — one Schedule model for timers, one-time tasks, recurring expiring and non-expiring tasks and heartbeats, each Run fired once into `process_cron_event` with the full Inbox/User dispatch context; prebuilt `self.crons` (schedule, reschedule, cancel, fan-out, concurrency keys), a Redis sorted-set backend with claims, a firing seam for external schedulers (APScheduler), and expiry triggers replaced in a clean cut.
 
-- [261106-mid-media-adaptation-service.md](./drafts/261106-mid-media-adaptation-service.md): automatic media probing/conversion, cache and public media URLs. Existing media library/rendition selection does not implement adaptation.
 - [provider-delivery-identity.md](./drafts/provider-delivery-identity.md): provider-event redelivery identity and replay/fan-out semantics. Separate from Instagram Inbox/User/address identity and echo filtering; not absorbed by either active series.
 
 ## Scope decisions (2026-11-06)

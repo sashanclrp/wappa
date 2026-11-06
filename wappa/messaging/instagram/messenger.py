@@ -89,7 +89,7 @@ from .client import InstagramClient
 from .content import InstagramCommentControls, InstagramContentReader, read_failure
 from .history import InstagramHistoryReader
 from .media import (
-    MEDIA_ADAPTATION_DRAFT,
+    CONVERT_HINT,
     MEDIA_RULES,
     InstagramAttachmentReader,
     url_format_accepted,
@@ -245,7 +245,7 @@ def _card(card: MessageCard) -> dict[str, Any]:
     elif card.header.poster_url is None:
         raise UnsupportedOperationError(
             f"Instagram card {card.title!r}: a video card shows a still image; "
-            "pass poster_url, or enable media adaptation"
+            "pass poster_url (a JPEG still of the video)"
         )
     else:
         element["image_url"] = str(card.header.poster_url)
@@ -672,8 +672,7 @@ class InstagramMessengerAdapter(IMessenger):
             url = next((s for s in sources if isinstance(s, str) and "://" in s), None)
             if url is None:
                 raise ValueError(
-                    f"{exc} (format conversion is the Media Adaptation backlog "
-                    f"draft, {MEDIA_ADAPTATION_DRAFT})"
+                    f"{exc} ({CONVERT_HINT}; M4A AAC works on both Platforms)"
                 ) from exc
             source = url
         return await self._send_media("audio", source, target, reply_to_message_id)
