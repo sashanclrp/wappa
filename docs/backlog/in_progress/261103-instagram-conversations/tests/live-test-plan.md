@@ -4,7 +4,7 @@ Runbook for the live checks. Record results in the matrix ([capability-matrix.md
 
 ## Current status (2026-11-06)
 
-Gate A has substantial November 5 live evidence, with remaining source/control/failure and concurrent isolation checks open. Core Gate B passed; Creator B-08 was not run, and independent-customer access and actual revocation remain limitations. Gate C has implementation notes but no recorded live results. The deauthorize experiments below are historical; architecture hardening removed that unsupported route for Unified Login. No historical pass is a live rerun of the November 6 refactors.
+Gate A was rerun live on November 6 after the hardening, on both Platforms; see the 2026-11-06 rows in the Results log. Open: the WhatsApp "not available" guard for `/post` and `/comments`, and the format matrix (image and video rerun, then audio, voice, document, sticker and card, with rendering observed on the phone). Core Gate B passed; Creator B-08 was not run, and independent-customer access and actual revocation remain limitations. Gate C has implementation notes but no recorded live results. The deauthorize experiments below are historical; architecture hardening removed that unsupported route for Unified Login.
 
 ## 0. Prepare (once)
 
@@ -201,6 +201,14 @@ Reading the logs: see `../wappa_examples/instagram_conversations_example/README.
 | 2026-11-05 | `/post`, `/comments` (Instagram) | pass | 15:00:40 `get_post(18009504445779229)` 200 → reply; 15:00:55 `list_comments(limit=5)` 200 → reply |
 | 2026-11-05 | Carousel card tap (WhatsApp) | pass | 15:01:50 tap arrived as `button` 'Choose' (selection, not text) → reply |
 | 2026-11-05 | Voice note echo + `played` (WhatsApp) | pass | 15:01:59 inbound voice note → echoed as a voice note 15:02:01 → played 15:02:13 |
+| 2026-11-06 | Gate A rerun after hardening (both Platforms) | pass | 09:08–12:07: text, `/help`, every media send, media in (WhatsApp image, video, document; Instagram image, video, voice), `/quick`, `/buttons`, `/card`, `/card-video`, `/cta`, `/carousel`, `/carousel-video`, `/location`, `/contact`, `/whoami`, Instagram `/read`, WhatsApp `/ask-location`, `/ask-contact`, `/template order`, `/form` (12:06 WhatsApp, 12:07 Instagram) accepted |
+| 2026-11-06 | `/carousel` mixed header kinds (WhatsApp) | fail → fixed → pass | Meta 131009 "same structure for all cards" for image + video cards. `check_carousel` now refuses mixed header kinds when built (3226ea4); the lab sends `/carousel` (images) and `/carousel-video` |
+| 2026-11-06 | `/contact` (WhatsApp) | fail → fixed → pass (10:29:34) | Meta 131009 "ContactName should have atleast one optional value". `ContactName.first_name` is required and `formatted_name` is built from the parts (057422a) |
+| 2026-11-06 | Comment controls (Instagram) | pass | 12:19–12:22 on media 17985939194362301: `#reply`, `#dm`, `#both`, `#hide`, `#hidecycle`, `#read` (comment found, media found), `#lock` (comments disabled), `#delete` accepted; the bot's own replies were ignored. `#unlock` not exercised through Wappa (comments re-enabled in the app) |
+| 2026-11-06 | @mention (Instagram) | pass | 12:23:05 comment mention on media 18041598575646756, `get_mentioned_comment` returned the text |
+| 2026-11-06 | `/post`, `/comments` (Instagram) | pass (send) | 12:26:36 and 12:26:47 on media 17985939194362301. WhatsApp "not available" guard not yet rerun |
+| 2026-11-06 | Concurrency | pass | `/formats image` dispatch ran 46.8 s; its webhook answered 200 in 19.6 ms, and status webhooks for the same User were handled in 3–5 ms during the run. A first WhatsApp `/formats video` never reached the server (no webhook POST between 12:28:19 and 12:30:02) |
+| 2026-11-06 | Format matrix image + video (first run) | partial | Results in the Media Adaptation PRD matrix; rerun pending after 2e5fd84 (code= visible, Instagram rejection reasons logged) and ef05128 (WhatsApp `.3gp` video as `video/3gpp`). WhatsApp HEIC link failed 6 min later: 131053, Meta could not fetch the URL (503). Instagram video links other than MP4 answered 403 |
 
 ### Echo filter evidence (2026-11-05, 08:06)
 
