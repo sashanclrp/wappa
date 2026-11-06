@@ -63,6 +63,7 @@ class LibraryMediaUploader:
             file_size=len(file_data),
             error=result.error,
             error_code=result.error_code,
+            retry_after=result.retry_after,
             inbox_id=self._inbox_id,
         )
 

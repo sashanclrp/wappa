@@ -13,6 +13,7 @@ from .error_helpers import (
     map_error_to_status,
     map_send_errors,
     raise_for_failed_result,
+    raise_if_rate_limited,
 )
 from .event_decorators import dispatch_message_event, fire_api_event
 from .inbox_helpers import require_inbox_context
@@ -32,5 +33,6 @@ __all__ = [
     "map_error_to_status",
     "map_send_errors",
     "raise_for_failed_result",
+    "raise_if_rate_limited",
     "require_inbox_context",
 ]

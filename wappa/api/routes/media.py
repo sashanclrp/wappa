@@ -24,7 +24,12 @@ from wappa.api.dependencies.media_transfer import (
     get_media_uploader,
 )
 from wappa.api.routes.families import RouteFamily
-from wappa.api.utils import direct_target, dispatch_message_event, map_send_errors
+from wappa.api.utils import (
+    direct_target,
+    dispatch_message_event,
+    map_send_errors,
+    raise_if_rate_limited,
+)
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.domain.interfaces.conversation_capabilities import ReadOutcome
 from wappa.domain.interfaces.media_library import IMediaLibrary
@@ -280,6 +285,7 @@ async def get_media_info(
 ) -> MediaInfoResult:
     result = await library.info(media_id)
     if not result.found or result.value is None:
+        raise_if_rate_limited(result.retry_after, result.error)
         raise HTTPException(
             status_code=_READ_STATUS.get(result.outcome, 502),
             detail=result.error or result.outcome.value,
@@ -314,6 +320,7 @@ async def download_media(
     """Download media by ID; ``Content-Type`` comes from ``MediaBytes``."""
     result = await library.download(media_id)
     if not result.found or result.value is None:
+        raise_if_rate_limited(result.retry_after, result.error)
         status = 413 if result.error_code == "SIZE" else None
         raise HTTPException(
             status_code=status or _READ_STATUS.get(result.outcome, 502),
@@ -349,6 +356,7 @@ async def delete_media(
 ) -> MediaDeleteResult:
     result = await library.delete(media_id)
     if not result.success:
+        raise_if_rate_limited(result.retry_after, result.error)
         status = 502 if result.outcome is OperationOutcome.INDETERMINATE else 400
         raise HTTPException(
             status_code=_DELETE_STATUS.get(result.error_code or "", status),

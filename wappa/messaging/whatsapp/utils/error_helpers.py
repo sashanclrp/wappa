@@ -9,6 +9,7 @@ from wappa.domain.interfaces.session_provider import (
 )
 from wappa.domain.results import MessageResult
 from wappa.resilience import is_transient_http_error
+from wappa.resilience.rate_limits import RateLimitedError
 from wappa.schemas.core.recipient import BSUID_ERROR_TAG
 from wappa.schemas.core.types import PlatformType
 
@@ -54,6 +55,17 @@ def handle_whatsapp_error(
     extra_context: str | None = None,
     include_traceback: bool = False,
 ) -> MessageResult:
+    if isinstance(error, RateLimitedError):
+        # Nothing was delivered; the client already logged the limit.
+        return MessageResult(
+            success=False,
+            error=f"Could not {operation}: {error}",
+            error_code=error.code,
+            retry_after=error.retry_after,
+            recipient=recipient,
+            platform=PlatformType.WHATSAPP,
+            inbox_id=inbox_id,
+        )
     if is_authentication_error(error):
         logger.error(f"CRITICAL: WhatsApp Authentication Failed - Cannot {operation}!")
         logger.error(f"Check WhatsApp access token for inbox {inbox_id}")

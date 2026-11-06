@@ -416,6 +416,7 @@ class InstagramMessengerAdapter(IMessenger):
             recipient=recipient,
             error=response.error,
             error_code=response.error_code,
+            retry_after=response.retry_after,
         )
 
     async def _send(
@@ -1015,6 +1016,7 @@ class InstagramMessengerAdapter(IMessenger):
             recipient=direct.recipient_id,
             error=failed.error if failed else None,
             error_code=error_code,
+            retry_after=failed.retry_after if failed else None,
             platform_response={
                 "mark_seen": seen.outcome.value,
                 "typing_on": typed.outcome.value if typed else None,

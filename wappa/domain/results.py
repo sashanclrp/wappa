@@ -12,6 +12,9 @@ Outcomes:
 - ``rejected``: the provider or local validation refused it; safe to inspect.
 - ``indeterminate``: transport/5xx/malformed success — the effect is unknown;
   do not blindly retry a send or destructive mutation.
+- ``rate_limited``: a Meta rate limit stopped it and nothing was delivered;
+  safe to retry after ``retry_after`` seconds. Short limits are already
+  retried inside the call (``wappa.resilience.rate_limits``).
 """
 
 from datetime import UTC, datetime
@@ -66,6 +69,13 @@ class MessageResult(BaseModel):
     )
     error: str | None = None
     error_code: str | None = None
+    retry_after: float | None = Field(
+        None,
+        description=(
+            "Seconds until a retry can succeed; set only when a Meta rate "
+            "limit stopped the send (nothing was delivered)"
+        ),
+    )
     timestamp: datetime = Field(default_factory=_utc_now)
     inbox_id: str | None = None
     platform_response: dict[str, Any] | None = Field(
@@ -97,12 +107,15 @@ class OperationOutcome(StrEnum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
     INDETERMINATE = "indeterminate"
+    RATE_LIMITED = "rate_limited"
 
 
 def message_outcome(result: MessageResult) -> OperationOutcome:
     """Classify a MessageResult without changing its historical fields."""
     if result.success:
         return OperationOutcome.ACCEPTED
+    if result.retry_after is not None:
+        return OperationOutcome.RATE_LIMITED
     if result.error_code == "INDETERMINATE":
         return OperationOutcome.INDETERMINATE
     return OperationOutcome.REJECTED
@@ -116,6 +129,7 @@ class _ProviderResult(BaseModel):
     inbox_id: str
     error: str | None = None
     error_code: str | None = None
+    retry_after: float | None = None  # set with outcome rate_limited
     timestamp: datetime = Field(default_factory=_utc_now)
     platform_response: dict[str, Any] | None = Field(default=None, exclude=True)
 

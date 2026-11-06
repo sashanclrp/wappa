@@ -1,13 +1,17 @@
 """Inbox-bound Graph HTTP for Instagram (Unified Login, ``graph.facebook.com``).
 
 One place classifies provider outcomes so every operation reports the same
-accepted / rejected / indeterminate semantics. Results never carry the bearer
-or raw provider error bodies; a rejection logs Meta's error fields. No
-automatic retries: an indeterminate mutation may already have taken effect.
+accepted / rejected / indeterminate / rate_limited semantics. Results never
+carry the bearer or raw provider error bodies; a rejection or a 5xx logs
+Meta's error fields. An indeterminate mutation is never retried (it may
+already have taken effect); a rate-limited call goes through the shared
+``wappa.resilience.rate_limits`` governor, which retries short limits and
+blocks long ones without calling Meta.
 """
 
 from __future__ import annotations
 
+import json as jsonlib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -18,6 +22,15 @@ from pydantic import SecretStr
 from wappa.core.logging.logger import get_logger
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.results import OperationOutcome
+from wappa.resilience.rate_limits import (
+    RateLimited,
+    RateLimitHit,
+    RateTarget,
+    rate_governor,
+    rate_limit_rule,
+    rewind,
+    usage_headers,
+)
 
 logger = get_logger(__name__)
 
@@ -68,6 +81,9 @@ class GraphResponse:
     body: dict[str, Any] = field(default_factory=dict)
     error_code: str | None = None
     error: str | None = None
+    retry_after: float | None = None  # set with outcome rate_limited
+    # Meta's usage headers (x-app-usage, x-business-use-case-usage) only.
+    usage: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -135,19 +151,59 @@ class InstagramGraphClient:
         operation: str = "Instagram operation",
         timeout: float | None = None,
     ) -> GraphResponse:
-        return await graph_request(
-            self._session_provider(),
-            self._base,
-            path,
-            self._token,
-            method=method,
-            operation=operation,
-            json=json,
-            params=params,
-            data=data,
-            files=files,
-            timeout=timeout,
-        )
+        """One governed Graph call for this account (see the module docstring)."""
+        target = RateTarget("instagram", self.account_id, lane=_lane(json, data))
+        governor = rate_governor()
+
+        async def call() -> GraphResponse:
+            rewind(files)  # a retried upload must send the file again
+            return await graph_request(
+                self._session_provider(),
+                self._base,
+                path,
+                self._token,
+                method=method,
+                operation=operation,
+                json=json,
+                params=params,
+                data=data,
+                files=files,
+                timeout=timeout,
+            )
+
+        def hit_of(response: GraphResponse) -> RateLimitHit | None:
+            regain = governor.observe_usage(target, response.usage)
+            if response.outcome is OperationOutcome.REJECTED and rate_limit_rule(
+                "instagram", response.error_code
+            ):
+                return RateLimitHit(response.error_code or "", regain)
+            return None
+
+        outcome = await governor.run(target, call, hit_of)
+        if isinstance(outcome, RateLimited):
+            return GraphResponse(
+                outcome=OperationOutcome.RATE_LIMITED,
+                error_code=outcome.code,
+                error=f"{operation}: {outcome.error}",
+                retry_after=outcome.retry_after,
+            )
+        return outcome
+
+
+_MEDIA_LANE = frozenset({"audio", "video"})
+
+
+def _lane(json: Mapping[str, Any] | None, data: Mapping[str, Any] | None) -> str:
+    """``media`` for audio and video (Meta's 10/s Send API rate), else default."""
+    message: object = (json or {}).get("message")
+    if message is None and data and isinstance(data.get("message"), str):
+        try:
+            message = jsonlib.loads(data["message"])
+        except ValueError:
+            message = None
+    attachment = message.get("attachment") if isinstance(message, Mapping) else None
+    kind = attachment.get("type") if isinstance(attachment, Mapping) else None
+    return "media" if kind in _MEDIA_LANE else "default"
 
 
 def _log_rejection(operation: str, status: int, body: Mapping[str, Any]) -> None:
@@ -162,7 +218,10 @@ def _log_rejection(operation: str, status: int, body: Mapping[str, Any]) -> None
         if isinstance(error, Mapping)
         else {}
     )
-    logger.error("Meta rejected %s (HTTP %s): %s", operation, status, summary)
+    if status >= 500:  # Meta's side failed: the outcome is unknown
+        logger.warning("Meta failed %s (HTTP %s): %s", operation, status, summary)
+    else:
+        logger.error("Meta rejected %s (HTTP %s): %s", operation, status, summary)
 
 
 async def graph_request(
@@ -208,19 +267,24 @@ async def graph_request(
     except ValueError:
         parsed = None
     body = parsed if isinstance(parsed, dict) else {}
+    usage = usage_headers(response.headers)
     if response.is_success and isinstance(parsed, dict) and "error" not in body:
         return GraphResponse(
             outcome=OperationOutcome.ACCEPTED,
             status_code=response.status_code,
             body=body,
+            usage=usage,
         )
     if response.is_success or response.status_code >= 500:
+        if response.status_code >= 500:
+            _log_rejection(operation, response.status_code, body)
         return GraphResponse(
             outcome=OperationOutcome.INDETERMINATE,
             status_code=response.status_code,
             error_code="INDETERMINATE",
             error=f"{operation} outcome is unknown "
             f"(HTTP {response.status_code}); do not automatically repeat it",
+            usage=usage,
         )
     code = _error_code(body) or str(response.status_code)
     _log_rejection(operation, response.status_code, body)
@@ -230,4 +294,5 @@ async def graph_request(
         error_code=code,
         error=f"{operation} rejected: "
         + describe_error(code, f"provider error {code}"),
+        usage=usage,
     )

@@ -32,7 +32,7 @@ from wappa.api.dependencies.inbox_context import (
     requires_capability,
 )
 from wappa.api.routes.families import RouteFamily
-from wappa.api.utils import map_send_errors
+from wappa.api.utils import map_send_errors, raise_if_rate_limited
 from wappa.domain.interfaces.conversation_capabilities import (
     ICommentControls,
     IConversationContentReader,
@@ -96,6 +96,7 @@ def _post(context: InboxExecutionContext, media_id: str) -> PostRef:
 
 def _control(result: ControlResult | CommentResult) -> Any:
     if not result.success:
+        raise_if_rate_limited(result.retry_after, result.error)
         raise HTTPException(
             status_code=400, detail=result.error or "The Platform rejected it"
         )
@@ -105,6 +106,7 @@ def _control(result: ControlResult | CommentResult) -> Any:
 def _read(result: ReadResult[Any]) -> Any:
     if result.outcome is ReadOutcome.FOUND:
         return result.value
+    raise_if_rate_limited(result.retry_after, result.error)
     raise HTTPException(
         status_code=_READ_STATUS.get(result.outcome, 502),
         detail=result.error or result.outcome.value,

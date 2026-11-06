@@ -1,5 +1,5 @@
 import json
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any, cast
@@ -8,6 +8,16 @@ import httpx
 
 from wappa.core.config.settings import settings
 from wappa.core.logging.logger import get_logger
+from wappa.resilience.rate_limits import (
+    RateLimited,
+    RateLimitedError,
+    RateLimitHit,
+    RateTarget,
+    rate_governor,
+    rate_limit_rule,
+    rewind,
+    usage_headers,
+)
 
 
 class WhatsAppUrlBuilder:
@@ -217,6 +227,43 @@ class WhatsAppClient:
         if meta_error is not None:
             self.logger.error("Meta error summary: %s", meta_error)
 
+    async def _governed(
+        self,
+        call: Callable[[], Awaitable[httpx.Response]],
+        *,
+        recipient: str | None = None,
+        files: Mapping[str, Any] | None = None,
+    ) -> httpx.Response:
+        """Run one HTTP call under Meta's limits (``wappa.resilience.rate_limits``).
+
+        Short limits (130429 throughput, 131056 pair rate) wait and retry
+        inside the call; long ones block this number (or the app) and raise
+        ``RateLimitedError`` without calling Meta again.
+        """
+        target = RateTarget("whatsapp", self.phone_number_id, recipient=recipient)
+        governor = rate_governor()
+
+        async def attempt() -> httpx.Response:
+            rewind(files)
+            return await call()
+
+        def hit_of(response: httpx.Response) -> RateLimitHit | None:
+            regain = governor.observe_usage(target, usage_headers(response.headers))
+            if response.status_code < 400:
+                return None
+            code = _meta_error_code(response)
+            if rate_limit_rule("whatsapp", code):
+                return RateLimitHit(code or "", regain)
+            return None
+
+        outcome = await governor.run(target, attempt, hit_of)
+        if isinstance(outcome, RateLimited):
+            self.logger.warning(
+                "WhatsApp call not sent for inbox %s: %s", self.inbox_id, outcome.error
+            )
+            raise RateLimitedError(outcome)
+        return outcome
+
     async def post_request(
         self,
         payload: dict[str, Any],
@@ -241,8 +288,11 @@ class WhatsAppClient:
                     payload=payload,
                     files=files,
                 )
-                response = await self.session.post(
-                    url, headers=headers, data=form_data, files=form_files
+                response = await self._governed(
+                    lambda: self.session.post(
+                        url, headers=headers, data=form_data, files=form_files
+                    ),
+                    files=form_files,
                 )
             else:
                 headers = self._get_headers()
@@ -252,7 +302,10 @@ class WhatsAppClient:
                     headers=headers,
                     payload=payload,
                 )
-                response = await self.session.post(url, headers=headers, json=payload)
+                response = await self._governed(
+                    lambda: self.session.post(url, headers=headers, json=payload),
+                    recipient=payload.get("to"),
+                )
 
             response_text = response.text
             response.raise_for_status()
@@ -264,10 +317,9 @@ class WhatsAppClient:
             if http_err.response.status_code == 401:
                 self.logger.error(
                     "CRITICAL: WhatsApp access token expired or invalid for inbox %s "
-                    "(401 Unauthorized). Token starts with: %s... URL: %s. "
+                    "(401 Unauthorized). URL: %s. "
                     "ACTION REQUIRED: Update the WhatsApp access token in environment variables.",
                     self.inbox_id,
-                    self.access_token[:20],
                     url,
                 )
             self._log_http_error(
@@ -279,6 +331,8 @@ class WhatsAppClient:
                 response_text=response_text,
             )
             raise
+        except RateLimitedError:
+            raise  # logged by _governed; callers map it to rate_limited
         except Exception as err:
             self.logger.error("Unexpected error for inbox %s: %s", self.inbox_id, err)
             raise
@@ -293,8 +347,10 @@ class WhatsAppClient:
         url = custom_url or self.url_builder.get_endpoint_url(endpoint or "")
 
         try:
-            response = await self.session.get(
-                url, headers=self._get_headers(), params=params
+            response = await self._governed(
+                lambda: self.session.get(
+                    url, headers=self._get_headers(), params=params
+                )
             )
             response.raise_for_status()
             response_data = response.json()
@@ -310,6 +366,8 @@ class WhatsAppClient:
                 http_err.response.text,
             )
             raise
+        except RateLimitedError:
+            raise  # logged by _governed; callers map it to rate_limited
         except Exception as err:
             self.logger.error(
                 "Unexpected GET error for inbox %s: %s", self.inbox_id, err
@@ -326,8 +384,10 @@ class WhatsAppClient:
         url = custom_url or self.url_builder.get_endpoint_url(endpoint or "")
 
         try:
-            response = await self.session.delete(
-                url, headers=self._get_headers(), params=params
+            response = await self._governed(
+                lambda: self.session.delete(
+                    url, headers=self._get_headers(), params=params
+                )
             )
             response.raise_for_status()
             response_data = response.json()
@@ -343,6 +403,8 @@ class WhatsAppClient:
                 http_err.response.text,
             )
             raise
+        except RateLimitedError:
+            raise  # logged by _governed; callers map it to rate_limited
         except Exception as err:
             self.logger.error(
                 "Unexpected DELETE error for inbox %s: %s", self.inbox_id, err
@@ -365,3 +427,13 @@ class WhatsAppClient:
         except httpx.HTTPError as e:
             self.logger.error("Streaming GET failed for inbox %s: %s", self.inbox_id, e)
             raise
+
+
+def _meta_error_code(response: httpx.Response) -> str | None:
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    error = body.get("error") if isinstance(body, dict) else None
+    code = error.get("code") if isinstance(error, dict) else None
+    return str(code) if code is not None else None

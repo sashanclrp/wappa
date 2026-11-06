@@ -4,9 +4,12 @@ Send routes build their target with :func:`direct_target` and are decorated
 with :func:`map_send_errors`, which owns every status a send can answer:
 ``UnsupportedOperationError`` → 501, ``ValueError`` (a local rule violation,
 raised before any Platform call) → 400, any other exception → 500, and a
-failed result → the status its ``error_code`` maps to (default 400).
+failed result → the status its ``error_code`` maps to (default 400). A result
+stopped by a Meta rate limit (``retry_after`` set) answers 429 with a
+``Retry-After`` header.
 """
 
+import math
 from collections.abc import Awaitable, Callable, Mapping
 from functools import wraps
 from typing import Protocol
@@ -55,6 +58,17 @@ def map_error_to_status(error_code: str | None, default_status: int = 400) -> in
     return ERROR_CODE_MAPPING.get(error_code, default_status)
 
 
+def raise_if_rate_limited(retry_after: float | None, detail: str | None) -> None:
+    """429 + ``Retry-After`` when a Meta rate limit stopped the call."""
+    if retry_after is None:
+        return
+    raise HTTPException(
+        status_code=429,
+        detail=detail or "Meta rate limit; retry later",
+        headers={"Retry-After": str(max(1, math.ceil(retry_after)))},
+    )
+
+
 def raise_for_failed_result(
     result: MessageResult | MediaUploadResult,
     operation_name: str,
@@ -62,6 +76,7 @@ def raise_for_failed_result(
 ) -> None:
     if result.success:
         return
+    raise_if_rate_limited(result.retry_after, result.error)
 
     if error_code_groups and result.error_code:
         for error_codes, status_code in error_code_groups.items():

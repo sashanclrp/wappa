@@ -28,6 +28,7 @@ from wappa.domain.interfaces.media_library import (
 )
 from wappa.domain.results import OperationOutcome
 from wappa.messaging.whatsapp.media_rules import check_bytes, check_file
+from wappa.resilience.rate_limits import RateLimitedError
 from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
@@ -67,20 +68,31 @@ class WhatsAppMediaLibrary(IMediaLibrary):
             check_bytes(source, use, name=None if mime_type else filename)
         else:
             check_file(source, use, by_name=mime_type is None)
-        if isinstance(source, bytes):
-            name = filename or "upload"
-            mime = mime_type or _guess_mime(name, family)
-            if mime is None:
-                raise ValueError(
-                    "WhatsApp byte uploads need a mime_type or a filename with "
-                    "a known extension"
+        try:
+            if isinstance(source, bytes):
+                name = filename or "upload"
+                mime = mime_type or _guess_mime(name, family)
+                if mime is None:
+                    raise ValueError(
+                        "WhatsApp byte uploads need a mime_type or a filename with "
+                        "a known extension"
+                    )
+                result = await self._handler.upload_media_from_bytes(source, mime, name)
+            else:
+                result = await self._handler.upload_media(
+                    source,
+                    media_type=mime_type
+                    or _guess_mime(filename or source.name, family),
+                    filename=filename,
                 )
-            result = await self._handler.upload_media_from_bytes(source, mime, name)
-        else:
-            result = await self._handler.upload_media(
-                source,
-                media_type=mime_type or _guess_mime(filename or source.name, family),
-                filename=filename,
+        except RateLimitedError as limited:
+            return UploadResult(
+                outcome=OperationOutcome.RATE_LIMITED,
+                platform=PlatformType.WHATSAPP,
+                inbox_id=self._inbox_id,
+                error=str(limited),
+                error_code=limited.code,
+                retry_after=limited.retry_after,
             )
         if result.success and result.media_id:
             return UploadResult(

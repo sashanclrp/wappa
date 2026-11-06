@@ -79,7 +79,10 @@ def _dict(value: Any) -> dict[str, Any]:
 
 def _read_failure[T](response: GraphResponse) -> ReadResult[T]:
     code = response.native_code
-    if response.outcome is OperationOutcome.INDETERMINATE:
+    if response.outcome in (
+        OperationOutcome.INDETERMINATE,
+        OperationOutcome.RATE_LIMITED,
+    ):
         outcome = ReadOutcome.UNAVAILABLE
     elif response.error_code in ("100/33",) or response.status_code == 404:
         outcome = ReadOutcome.NOT_FOUND
@@ -88,7 +91,10 @@ def _read_failure[T](response: GraphResponse) -> ReadResult[T]:
     else:
         outcome = ReadOutcome.REJECTED
     return ReadResult(
-        outcome=outcome, error=response.error, error_code=response.error_code
+        outcome=outcome,
+        error=response.error,
+        error_code=response.error_code,
+        retry_after=response.retry_after,
     )
 
 
@@ -199,6 +205,7 @@ class InstagramCommentControls(ICommentControls):
             if accepted
             else response.error or "Instagram comment reply outcome is unknown",
             error_code=None if accepted else response.error_code or "INDETERMINATE",
+            retry_after=response.retry_after,
             platform_response=response.body or None,
         )
 
@@ -224,6 +231,7 @@ class InstagramCommentControls(ICommentControls):
             error_code=response.error_code
             if outcome is not OperationOutcome.ACCEPTED
             else None,
+            retry_after=response.retry_after,
             platform_response=response.body or None,
         )
 

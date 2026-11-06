@@ -100,6 +100,7 @@ class InstagramMediaLibrary(IMediaLibrary):
             error=response.error
             or f"Instagram {family.value} upload returned no attachment_id",
             error_code=response.error_code or "INDETERMINATE",
+            retry_after=response.retry_after,
             platform_response=response.body or None,
         )
 

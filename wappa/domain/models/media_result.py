@@ -30,6 +30,7 @@ class MediaUploadResult(BaseModel):
     mime_type: str | None = None
     error: str | None = None
     error_code: str | None = None
+    retry_after: float | None = None  # a Meta rate limit stopped the upload
     uploaded_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     inbox_id: str | None = None  # phone_number_id in WhatsApp context
 

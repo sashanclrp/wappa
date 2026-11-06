@@ -8,6 +8,7 @@ sees only the process environment plus the dummy defaults below.
 import os
 
 import dotenv
+import pytest
 
 # ``wappa.core.config.settings`` calls ``load_dotenv(".env")`` at import time.
 # Disable it so a real ``.env`` (with an explicit routing mode, a Redis URL,
@@ -29,3 +30,19 @@ _TEST_ENV_DEFAULTS = {
 
 for _key, _value in _TEST_ENV_DEFAULTS.items():
     os.environ.setdefault(_key, _value)
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_governor():
+    """Rate-limit state is process-wide: give every test its own, unpaced."""
+    from wappa.resilience.rate_limits import (
+        RateLimitGovernor,
+        RateLimitPolicy,
+        rate_governor,
+        use_rate_governor,
+    )
+
+    previous = rate_governor()
+    use_rate_governor(RateLimitGovernor(RateLimitPolicy(send_rates=None)))
+    yield
+    use_rate_governor(previous)

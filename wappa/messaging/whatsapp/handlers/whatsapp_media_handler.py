@@ -18,6 +18,7 @@ from wappa.domain.models.media_result import (
 )
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.models.media_models import MediaType
+from wappa.resilience.rate_limits import RateLimitedError
 from wappa.schemas.core.types import PlatformType
 
 
@@ -148,6 +149,8 @@ class WhatsAppMediaHandler:
                 inbox_id=self._inbox_id,
             )
 
+        except RateLimitedError:
+            raise  # the caller maps it to rate_limited
         except Exception as e:
             self.logger.exception(f"Failed to upload {file_path}: {e}")
             return MediaUploadResult(
@@ -214,6 +217,8 @@ class WhatsAppMediaHandler:
                 inbox_id=self._inbox_id,
             )
 
+        except RateLimitedError:
+            raise  # the caller maps it to rate_limited
         except Exception as e:
             self.logger.exception(f"Failed to upload {filename} from bytes: {e}")
             return MediaUploadResult(
@@ -235,6 +240,8 @@ class WhatsAppMediaHandler:
             return await self.upload_media_from_bytes(
                 file_stream.read(), media_type, filename
             )
+        except RateLimitedError:
+            raise  # the caller maps it to rate_limited
         except Exception as e:
             self.logger.exception(f"Failed to upload {filename} from stream: {e}")
             return MediaUploadResult(
@@ -343,6 +350,8 @@ class WhatsAppMediaHandler:
                 error_code="DOWNLOAD_FAILED",
                 inbox_id=self._inbox_id,
             )
+        except RateLimitedError:
+            raise  # the caller maps it to rate_limited
         except Exception as e:
             self.logger.exception(f"Failed to upload media from URL {url}: {e}")
             return MediaUploadResult(

@@ -376,6 +376,14 @@ Solution: keep only open Wappa items (live Gate B, an Embedded Signup run, crede
 Files: new `tests/test_third_platform_contract.py`, new `tests/test_two_platform_inboxes.py`.
 Benefits: multi-Inbox and multi-Platform become provable claims checked in CI, not doc assertions.
 
+### Seam 9: Meta Graph transport (missed by the audit, found 2026-11-06)
+
+**H-34 One `MetaGraphClient` for WhatsApp and Instagram.** Size L. Breaking: internal (`WhatsAppClient`'s raise-on-error API, `InstagramGraphClient`, `graph_request`); no Host-facing change.
+Problem: both Platforms call the same Graph API (`graph.facebook.com/vXX`, Bearer token, one error envelope, the same usage headers), through two clients that disagree. `WhatsAppClient` raises `httpx.HTTPStatusError` and every WhatsApp handler classifies the exception; `InstagramGraphClient` / `graph_request` classify centrally into accepted / rejected / indeterminate / rate_limited. Meta's error code is parsed in three places (`graph._error_code`, `error_helpers._platform_error_code`, `whatsapp_client._meta_error_code`), rejections are logged two ways, and the rate-limit governor had to be wired in twice.
+Solution: a Platform-neutral Meta transport module owning the versioned base URL, Bearer auth, outcome classification, error-envelope parsing, redacted logging, usage headers, file rewind and the `RateLimitGovernor`. `InstagramGraphClient` folds into it; `WhatsAppClient` keeps only WhatsApp URL shapes and payloads and returns outcomes, and the WhatsApp handlers map outcomes the way Instagram's do. Record it as an ADR.
+Benefits: one place for every Meta-level rule (rate limits, retries, logging), and a third Meta Platform (Messenger) reuses it unchanged.
+Why the audit missed it: its areas were cut by Host-facing interface (webhooks, sending, media, profile, connection) and by Platform; no area owned the shared provider transport underneath, so each area saw half of the duplication. A future audit adds a "provider transport" area for every external API more than one adapter calls.
+
 Breaking items: H-01, H-02, H-03, H-04, H-06, H-07, H-08, H-11, H-15, H-16, H-17, H-19, H-20, H-23, H-24, H-28, H-30 (17 of 33). Pure deletions: H-04, H-05, H-06, H-07, H-19, H-20, H-28.
 
 ## Proposed public interface changes

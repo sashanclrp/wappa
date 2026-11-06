@@ -105,7 +105,7 @@ await comments.delete_comment(ref)                      # media owner only
 await comments.set_comments_enabled(webhook.post_ref, False)
 ```
 
-These return `ControlResult` (`accepted`/`rejected`/`indeterminate`). None of them work on Live. Never retry a destructive control on an indeterminate outcome. A successful control does not mean a webhook will follow. Moderation policy (what to hide, who may) belongs to the app, so test only on disposable comments.
+These return `ControlResult` (`accepted`/`rejected`/`indeterminate`/`rate_limited`). None of them work on Live. Never retry a destructive control on an indeterminate outcome. A successful control does not mean a webhook will follow. Moderation policy (what to hide, who may) belongs to the app, so test only on disposable comments.
 
 ## Post and comment reads
 

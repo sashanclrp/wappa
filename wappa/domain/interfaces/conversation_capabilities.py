@@ -36,6 +36,8 @@ class ReadResult[T](BaseModel):
     value: T | None = None
     error: str | None = None
     error_code: str | None = None
+    # A Meta rate limit made it ``unavailable``: seconds until a retry can work.
+    retry_after: float | None = None
 
     @property
     def found(self) -> bool:

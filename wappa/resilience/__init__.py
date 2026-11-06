@@ -16,6 +16,14 @@ from .classification import (
     is_transient_db_error,
     is_transient_http_error,
 )
+from .rate_limits import (
+    RateLimitedError,
+    RateLimitGovernor,
+    RateLimitPolicy,
+    rate_governor,
+    rate_limit_rule,
+    use_rate_governor,
+)
 from .retry import (
     DEFAULT_RETRY_POLICY,
     RetryPolicy,
@@ -29,10 +37,16 @@ __all__ = [
     "TRANSIENT_DB_ERROR_PATTERNS",
     "TRANSIENT_DB_ERROR_TYPES",
     "TRANSIENT_HTTP_STATUS_CODES",
+    "RateLimitGovernor",
+    "RateLimitPolicy",
+    "RateLimitedError",
     "RetryPolicy",
     "is_transient_db_error",
     "is_transient_http_error",
+    "rate_governor",
+    "rate_limit_rule",
     "retry_async",
     "retry_transient_db",
     "retry_transient_http",
+    "use_rate_governor",
 ]

@@ -54,22 +54,35 @@ Read the limit with the `whatsapp_business_manager_messaging_limit` field (`mess
 
 Conversation replies inside the 24-hour customer service window do not count toward the messaging limit; only messages outside it (Templates, in practice) do.
 
-## What Wappa does today
+## Second block (13:45) and what it adds
 
-- Instagram: `graph_request` classifies `4` as "application rate limit reached" and `613/2534040` as "rate limit reached", returns `REJECTED` with the code, and (since 2e5fd84) logs Meta's error fields. It does not read `x-app-usage` or `X-Business-Use-Case-Usage`.
-- WhatsApp: the status-webhook error model exposes `is_rate_limit_error()` for `130429`; `131056` is listed among non-address rejections, so the BSUID fallback does not retry on it. Send results carry Meta's code; no usage header is read.
-- Neither adapter paces sends, retries rate-limited calls, or reports a retry time. `indeterminate` sends are never retried automatically, and that stays.
+After the limit cleared at about 13:29, the image family (16 files) and half the video family used the budget again by 13:45:26. A second Instagram account messaging the same business got `(#4)` on its very first call at 13:46:53: code 4 counts the whole Meta app, not each conversing user or account. The `x-app-usage` header on the last accepted call (13:44:56) read `call_count: 23`, so the header understates the Instagram budget and cannot be the only warning signal. Meta also answered MOV and WebM uploads with HTTP 500 instead of a rejection.
 
-## Gaps (candidate backlog draft)
+## What Wappa does (since the rate-limit governor)
 
-1. A distinct rate-limited outcome (or `error_code` family) on `MessageResult` and operation results, with `retry_after` taken from `estimated_time_to_regain_access` or Meta's backoff rule, so a Host can tell "slow down" from "rejected".
-2. Usage telemetry: log a warning when `x-app-usage` or `X-Business-Use-Case-Usage` crosses a threshold (for example 80 %), per Inbox.
-3. Optional outbound pacing per Inbox in the send pipeline: Instagram 100/s text and 10/s media, WhatsApp throughput and the per-recipient pair limit, opt-in and Host-configurable.
-4. The Crons domain (fire with a delay) is the natural home for a Host's retry of a rate-limited send.
+`wappa.resilience.rate_limits.RateLimitGovernor`, one per process, sits at each adapter's transport: `InstagramGraphClient.request` and `WhatsAppClient` (`post_request`, `get_request`, `delete_request`). Every Meta call goes through it, sends, uploads, comment actions and reads alike, and it decides by Meta's error code, never by HTTP status.
+
+| Kind | Codes | Scope | What happens |
+| --- | --- | --- | --- |
+| Short | Instagram `613`; WhatsApp `130429`, `131057` | Inbox | sleep and retry inside the call (1 s, 4 s, 16 s), at most 3 retries and 30 s |
+| Short | WhatsApp `131056` | Inbox + recipient | same, Meta's 4^X backoff; other recipients unaffected |
+| Long | Instagram `4`; WhatsApp `4` | the app on that Platform | block every Inbox: `rate_limited` at once without calling Meta |
+| Long | Instagram `17`, `32`, `80002`, `80006`; WhatsApp `80007`, `133016` | Inbox | block that Inbox the same way |
+
+A long block lasts Meta's `estimated_time_to_regain_access` when the `X-Business-Use-Case-Usage` header gives it, else 300 s, doubling on each consecutive block up to an hour; the first accepted call clears the strikes. Retrying a rate limit is safe because Meta did not process the call (an uploaded file is rewound first); `indeterminate` (transport failure, 5xx) is still never retried. Calls are paced per Inbox: Instagram 10/s for audio and video and 100/s otherwise, WhatsApp 80/s. Both usage headers are read on every response and a value over 80 % logs a warning per Inbox, at most once a minute.
+
+Hosts see `OperationOutcome.RATE_LIMITED` and `retry_after` (seconds) on every result type, and the HTTP API answers 429 with `Retry-After`. Waiting is `asyncio.sleep` in the task that sent: each webhook is its own task, so other Users keep being served while one waits. State is in process memory, so with several workers each keeps its own view; a Redis-backed governor is a follow-up if Hosts run many workers.
+
+## Remaining gaps
+
+1. Shared state across worker processes (Redis), so one worker's code 4 blocks the others.
+2. A Host-side delayed retry of a `rate_limited` result: the Crons domain is its natural home.
+3. Proactive slowing as usage nears 100 % (today the warning only logs), once production numbers show the headers are trustworthy for Instagram.
+4. One `MetaGraphClient` for both Platforms: the governor is wired into two transports that duplicate the Graph call, error parsing and logging (architecture-hardening follow-up).
 
 ## What the skills teach
 
-- Treat a rate-limit code as "wait", not "fix the request": stop that kind of send for the Inbox (or that recipient, for `131056`), retry later, never in a tight loop.
+- Wappa already waits and retries short limits and blocks long ones; a Host sees `rate_limited` with `retry_after` only when the wait would be long. Treat it as "try later", not "fix the request", and never resend in a loop.
 - Instagram: bulk media is the tight path (10/s); private replies on posts cap at 750/h per account; history reads cap at 2/s, so do not read history on every message.
 - WhatsApp: one recipient gets about one message per 6 s sustained, so batch a multi-part answer instead of firing many sends; Templates outside the window are bounded by the portfolio's messaging limit tier.
 - Development apps have tiny budgets (one test user ≈ 200 Instagram calls per hour): run load-style tests in short families with pauses.
