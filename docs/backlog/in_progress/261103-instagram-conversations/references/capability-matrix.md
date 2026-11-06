@@ -42,7 +42,7 @@ Reviewed 2026-11-06 against the November 5 [results log](../tests/live-test-plan
 | caption on image/video/document | follow-up `send_text` after the media | yes | yes | pending |
 | `send_location` | text: name, address, `📍` maps link | yes | yes | 2026-11-05: accepted |
 | `send_contact` | text contact card | yes | yes | 2026-11-05: accepted |
-| `send_sticker` | sent as an image (png/jpeg/gif preferred, else static WebP; animated WebP shows one frame) | yes | yes | 2026-11-05: PNG rendition accepted; 2026-11-06: static WebP renders, animated WebP shows its first frame |
+| `send_sticker` | sent as an image (png/jpeg/gif preferred, else a WebP URL; WebP upload fails with HTTP 500; animated WebP shows one frame) | yes | yes | 2026-11-05: PNG rendition accepted; 2026-11-06: static WebP renders by URL, its upload answers HTTP 500, animated WebP shows its first frame |
 | media by local `Path` | `POST /{ig}/message_attachments` → `attachment_id`, then send | yes | yes | pending |
 | `IMediaLibrary.upload(path, family)` | `POST /{ig}/message_attachments` with `is_reusable` → `attachment_id` | yes | yes | 2026-11-05: /image-upload accepted |
 | `send_list_message` | `message.quick_replies` (rows flattened, ≤ 13) | yes | yes | 2026-11-05: quick replies and form selections |

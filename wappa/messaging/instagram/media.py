@@ -5,9 +5,10 @@ fetched 2026-11-03, rechecked 2026-11-06): image png/jpeg/gif ≤ 8 MB; audio
 aac/m4a/wav/mp4, video mp4/ogg/avi/mov/webm and file pdf ≤ 25 MB. The guide
 states no URL scheme and no file-name rule, so an http(s) URL passes through
 (as on WhatsApp) and an upload name is transliterated to ASCII. The live
-format matrix (2026-11-06) adds static WebP (renders, link and upload) and
-shows that an animated WebP renders only its first frame (GIF animates), so
-an uploaded animated WebP is refused with that hint.
+format matrix (2026-11-06) adds static WebP **by URL** (it renders), while
+the attachment upload endpoint answers a WebP with HTTP 500 ("unknown
+error", code 1), so a WebP upload is refused before I/O; an animated WebP
+renders only its first frame (GIF animates).
 
 Inbound attachment URLs are signed Meta CDN URLs
 (``lookaside.fbsbx.com/ig_messaging_cdn/...``) that may expire within minutes.
@@ -123,9 +124,20 @@ def ascii_name(name: str) -> str:
     return (fold(path.stem) or "file") + fold(path.suffix)
 
 
+# Formats Instagram renders by URL but its upload endpoint fails (HTTP 500).
+URL_ONLY: dict[str, frozenset[str]] = {"image": frozenset({".webp"})}
+
+
 def validate_upload(name: str, size: int, family: str) -> MediaRule:
     rule = MEDIA_RULES[family]
     suffix = PurePosixPath(name).suffix
+    if suffix.lower() in URL_ONLY.get(family, frozenset()):
+        raise ValueError(
+            f"Instagram renders a {suffix} {family} sent by URL, but its upload "
+            "endpoint fails on it (HTTP 500); send it by URL, or upload a PNG or "
+            f"JPEG (conversion is the Media Adaptation backlog draft, "
+            f"{MEDIA_ADAPTATION_DRAFT})"
+        )
     if suffix.lower() not in rule.extensions:
         raise ValueError(
             f"Instagram {family} supports {sorted(rule.extensions)}, not "
@@ -143,8 +155,14 @@ def validate_upload(name: str, size: int, family: str) -> MediaRule:
 
 
 def check_image_content(data: bytes) -> None:
-    """Refuse an animated WebP: Instagram shows only its first frame."""
+    """Refuse WebP content under another name: an animated WebP shows only its
+    first frame, and the upload endpoint fails on any WebP (HTTP 500)."""
     found = probe(data)
+    if found.mime == "image/webp" and not found.animated:
+        raise ValueError(
+            "Instagram's upload endpoint fails on WebP (HTTP 500); send it by "
+            "URL, or upload a PNG or JPEG"
+        )
     if found.mime == "image/webp" and found.animated:
         raise ValueError(
             "Instagram shows only the first frame of an animated WebP; send the "

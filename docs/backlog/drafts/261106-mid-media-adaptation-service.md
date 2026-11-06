@@ -107,7 +107,7 @@ The engine converts to the cheapest format that was **verified live** for that P
 | image | GIF (static) | PNG (lossless; JPEG when there is no alpha and the file is a photo) | as-is: GIF static renders |
 | image | GIF animated, animated WebP | first frame as PNG for an image; or MP4 H.264 when the Host asked for motion (send as video) | GIF animated: as-is, **animates** (link and upload); animated WebP: shows only its first frame, so convert to GIF |
 | image | HEIC / HEIF, AVIF | JPEG | HEIC by link renders (Meta converts it; the first run's 400 was the rate limit); uploads refused by Wappa until proven: JPEG |
-| image | static WebP | as-is (works) | as-is (renders by link; Wappa now accepts it by upload too) |
+| image | static WebP | as-is (works) | as-is by URL (renders); the upload endpoint answers HTTP 500 ("unknown error", code 1), so a WebP file becomes PNG (alpha) or JPEG |
 | image | over 5 MB (WhatsApp) / 8 MB (Instagram), edge over 4096 px | downscale, then JPEG quality ladder | same, 8 MB cap |
 | video | HEVC in MP4, MOV, MKV, WebM VP8/VP9 | MP4, H.264 Main (Baseline for old Android), AAC, faststart, one audio stream | MP4 H.264 Baseline and High play by link and upload; MOV and WebM VP8 uploads answer HTTP 500; HEVC, MOV, 3GP, WebM, MKV links *pending* |
 | video | 3GP H.264 | as-is (works once sent as `video/3gpp`) | MP4 (3GP link rejected) |
@@ -324,7 +324,7 @@ API = Meta's response; Instagram sends no `failed` status (every accepted send c
 
 | Use | Works | Fails or degrades | Notes |
 | --- | --- | --- | --- |
-| image | JPEG, PNG, static GIF, static WebP, HEIC by link; animated GIF **animates** (link and upload) | animated WebP shows only its first frame; PNG with alpha: transparent area filled **white by link**, kept (chat background shows through) **by upload** | Wappa refused WebP and HEIC uploads before I/O in this run; it now accepts static WebP uploads and refuses animated WebP uploads (read from the bytes) |
+| image | JPEG, PNG, static GIF, static WebP, HEIC by link; animated GIF **animates** (link and upload) | animated WebP shows only its first frame; PNG with alpha: transparent area filled **white by link**, kept (chat background shows through) **by upload** | a static WebP **upload** answers HTTP 500 ("unknown error", code 1, rerun 14:50) while the same file renders by URL; Wappa now accepts WebP URLs and refuses WebP files and animated WebP bytes before I/O |
 | video | MP4 H.264 Baseline and High, link and upload | MOV and WebM VP8 uploads: HTTP **500** from `message_attachments` (Wappa reports `indeterminate` and now logs Meta's fields for a 5xx) | links for HEVC, MOV, 3GP, WebM VP8/VP9 and MKV *pending* |
 | sticker (sent as image) | PNG 512 (link and upload; same alpha behaviour as images), static WebP 512 and 256 | animated WebP 512 shows its first frame | Instagram has no sticker size rule |
 | card_image | JPEG, PNG, PNG with alpha, static WebP, animated WebP (first frame) | — | GIF and video cards *pending* |
@@ -335,7 +335,7 @@ Findings:
 - Instagram's verdict is the phone, not a status: accepted sends are `read`, never `failed`, so a format Instagram degrades (animated WebP, alpha) looks like a success to the Host. Only the spec table, enforced before I/O, protects the Host.
 - Animation: GIF is Instagram's animation format; WhatsApp's is animated WebP (stickers) or MP4 (video). The engine converts between them per Platform.
 - Transparency depends on the lane on Instagram (white matte by link, transparent by upload), so the engine flattens onto a Host-chosen background when the look must be predictable.
-- An Instagram upload that answers HTTP 500 is a format refusal in practice (MOV, WebM), not an outage: the spec keeps MP4 as the only video upload format until a rerun with Meta's logged fields says otherwise.
+- An Instagram upload that answers HTTP 500 is a format refusal in practice (MOV, WebM video, WebP image: code 1 "unknown error"), not an outage: the spec keeps MP4 as the only video upload format until a rerun with Meta's logged fields says otherwise.
 
 ## Exit criteria
 

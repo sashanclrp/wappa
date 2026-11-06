@@ -43,7 +43,7 @@ await self.messenger.send_document(Path("assets/menu.pdf"), target)  # uploaded 
 | Operation | Limits and emulation |
 | --- | --- |
 | `send_text` | text over 1000 UTF-8 bytes is sent as several messages, cut on a word boundary when possible, with the reply context on the first; a `PrivateReply` over the limit raises `ValueError` (one reply per comment) |
-| `send_image` | http(s) URL or local png/jpeg/gif/webp ≤ 8 MB; an uploaded animated WebP is refused (Instagram shows its first frame only; send a GIF, which animates) |
+| `send_image` | http(s) URL (WebP works by URL) or local png/jpeg/gif ≤ 8 MB; a WebP file is refused (the upload endpoint answers HTTP 500); an animated WebP shows only its first frame, a GIF animates |
 | `send_audio` | aac/m4a/wav/mp4 ≤ 25 MB; another format by URL (`.mp3`, `.ogg`, `.amr`) is shared as a text with the file name and link |
 | `send_video` | mp4/ogg/avi/mov/webm ≤ 25 MB; another format by URL (`.3gp`) is shared as a link |
 | `send_document` | pdf ≤ 25 MB; another format by URL (`.docx`, `.xlsx`, `.txt` …) is shared as a text with `filename` (else the URL's file name) and the link; a local `Path` uploads under `filename` |
@@ -60,7 +60,7 @@ The same calls work on both Platforms; Instagram adapts them instead of raising:
 | --- | --- |
 | `send_location(latitude, longitude, target, name=..., address=...)` | text: name, address and a `📍` Google Maps link |
 | `send_contact(contacts, target)` | one text block per card (👤 name, organization, 📞 phones, ✉️ emails, 🔗 urls), split over 1000 UTF-8 bytes; `contacts` is one `ContactCard` or a list, in WhatsApp's contact-card shape (`name.first_name` required; the 👤 line is `name.formatted_name`, built from the name parts when omitted) |
-| `send_sticker(source, target)` | an image; with several renditions a png/jpeg/gif one is preferred (pass `[s.webp, s.gif]` for an animated sticker), else a static WebP |
+| `send_sticker(source, target)` | an image; with several renditions a png/jpeg/gif one is preferred (pass `[s.webp, s.gif]` for an animated sticker), else a WebP URL |
 
 Location and phone-number requests are WhatsApp-only (`self.whatsapp.send_location_request`, `self.whatsapp.send_contact_request`), because a text prompt on Instagram cannot return the location or phone. `self.whatsapp` is `None` in an Instagram dispatch, so ask the User to type the answer there.
 

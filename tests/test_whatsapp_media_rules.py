@@ -182,16 +182,23 @@ async def test_carousel_checks_every_card_before_sending():
     assert client.posted == []
 
 
-def test_instagram_takes_static_webp_and_refuses_animated_webp_uploads():
-    """Live matrix 2026-11-06: static WebP renders on Instagram; animated
-    WebP shows only its first frame (GIF animates)."""
+def test_instagram_takes_webp_by_url_only():
+    """Live matrix 2026-11-06: a WebP renders on Instagram by URL, but the
+    upload endpoint answers it with HTTP 500; an animated WebP shows only its
+    first frame (GIF animates)."""
     from wappa.messaging.instagram.media import (
         MEDIA_RULES,
         check_image_content,
+        url_format_accepted,
+        validate_upload,
     )
 
     assert ".webp" in MEDIA_RULES["image"].extensions
-    check_image_content(_webp_vp8x(512, 512, animated=False))
+    assert url_format_accepted("https://x.test/a.webp", "image")
+    with pytest.raises(ValueError, match="by URL"):
+        validate_upload("a.webp", 10, "image")
     check_image_content(GIF)  # GIFs animate on Instagram
+    with pytest.raises(ValueError, match="HTTP 500"):
+        check_image_content(_webp_vp8x(512, 512, animated=False))  # renamed .png
     with pytest.raises(ValueError, match="first frame"):
         check_image_content(_webp_vp8x(512, 512, animated=True))

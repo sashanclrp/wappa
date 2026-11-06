@@ -711,10 +711,11 @@ class InstagramMessengerAdapter(IMessenger):
     ) -> MessageResult:
         """Instagram has no custom stickers: the sticker is sent as an image.
 
-        A static WebP sticker shows as an image; an animated one would show
-        only its first frame. Pass renditions (``[sticker.webp, sticker.gif]``)
-        and Instagram takes a png/jpeg/gif one when given (a GIF animates),
-        else the WebP; WhatsApp takes the WebP.
+        A static WebP sticker shows as an image when sent by URL (the upload
+        endpoint fails on WebP); an animated one shows only its first frame.
+        Pass renditions (``[sticker.webp, sticker.gif]``) and Instagram takes a
+        png/jpeg/gif one when given (a GIF animates), else the WebP URL;
+        WhatsApp takes the WebP.
         """
         what = "Instagram sticker (sent as an image)"
         images = MEDIA_RULES["image"].extensions
