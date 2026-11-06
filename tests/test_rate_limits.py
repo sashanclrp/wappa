@@ -287,3 +287,59 @@ async def test_api_answers_429_with_retry_after():
         raise_for_failed_result(limited, "send text")
     assert caught.value.status_code == 429
     assert caught.value.headers == {"Retry-After": "3"}
+
+
+async def test_a_shorter_hit_never_shortens_a_block(fake_time):
+    governor = RateLimitGovernor(clock=fake_time.clock, sleep=fake_time.sleep)
+    target = RateTarget("instagram", "1784")
+
+    async def refused() -> str:
+        return "x"
+
+    await governor.run(
+        target, refused, lambda _r: RateLimitHit("80002", retry_after=900.0)
+    )
+    await governor.run(target, refused, lambda _r: RateLimitHit("17", retry_after=10.0))
+    assert governor.blocked_for(target) == pytest.approx(900.0)
+
+
+async def test_pair_limit_without_recipient_holds_the_inbox(fake_time):
+    governor = RateLimitGovernor(
+        RateLimitPolicy(send_rates=None, max_wait=0.5),
+        clock=fake_time.clock,
+        sleep=fake_time.sleep,
+    )
+    target = RateTarget("whatsapp", "pnid")  # no recipient known
+
+    async def refused() -> str:
+        return "131056"
+
+    await governor.run(target, refused, lambda code: RateLimitHit(code))
+    assert governor.blocked_for(target) == pytest.approx(1.0)
+
+
+async def test_whatsapp_upload_5xx_is_indeterminate_not_rejected(fake_time, tmp_path):
+    from wappa.messaging import MediaFamily
+    from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
+        WhatsAppMediaHandler,
+    )
+    from wappa.messaging.whatsapp.media_library import WhatsAppMediaLibrary
+
+    client = WhatsAppClient(
+        session=httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda _r: httpx.Response(500, json={}))
+        ),
+        access_token="t",
+        phone_number_id="pnid",
+    )
+    handler = WhatsAppMediaHandler(
+        client=client,
+        inbox_id="pnid",
+        media_download_client=None,  # type: ignore[arg-type]
+    )
+    photo = tmp_path / "a.jpg"
+    photo.write_bytes(b"\xff\xd8\xff" + b"\x00" * 16)
+    result = await WhatsAppMediaLibrary(handler, "pnid").upload(
+        photo, MediaFamily.IMAGE
+    )
+    assert result.outcome is OperationOutcome.INDETERMINATE

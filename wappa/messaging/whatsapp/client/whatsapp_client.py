@@ -10,7 +10,6 @@ indeterminate, with the classified ``GraphResponse``) or ``RateLimitedError``.
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -110,7 +109,6 @@ class WhatsAppClient:
         self.access_token = access_token
         self.phone_number_id = phone_number_id
         self.logger = logger or get_logger(__name__)
-        self.last_activity: datetime | None = None
 
         self.url_builder = WhatsAppUrlBuilder(base_url, api_version, phone_number_id)
         self.form_builder = WhatsAppFormDataBuilder()
@@ -131,15 +129,6 @@ class WhatsAppClient:
     def inbox_id(self) -> str:
         return self.phone_number_id
 
-    def _get_headers(self, include_content_type: bool = True) -> dict[str, str]:
-        headers = {"Authorization": f"Bearer {self.access_token}"}
-        if include_content_type:
-            headers["Content-Type"] = "application/json"
-        return headers
-
-    def _update_activity(self) -> None:
-        self.last_activity = datetime.now(UTC)
-
     async def post_request(
         self,
         payload: dict[str, Any],
@@ -150,7 +139,6 @@ class WhatsAppClient:
 
         Raises ``MetaGraphError`` or ``RateLimitedError``.
         """
-        self._update_activity()
         url = custom_url or self.url_builder.get_messages_url()
         self.logger.debug("POST %s for inbox %s: %s", url, self.inbox_id, payload)
         if files:
@@ -173,7 +161,6 @@ class WhatsAppClient:
         custom_url: str | None = None,
     ) -> dict[str, Any]:
         """GET; the accepted body. Raises ``MetaGraphError`` or ``RateLimitedError``."""
-        self._update_activity()
         url = custom_url or self.url_builder.get_endpoint_url(endpoint or "")
         return await self.graph.call(
             "GET", url, params=params, operation="WhatsApp read"
@@ -186,7 +173,6 @@ class WhatsAppClient:
         custom_url: str | None = None,
     ) -> dict[str, Any]:
         """DELETE; the accepted body. Raises ``MetaGraphError`` or ``RateLimitedError``."""
-        self._update_activity()
         url = custom_url or self.url_builder.get_endpoint_url(endpoint or "")
         return await self.graph.call(
             "DELETE", url, params=params, operation="WhatsApp delete"
@@ -196,18 +182,9 @@ class WhatsAppClient:
     async def stream_get(
         self, url: str, params: dict[str, Any] | None = None
     ) -> AsyncIterator[httpx.Response]:
-        self._update_activity()
-        try:
-            async with self.session.stream(
-                "GET", url, headers=self._get_headers(), params=params
-            ) as response:
-                self.logger.debug(
-                    "Streaming GET to %s. Status: %s", url, response.status_code
-                )
-                yield response
-        except httpx.HTTPError as e:
-            self.logger.error("Streaming GET failed for inbox %s: %s", self.inbox_id, e)
-            raise
+        """Stream media bytes from the URL ``get_media_info`` returned."""
+        async with self.graph.stream(url, params) as response:
+            yield response
 
 
 def _operation(payload: dict[str, Any]) -> str:

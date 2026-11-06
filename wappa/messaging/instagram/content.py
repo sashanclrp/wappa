@@ -78,7 +78,7 @@ def _dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _read_failure[T](response: GraphResponse) -> ReadResult[T]:
+def read_failure[T](response: GraphResponse) -> ReadResult[T]:
     code = response.native_code
     if response.outcome in (
         OperationOutcome.INDETERMINATE,
@@ -291,7 +291,7 @@ class InstagramContentReader(IConversationContentReader):
             operation="Instagram post read",
         )
         if not response.ok:
-            return _read_failure(response)
+            return read_failure(response)
         return ReadResult(
             outcome=ReadOutcome.FOUND, value=_post(post_ref, response.body)
         )
@@ -305,7 +305,7 @@ class InstagramContentReader(IConversationContentReader):
             operation="Instagram comment read",
         )
         if not response.ok:
-            return _read_failure(response)
+            return read_failure(response)
         parsed = _comment(self._graph.inbox_ref, response.body)
         if parsed is None:
             return ReadResult(
@@ -327,7 +327,7 @@ class InstagramContentReader(IConversationContentReader):
             "GET", path, params=params, operation=operation
         )
         if not response.ok:
-            return _read_failure(response)
+            return read_failure(response)
         return ReadResult(
             outcome=ReadOutcome.FOUND, value=_page(self._graph.inbox_ref, response.body)
         )
@@ -366,7 +366,7 @@ class InstagramContentReader(IConversationContentReader):
             operation="Instagram mentioned media read",
         )
         if not response.ok:
-            return _read_failure(response)
+            return read_failure(response)
         body = response.body.get("mentioned_media")
         if not isinstance(body, dict):
             return ReadResult(
@@ -389,7 +389,7 @@ class InstagramContentReader(IConversationContentReader):
             operation="Instagram mentioned comment read",
         )
         if not response.ok:
-            return _read_failure(response)
+            return read_failure(response)
         body = response.body.get("mentioned_comment")
         parsed = (
             _comment(self._graph.inbox_ref, body) if isinstance(body, dict) else None

@@ -102,7 +102,9 @@ class WhatsAppMediaLibrary(IMediaLibrary):
                 media_id=result.media_id,
             )
         return UploadResult(
-            outcome=OperationOutcome.REJECTED,
+            outcome=OperationOutcome.INDETERMINATE
+            if result.error_code == "INDETERMINATE"
+            else OperationOutcome.REJECTED,
             platform=PlatformType.WHATSAPP,
             inbox_id=self._inbox_id,
             error=result.error or "WhatsApp media upload failed",

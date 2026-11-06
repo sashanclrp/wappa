@@ -7,7 +7,6 @@ from wappa.domain.interfaces.session_provider import (
 )
 from wappa.domain.results import MessageResult
 from wappa.messaging.meta.graph import MetaGraphError
-from wappa.resilience import is_transient_http_error
 from wappa.resilience.rate_limits import RateLimitedError
 from wappa.schemas.core.recipient import BSUID_ERROR_TAG
 from wappa.schemas.core.types import PlatformType
@@ -29,21 +28,19 @@ ADDRESS_REJECTION_CODES: frozenset[str] = frozenset({"131030", BSUID_ERROR_TAG})
 
 
 def is_authentication_error(error: Exception) -> bool:
-    error_str = str(error).lower()
-    return "401" in error_str or "unauthorized" in error_str
+    """Meta refused the token: HTTP 401 or Graph code 190."""
+    return isinstance(error, MetaGraphError) and (
+        error.status_code == 401 or error.code == "190"
+    )
 
 
-def is_bsuid_unsupported_error(error: Exception | dict) -> bool:
-    if isinstance(error, dict):
-        error_code = error.get("code") or error.get("error_code")
-        return error_code == ERROR_CODE_BSUID_NOT_SUPPORTED
-
-    if isinstance(error, MetaGraphError):
-        return error.code == str(ERROR_CODE_BSUID_NOT_SUPPORTED)
+def is_bsuid_unsupported_error(error: Exception) -> bool:
     # Only Meta's structured error code counts. Matching the number in free
     # text could tag a timeout as an address rejection and trigger a
     # fallback send (ADR-0022).
-    return False
+    return isinstance(error, MetaGraphError) and error.code == str(
+        ERROR_CODE_BSUID_NOT_SUPPORTED
+    )
 
 
 def handle_whatsapp_error(
@@ -113,11 +110,6 @@ def _classify_transport_error(error: Exception) -> tuple[str, str]:
             )
         code = error.code or f"http_{error.status_code}"
         return code, "The messaging platform rejected the request."
-    if is_transient_http_error(error):
-        return (
-            INDETERMINATE,
-            "The messaging platform outcome could not be determined.",
-        )
     if isinstance(error, ValueError):
         return "invalid_template_request", "The messaging request is invalid."
     return (

@@ -320,7 +320,10 @@ class RateLimitGovernor:
     def _record(
         self, target: RateTarget, rule: RateLimitRule, hit: RateLimitHit, attempt: int
     ) -> float:
-        key = target.key(rule.scope)
+        scope = rule.scope
+        if scope is RateScope.PAIR and not target.recipient:
+            scope = RateScope.ACCOUNT  # no recipient known: hold the whole Inbox
+        key = target.key(scope)
         if rule.transient:
             wait = hit.retry_after or rule.base_delay * (4**attempt)
         else:
@@ -333,10 +336,13 @@ class RateLimitGovernor:
                 hit.code,
                 target.platform,
                 target.account,
-                rule.scope.value,
+                scope.value,
                 wait,
             )
-        self._blocks[key] = _Block(hit.code, self._clock() + wait, rule.transient)
+        until = self._clock() + wait
+        current = self._blocks.get(key)
+        if current is None or current.until < until:  # never shorten a block
+            self._blocks[key] = _Block(hit.code, until, rule.transient)
         return wait
 
     def _clear_strikes(self, target: RateTarget) -> None:

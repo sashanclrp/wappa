@@ -24,7 +24,8 @@ exceptions to results (WhatsApp).
 from __future__ import annotations
 
 import json as jsonlib
-from collections.abc import Callable, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -76,6 +77,8 @@ class GraphResponse:
     error_code: str | None = None  # "code" or "code/subcode"
     error: str | None = None
     retry_after: float | None = None  # set with outcome rate_limited
+    # With rate_limited: False when blocked locally and Meta was not called.
+    meta_called: bool = True
     # Meta's usage headers (x-app-usage, x-business-use-case-usage) only.
     usage: Mapping[str, str] = field(default_factory=dict)
 
@@ -150,7 +153,7 @@ async def graph_request(
     client: httpx.AsyncClient,
     base: str,
     path: str,
-    token: SecretStr,
+    token: SecretStr | None,
     *,
     method: str = "GET",
     operation: str,
@@ -166,7 +169,8 @@ async def graph_request(
     ``base`` is the versioned Graph root (``https://graph.facebook.com/v26.0``);
     an absolute ``path`` (``https://...``) is used as is. Use
     ``MetaGraphClient.request`` for Inbox calls; this raw form serves calls
-    made before an Inbox exists (Unified Login).
+    made before an Inbox exists (Unified Login). ``token=None`` sends no
+    ``Authorization`` header (the code exchange authenticates by query).
     """
     url = path if "://" in path else f"{base}/{path.lstrip('/')}"
     try:
@@ -177,7 +181,11 @@ async def graph_request(
             params=params,
             data=data,
             files=files,
-            headers={"Authorization": f"Bearer {token.get_secret_value()}"},
+            headers=(
+                {"Authorization": f"Bearer {token.get_secret_value()}"}
+                if token
+                else None
+            ),
             timeout=timeout if timeout is not None else httpx.USE_CLIENT_DEFAULT,
         )
     except httpx.RequestError:
@@ -257,15 +265,11 @@ class MetaGraphClient:
         self._token = access_token
         self._session_provider = session_provider
         self.base = f"{graph_base_url.rstrip('/')}/{graph_api_version}"
-        self.api_version = graph_api_version
         self._describe = describe
 
     @property
     def account_id(self) -> str:
         return self.inbox_ref.inbox_id
-
-    def url(self, path: str) -> str:
-        return f"{self.base}/{path.lstrip('/')}"
 
     async def request(
         self,
@@ -322,8 +326,35 @@ class MetaGraphClient:
                 error_code=outcome.code,
                 error=f"{operation}: {outcome.error}",
                 retry_after=outcome.retry_after,
+                meta_called=outcome.called,
             )
         return outcome
+
+    @asynccontextmanager
+    async def stream(
+        self, url: str, params: Mapping[str, Any] | None = None
+    ) -> AsyncIterator[httpx.Response]:
+        """Authenticated streaming GET of media bytes (Meta's lookaside CDN).
+
+        Not classified or rate-governed: the CDN is not the Graph API and
+        answers raw bytes. The caller reads ``response.status_code``.
+        """
+        try:
+            async with self._session_provider().stream(
+                "GET",
+                url,
+                headers={"Authorization": f"Bearer {self._token.get_secret_value()}"},
+                params=params,
+            ) as response:
+                yield response
+        except httpx.HTTPError as error:
+            logger.error(
+                "Media stream failed for %s inbox %s: %s",
+                self.inbox_ref.platform.value,
+                self.account_id,
+                type(error).__name__,
+            )
+            raise
 
     async def call(
         self,
@@ -359,7 +390,7 @@ class MetaGraphClient:
                 RateLimited(
                     response.error_code or "",
                     response.retry_after or 0.0,
-                    called="still active" not in (response.error or ""),
+                    called=response.meta_called,
                 )
             )
         raise MetaGraphError(response)

@@ -86,7 +86,7 @@ from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
 
 from .client import InstagramClient
-from .content import InstagramCommentControls, InstagramContentReader, _read_failure
+from .content import InstagramCommentControls, InstagramContentReader, read_failure
 from .history import InstagramHistoryReader
 from .media import (
     MEDIA_ADAPTATION_DRAFT,
@@ -1049,7 +1049,7 @@ class InstagramMessengerAdapter(IMessenger):
         )
         if not response.ok:
             return evidence.model_copy(
-                update={"outcome": _read_failure(response).outcome}
+                update={"outcome": read_failure(response).outcome}
             )
         body = response.body
 

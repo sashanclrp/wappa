@@ -152,6 +152,18 @@ class WhatsAppMediaHandler:
 
         except RateLimitedError:
             raise  # the caller maps it to rate_limited
+        except MetaGraphError as e:
+            # Classified once by MetaGraphClient: keep rejected vs unknown.
+            self.logger.warning(f"Media upload failed: {e}")
+            return MediaUploadResult(
+                platform=PlatformType.WHATSAPP,
+                success=False,
+                error=str(e),
+                error_code="INDETERMINATE"
+                if e.indeterminate
+                else e.code or "UPLOAD_FAILED",
+                inbox_id=self._inbox_id,
+            )
         except Exception as e:
             self.logger.exception(f"Failed to upload {file_path}: {e}")
             return MediaUploadResult(
@@ -220,6 +232,18 @@ class WhatsAppMediaHandler:
 
         except RateLimitedError:
             raise  # the caller maps it to rate_limited
+        except MetaGraphError as e:
+            # Classified once by MetaGraphClient: keep rejected vs unknown.
+            self.logger.warning(f"Media upload failed: {e}")
+            return MediaUploadResult(
+                platform=PlatformType.WHATSAPP,
+                success=False,
+                error=str(e),
+                error_code="INDETERMINATE"
+                if e.indeterminate
+                else e.code or "UPLOAD_FAILED",
+                inbox_id=self._inbox_id,
+            )
         except Exception as e:
             self.logger.exception(f"Failed to upload {filename} from bytes: {e}")
             return MediaUploadResult(

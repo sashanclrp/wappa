@@ -36,7 +36,7 @@ from wappa.webhooks.instagram.models import (
 )
 
 from .client import InstagramClient
-from .content import _read_failure
+from .content import read_failure
 
 MAX_HISTORY_PAGE = 20
 MESSAGE_FIELDS = "id,created_time,from,to,message,attachments"
@@ -127,7 +127,7 @@ class InstagramHistoryReader(IConversationHistoryReader):
             operation="Instagram conversation lookup",
         )
         if not found.ok:
-            return _read_failure(found)
+            return read_failure(found)
         rows = found.body.get("data") or []
         if not rows or not isinstance(rows[0], dict) or "id" not in rows[0]:
             return ReadResult(outcome=ReadOutcome.NOT_FOUND)
@@ -141,7 +141,7 @@ class InstagramHistoryReader(IConversationHistoryReader):
             operation="Instagram history read",
         )
         if not page.ok:
-            return _read_failure(page)
+            return read_failure(page)
         messages = [
             m
             for m in (self._message(r) for r in page.body.get("data") or [])

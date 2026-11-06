@@ -33,6 +33,8 @@ from wappa.core.config.meta_application import (
     DEFAULT_GRAPH_API_VERSION,
     DEFAULT_GRAPH_BASE_URL,
 )
+from wappa.domain.results import OperationOutcome
+from wappa.messaging.meta.graph import GraphResponse, graph_request, meta_error_code
 from wappa.schemas.core.types import PlatformType
 
 from .contract import (
@@ -63,14 +65,6 @@ class MetaLoginConfig(BaseModel):
     def graph_base(self) -> str:
         """Versioned Graph root, e.g. ``https://graph.facebook.com/v26.0``."""
         return f"{self.graph_base_url.rstrip('/')}/{self.graph_api_version}"
-
-
-def error_code(body: Any) -> str | None:
-    error = body.get("error") if isinstance(body, dict) else None
-    if not isinstance(error, dict) or error.get("code") is None:
-        return None
-    sub = error.get("error_subcode")
-    return f"{error['code']}/{sub}" if sub is not None else str(error["code"])
 
 
 def as_dict(value: Any) -> dict[str, Any]:
@@ -248,22 +242,17 @@ class MetaBusinessLogin:
         *,
         params: dict[str, Any] | None = None,
         token: SecretStr | None = None,
-    ) -> httpx.Response:
-        headers = (
-            {"Authorization": f"Bearer {token.get_secret_value()}"} if token else None
+    ) -> GraphResponse:
+        return await graph_request(
+            self._client_provider(),
+            self._graph,
+            path,
+            token,
+            method=method,
+            operation=f"Meta {path.split('?')[0]}",
+            params=params,
+            timeout=20.0,
         )
-        try:
-            return await self._client_provider().request(
-                method,
-                f"{self._graph}/{path.lstrip('/')}",
-                params=params,
-                headers=headers,
-                timeout=20.0,
-            )
-        except httpx.RequestError as exc:
-            raise ConnectionProviderError(
-                "Meta connection endpoint unreachable", "TRANSPORT"
-            ) from exc
 
     async def get(
         self,
@@ -273,14 +262,14 @@ class MetaBusinessLogin:
         token: SecretStr | None = None,
     ) -> dict[str, Any]:
         response = await self._request("GET", path, params=params, token=token)
-        try:
-            body = response.json()
-        except ValueError:
-            body = None
-        if not response.is_success or not isinstance(body, dict) or "error" in body:
-            code = error_code(body) or str(response.status_code)
-            raise ConnectionProviderError(f"Meta rejected {path.split('?')[0]}", code)
-        return body
+        if response.ok:
+            return response.body
+        if response.status_code is None:
+            raise ConnectionProviderError(
+                "Meta connection endpoint unreachable", "TRANSPORT"
+            )
+        code = meta_error_code(response.body) or str(response.status_code)
+        raise ConnectionProviderError(f"Meta rejected {path.split('?')[0]}", code)
 
     async def success_call(
         self,
@@ -290,19 +279,14 @@ class MetaBusinessLogin:
         params: dict[str, Any] | None = None,
     ) -> tuple[bool | None, str | None]:
         """``(True, None)`` on ``{"success": true}``; ``None`` = unknown outcome."""
-        try:
-            response = await self._request(method, path, params=params, token=token)
-        except ConnectionProviderError:
+        response = await self._request(method, path, params=params, token=token)
+        if response.status_code is None:
             return None, "TRANSPORT"
-        try:
-            body = response.json()
-        except ValueError:
-            body = None
-        if response.is_success and as_dict(body).get("success") is True:
+        if response.ok and response.body.get("success") is True:
             return True, None
-        if response.status_code >= 500 or response.is_success:
+        if response.outcome is OperationOutcome.INDETERMINATE or response.ok:
             return None, "INDETERMINATE"
-        return False, error_code(body) or str(response.status_code)
+        return False, response.error_code
 
 
 def _b64decode(value: str) -> bytes:
@@ -334,6 +318,5 @@ __all__ = [
     "MetaBusinessLogin",
     "MetaLoginConfig",
     "as_dict",
-    "error_code",
     "parse_signed_request",
 ]
