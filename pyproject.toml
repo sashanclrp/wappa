@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wappa"
-version = "0.33.0"
+version = "0.34.0"
 description = "Open Source framework for messaging workflows, chat applications, and platform webhooks"
 authors = [
     {name = "Sasha Canal", email = "contact@mimeia.com"},
@@ -42,6 +42,7 @@ dependencies = [
     # Cache support
     "redis>=5.2.0",
     # Database support
+    "sqlalchemy[asyncio]>=2.0",
     "sqlmodel>=0.0.24",
     # AI/ML features
     "openai>=1.69.0",
@@ -68,10 +69,11 @@ Changelog = "https://github.com/sashanclrp/wappa/blob/main/CHANGELOG.md"
 wappa = "wappa.cli.main:app"
 
 # Hatchling configuration
-[tool.hatchling.build.targets.wheel]
+[tool.hatch.build.targets.wheel]
 packages = ["wappa"]
 
-[tool.hatchling.build.targets.sdist]
+[tool.hatch.build.targets.sdist]
+skip-excluded-dirs = true
 include = [
     "/wappa",
     "/README.md",
@@ -79,6 +81,12 @@ include = [
     "/CHANGELOG.md",
 ]
 exclude = [
+    # These hold symlinks to wappa/cli/skills. Hatchling's walk follows symlinks
+    # and skips directories it has seen, so walking them drops the real skills
+    # from the sdist, and from the wheel built from it. skip-excluded-dirs keeps
+    # the walk out of them.
+    "/.agents/",
+    "/.claude/",
     "*.pyc",
     "__pycache__/",
     "/.git/",

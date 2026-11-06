@@ -1,7 +1,7 @@
 ---
 status: complete (design approved 2026-11-06; implementation remains pending)
 date: 2026-11-06
-backlog: ../../backlog/in_progress/261106-high-scheduled-task-dispatch.md
+backlog: shipped in 0.34.0 (PRD deleted, see git history)
 ---
 
 # Scheduling domain grilling session
@@ -49,7 +49,7 @@ The remaining detailed engine-policy questions are closed by this ownership spli
 
 ## Purpose and evidence
 
-Turn the [Crons draft](../../backlog/in_progress/261106-high-scheduled-task-dispatch.md) into an executable PRD following the [backlog rules](../../backlog/README.md). Questions are asked in groups, with a recommendation for each. A session in progress does not make its implementation backlog item `in_progress`: the PRD moves to `pending/` when design and acceptance are settled, and to `in_progress/` when its first implementation slice lands.
+Turn the Crons draft into an executable PRD following the [backlog rules](../../backlog/README.md). Questions are asked in groups, with a recommendation for each. A session in progress does not make its implementation backlog item `in_progress`: the PRD moves to `pending/` when design and acceptance are settled, and to `in_progress/` when its first implementation slice lands.
 
 Three independent GPT-6.1 Terra agents reviewed current Wappa claims, proposed scheduling correctness, and Symphonai's actual scheduler and expiry integration. Their findings below are code-review evidence and design analysis, not proof from new execution tests. No live jobs or sends were run. The parent also inspected the locked fastapi-crons 2.3.0 wheel, verified its SHA-256 against `uv.lock`, and checked Redis's primary documentation.
 

@@ -61,6 +61,23 @@ jobs:
       - name: Pytest
         run: uv run pytest -q
 
+      # Installs the real wheel, built the way publish.yml builds it, away from
+      # the repo and the lockfile, so a fresh resolve and the packaged files are
+      # what's tested.
+      - name: Check the built package in a clean environment
+        run: |
+          uv build
+          wheel="$(realpath dist/*.whl)"
+          expected="$(ls wappa/cli/skills | sort | paste -sd, -)"
+          cd "$RUNNER_TEMP"
+          EXPECTED_SKILLS="$expected" uv run --isolated --no-project --with "$wheel" python -c '
+          import os, pathlib, wappa
+          from wappa.scheduling import Scheduling
+          skills = pathlib.Path(wappa.__file__).parent / "cli" / "skills"
+          found = ",".join(sorted(p.parent.name for p in skills.glob("*/SKILL.md")))
+          assert found == os.environ["EXPECTED_SKILLS"], f"skills in wheel: {found!r}"
+          '
+
   gitleaks:
     name: Secret scan
     runs-on: ubuntu-latest

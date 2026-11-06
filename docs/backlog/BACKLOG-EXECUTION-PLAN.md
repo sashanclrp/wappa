@@ -10,8 +10,6 @@ Reviewed 2026-11-06 against the current code, recorded live evidence and the use
 
 3. [261106-architecture-hardening/](./in_progress/261106-architecture-hardening/plan.md): H-01–H-25 and H-28–H-31 implemented; H-27 proposal rename complete. H-26 User profile reading, H-32 final docs/ADR reconciliation, H-33 third-Platform/two-Platform proof and final verification remain. The plan contains per-item status; historical audits are not fresh implementation instructions.
 
-4. [261106-high-scheduled-task-dispatch.md](./in_progress/261106-high-scheduled-task-dispatch.md): Wappa implementation done in the working tree, not yet committed; Symphonai adoption PRD is next. One context-bound scheduled-event handler lane for existing Redis TTL and Host scheduler callbacks, with no new scheduler engine, SQL tables, replay/history store or admin API. Redis TTL remains Redis-only with current behavior. Wappa contracts/skills/examples and separate Symphonai adoption are prerequisites for Gate C. [Accepted session](../sasha/grilling-sessions/261106-scheduling-domain.md#q26-final-question-wappa-versus-host-responsibilities); [ADR-0030](../adr/0030-scheduled-work-dispatch.md).
-
 ## Pending
 
 None.

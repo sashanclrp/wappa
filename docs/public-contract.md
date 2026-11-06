@@ -6,7 +6,7 @@ A breaking change is a clean cut: no aliases, re-exports, or compatibility shims
 
 ## Instagram conversations contract
 
-Implemented (unreleased); see the [migration guide](migration/instagram-conversation-contracts.md), the [capability matrix](backlog/in_progress/261103-instagram-conversations/references/capability-matrix.md) for per-capability offline/live status, and [ADR-0025](adr/0025-messenger-contract.md) for the one-method-per-action rule. Publishing, analytics and moderation *policy* remain Host/extension responsibilities.
+Shipped in 0.34.0; see the [migration guide](migration/instagram-conversation-contracts.md), the [capability matrix](backlog/in_progress/261103-instagram-conversations/references/capability-matrix.md) for per-capability offline/live status, and [ADR-0025](adr/0025-messenger-contract.md) for the one-method-per-action rule. Publishing, analytics and moderation *policy* remain Host/extension responsibilities.
 
 ### Event lanes (`from wappa.webhooks import ...`)
 

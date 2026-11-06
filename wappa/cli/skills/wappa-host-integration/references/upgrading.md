@@ -1,7 +1,7 @@
 ---
 checked_on: 2026-11-06
-checked_against: Wappa CHANGELOG.md (0.34.0 unreleased) and docs/migration/v0.34.0-from-0.33.md
-revision: 1
+checked_against: Wappa CHANGELOG.md (0.34.0) and docs/migration/v0.34.0-from-0.33.md
+revision: 2
 ---
 
 # Upgrading a Host to a new Wappa version

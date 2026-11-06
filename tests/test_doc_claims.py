@@ -327,3 +327,25 @@ def test_retired_env_vars_are_not_read_by_settings() -> None:
     source = (REPO / "wappa" / "core" / "config" / "settings.py").read_text()
     for name in RETIRED_ENV_VARS:
         assert f'"{name}"' not in source, f"Settings reads {name}; update this test"
+
+
+def test_async_sqlalchemy_is_a_declared_dependency() -> None:
+    """Regression: SQLAlchemy 2.1 made greenlet optional, breaking a clean install."""
+    import tomllib
+
+    pyproject = tomllib.loads(Path("pyproject.toml").read_text())
+    assert any(
+        dep.startswith("sqlalchemy[asyncio]")
+        for dep in pyproject["project"]["dependencies"]
+    )
+
+
+def test_build_settings_use_the_key_hatchling_reads() -> None:
+    """Regression: [tool.hatchling.build] is silently ignored."""
+    import tomllib
+
+    tool = tomllib.loads(Path("pyproject.toml").read_text())["tool"]
+    assert "hatchling" not in tool
+    sdist = tool["hatch"]["build"]["targets"]["sdist"]
+    assert {"/.agents/", "/.claude/"} <= set(sdist["exclude"])
+    assert sdist["skip-excluded-dirs"] is True

@@ -5,7 +5,7 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.34.0] - 2026-11-06
 
 Instagram conversations join WhatsApp on one Messenger contract, and Wappa's contracts are split by responsibility so it can host more messaging Platforms. Every action that exists on more than one Platform has exactly one `IMessenger` method. Each adapter maps that method onto its native API, so Host code never branches on Platform name ([ADR-0025](docs/adr/0025-messenger-contract.md)). Platform-only families are capabilities a Host asks for: Templates for WhatsApp; comment controls and content reads for Instagram; the Media Library for both. Connecting an account so it becomes an Inbox is a separate contract, `IInboxConnector`, implemented for both Instagram and WhatsApp ([ADR-0026](docs/adr/0026-inbox-connection.md)).
 
@@ -226,6 +226,8 @@ await self.whatsapp.templates.send_text_template("order_ready", target, params, 
 
 ### Fixed
 
+- **The package now ships what it claims.** `wappa init` copied no skills from an installed Wappa, because `uv build` left them out of the sdist and so the wheel. The build settings in `pyproject.toml` also used a key Hatchling ignores, so the sdist contained the repo's tests and agent folders. CI now installs the built wheel in a clean environment and checks it.
+- **A clean install can import Wappa again.** Wappa imports SQLAlchemy's async module but relied on `sqlmodel` to bring it in. SQLAlchemy 2.1 made `greenlet` optional, so a fresh `pip install wappa` failed at `import wappa`, including on 0.33.0. Wappa now declares `sqlalchemy[asyncio]`.
 - The WhatsApp client logged the first 20 characters of the access token on a 401. It now logs the Inbox and URL only.
 - An Instagram 5xx left no reason in the log (only rejections were logged). Meta's error fields are now logged at WARNING for a 5xx too, so a format refusal that Meta reports as HTTP 500 (MOV and WebM uploads, live run of 2026-11-06) is told apart from an outage.
 - The log redactor masked every `code=` field, so Meta's error code in Host log lines (`code=131053`) read `code=[REDACTED]`. The OAuth `code` is now masked only as a URL query parameter (after `?` or `&`).
