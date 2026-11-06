@@ -73,19 +73,35 @@ The [architecture hardening](../261106-architecture-hardening/plan.md) changed h
 - `self.instagram`: an Instagram Messenger on Instagram Inboxes, `None` elsewhere: `.comments`, `.content`, `.history`.
 - `IMessenger.capability()` stays the internal seam behind these objects and behind HTTP `requires_capability` (501 when absent); Hosts do not call it. Internal adapter classes are renamed `WhatsAppMessengerAdapter` / `InstagramMessengerAdapter`. (Planned as the group after the ADR compliance fixes; until it lands, the code still exposes `capability()` / `require_capability()`.)
 
-**Event lanes: put each Platform action in the hook that receives its event.**
+**Event lanes: put each action in the hook that receives its event.** `WappaEventHandler` has fifteen hooks in two kinds.
 
-| Hook | Receives | Typical Platform-specific use |
+Platform webhook lanes (events Meta sends; `self.messenger` and the Platform Messengers are always bound to the Inbox that received the event):
+
+| Hook | Receives | Typical use |
 | --- | --- | --- |
-| `process_message` | DMs and conversation messages on every Platform (text, media, button/list/quick-reply/postback selections) | `self.whatsapp.send_location_request(...)`; `self.instagram.history.read_history(...)` to recap the thread |
+| `process_message` | DMs and conversation messages on every Platform: text, media, location, contacts, button/list/quick-reply/postback selections, typed Flow replies | conversation replies through `self.messenger`; `self.whatsapp.send_location_request(...)`; `self.instagram.history.read_history(...)` to recap the thread |
+| `process_message_update` | edits and deletions (unsend) of an earlier User message; never arrives as `process_message` or `process_status` | update or retract what the Host stored for that message |
+| `process_status` | sent / delivered / read / failed statuses on every Platform (Instagram sends only `read`) | correlate with the stored `MessageResult.message_id` and `wappa_parts` IDs |
+| `process_outbound_echo` | messages the business itself sent, same lane on every Platform (WhatsApp Coexistence, Instagram); never arrives as `process_message` | `webhook.is_from_business_app` means a person answered from the Platform's own app: pause automation for a human takeover |
 | `process_comment` | Instagram comments, including Live | `self.instagram.comments.reply_comment(webhook.comment_ref, ...)`; a private reply is `self.messenger.send_text(..., PrivateReply(comment_ref=...))` |
-| `process_mention` | Instagram mentions of the account | `self.instagram.content.get_mentioned_post(...)` / `get_mentioned_comment(...)` |
-| `process_history_sync` | Instagram history sync | none needed beyond reading the webhook |
-| `process_call` | WhatsApp calls | `self.whatsapp.calls` when the Calling PRD lands |
-| `process_status` | delivery and read statuses on every Platform | correlate with the `MessageResult.message_id` (and `wappa_parts` IDs) the Host stored |
-| `process_inbox_connection` | WhatsApp account offboarded / reconnected | update the Host's account records |
+| `process_mention` | Instagram mentions of the account in posts or comments | `self.instagram.content.get_mentioned_post(...)` / `get_mentioned_comment(...)` |
+| `process_history_sync` | past conversations a Platform pushes (WhatsApp Coexistence history) | store them; pull-only Platforms (Instagram) offer the same `HistoryThread` through `self.instagram.history` |
+| `process_call` | WhatsApp calls (`CallWebhook`) | `self.whatsapp.calls` when the Calling PRD lands |
+| `process_system_webhook` | Platform system events: User phone number changes, BSUID updates, marketing preference changes | update the Host's User identity records |
+| `process_inbox_connection` | account lifecycle: WhatsApp account offboarded / reconnected | update the Host's account records; stop sending on an offboarded Inbox |
+| `process_error` | Platform error webhooks (Wappa logs and escalates first) | alerting, Host-specific error handling |
 
-Comment actions belong in `process_comment` / `process_mention`, conversation actions in `process_message`; inside a lane that only one Platform emits (comments today), the Platform Messenger is always present. `IMessenger.resolve_platform_user_profile(webhook.user)` works in every lane: WhatsApp resolves from webhook evidence, Instagram adds a Graph lookup.
+Wappa runtime lanes (events from Wappa itself, not from a Platform callback):
+
+| Hook | Receives | Notes |
+| --- | --- | --- |
+| `process_api_message` | an `APIMessageEvent` after a message is sent through Wappa's HTTP API (`/api/{platform}/...`); never called for webhook-received messages | track outgoing messages and trigger workflows; the event's Platform is `result.platform` |
+| `process_external_event` | an `ExternalEvent` from a registered External Webhook Source (payments, CRM, subscriptions) | `self.db` / `self.db_read` when configured; an external webhook context resolver may bind an Inbox, and only then are `self.messenger` and the Platform Messengers available |
+| `process_cron_event` | a `CronEvent` from a scheduled cron; dispatch by `event.cron_id` | `self.db` always available when configured; `self.messenger` and caches only when the cron is bound to an Inbox |
+
+In the runtime lanes, check that `self.messenger` (and `self.whatsapp` / `self.instagram`) is bound before sending: these events have an Inbox only when one was resolved.
+
+Comment actions belong in `process_comment` / `process_mention`, conversation actions in `process_message`, edits in `process_message_update`, business echoes in `process_outbound_echo`; inside a lane that only one Platform emits (comments today), the Platform Messenger is always present. `IMessenger.resolve_platform_user_profile(webhook.user)` works in every lane: WhatsApp resolves from webhook evidence, Instagram adds a Graph lookup.
 
 **Order before Gate C.** Architecture hardening and ADR compliance fixes → Platform Messengers on the handler → Gate A re-run on the migrated lab (both Platforms) and the Media Adaptation phase 0 format matrix → **I08 skill refresh** to this Host shape → I07 Symphonai migration → Gate C.
 
