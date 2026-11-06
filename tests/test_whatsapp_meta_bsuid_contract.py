@@ -42,7 +42,7 @@ def _metadata() -> dict[str, str]:
 
 @pytest.mark.asyncio
 async def test_contact_request_webhook_accepts_origin_and_vcard_without_name() -> None:
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         _payload(
             {
                 "messaging_product": "whatsapp",
@@ -89,7 +89,7 @@ async def test_contact_request_webhook_accepts_origin_and_vcard_without_name() -
 
 @pytest.mark.asyncio
 async def test_system_user_id_change_accepts_meta_and_parent_bsuids() -> None:
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         _payload(
             {
                 "messaging_product": "whatsapp",
@@ -157,7 +157,7 @@ async def test_contact_request_send_uses_bsuid_recipient_payload() -> None:
 
 @pytest.mark.asyncio
 async def test_call_permission_reply_accepts_username_only_user() -> None:
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         _payload(
             {
                 "messaging_product": "whatsapp",
@@ -224,7 +224,7 @@ async def test_business_username_update_is_a_native_system_event() -> None:
         ],
     }
 
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         payload, inbox_id="508386009032748"
     )
 
@@ -238,7 +238,7 @@ async def test_business_username_update_is_a_native_system_event() -> None:
 
 @pytest.mark.asyncio
 async def test_group_participant_update_preserves_bsuid_without_phone() -> None:
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         {
             "object": "whatsapp_business_account",
             "entry": [
@@ -285,7 +285,7 @@ async def test_group_participant_update_preserves_bsuid_without_phone() -> None:
 
 @pytest.mark.asyncio
 async def test_business_initiated_call_uses_to_bsuid_without_phone() -> None:
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         {
             "object": "whatsapp_business_account",
             "entry": [
@@ -403,7 +403,7 @@ async def test_history_sync_preserves_thread_identity_companions() -> None:
         ],
     }
 
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(payload)
+    webhook = await WhatsAppWebhookProcessor().translate(payload)
 
     from wappa.webhooks import HistoryDirection, HistorySyncWebhook
 
@@ -457,7 +457,7 @@ async def test_smb_echo_and_app_state_sync_accept_username_only_user() -> None:
             }
         ],
     }
-    echo = await processor.create_universal_webhook(echo_payload)
+    echo = await processor.translate(echo_payload)
 
     assert isinstance(echo, OutboundEchoWebhook)
     assert echo.origin is EchoOrigin.BUSINESS_APP
@@ -497,7 +497,7 @@ async def test_smb_echo_and_app_state_sync_accept_username_only_user() -> None:
             }
         ],
     }
-    app_state = await processor.create_universal_webhook(app_state_payload)
+    app_state = await processor.translate(app_state_payload)
 
     assert isinstance(app_state, SystemWebhook)
     assert app_state.system_event_type == SystemEventType.SMB_APP_STATE_SYNC
@@ -523,7 +523,7 @@ async def test_consumer_lifecycle_messages_preserve_bsuid(
         if message_type == "edit"
         else {"original_message_id": "wamid.original-001"}
     )
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         _payload(
             {
                 "messaging_product": "whatsapp",
@@ -566,7 +566,7 @@ async def test_consumer_lifecycle_messages_preserve_bsuid(
 
 @pytest.mark.asyncio
 async def test_call_status_accepts_recipient_bsuid_without_phone() -> None:
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         {
             "object": "whatsapp_business_account",
             "entry": [
@@ -606,7 +606,7 @@ async def test_call_status_accepts_recipient_bsuid_without_phone() -> None:
 
 @pytest.mark.asyncio
 async def test_user_preferences_preserves_parent_bsuid_without_phone() -> None:
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         {
             "object": "whatsapp_business_account",
             "entry": [
@@ -653,7 +653,7 @@ async def test_user_preferences_preserves_parent_bsuid_without_phone() -> None:
 
 @pytest.mark.asyncio
 async def test_user_id_update_accepts_missing_phone_and_parent_transition() -> None:
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         {
             "object": "whatsapp_business_account",
             "entry": [
@@ -702,7 +702,7 @@ async def test_system_user_id_change_maps_observed_previous_user_id() -> None:
     ``extra="forbid"`` and the previous BSUID reaches the identity event the
     same way the ``user_id_update`` field path already exposes it.
     """
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         _payload(
             {
                 "messaging_product": "whatsapp",
@@ -735,10 +735,10 @@ async def test_system_user_id_change_maps_observed_previous_user_id() -> None:
 @pytest.mark.asyncio
 async def test_system_schema_reports_unobserved_fields_as_drift() -> None:
     """Strict mode (conftest): a never-observed ``system`` key is reported as drift."""
-    from wappa.processors.base_processor import ProcessorError
+    from wappa.processors.errors import ProcessorError
 
     with pytest.raises(ProcessorError, match="surprise_field"):
-        await WhatsAppWebhookProcessor().create_universal_webhook(
+        await WhatsAppWebhookProcessor().translate(
             _payload(
                 {
                     "messaging_product": "whatsapp",
@@ -769,7 +769,7 @@ async def test_blank_contact_name_normalizes_to_none_and_keeps_identity() -> Non
     It normalizes to ``None`` — the already-supported absent-name shape —
     while BSUID, phone number and username are unchanged.
     """
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         _payload(
             {
                 "messaging_product": "whatsapp",
@@ -811,7 +811,7 @@ async def test_blank_contact_name_normalizes_to_none_and_keeps_identity() -> Non
 @pytest.mark.asyncio
 async def test_real_contact_name_is_still_preserved() -> None:
     """A non-blank profile.name still lands on the user as before."""
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         _payload(
             {
                 "messaging_product": "whatsapp",
@@ -888,5 +888,5 @@ async def test_status_with_pricing_subtype_free_tier_is_accepted() -> None:
             }
         ],
     }
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(payload)
+    webhook = await WhatsAppWebhookProcessor().translate(payload)
     assert isinstance(webhook, StatusWebhook)

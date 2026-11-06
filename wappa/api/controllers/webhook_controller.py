@@ -1,15 +1,18 @@
-"""HTTP adapter for the WhatsApp callback.
+"""HTTP adapter for the Meta Platform callbacks.
 
-The controller authenticates the exact request bytes, validates the JSON
-root, delegates routing and admission to Wappa modules, and maps typed
-failures to HTTP status codes. It never parses Platform identity itself and
-never sees Table Cache names, encryption keys, or token values.
+The controller looks the path Platform up in the app's Platform Registry
+(400 when it is not installed), authenticates the exact request bytes,
+validates the JSON root, delegates routing to the Platform's
+``PlatformWebhooks`` adapter and admission to the Inbound Runtime, and maps
+typed failures to HTTP status codes. It never parses Platform identity itself
+and never sees Table Cache names, encryption keys, or token values.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Mapping
 from typing import Any
 
 from fastapi import HTTPException, Request
@@ -26,9 +29,7 @@ from wappa.core.inbound import (
     PayloadRoutingError,
     ProcessorFailureError,
     UnsupportedPlatformError,
-    route_whatsapp_payload,
 )
-from wappa.core.inbound.instagram_routing import route_instagram_payload
 from wappa.core.inbound.payload_capture import capture_payload
 from wappa.core.logging.logger import get_logger
 from wappa.domain.inbox.errors import (
@@ -38,6 +39,7 @@ from wappa.domain.inbox.errors import (
     InboxMutationConflictError,
     InboxNotFoundError,
 )
+from wappa.platforms import PLATFORMS, PlatformEntry
 from wappa.schemas.core.types import PlatformType
 
 _UNAUTHORIZED_DETAIL = "Unauthorized"
@@ -50,7 +52,6 @@ class WebhookController:
         self.event_dispatcher = event_dispatcher
         self.inbound_runtime = InboundRuntime(event_dispatcher)
         self.logger = get_logger(__name__)
-        self.supported_platforms = {platform.value.lower() for platform in PlatformType}
         if settings.capture_payloads and not settings.payload_capture_enabled:
             self.logger.warning(
                 "SYSTEM_CAPTURE_PAYLOADS is ignored outside SYSTEM_ENVIRONMENT=DEV"
@@ -68,10 +69,7 @@ class WebhookController:
     ) -> PlainTextResponse:
         self.logger.info("Webhook verification request for platform: %s", platform)
 
-        if not self._is_supported_platform(platform):
-            raise HTTPException(
-                status_code=400, detail=f"Unsupported platform: {platform}"
-            )
+        self._platform_entry(request, platform)
 
         if hub_mode == "subscribe" and hub_challenge:
             config = self._meta_config(request)
@@ -108,16 +106,7 @@ class WebhookController:
         body: bytes,
         signature: str | None,
     ) -> dict[str, str]:
-        if not self._is_supported_platform(platform):
-            raise HTTPException(
-                status_code=400, detail=f"Unsupported platform: {platform}"
-            )
-        platform_type = PlatformType(platform.lower())
-        if platform_type not in {PlatformType.WHATSAPP, PlatformType.INSTAGRAM}:
-            raise HTTPException(
-                status_code=400,
-                detail="Payload-derived Inbox routing requires a registered platform adapter",
-            )
+        platform_type, entry = self._platform_entry(request, platform)
 
         # 1. Authenticate the exact bytes before anything else touches them.
         config = self._meta_config(request)
@@ -133,12 +122,9 @@ class WebhookController:
         # 3. Route, prove membership, build every Dispatch Context, then schedule.
         dependencies = RuntimeCapabilities.from_app(request.app)
         try:
-            route_payload = (
-                route_instagram_payload
-                if platform_type is PlatformType.INSTAGRAM
-                else route_whatsapp_payload
+            deliveries = await entry.webhooks.route(
+                payload, dependencies.credential_resolver
             )
-            deliveries = await route_payload(payload, dependencies.credential_resolver)
             return await self.inbound_runtime.accept_webhook_batch(
                 deliveries=deliveries, dependencies=dependencies
             )
@@ -223,14 +209,31 @@ class WebhookController:
             )
         return config
 
-    def _is_supported_platform(self, platform: str) -> bool:
-        return platform.lower() in self.supported_platforms
+    @staticmethod
+    def platforms(request: Request) -> Mapping[PlatformType, PlatformEntry]:
+        """The app's Platform Registry (``PLATFORMS`` when built by hand)."""
+        return getattr(request.app.state, "platforms", None) or PLATFORMS
 
-    def get_health_status(self) -> dict[str, Any]:
+    def _platform_entry(
+        self, request: Request, platform: str
+    ) -> tuple[PlatformType, PlatformEntry]:
+        """Resolve an installed Platform or answer 400; never fall through."""
+        try:
+            platform_type = PlatformType(platform.lower())
+        except ValueError:
+            platform_type = None
+        entry = self.platforms(request).get(platform_type) if platform_type else None
+        if platform_type is None or entry is None:
+            raise HTTPException(
+                status_code=400, detail=f"Unsupported platform: {platform}"
+            )
+        return platform_type, entry
+
+    def get_health_status(self, request: Request) -> dict[str, Any]:
         handler = self.event_dispatcher.event_handler if self.event_dispatcher else None
         return {
             "controller": "healthy",
-            "supported_platforms": list(self.supported_platforms),
+            "supported_platforms": sorted(p.value for p in self.platforms(request)),
             "event_dispatcher": {
                 "initialized": self.event_dispatcher is not None,
                 "event_handler": handler.__class__.__name__ if handler else None,

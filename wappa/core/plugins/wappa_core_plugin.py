@@ -233,27 +233,25 @@ class WappaCorePlugin:
     ) -> None:
         try:
             # Imported here to avoid circular imports during startup
-            from wappa.processors.factory import processor_factory
+            from wappa.platforms import PLATFORMS
 
             from ..events.webhook_factory import WebhookURLFactory
 
             if getattr(app.state, "meta_application_config", None) is None:
                 return
 
-            platforms = processor_factory.get_supported_platforms()
+            platforms = getattr(app.state, "platforms", None) or PLATFORMS
+            shown = sorted(platforms, key=lambda item: item.value)
             if app.state.inbox_runtime.mode is InboxRoutingMode.LEGACY:
-                platforms = platforms & {PlatformType.WHATSAPP}
+                # The legacy settings-backed Inbox is a WhatsApp number.
+                shown = [p for p in shown if p is PlatformType.WHATSAPP]
             factory = WebhookURLFactory(base_url=base_url)
-            labels = {
-                PlatformType.WHATSAPP: "WhatsApp",
-                PlatformType.INSTAGRAM: "Instagram",
-            }
 
             logger.info("=== META WEBHOOK URLS ===")
-            for platform in sorted(platforms, key=lambda item: item.value):
+            for platform in shown:
                 logger.info(
                     "📍 %s Webhook URL: %s",
-                    labels.get(platform, platform.value),
+                    platforms[platform].display_name,
                     factory.generate_webhook_url(platform),
                 )
             logger.info("   • Configure each URL in its matching Meta use case")

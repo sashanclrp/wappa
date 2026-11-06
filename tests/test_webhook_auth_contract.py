@@ -197,6 +197,29 @@ async def test_get_verification_rejects_the_app_secret_and_wrong_tokens(
     assert secret_as_token.status_code == 403
 
 
+@pytest.mark.parametrize("platform", ["telegram", "teams", "nope"])
+async def test_uninstalled_platform_answers_400_before_any_challenge(
+    app: FastAPI, platform: str
+) -> None:
+    body = json.dumps(_message_payload()).encode()
+    async with _client(app) as client:
+        get = await client.get(
+            f"/webhook/inboxes/{platform}",
+            params={
+                "hub.mode": "subscribe",
+                "hub.verify_token": VERIFY_TOKEN,
+                "hub.challenge": "abc",
+            },
+        )
+        post = await client.post(
+            f"/webhook/inboxes/{platform}",
+            content=body,
+            headers=_signed_headers(body),
+        )
+    assert get.status_code == 400 and get.text != "abc"
+    assert post.status_code == 400
+
+
 async def test_get_verification_does_not_read_the_directory(app: FastAPI) -> None:
     class _Exploding:
         async def resolve_credentials(self, inbox_ref: InboxRef) -> Any:

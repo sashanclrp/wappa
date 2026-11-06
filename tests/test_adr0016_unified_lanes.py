@@ -60,7 +60,7 @@ def _wa(field: str, value: dict) -> dict:
 
 
 async def test_whatsapp_text_edit_is_a_message_update_with_typed_replacement():
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         _wa(
             "messages",
             {
@@ -89,7 +89,7 @@ async def test_whatsapp_text_edit_is_a_message_update_with_typed_replacement():
 
 
 async def test_whatsapp_ctwa_referral_fills_the_shared_entry_referral():
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         _wa(
             "messages",
             {
@@ -125,7 +125,7 @@ async def test_whatsapp_ctwa_referral_fills_the_shared_entry_referral():
 
 
 async def test_media_history_sync_builds_one_typed_thread():
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         _wa(
             "history",
             {

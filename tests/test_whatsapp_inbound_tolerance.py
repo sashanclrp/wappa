@@ -63,7 +63,7 @@ def _interactive(interactive: dict) -> dict:
 
 
 async def _parse(message: dict):
-    return await WhatsAppWebhookProcessor().create_universal_webhook(_payload(message))
+    return await WhatsAppWebhookProcessor().translate(_payload(message))
 
 
 @pytest.mark.asyncio
@@ -206,7 +206,7 @@ async def test_unmodelled_interactive_type_is_unsupported_not_400(monkeypatch) -
 
 @pytest.mark.asyncio
 async def test_unmodelled_interactive_type_fails_in_strict_mode(monkeypatch) -> None:
-    from wappa.processors.base_processor import ProcessorError
+    from wappa.processors.errors import ProcessorError
 
     monkeypatch.setenv("WAPPA_STRICT_META_SCHEMA", "1")
     with pytest.raises(ProcessorError, match="InteractiveContent.type=nfm_reply"):
@@ -282,9 +282,7 @@ async def test_played_status_is_a_status_webhook() -> None:
     from wappa.schemas.core.types import MessageStatus
     from wappa.webhooks.core.webhook_interfaces import StatusWebhook
 
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
-        _status_payload("played")
-    )
+    webhook = await WhatsAppWebhookProcessor().translate(_status_payload("played"))
 
     assert isinstance(webhook, StatusWebhook)
     assert webhook.status is MessageStatus.PLAYED
@@ -295,9 +293,7 @@ async def test_unknown_status_is_unsupported_not_400(monkeypatch) -> None:
     from wappa.webhooks.core.webhook_interfaces import SystemEventType, SystemWebhook
 
     monkeypatch.delenv("WAPPA_STRICT_META_SCHEMA", raising=False)
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
-        _status_payload("archived")
-    )
+    webhook = await WhatsAppWebhookProcessor().translate(_status_payload("archived"))
 
     assert isinstance(webhook, SystemWebhook)
     assert webhook.system_event_type is SystemEventType.UNSUPPORTED_EVENT

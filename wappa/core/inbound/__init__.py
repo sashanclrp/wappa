@@ -1,6 +1,11 @@
 """Inbound Runtime boundary for accepted platform webhooks."""
 
 from .meta_callback_auth import SIGNATURE_HEADER, MetaCallbackAuthenticator
+from .platform_webhooks import (
+    PayloadRoutingError,
+    PlatformWebhooks,
+    RoutedWebhookDelivery,
+)
 from .runtime import (
     DispatchContext,
     DispatchContextError,
@@ -12,9 +17,7 @@ from .runtime import (
     UnsupportedPlatformError,
 )
 from .webhook_routing import (
-    PayloadRoutingError,
     PlatformAccountNotRegisteredError,
-    RoutedWebhookDelivery,
     route_whatsapp_payload,
 )
 
@@ -29,6 +32,7 @@ __all__ = (
     "PayloadInboxMismatchError",
     "PayloadRoutingError",
     "PlatformAccountNotRegisteredError",
+    "PlatformWebhooks",
     "ProcessorFailureError",
     "RoutedWebhookDelivery",
     "UnsupportedPlatformError",

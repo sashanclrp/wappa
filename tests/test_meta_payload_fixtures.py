@@ -2,8 +2,8 @@
 
 Each JSON file under ``tests/fixtures/meta_payloads/<platform>/`` goes
 through the same steps as an authenticated callback: Platform routing
-(``route_whatsapp_payload`` / ``route_instagram_payload``), then the
-Platform processor that builds the Universal Webhook. Strict schema mode
+(``PlatformWebhooks.route``), then ``PlatformWebhooks.translate`` that
+builds the Universal Webhook. Strict schema mode
 (``WAPPA_STRICT_META_SCHEMA=1``, ADR-0010) turns any field Wappa does not
 model into a failure, so drift found live becomes a fixture that fails CI
 until it is modelled. Add fixtures with ``scripts/promote_payload.py``.
@@ -18,12 +18,10 @@ from typing import Any
 import pytest
 from pydantic import SecretStr
 
-from wappa.core.inbound.instagram_routing import route_instagram_payload
 from wappa.core.inbound.payload_capture import find_secrets
-from wappa.core.inbound.webhook_routing import route_whatsapp_payload
 from wappa.domain.inbox import InboxRef, PlatformAccountRef
 from wappa.domain.inbox.ports import IInboxCredentialResolver, ResolvedInboxCredentials
-from wappa.processors.factory import processor_factory
+from wappa.platforms import PLATFORMS
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks import SystemEventType, SystemWebhook
 from wappa.webhooks.core import schema_drift
@@ -81,20 +79,13 @@ async def test_fixture_parses_without_schema_drift(
     monkeypatch.setenv(schema_drift.STRICT_SCHEMA_ENV, "1")
     platform = PlatformType(fixture.parent.name)
     payload = json.loads(fixture.read_text(encoding="utf-8"))
-    route = (
-        route_instagram_payload
-        if platform is PlatformType.INSTAGRAM
-        else route_whatsapp_payload
-    )
+    webhooks = PLATFORMS[platform].webhooks
 
-    deliveries = await route(payload, _FixtureResolver(payload))
+    deliveries = await webhooks.route(payload, _FixtureResolver(payload))
 
     assert deliveries, f"{fixture.name} produced no deliveries"
-    processor = processor_factory.get_processor(platform)
     for delivery in deliveries:
-        webhook = await processor.create_universal_webhook(
-            payload=delivery.payload, inbox_id=delivery.inbox_id
-        )
+        webhook = await webhooks.translate(delivery.payload, inbox_id=delivery.inbox_id)
         assert schema_drift.unmodelled_fields(webhook) == []
         assert not (
             isinstance(webhook, SystemWebhook)

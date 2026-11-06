@@ -12,9 +12,11 @@ inactive record carries no credential material by construction.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Annotated, Any, Final, Literal
 
 from pydantic import (
@@ -197,6 +199,23 @@ InactiveInboxCredentialRecord = (
 )
 CredentialRecord = ActiveInboxCredentialRecord | InactiveInboxCredentialRecord
 
+RECORD_TYPES: Mapping[
+    PlatformType,
+    tuple[type[ActiveInboxCredentialRecord], type[InactiveInboxCredentialRecord]],
+] = MappingProxyType(
+    {
+        PlatformType.WHATSAPP: (
+            WhatsAppActiveInboxCredentialRecord,
+            WhatsAppInactiveInboxCredentialRecord,
+        ),
+        PlatformType.INSTAGRAM: (
+            InstagramActiveInboxCredentialRecord,
+            InstagramInactiveInboxCredentialRecord,
+        ),
+    }
+)
+"""Each Platform's ``(active, inactive)`` record classes; one entry per union pair."""
+
 
 def _record_tag(value: Any) -> str | None:
     """Callable discriminator over ``platform`` and ``status`` together."""
@@ -309,6 +328,7 @@ def utc_now() -> datetime:
 
 
 __all__ = [
+    "RECORD_TYPES",
     "ActiveInboxCredentialRecord",
     "InactiveInboxCredentialRecord",
     "CredentialRecord",

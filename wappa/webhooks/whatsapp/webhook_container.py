@@ -16,12 +16,6 @@ from pydantic import (
     model_validator,
 )
 
-from wappa.core.events.field_registry import (
-    ACCOUNT_EVENT_FIELDS,
-    BUILTIN_WEBHOOK_FIELDS,
-    BUSINESS_USERNAME_EVENT_FIELDS,
-    COEXISTENCE_EVENT_FIELDS,
-)
 from wappa.schemas.core.types import PlatformType, WebhookType
 from wappa.webhooks.core.base_webhook import (
     BaseContact,
@@ -37,6 +31,37 @@ from wappa.webhooks.whatsapp.coexistence_events import (
     SmbMessageEchoesWebhookValue,
 )
 from wappa.webhooks.whatsapp.system_events import UserActionEntry
+
+ACCOUNT_EVENT_FIELDS: frozenset[str] = frozenset(
+    {"account_offboarded", "account_reconnected"}
+)
+BUSINESS_USERNAME_EVENT_FIELDS: frozenset[str] = frozenset(
+    {"business_username_updates"}
+)
+COEXISTENCE_EVENT_FIELDS: frozenset[str] = frozenset(
+    {"history", "smb_message_echoes", "smb_app_state_sync"}
+)
+"""Account-level Coexistence fields whose ``value`` is a flat WABA-scoped object.
+
+Their value shape (``waba_id``/``reason``/``phone_number_id``/``timestamp``) differs
+from the phone-scoped :class:`WebhookValue` used by all other built-in fields.
+"""
+
+BUILTIN_WEBHOOK_FIELDS: frozenset[str] = (
+    frozenset(
+        {
+            "messages",
+            "user_preferences",
+            "user_id_update",
+            "group_participants_update",
+            "calls",
+        }
+    )
+    | ACCOUNT_EVENT_FIELDS
+    | BUSINESS_USERNAME_EVENT_FIELDS
+    | COEXISTENCE_EVENT_FIELDS
+)
+"""WhatsApp field values handled natively — reserved from Host registration."""
 
 # Pre-computed union used by ``is_system_event`` to identify fields that are
 # system events by their field name alone (as opposed to system messages that

@@ -17,12 +17,15 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, SecretStr, field_validator
 
-from wappa.domain.inbox.errors import InboxConfigurationError
-
 if TYPE_CHECKING:
     from .settings import Settings
 
 _VERSION_PATTERN = re.compile(r"^v\d+\.\d+$")
+
+DEFAULT_GRAPH_API_VERSION = "v26.0"
+"""The one home of Wappa's default Meta Graph API version."""
+DEFAULT_GRAPH_BASE_URL = "https://graph.facebook.com"
+"""The one home of Wappa's default Meta Graph API base URL."""
 
 META_APP_SECRET_VARIABLE = "META_APP_SECRET"
 VERIFY_TOKEN_VARIABLE = "WP_WEBHOOK_VERIFY_TOKEN"
@@ -35,8 +38,8 @@ class MetaApplicationConfig(BaseModel):
 
     app_secret: SecretStr
     whatsapp_webhook_verify_token: SecretStr
-    graph_api_version: str = "v26.0"
-    graph_base_url: AnyHttpUrl = AnyHttpUrl("https://graph.facebook.com/")
+    graph_api_version: str = DEFAULT_GRAPH_API_VERSION
+    graph_base_url: AnyHttpUrl = AnyHttpUrl(DEFAULT_GRAPH_BASE_URL)
 
     @field_validator("app_secret", "whatsapp_webhook_verify_token")
     @classmethod
@@ -73,6 +76,9 @@ def resolve_meta_application_config(
     Returns ``None`` only for an outbound-only application that mounts no
     WhatsApp callback and configured nothing.
     """
+    # Imported here: ``settings`` imports this module for the Graph defaults.
+    from wappa.domain.inbox.errors import InboxConfigurationError
+
     env_secret = (settings.meta_app_secret or "").strip()
     env_verify = (settings.wp_webhook_verify_token or "").strip()
 
@@ -125,6 +131,8 @@ def resolve_meta_application_config(
 
 
 __all__ = [
+    "DEFAULT_GRAPH_API_VERSION",
+    "DEFAULT_GRAPH_BASE_URL",
     "META_APP_SECRET_VARIABLE",
     "VERIFY_TOKEN_VARIABLE",
     "MetaApplicationConfig",

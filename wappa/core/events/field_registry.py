@@ -1,32 +1,30 @@
 """
 Webhook field handler registry.
 
-Apps register typed handlers for arbitrary Meta WhatsApp webhook field values
-(e.g. ``message_template_status_update``, ``account_update``,
-``phone_number_quality_update``) that the framework does not understand
-natively. A registration carries a mandatory Pydantic parser plus an async
-handler — the parser converts the raw ``value`` dict from Meta into a typed
-model, and the handler receives a :class:`CustomWebhook` whose ``parsed``
-attribute holds that model.
+Apps register typed handlers for arbitrary Meta webhook field values (e.g.
+WhatsApp ``message_template_status_update`` or an Instagram extension field)
+that the framework does not understand natively. A registration carries a
+mandatory Pydantic parser plus an async handler — the parser converts the raw
+``value`` dict from Meta into a typed model, and the handler receives a
+:class:`CustomWebhook` whose ``parsed`` attribute holds that model.
 
-The registry is consulted in two places:
-
-1. ``WhatsAppWebhookProcessor.parse_webhook_container`` passes the registry
-   into Pydantic's validation context, which lets ``WebhookChange`` accept
-   registered field names alongside the built-in literals.
-2. ``WhatsAppWebhookProcessor.create_universal_webhook`` builds a
-   ``CustomWebhook`` for any registered field, and ``WappaEventDispatcher``
-   then awaits the registered handler.
+The registry is built at the composition root (``wappa.platforms``) with each
+installed Platform's ``builtin_fields``; a Platform without an entry cannot
+register fields. Each Platform adapter receives the registry in its
+constructor and builds a ``CustomWebhook`` for a registered field;
+``WappaEventDispatcher`` then awaits the registered handler.
 
 Built-in field values are reserved — apps cannot override native message,
-identity, Calling, group, account, or Coexistence contracts through the registry.
+identity, Calling, group, account, Coexistence, comment or mention contracts
+through the registry.
 """
 
 from __future__ import annotations
 
 import inspect
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, cast
 
 from pydantic import BaseModel
@@ -35,40 +33,6 @@ from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
     from wappa.webhooks.core.webhook_interfaces import CustomWebhook
-
-
-ACCOUNT_EVENT_FIELDS: frozenset[str] = frozenset(
-    {"account_offboarded", "account_reconnected"}
-)
-BUSINESS_USERNAME_EVENT_FIELDS: frozenset[str] = frozenset(
-    {"business_username_updates"}
-)
-COEXISTENCE_EVENT_FIELDS: frozenset[str] = frozenset(
-    {"history", "smb_message_echoes", "smb_app_state_sync"}
-)
-"""Account-level Coexistence fields whose ``value`` is a flat WABA-scoped object.
-
-Their value shape (``waba_id``/``reason``/``phone_number_id``/``timestamp``) differs
-from the phone-scoped :class:`WebhookValue` used by all other built-in fields.
-Defined here so :data:`BUILTIN_WEBHOOK_FIELDS` can compose from it — one place to
-extend when Meta adds a new account-level event.
-"""
-
-BUILTIN_WEBHOOK_FIELDS: frozenset[str] = (
-    frozenset(
-        {
-            "messages",
-            "user_preferences",
-            "user_id_update",
-            "group_participants_update",
-            "calls",
-        }
-    )
-    | ACCOUNT_EVENT_FIELDS
-    | BUSINESS_USERNAME_EVENT_FIELDS
-    | COEXISTENCE_EVENT_FIELDS
-)
-"""Field values handled natively by the framework — reserved from registration."""
 
 
 ParserFn = Callable[[dict[str, Any]], BaseModel]
@@ -82,24 +46,19 @@ class FieldHandler:
     field_name: str
     parser: ParserFn
     handler: HandlerFn
-    platform: PlatformType = PlatformType.WHATSAPP
-
-
-def _builtin_fields(platform: PlatformType) -> frozenset[str]:
-    if platform is PlatformType.INSTAGRAM:
-        from wappa.webhooks.instagram.models import INSTAGRAM_BUILTIN_FIELDS
-
-        return INSTAGRAM_BUILTIN_FIELDS
-    return BUILTIN_WEBHOOK_FIELDS
-
-
-_REGISTRABLE_PLATFORMS = frozenset({PlatformType.WHATSAPP, PlatformType.INSTAGRAM})
+    platform: PlatformType
 
 
 class FieldHandlerRegistry:
-    """In-memory registry of custom webhook field handlers."""
+    """In-memory registry of custom webhook field handlers.
 
-    def __init__(self) -> None:
+    ``builtin_fields`` maps each installed Platform to the field names its
+    adapter handles natively; ``wappa.platforms.BUILTIN_FIELDS`` is the
+    composition-root value.
+    """
+
+    def __init__(self, builtin_fields: Mapping[PlatformType, frozenset[str]]) -> None:
+        self._builtin_fields = MappingProxyType(dict(builtin_fields))
         self._entries: dict[tuple[PlatformType, str], FieldHandler] = {}
 
     def register(
@@ -132,11 +91,12 @@ class FieldHandlerRegistry:
             raise ValueError("field_name must be a non-empty string")
         field_name = field_name.strip()
 
-        if platform not in _REGISTRABLE_PLATFORMS:
+        builtin = self._builtin_fields.get(platform)
+        if builtin is None:
             raise ValueError(
                 f"Webhook field registration is not available for {platform.value}"
             )
-        if field_name in _builtin_fields(platform):
+        if field_name in builtin:
             raise ValueError(
                 f"Cannot register built-in webhook field '{field_name}' — "
                 "it is handled by the framework."
@@ -156,21 +116,12 @@ class FieldHandlerRegistry:
             field_name=field_name, parser=parser_fn, handler=handler, platform=platform
         )
 
-    def get(
-        self, field_name: str, platform: PlatformType = PlatformType.WHATSAPP
-    ) -> FieldHandler | None:
+    def get(self, field_name: str, platform: PlatformType) -> FieldHandler | None:
         return self._entries.get((platform, field_name))
 
-    def fields(self, platform: PlatformType = PlatformType.WHATSAPP) -> frozenset[str]:
+    def fields(self, platform: PlatformType) -> frozenset[str]:
         """Snapshot of registered field names for one Platform."""
         return frozenset(name for (p, name) in self._entries if p is platform)
-
-    def __contains__(self, field_name: object) -> bool:
-        # Membership keeps its WhatsApp meaning; use get(..., platform=) else.
-        return (
-            isinstance(field_name, str)
-            and (PlatformType.WHATSAPP, field_name) in self._entries
-        )
 
     def __len__(self) -> int:
         return len(self._entries)

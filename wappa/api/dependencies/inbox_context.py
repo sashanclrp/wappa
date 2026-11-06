@@ -37,6 +37,7 @@ from wappa.domain.inbox.identity import (
 from wappa.domain.inbox.ports import ResolvedInboxCredentials
 from wappa.domain.inbox.routing import InboxRoutingMode
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
+from wappa.platforms import PLATFORMS
 from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
@@ -56,11 +57,11 @@ INBOX_HEADER_DESCRIPTION: Final[str] = (
 )
 
 
-class RoutePlatform(StrEnum):
-    """Platforms served by Wappa's messaging HTTP API (``/api/{platform}``)."""
-
-    WHATSAPP = "whatsapp"
-    INSTAGRAM = "instagram"
+# The installed Platforms served by ``/api/{platform}``, derived from the
+# Platform Registry so a new Platform needs no edit here.
+RoutePlatform = StrEnum(  # type: ignore[misc]  # members come from PLATFORMS
+    "RoutePlatform", {platform.name: platform.value for platform in PLATFORMS}
+)
 
 
 async def route_platform(

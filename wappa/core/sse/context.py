@@ -169,7 +169,7 @@ async def sse_event_scope(
     user_id: str = "unknown",
     bsuid: str | None = None,
     phone_number: str | None = None,
-    platform: str = "whatsapp",
+    platform: str,
     metadata: dict[str, Any] | None = None,
     tracker: Any = None,
 ) -> AsyncIterator[SSEEventContext]:

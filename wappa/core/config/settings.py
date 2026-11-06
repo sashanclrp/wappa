@@ -20,6 +20,8 @@ from typing import cast
 
 from dotenv import load_dotenv
 
+from .meta_application import DEFAULT_GRAPH_API_VERSION, DEFAULT_GRAPH_BASE_URL
+
 load_dotenv(".env")
 
 
@@ -87,8 +89,8 @@ class Settings:
         ).strip().lower() in {"1", "true", "yes"}
 
         # ── Meta / WhatsApp (META_* / WP_*) ─────────────────────
-        self.api_version: str = os.getenv("META_API_VERSION", "v26.0")
-        self.base_url: str = os.getenv("META_BASE_URL", "https://graph.facebook.com/")
+        self.api_version: str = os.getenv("META_API_VERSION", DEFAULT_GRAPH_API_VERSION)
+        self.base_url: str = os.getenv("META_BASE_URL", DEFAULT_GRAPH_BASE_URL)
 
         # Meta Application Configuration (one Meta App per Wappa application).
         self.meta_app_secret: str | None = os.getenv("META_APP_SECRET")

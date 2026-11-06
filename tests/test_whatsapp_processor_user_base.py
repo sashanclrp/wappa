@@ -54,7 +54,7 @@ def test_create_user_base_from_contacts_preserves_wa_id_when_bsuid_exists() -> N
 
 
 @pytest.mark.asyncio
-async def test_create_universal_webhook_accepts_contact_without_profile() -> None:
+async def test_translate_accepts_contact_without_profile() -> None:
     payload = {
         "object": "whatsapp_business_account",
         "entry": [
@@ -93,7 +93,7 @@ async def test_create_universal_webhook_accepts_contact_without_profile() -> Non
     }
 
     processor = WhatsAppWebhookProcessor()
-    webhook = await processor.create_universal_webhook(payload)
+    webhook = await processor.translate(payload)
 
     assert webhook.user.user_id == "CO.2186878922080769"  # BSUID preferred (v0.3.3)
     assert webhook.user.phone_number == "573168227670"

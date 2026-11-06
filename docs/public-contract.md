@@ -242,6 +242,7 @@ The canonical and only Meta WhatsApp callback is `GET + POST /webhook/inboxes/wh
 
 | Condition | Status |
 | --- | ---: |
+| `{platform}` is not an installed Platform (GET or POST; `telegram`, `teams`, unknown names) | 400 |
 | Missing, malformed, or invalid Meta POST signature | 401 |
 | Invalid GET verify token | 403 |
 | Malformed JSON or non-object root | 400 |
@@ -338,7 +339,9 @@ removed. No compatibility import path is provided.
 - `wappa.schemas.core.recipient.RecipientRequest`
 - `wappa.schemas.core.recipient.apply_recipient_to_payload`
 
-`wappa.schemas.core.types` holds vocabulary only (`PlatformType`, `MessageType` and sibling enums). It has no per-Platform capability table: `PLATFORM_CAPABILITIES` and its helpers were removed in 0.34. Which Platforms are installed is decided by the processor factory, not by `PlatformType`; `TELEGRAM` and `TEAMS` are reserved members with no adapter.
+`wappa.schemas.core.types` holds vocabulary only (`PlatformType`, `MessageType` and sibling enums). It has no per-Platform capability table: `PLATFORM_CAPABILITIES` and its helpers were removed in 0.34. Which Platforms are installed is decided by the Platform Registry, `PLATFORMS` (`from wappa.platforms import ...`, a read-only `Mapping[PlatformType, PlatformEntry]`), not by `PlatformType`; `TELEGRAM` and `TEAMS` are reserved members with no entry. Every surface that takes a Platform reads it: `GET`/`POST /webhook/inboxes/{platform}` answer `400` for an uninstalled Platform (before 0.34 GET answered the challenge for any `PlatformType`), `/webhook/platforms` and `/webhook/inboxes/{platform}/status` list its keys as `installed_platforms`, `/api/{platform}` accepts only its keys, and `MessengerFactory` raises `ValueError` for any other Platform.
+
+`PlatformEntry` is a frozen dataclass: `webhooks: PlatformWebhooks`, `build_messenger(credentials, deps) -> IMessenger`, `display_name`. `PlatformWebhooks` (`from wappa.core.inbound import ...`) is the inbound Platform protocol: `platform`, `builtin_fields: frozenset[str]`, `async route(payload, resolver) -> tuple[RoutedWebhookDelivery, ...]` (may do credential I/O) and `async translate(payload, *, inbox_id) -> UniversalWebhook` (pure). `build_platforms(field_registry)` builds the table; `WappaBuilder.build()` calls it once with the app's `FieldHandlerRegistry` and stores it on `app.state.platforms`, and `BUILTIN_FIELDS` holds each Platform's reserved webhook field names. `WhatsAppWebhookProcessor` and `InstagramWebhookProcessor` take the registry in their constructor (`None` means no Host extension fields); `ProcessorFactory`, `processor_factory` and `BaseWebhookProcessor` were removed in 0.34.
 
 Webhook processors are translation-only adapters. They return Universal Models and do not mutate ContextVars, construct messengers, construct cache factories, open DB sessions, clone handlers, or dispatch events. Those responsibilities belong to the Inbound Runtime and its Dispatch Context.
 
@@ -532,6 +535,8 @@ SSE Event Envelopes preserve the active SSE identity scope:
 - `phone_number`
 - `platform`
 - `metadata`
+
+Inbound webhook scopes read `bsuid` and `phone_number` from the evidence fields the adapter filled (`UserBase.bsuid`/`phone_number`, `CallWebhook.bsuid`/`phone_number`, `StatusWebhook.recipient_bsuid`/`recipient_phone_id`), never from the Platform or an identifier's shape; Instagram events carry `None` for both. `sse_event_scope(...)` requires `platform` (no `"whatsapp"` default since 0.34).
 
 An SSE Inbox filter must also supply `platform`; Wappa rejects an unqualified
 native Inbox filter. PubSub channel namespaces are derived from `InboxRef` for
@@ -1059,10 +1064,11 @@ Platform Account (WABA), not a User. Consumers handle them in `process_system_we
 
 - `InboxRef`, `PlatformAccountRef`, `InboxRoutingMode`
 - `IInboxDirectorySource`, `InboxCredentialService`, `InboxDirectory`
+- `RECORD_TYPES` (`wappa.domain.inbox.credentials`): each Platform's `(active, inactive)` record classes; `InboxCredentialService` picks record classes from it and rejects a Platform without an entry with `ValueError`. `wappa.domain.inbox.services.WHATSAPP_ACCESS_TOKEN_FIELD` was removed in 0.34; the envelope binding field name stays `access_token`, so stored records decrypt unchanged
 - `EncryptedSecretEnvelope`, `InboxCredentialRecord`, `InboxCredentialStatus`, `WhatsAppActiveInboxCredentialRecord`, `WhatsAppInactiveInboxCredentialRecord`, `PlatformAccountActiveIndexRecord`, `PlatformAccountEmptyIndexRecord`, `parse_inbox_credential_record`, `dump_record_for_storage`
 - `InboxDirectoryError`, `InboxConfigurationError`, `InboxNotFoundError`, `InboxMembershipError`, `InboxDirectoryUnavailableError`, `InboxCredentialIntegrityError`, `InboxMutationConflictError`
 - `MetaApplicationConfig` (`from wappa import ...` or `wappa.core.config.meta_application`), `CredentialCodec` / `SecretBinding` (`from wappa.core.security import ...`), `InboxDirectoryTable` (`wappa.persistence.inbox_directory`)
-- `INBOX_ID_HEADER`, `InboxExecutionContext`, `get_inbox_execution_context` (`from wappa.api.dependencies import ...`); `SIGNATURE_HEADER`, `MetaCallbackAuthenticator`, `route_whatsapp_payload`, `RoutedWebhookDelivery` (`from wappa.core.inbound import ...`)
+- `INBOX_ID_HEADER`, `InboxExecutionContext`, `get_inbox_execution_context` (`from wappa.api.dependencies import ...`); `SIGNATURE_HEADER`, `MetaCallbackAuthenticator`, `PlatformWebhooks`, `PayloadRoutingError`, `route_whatsapp_payload`, `RoutedWebhookDelivery` (`from wappa.core.inbound import ...`; `RoutedWebhookDelivery` and `PayloadRoutingError` live in `wappa.core.inbound.platform_webhooks`, no longer in `wappa.core.inbound.webhook_routing`); `PLATFORMS`, `PlatformEntry`, `build_platforms`, `BUILTIN_FIELDS` (`from wappa.platforms import ...`)
 
 ### API (`from wappa.api import ...`)
 

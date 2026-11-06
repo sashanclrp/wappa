@@ -1,19 +1,22 @@
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from pydantic import ValidationError
 
-from wappa.processors.base_processor import (
-    BaseWebhookProcessor,
-    ProcessorError,
-)
+from wappa.core.inbound.platform_webhooks import RoutedWebhookDelivery
+from wappa.core.inbound.webhook_routing import route_whatsapp_payload
+from wappa.core.logging.logger import get_logger
+from wappa.processors.errors import ProcessorError, UnsupportedMessageTypeError
 from wappa.schemas.core.recipient import looks_like_bsuid, looks_like_phone_number
 from wappa.schemas.core.types import ErrorCode, MessageType, PlatformType
 from wappa.webhooks.core.base_message import BaseMessage
 from wappa.webhooks.core.schema_drift import report_schema_drift, report_unmodelled
+from wappa.webhooks.whatsapp.webhook_container import BUILTIN_WEBHOOK_FIELDS
 
 if TYPE_CHECKING:
     from wappa.core.events.field_registry import FieldHandlerRegistry
+    from wappa.domain.inbox.ports import IInboxCredentialResolver
     from wappa.webhooks.core.webhook_interfaces import (
         BusinessContextBase,
         CallWebhook,
@@ -45,74 +48,55 @@ if TYPE_CHECKING:
     from wappa.webhooks.whatsapp.webhook_container import WhatsAppWebhook
 
 
-_SUPPORTED_MESSAGE_TYPES = frozenset(
-    {
-        MessageType.TEXT,
-        MessageType.INTERACTIVE,
-        MessageType.BUTTON,
-        MessageType.IMAGE,
-        MessageType.AUDIO,
-        MessageType.VIDEO,
-        MessageType.DOCUMENT,
-        MessageType.CONTACT,
-        MessageType.LOCATION,
-        MessageType.ORDER,
-        MessageType.STICKER,
-        MessageType.REACTION,
-        MessageType.SYSTEM,
-        MessageType.EDIT,
-        MessageType.REVOKE,
-        MessageType.UNSUPPORTED,
-    }
-)
+class WhatsAppWebhookProcessor:
+    """WhatsApp ``PlatformWebhooks`` adapter: Meta batch routing and translation."""
 
+    builtin_fields: ClassVar[frozenset[str]] = BUILTIN_WEBHOOK_FIELDS
 
-class WhatsAppWebhookProcessor(BaseWebhookProcessor):
-    """WhatsApp Business Platform webhook processor."""
-
-    def __init__(self) -> None:
-        super().__init__()
-
-        self._field_registry: FieldHandlerRegistry | None = None
-
-        # Register message type handlers
-        self._register_message_handlers()
+    def __init__(self, field_registry: "FieldHandlerRegistry | None" = None) -> None:
+        self.logger = get_logger(__name__)
+        # ``None`` means the Host registered no extension fields.
+        self._field_registry = field_registry
+        self._message_type_handlers: dict[str, Callable[..., BaseMessage]] = {
+            "text": self._create_text_message,
+            "interactive": self._create_interactive_message,
+            "image": self._create_image_message,
+            "audio": self._create_audio_message,
+            "video": self._create_video_message,
+            "document": self._create_document_message,
+            "contact": self._create_contact_message,
+            "location": self._create_location_message,
+            "sticker": self._create_sticker_message,
+            "system": self._create_system_message,
+            "unsupported": self._create_unsupported_message,
+            "reaction": self._create_reaction_message,
+            "button": self._create_button_message,
+            "order": self._create_order_message,
+            "edit": self._create_lifecycle_message,
+            "revoke": self._create_lifecycle_message,
+        }
 
     @property
     def platform(self) -> PlatformType:
         return PlatformType.WHATSAPP
 
-    def set_field_registry(self, registry: "FieldHandlerRegistry | None") -> None:
-        """Attach (or clear) the app-supplied custom webhook field registry."""
-        self._field_registry = registry
+    async def route(
+        self, payload: dict[str, Any], resolver: "IInboxCredentialResolver"
+    ) -> tuple[RoutedWebhookDelivery, ...]:
+        return await route_whatsapp_payload(payload, resolver)
 
-    def _register_message_handlers(self) -> None:
-        self.register_message_handler("text", self._create_text_message)
-        self.register_message_handler("interactive", self._create_interactive_message)
-        self.register_message_handler("image", self._create_image_message)
-        self.register_message_handler("audio", self._create_audio_message)
-        self.register_message_handler("video", self._create_video_message)
-        self.register_message_handler("document", self._create_document_message)
-        self.register_message_handler("contact", self._create_contact_message)
-        self.register_message_handler("location", self._create_location_message)
-        self.register_message_handler("sticker", self._create_sticker_message)
-        self.register_message_handler("system", self._create_system_message)
-        self.register_message_handler("unsupported", self._create_unsupported_message)
-        self.register_message_handler("reaction", self._create_reaction_message)
-        self.register_message_handler("button", self._create_button_message)
-        self.register_message_handler("order", self._create_order_message)
-        self.register_message_handler("edit", self._create_lifecycle_message)
-        self.register_message_handler("revoke", self._create_lifecycle_message)
+    def _is_registered_field(self, field: str | None) -> bool:
+        return (
+            field is not None
+            and self._field_registry is not None
+            and self._field_registry.get(field, PlatformType.WHATSAPP) is not None
+        )
 
-    def parse_webhook_container(
-        self, payload: dict[str, Any], **kwargs: Any
-    ) -> "WhatsAppWebhook":
+    def _parse_webhook_container(self, payload: dict[str, Any]) -> "WhatsAppWebhook":
         try:
             from wappa.webhooks.whatsapp.webhook_container import WhatsAppWebhook
 
-            # A missing registry means no custom fields are registered.
-            context = {"field_registry": self._field_registry}
-            webhook = WhatsAppWebhook.model_validate(payload, context=context)
+            webhook = WhatsAppWebhook.model_validate(payload)
             report_schema_drift(webhook, platform="whatsapp", logger=self.logger)
             self.logger.debug(
                 "Successfully parsed WhatsApp webhook from %s", webhook.business_id
@@ -124,28 +108,23 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             self.logger.error(error_msg)
             raise ValueError(error_msg) from e
 
-    def get_supported_message_types(self) -> set[MessageType]:
-        return set(_SUPPORTED_MESSAGE_TYPES)
-
-    def create_message_from_data(
+    def _create_message_from_data(
         self,
         message_data: dict[str, Any],
         message_type: MessageType,
         **kwargs: Any,
     ) -> BaseMessage:
         message_type_str = message_type.value
-        handler = self.get_message_handler(message_type_str)
+        handler = self._message_type_handlers.get(message_type_str)
         if handler is None:
-            from .base_processor import UnsupportedMessageTypeError
-
             raise UnsupportedMessageTypeError(message_type_str, self.platform)
 
-        message = cast(BaseMessage, handler(message_data, **kwargs))
+        message = handler(message_data, **kwargs)
         report_schema_drift(message, platform="whatsapp", logger=self.logger)
         return message
 
-    def create_status_from_data(
-        self, status_data: dict[str, Any], **kwargs: Any
+    def _create_status_from_data(
+        self, status_data: dict[str, Any]
     ) -> "WhatsAppMessageStatus":
         try:
             from wappa.webhooks.whatsapp.status_models import WhatsAppMessageStatus
@@ -310,14 +289,15 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
     # ===== Universal Webhook Interface Creation Methods =====
 
-    async def create_universal_webhook(
+    async def translate(
         self,
         payload: dict[str, Any],
+        *,
         inbox_id: str | None = None,
-        **kwargs: Any,
     ) -> "UniversalWebhook":
+        """Translate one routed change; ``inbox_id`` defaults to its metadata."""
         try:
-            webhook = self.parse_webhook_container(payload)
+            webhook = self._parse_webhook_container(payload)
             self.logger.debug("Raw WhatsApp webhook received: %s", payload)
 
             inbox_base = self._create_inbox_base(webhook, inbox_id)
@@ -347,29 +327,25 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 )
             elif webhook.is_system_event:
                 universal_webhook = await self._create_system_webhook(
-                    webhook, inbox_base, **kwargs
+                    webhook, inbox_base
                 )
             elif webhook.is_call_event:
-                universal_webhook = await self._create_call_webhook(
-                    webhook, inbox_base, **kwargs
-                )
+                universal_webhook = await self._create_call_webhook(webhook, inbox_base)
             elif webhook.is_incoming_message:
                 universal_webhook = await self._create_incoming_message_webhook(
-                    webhook, inbox_base, **kwargs
+                    webhook, inbox_base
                 )
             elif webhook.is_status_update:
                 universal_webhook = await self._create_status_webhook(
-                    webhook, inbox_base, **kwargs
+                    webhook, inbox_base
                 )
             elif webhook.has_errors:
                 universal_webhook = await self._create_error_webhook(
-                    webhook, inbox_base, **kwargs
+                    webhook, inbox_base
                 )
-            elif webhook.is_custom_field and (
-                self._field_registry is not None and field in self._field_registry
-            ):
+            elif webhook.is_custom_field and self._is_registered_field(field):
                 universal_webhook = await self._create_custom_webhook(
-                    webhook, inbox_base, payload, **kwargs
+                    webhook, inbox_base, payload
                 )
             elif webhook.is_custom_field:
                 universal_webhook = self._create_unmodelled_field_webhook(
@@ -482,7 +458,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         data[content.type] = body
         try:
             kind = MessageType({"contacts": "contact"}.get(content.type, content.type))
-            return self.create_message_from_data(data, kind)
+            return self._create_message_from_data(data, kind)
         except Exception as exc:
             self.logger.info(
                 "Edit replacement of type %r has no inbound model: %s",
@@ -515,7 +491,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         message_type: MessageType | None = None
         try:
             message_type = MessageType({"contacts": "contact"}.get(raw.type, raw.type))
-            return self.create_message_from_data(data, message_type), message_type
+            return self._create_message_from_data(data, message_type), message_type
         except Exception as exc:
             self.logger.info(
                 "Coexistence message %s of type %r has no inbound model: %s",
@@ -741,7 +717,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         )
 
         message_type = MessageType(universal_message_type)
-        message = self.create_message_from_data(raw_message, message_type)
+        message = self._create_message_from_data(raw_message, message_type)
         message_type = message.message_type  # an unmodelled subtype becomes UNSUPPORTED
         if message_type in (MessageType.EDIT, MessageType.REVOKE):
             return self._create_message_update_webhook(webhook, message, inbox_base)
@@ -865,7 +841,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             return self._create_unmodelled_status_webhook(
                 webhook, inbox_base, raw_status
             )
-        status = self.create_status_from_data(raw_status)
+        status = self._create_status_from_data(raw_status)
 
         # Extract conversation and error context
         conversation = self._extract_conversation_context(status)
@@ -1053,7 +1029,7 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
                 ErrorCode.PROCESSING_ERROR,
                 PlatformType.WHATSAPP,
             )
-        handler_spec = registry.get(field_name)
+        handler_spec = registry.get(field_name, PlatformType.WHATSAPP)
         if handler_spec is None:
             raise ProcessorError(
                 f"No registered handler for webhook field '{field_name}'",

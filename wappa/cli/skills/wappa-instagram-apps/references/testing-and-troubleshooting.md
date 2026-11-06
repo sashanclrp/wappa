@@ -21,7 +21,7 @@ A mocked test never stands in for live proof. Never paste tokens, authorization 
 ## Offline tests
 
 - **Handler logic.** Build `InstagramMessenger` against `httpx.MockTransport`, then bind your handler with `handler.with_context(inbox_id=..., user_id=..., messenger=MessengerPipeline(raw), cache_factory=create_cache_factory("memory")(inbox_id=ref.cache_namespace, user_id=...), inbox_ref=ref)`.
-- **Webhooks.** Feed payloads through `InstagramWebhookProcessor().create_universal_webhook(payload)`, using the shapes from Meta's webhook examples.
+- **Webhooks.** Feed payloads through `await InstagramWebhookProcessor().translate(payload)`, using the shapes from Meta's webhook examples.
 - **Signed HTTP.** Sign bodies with `MetaCallbackAuthenticator(secret).sign(body)` and POST them to `/webhook/inboxes/instagram`.
 - **What to assert.** Wire JSON, the target `recipient` (`id` or `comment_id`), one dispatch per event, and no call for own comments or echoes.
 

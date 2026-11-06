@@ -75,7 +75,9 @@ async def test_sse_event_scope_sets_and_resets_contextvar():
 
 @pytest.mark.asyncio
 async def test_update_metadata_and_identity_apply_to_active_scope():
-    async with sse_event_scope(inbox_id="t-1", user_id="15551234567"):
+    async with sse_event_scope(
+        platform="whatsapp", inbox_id="t-1", user_id="15551234567"
+    ):
         update_metadata(conversation_id="conv-42", run_id="run-1")
         update_identity(bsuid="US.new", phone_number="15551234567")
 
@@ -176,7 +178,9 @@ async def test_publish_sse_event_delivers_registered_custom_event_type(
     hub = SSEEventHub()
     sub = await hub.subscribe(event_types={custom_sse_event_type})
 
-    async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
+    async with sse_event_scope(
+        platform="whatsapp", inbox_id="inbox-1", user_id="user-1"
+    ):
         delivered = await publish_sse_event(
             hub,
             event_type=custom_sse_event_type,
@@ -255,6 +259,7 @@ async def test_incoming_message_defers_until_post_process_and_picks_up_metadata(
     webhook = _FakeWebhook()
 
     async with sse_event_scope(
+        platform="whatsapp",
         inbox_id="t-1",
         user_id="US.canonical",
         bsuid="US.canonical",
@@ -288,7 +293,9 @@ async def test_post_process_without_staged_payload_is_noop():
     handler = SSEMessageHandler(event_hub=hub)
     webhook = _FakeWebhook()
 
-    async with sse_event_scope(inbox_id="t-1", user_id="US.canonical"):
+    async with sse_event_scope(
+        platform="whatsapp", inbox_id="t-1", user_id="US.canonical"
+    ):
         await handler.post_process_message(webhook)
 
     events = await _drain(sub, timeout=0.05)

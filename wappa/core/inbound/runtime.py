@@ -20,22 +20,16 @@ from wappa.core.logging.context import (
     set_request_context,
 )
 from wappa.core.logging.logger import get_logger
-from wappa.core.sse.context import (
-    classify_meta_identifier,
-    derive_identifiers,
-    sse_event_scope,
-)
+from wappa.core.sse.context import derive_identifiers, sse_event_scope
 from wappa.domain.inbox.errors import InboxDirectoryError
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.sent_message_registry import ISentMessageRegistry
 from wappa.persistence.cache_factory import create_cache_factory
-from wappa.processors.base_processor import ProcessorError
-from wappa.processors.factory import processor_factory
+from wappa.processors.errors import ProcessorError
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.webhook_interfaces import (
     CallWebhook,
     EchoOrigin,
-    ErrorWebhook,
     InboundMessageWebhook,
     IncomingCommentWebhook,
     MessageUpdateWebhook,
@@ -45,7 +39,7 @@ from wappa.webhooks.core.webhook_interfaces import (
     UniversalWebhook,
 )
 
-from .webhook_routing import RoutedWebhookDelivery
+from .platform_webhooks import RoutedWebhookDelivery
 
 # Instagram can deliver an echo before the send call returns its message ID.
 ECHO_SETTLE_DELAYS_SECONDS: tuple[float, ...] = (1.0, 2.0)
@@ -145,8 +139,11 @@ class InboundRuntime:
 
         inbox_ref = delivery.inbox_ref
         platform = inbox_ref.platform
-        universal_webhook = await self._create_universal_webhook(
-            platform=platform, inbox_id=inbox_ref.inbox_id, payload=delivery.payload
+        universal_webhook = await self._translate(
+            builder.capabilities,
+            platform=platform,
+            inbox_id=inbox_ref.inbox_id,
+            payload=delivery.payload,
         )
         self._validate_payload_inbox(inbox_ref.inbox_id, universal_webhook)
 
@@ -298,20 +295,21 @@ class InboundRuntime:
         echo.origin = EchoOrigin.BUSINESS_APP
         return False
 
-    async def _create_universal_webhook(
+    async def _translate(
         self,
+        capabilities: RuntimeCapabilities,
         *,
         platform: PlatformType,
         inbox_id: str,
         payload: dict[str, Any],
     ) -> UniversalWebhook:
-        try:
-            processor = processor_factory.get_processor(platform)
-            return await processor.create_universal_webhook(
-                payload=payload, inbox_id=inbox_id
+        entry = capabilities.platforms.get(platform)
+        if entry is None:
+            raise UnsupportedPlatformError(
+                f"Platform {platform.value} has no installed adapter"
             )
-        except UnsupportedPlatformError:
-            raise
+        try:
+            return await entry.webhooks.translate(payload, inbox_id=inbox_id)
         except ProcessorError as exc:
             raise ProcessorFailureError(str(exc)) from exc
         except Exception as exc:
@@ -390,28 +388,23 @@ class InboundRuntime:
     def _derive_sse_identity(
         self, webhook: UniversalWebhook, fallback_user_id: str
     ) -> tuple[str, str | None, str | None]:
-        if webhook.platform is not PlatformType.WHATSAPP:
-            return fallback_user_id, None, None
+        """Read SSE identity from the evidence fields each adapter fills.
 
-        if isinstance(webhook, InboundMessageWebhook) and webhook.user:
-            bsuid, phone = derive_identifiers(webhook.user)
-            return webhook.user.user_id or fallback_user_id, bsuid, phone
-
+        Never from a Platform check or an identifier's shape (ADR-0019).
+        """
         if isinstance(webhook, CallWebhook):
-            user_id = webhook.user_id or fallback_user_id
-            return user_id, webhook.bsuid, webhook.phone_number
-
+            return fallback_user_id, webhook.bsuid, webhook.phone_number
         if isinstance(webhook, StatusWebhook):
-            user_id = webhook.user_id or fallback_user_id
-            bsuid, shape_phone = classify_meta_identifier(user_id)
-            phone = webhook.recipient_phone_id or shape_phone
-            return user_id, bsuid, phone
-
-        if isinstance(webhook, ErrorWebhook):
-            return fallback_user_id, None, None
-
-        bsuid, phone = classify_meta_identifier(fallback_user_id)
-        return fallback_user_id, bsuid, phone
+            return (
+                fallback_user_id,
+                webhook.recipient_bsuid or None,
+                webhook.recipient_phone_id or None,
+            )
+        user = getattr(webhook, "user", None)
+        if user is not None:
+            bsuid, phone = derive_identifiers(user)
+            return fallback_user_id, bsuid, phone
+        return fallback_user_id, None, None
 
     async def _enrich_status_user_id(
         self,

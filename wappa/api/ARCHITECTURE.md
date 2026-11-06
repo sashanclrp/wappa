@@ -10,6 +10,7 @@ Wappa's HTTP edge: the Meta webhook callback and the optional Messaging HTTP API
 /health, /health/detailed wappa/api/routes/health.py           health_router (public)
 /webhook                  wappa/api/routes/webhooks.py          create_webhook_router
   /inboxes/{platform}       GET verify, POST callback -> api/controllers/webhook_controller.py
+                            (400 unless {platform} is in wappa.platforms.PLATFORMS)
   /inboxes/instagram/deauthorize, /inboxes/{platform}/status, /platforms
 /api/{platform}           wappa/api/routes/whatsapp_combined.py create_messaging_router
   reads (always)            whatsapp_health, media reads, messages/interactive/specialized info,
@@ -27,7 +28,7 @@ The route modules live in `wappa/api/routes/whatsapp/` (the folder name is histo
 
 ## Inbox selection
 
-`wappa/api/dependencies/inbox_context.py` owns it. The router-level `route_platform` dependency validates `{platform}` (`RoutePlatform`: `whatsapp`, `instagram`). `select_inbox_ref` builds `InboxRef(path platform, X-Wappa-Inbox-ID)`; without the header it falls back to the legacy default Inbox only when that Inbox is on the path's Platform, else 400. `get_inbox_execution_context` resolves the active record once per request (unknown → 404, directory failures → 503) and returns the shared `InboxExecutionContext`. Send routes take `get_inbox_messenger`, which builds the Inbox's own Messenger through `OutboundRuntime`, so app Messenger middleware runs on API sends. Host authentication runs first; the header selects scope and grants nothing.
+`wappa/api/dependencies/inbox_context.py` owns it. The router-level `route_platform` dependency validates `{platform}` (`RoutePlatform`, derived from the installed Platforms in `wappa.platforms.PLATFORMS`: `whatsapp`, `instagram`). `select_inbox_ref` builds `InboxRef(path platform, X-Wappa-Inbox-ID)`; without the header it falls back to the legacy default Inbox only when that Inbox is on the path's Platform, else 400. `get_inbox_execution_context` resolves the active record once per request (unknown → 404, directory failures → 503) and returns the shared `InboxExecutionContext`. Send routes take `get_inbox_messenger`, which builds the Inbox's own Messenger through `OutboundRuntime`, so app Messenger middleware runs on API sends. Host authentication runs first; the header selects scope and grants nothing.
 
 ## Capability gates and status mapping (ADR-0021)
 

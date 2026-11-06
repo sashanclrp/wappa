@@ -51,6 +51,8 @@ from .scope import SYSTEM_SCOPE
 DIRECTORY_TTL_SECONDS: Final[int] = 60 * 60
 PRIMARY_TABLE: Final[str] = "wappa_inbox_directory"
 ACCOUNT_INDEX_TABLE: Final[str] = "wappa_inbox_directory_account_index"
+# Never a cache namespace: those are ``<platform>__<inbox_id>``.
+_HEALTH_PROBE_KEY: Final[str] = "__health_probe__"
 MAX_MUTATION_ATTEMPTS: Final[int] = 8
 
 IndexRecord = PlatformAccountActiveIndexRecord | PlatformAccountEmptyIndexRecord
@@ -158,6 +160,13 @@ class InboxDirectoryTable:
             self._table.delete_table(ACCOUNT_INDEX_TABLE), "clear index"
         )
         return int(rows) + int(index)
+
+    async def ping(self) -> None:
+        """Probe the backing Table Cache; raises the typed unavailable error."""
+        await self._guard(
+            self._table.get(PRIMARY_TABLE, _HEALTH_PROBE_KEY),
+            "answer a health probe",
+        )
 
     # ── primary rows ──────────────────────────────────────────────────
 

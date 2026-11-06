@@ -46,6 +46,7 @@ from wappa.messaging import (
 )
 from wappa.messaging.instagram.media import InstagramAttachmentReader
 from wappa.messaging.instagram.messenger import InstagramMessenger
+from wappa.platforms import BUILTIN_FIELDS, build_platforms
 from wappa.processors.instagram_processor import InstagramWebhookProcessor
 from wappa.schemas.core.types import MessageType, PlatformType
 from wappa.webhooks import (
@@ -95,7 +96,7 @@ def msg(user=USER, **parts):
 
 
 async def parse(payload):
-    return await InstagramWebhookProcessor().create_universal_webhook(payload)
+    return await InstagramWebhookProcessor().translate(payload)
 
 
 # ── inbound families ─────────────────────────────────────────────────────
@@ -381,7 +382,7 @@ class StoryInsight(BaseModel):
 
 
 async def test_extension_field_registration_and_unknown_change():
-    registry = FieldHandlerRegistry()
+    registry = FieldHandlerRegistry(BUILTIN_FIELDS)
 
     async def handler(webhook):
         return None
@@ -399,16 +400,16 @@ async def test_extension_field_registration_and_unknown_change():
             handler=handler,
             platform=PlatformType.INSTAGRAM,
         )
-    assert "story_insights" not in registry  # WhatsApp membership unaffected
-    processor = InstagramWebhookProcessor()
-    processor.set_field_registry(registry)
-    custom = await processor.create_universal_webhook(
+    # WhatsApp membership unaffected
+    assert registry.get("story_insights", PlatformType.WHATSAPP) is None
+    processor = InstagramWebhookProcessor(registry)
+    custom = await processor.translate(
         changes(
             {"field": "story_insights", "value": {"media_id": "s1", "impressions": 3}}
         )
     )
     assert isinstance(custom, CustomWebhook) and custom.parsed.impressions == 3
-    unknown = await processor.create_universal_webhook(
+    unknown = await processor.translate(
         changes({"field": "something_new", "value": {"x": 1}})
     )
     assert unknown.system_event_type is SystemEventType.UNSUPPORTED_EVENT
@@ -492,6 +493,9 @@ def _app(handler, resolver, registry=None):
     app.state.background_work_tracker = BackgroundWorkTracker()
     app.state.messenger_middleware = []
     app.state.wappa_cache_type = "memory"
+    app.state.platforms = build_platforms(
+        registry or FieldHandlerRegistry(BUILTIN_FIELDS)
+    )
     return app
 
 
@@ -590,7 +594,7 @@ async def test_unsigned_or_unknown_account_batches_schedule_nothing():
 
 async def test_extension_parse_failure_rejects_whole_batch():
     handler = Recorder()
-    registry = FieldHandlerRegistry()
+    registry = FieldHandlerRegistry(BUILTIN_FIELDS)
     seen = []
 
     async def on_insight(webhook):
@@ -602,36 +606,27 @@ async def test_extension_parse_failure_rejects_whole_batch():
         handler=on_insight,
         platform=PlatformType.INSTAGRAM,
     )
-    from wappa.processors.factory import processor_factory
-
-    processor = processor_factory.get_processor(PlatformType.INSTAGRAM)
-    processor.set_field_registry(registry)
-    try:
-        batch = {
-            "object": "instagram",
-            "entry": [
-                {
-                    "id": ACCOUNT,
-                    "messaging": [msg(message={"mid": "m1", "text": "hi"})],
-                },
-                {
-                    "id": ACCOUNT,
-                    "changes": [
-                        {"field": "story_insights", "value": {"media_id": "s"}}
-                    ],
-                },
-            ],
-        }
-        response = await _post(_app(handler, Resolver(), registry), batch)
-        assert response.status_code == 400
-        assert handler.events == [] and seen == []
-        good = changes(
-            {"field": "story_insights", "value": {"media_id": "s", "impressions": 2}}
-        )
-        ok = await _post(_app(handler, Resolver(), registry), good)
-        assert ok.status_code == 200 and seen[0].parsed.impressions == 2
-    finally:
-        processor.set_field_registry(None)
+    batch = {
+        "object": "instagram",
+        "entry": [
+            {
+                "id": ACCOUNT,
+                "messaging": [msg(message={"mid": "m1", "text": "hi"})],
+            },
+            {
+                "id": ACCOUNT,
+                "changes": [{"field": "story_insights", "value": {"media_id": "s"}}],
+            },
+        ],
+    }
+    response = await _post(_app(handler, Resolver(), registry), batch)
+    assert response.status_code == 400
+    assert handler.events == [] and seen == []
+    good = changes(
+        {"field": "story_insights", "value": {"media_id": "s", "impressions": 2}}
+    )
+    ok = await _post(_app(handler, Resolver(), registry), good)
+    assert ok.status_code == 200 and seen[0].parsed.impressions == 2
 
 
 # ── outbound operations ─────────────────────────────────────────────────

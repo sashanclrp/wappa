@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from ...domain.inbox.ports import IInboxDirectorySource
 from ...domain.inbox.routing import InboxRoutingMode
 from ...domain.interfaces.identity_resolver import IIdentityResolver
+from ...platforms import BUILTIN_FIELDS, build_platforms
 from ...schemas.core.types import PlatformType
 from ..config.meta_application import (
     MetaApplicationConfig,
@@ -63,13 +64,13 @@ class WappaBuilder:
         self.shutdown_hooks: list[tuple[Callable, int]] = []  # (hook, priority)
         self.messenger_middleware: list[MiddlewareEntry] = []  # (middleware, priority)
         self.config_overrides: dict[str, Any] = {}
-        self.field_registry: FieldHandlerRegistry = FieldHandlerRegistry()
+        self.field_registry: FieldHandlerRegistry = FieldHandlerRegistry(BUILTIN_FIELDS)
         self.identity_resolver: IIdentityResolver | None = None
         self.inbox_directory_source: IInboxDirectorySource | None = None
         self.inbox_routing_mode: InboxRoutingMode | None = None
         self.meta_application_config: MetaApplicationConfig | None = None
         self.persistence_backend: str = "memory"
-        self._whatsapp_callback_mounted = False
+        self._webhook_callback_mounted = False
         self._public_prefixes: list[str] = []
 
     def add_plugin(self, plugin: "WappaPlugin") -> "WappaBuilder":
@@ -365,9 +366,9 @@ class WappaBuilder:
         self.persistence_backend = cache_type
         return self
 
-    def mount_whatsapp_callback(self) -> "WappaBuilder":
-        """Record that the WhatsApp callback will be served by this app."""
-        self._whatsapp_callback_mounted = True
+    def mount_webhook_callback(self) -> "WappaBuilder":
+        """Record that the Meta Platform callbacks will be served by this app."""
+        self._webhook_callback_mounted = True
         return self
 
     def configure(self, **overrides: Any) -> "WappaBuilder":
@@ -481,9 +482,11 @@ class WappaBuilder:
         app.state.meta_application_config = resolve_meta_application_config(
             self.meta_application_config,
             settings,
-            callback_mounted=self._whatsapp_callback_mounted,
+            callback_mounted=self._webhook_callback_mounted,
         )
         app.state.public_route_prefixes = tuple(self._public_prefixes)
+        # The installed Platforms, bound to this app's extension fields.
+        app.state.platforms = build_platforms(self.field_registry)
 
         # Step 3: Add all middleware via app.add_middleware()
         # Sort by priority (reverse order because FastAPI adds middleware in reverse)

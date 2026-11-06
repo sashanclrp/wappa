@@ -15,8 +15,6 @@ from fastapi import APIRouter, FastAPI
 from pydantic import BaseModel
 
 from wappa.api.routes.webhooks import create_webhook_router
-from wappa.processors.factory import processor_factory
-from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.schemas.core.types import PlatformType
 
 from .config.settings import settings
@@ -282,17 +280,6 @@ class Wappa:
             redoc_url="/redoc" if settings.is_development else None,
         )
 
-        # Wire the registry into the shared processor singleton so Pydantic
-        # validation accepts registered field values alongside the built-ins.
-        whatsapp_processor = processor_factory.get_processor(PlatformType.WHATSAPP)
-        if not isinstance(whatsapp_processor, WhatsAppWebhookProcessor):
-            raise TypeError("WhatsApp processor registration is invalid")
-        whatsapp_processor.set_field_registry(self._builder.field_registry)
-        instagram_processor = processor_factory.get_processor(PlatformType.INSTAGRAM)
-        set_registry = getattr(instagram_processor, "set_field_registry", None)
-        if set_registry is not None:
-            set_registry(self._builder.field_registry)
-
         # Create dispatchers and register webhook router through the builder
         # so the builder owns the complete route tree.
         webhook_dispatcher = WappaEventDispatcher(
@@ -301,7 +288,7 @@ class Wappa:
         api_dispatcher = APIEventDispatcher(self._event_handler)
         webhook_router = create_webhook_router(webhook_dispatcher)
         self._builder.add_router(webhook_router, public=True)
-        self._builder.mount_whatsapp_callback()
+        self._builder.mount_webhook_callback()
 
         app = self._builder.build()
 

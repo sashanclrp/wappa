@@ -39,7 +39,7 @@ def _wa_echo(message: dict) -> dict:
 
 
 async def test_whatsapp_text_echo_is_typed_with_the_inbound_model():
-    echo = await WhatsAppWebhookProcessor().create_universal_webhook(
+    echo = await WhatsAppWebhookProcessor().translate(
         _wa_echo(
             {
                 "from": "15550001111",
@@ -60,7 +60,7 @@ async def test_whatsapp_text_echo_is_typed_with_the_inbound_model():
 
 
 async def test_whatsapp_outbound_only_shape_keeps_native_type_without_raw_dict():
-    echo = await WhatsAppWebhookProcessor().create_universal_webhook(
+    echo = await WhatsAppWebhookProcessor().translate(
         _wa_echo(
             {
                 "from": "15550001111",
@@ -80,7 +80,7 @@ async def test_whatsapp_outbound_only_shape_keeps_native_type_without_raw_dict()
 async def test_instagram_echo_starts_unknown_until_the_runtime_proves_it():
     from wappa.processors.instagram_processor import InstagramWebhookProcessor
 
-    echo = await InstagramWebhookProcessor().create_universal_webhook(
+    echo = await InstagramWebhookProcessor().translate(
         {
             "object": "instagram",
             "entry": [

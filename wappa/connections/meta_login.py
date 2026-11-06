@@ -29,6 +29,11 @@ from urllib.parse import urlencode
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from wappa.core.config.meta_application import (
+    DEFAULT_GRAPH_API_VERSION,
+    DEFAULT_GRAPH_BASE_URL,
+)
+
 from .contract import (
     AuthorizationRequest,
     ConnectionCancelledError,
@@ -48,8 +53,8 @@ class MetaLoginConfig(BaseModel):
     config_id: str = Field(min_length=1)
     redirect_uri: str | None = None
     dialog_extras: dict[str, Any] | None = None
-    graph_api_version: str = "v26.0"
-    graph_base_url: str = "https://graph.facebook.com"
+    graph_api_version: str = DEFAULT_GRAPH_API_VERSION
+    graph_base_url: str = DEFAULT_GRAPH_BASE_URL
     dialog_base_url: str = "https://www.facebook.com"
 
 

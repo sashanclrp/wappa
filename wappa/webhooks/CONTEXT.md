@@ -13,8 +13,9 @@ Terms specific to this bounded context. Shared kernel terms (`inbox_id`, `user_i
 | `CustomWebhookValue` | Permissive value container for app-registered Meta webhook fields not natively understood by Wappa (e.g. `message_template_status_update`). Parsed downstream by the app's registered parser. |
 | `WebhookChange` | A single entry in the `changes` array. Routes its `value` to either `WebhookValue` (built-in fields) or `CustomWebhookValue` (registered fields). |
 | `WebhookEntry` | Wraps the `platform_account_id` and its associated `changes` array. |
-| **Routed Webhook Delivery** | One Meta change paired with one payload-derived `inbox_id` before processor translation. WABA-only changes produce one delivery per registered Inbox. |
-| `BaseWebhook` | Abstract contract all platform webhook containers must implement. Exposes platform-agnostic inspection methods (`is_incoming_message`, `is_status_update`, `has_errors`, etc.). |
+| **Routed Webhook Delivery** | One Meta change paired with one payload-derived `inbox_id` before processor translation. WABA-only changes produce one delivery per registered Inbox. Produced by `PlatformWebhooks.route`. |
+| `PlatformWebhooks` | The inbound Platform seam (`wappa/core/inbound/platform_webhooks.py`): `platform`, `builtin_fields`, `route` (batch → Routed Webhook Deliveries, may do credential I/O) and `translate` (one delivery → Universal Webhook, pure). One adapter per installed Platform. |
+| `BaseWebhook` | Abstract container contract the WhatsApp envelope implements (`is_incoming_message`, `is_status_update`, `has_errors`, etc.). A Platform is not required to implement it; `PlatformWebhooks` is the Platform seam. |
 | `BaseMessage` | Abstract contract all per-type message models must implement. |
 | `InboundMessageWebhook` | Canonical name for the Universal Model representing a message sent by a User to an Inbox. |
 | `StatusWebhook` | Universal Model for a delivery status event (sent / delivered / read / failed) on a business-sent message. |
@@ -27,6 +28,6 @@ Terms specific to this bounded context. Shared kernel terms (`inbox_id`, `user_i
 | `UserBase` | End-user identification component. `user_id` property returns BSUID when present, falls back to `phone_number`. |
 | `BSUID` | Business Scoped User ID scoped to one Meta business portfolio. Used as `user_id` when available; `phone_number` is the fallback. Meta can replace it after a phone-number change and reports that through `user_id_update`. |
 | Parent BSUID | Optional `CC.ENT.<id>` identity shared across a set of enrolled business portfolios. It is preserved separately from the portfolio BSUID. |
-| Built-in field | A Meta `change.field` value Wappa handles natively: messages, identity and preference changes, group and username events, Calling, account events, and Coexistence synchronization fields. |
+| Built-in field | A Meta `change.field` value Wappa handles natively: messages, identity and preference changes, group and username events, Calling, account events, and Coexistence synchronization fields on WhatsApp; comments, live comments, mentions and messaging fields on Instagram. Each adapter declares its set as `builtin_fields`. |
 | Custom field | A Meta `change.field` value the host application registers via `WappaBuilder.register_webhook_field`. |
 | Schema drift | A Meta payload property or `change.field` Wappa does not model. Tolerated, logged as `META_SCHEMA_DRIFT`, and answered 200; see root `CONTEXT.md`. |

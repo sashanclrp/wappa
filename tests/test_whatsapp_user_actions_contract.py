@@ -152,12 +152,12 @@ def test_unknown_top_level_value_key_still_reports_contract_drift() -> None:
     payload["entry"][0]["changes"][0]["value"]["brand_new_field"] = [{"a": 1}]
 
     with pytest.raises(ValueError, match="brand_new_field"):
-        WhatsAppWebhookProcessor().parse_webhook_container(payload)
+        WhatsAppWebhookProcessor()._parse_webhook_container(payload)
 
 
 @pytest.mark.asyncio
 async def test_link_click_dispatches_as_inbox_scoped_user_action() -> None:
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+    webhook = await WhatsAppWebhookProcessor().translate(
         _payload([_LINK_CLICK]), inbox_id="508386009032748"
     )
 

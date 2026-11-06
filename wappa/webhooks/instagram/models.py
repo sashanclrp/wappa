@@ -20,7 +20,6 @@ from wappa.schemas.core.types import (
     MessageType,
     PlatformType,
     UniversalMessageData,
-    WebhookType,
 )
 from wappa.webhooks.core.base_message import (
     BaseAudioMessage,
@@ -32,11 +31,6 @@ from wappa.webhooks.core.base_message import (
     BaseReactionMessage,
     BaseTextMessage,
     BaseVideoMessage,
-)
-from wappa.webhooks.core.base_webhook import (
-    BaseContact,
-    BaseWebhook,
-    BaseWebhookMetadata,
 )
 
 NativeID = str
@@ -294,102 +288,18 @@ class InstagramMentionValue(BaseModel):
     comment_id: str | None = None
 
 
-# ── Container (BaseWebhook contract) ─────────────────────────────────────
+# ── Envelope ─────────────────────────────────────────────────────────────
 
 
-class InstagramMetadata(BaseWebhookMetadata):
-    account_id: str
+class InstagramWebhook(BaseModel):
+    """The ``object: instagram`` callback envelope; no container ABC."""
 
-    @property
-    def business_id(self) -> str:
-        return self.account_id
+    model_config = ConfigDict(
+        extra="forbid", str_strip_whitespace=True, validate_assignment=True
+    )
 
-    @property
-    def webhook_source_id(self) -> str:
-        return self.account_id
-
-    @property
-    def platform(self) -> PlatformType:
-        return PlatformType.INSTAGRAM
-
-    def to_universal_dict(self) -> dict[str, Any]:
-        return {"platform": self.platform.value, "inbox_id": self.account_id}
-
-
-class InstagramWebhook(BaseWebhook):
     object: Literal["instagram"]
     entry: list[InstagramEntry] = Field(min_length=1)
-
-    @property
-    def platform(self) -> PlatformType:
-        return PlatformType.INSTAGRAM
-
-    @property
-    def business_id(self) -> str:
-        return self.entry[0].id
-
-    @property
-    def source_id(self) -> str:
-        return self.entry[0].id
-
-    @property
-    def webhook_type(self) -> WebhookType:
-        if self.is_status_update:
-            return WebhookType.STATUS_UPDATES
-        if self.is_incoming_message:
-            return WebhookType.INCOMING_MESSAGES
-        return WebhookType.SYSTEM_EVENTS
-
-    def _events(self) -> list[tuple[str, InstagramMessagingEvent]]:
-        return [(entry.id, event) for entry in self.entry for event in entry.messaging]
-
-    @property
-    def is_incoming_message(self) -> bool:
-        return any(is_user_message(event, account) for account, event in self._events())
-
-    @property
-    def is_status_update(self) -> bool:
-        return any(event.read is not None for _, event in self._events())
-
-    @property
-    def has_errors(self) -> bool:
-        return False
-
-    def get_raw_messages(self) -> list[dict[str, Any]]:
-        return [
-            event.model_dump(exclude_none=True)
-            for account, event in self._events()
-            if is_user_message(event, account)
-        ]
-
-    def get_raw_statuses(self) -> list[dict[str, Any]]:
-        return [
-            event.model_dump(exclude_none=True)
-            for _, event in self._events()
-            if event.read is not None
-        ]
-
-    def get_contacts(self) -> list[BaseContact]:
-        return []
-
-    def get_metadata(self) -> InstagramMetadata:
-        return InstagramMetadata(account_id=self.source_id)
-
-    def to_universal_dict(self) -> dict[str, Any]:
-        return {
-            "platform": self.platform.value,
-            "inbox_id": self.source_id,
-            "payload": self.model_dump(mode="json"),
-        }
-
-    def get_processing_context(self) -> dict[str, Any]:
-        return {"platform": self.platform.value, "inbox_id": self.source_id}
-
-    @classmethod
-    def from_platform_payload(
-        cls, payload: dict[str, Any], **kwargs: Any
-    ) -> InstagramWebhook:
-        return cls.model_validate(payload)
 
 
 def is_echo(event: InstagramMessagingEvent, account_id: str) -> bool:
@@ -397,31 +307,6 @@ def is_echo(event: InstagramMessagingEvent, account_id: str) -> bool:
     return bool(
         event.sender.id == account_id
         or (message and (message.is_echo or message.is_self))
-    )
-
-
-def is_user_message(event: InstagramMessagingEvent, account_id: str) -> bool:
-    """A new User-authored message (text, media, share or quick reply)."""
-    message = event.message
-    return bool(
-        message
-        and message.mid
-        and not is_echo(event, account_id)
-        and not message.is_deleted
-        and not message.is_unsupported
-        and (message.text is not None or message.attachments)
-    )
-
-
-def is_text_message(event: InstagramMessagingEvent, account_id: str) -> bool:
-    """Retained helper: a plain text message without attachments/selection."""
-    message = event.message
-    return bool(
-        is_user_message(event, account_id)
-        and message
-        and message.text is not None
-        and not message.attachments
-        and message.quick_reply is None
     )
 
 

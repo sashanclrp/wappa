@@ -17,7 +17,6 @@ from wappa.core.events import (
 )
 from wappa.core.inbound import SIGNATURE_HEADER
 from wappa.core.logging.logger import get_logger
-from wappa.processors.factory import processor_factory
 from wappa.schemas.core.types import PlatformType
 
 
@@ -168,9 +167,10 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
                 status_code=400, detail=f"Unsupported platform: {platform}"
             ) from exc
         webhook_url = webhook_url_factory.generate_webhook_url(platform_type)
-        installed = platform_type in processor_factory.get_supported_platforms()
+        installed_platforms = webhook_controller.platforms(request)
+        installed = platform_type in installed_platforms
 
-        controller_status = webhook_controller.get_health_status()
+        controller_status = webhook_controller.get_health_status(request)
 
         return {
             "status": "active" if installed else "adapter_not_installed",
@@ -179,13 +179,11 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
             "verify_url": webhook_url,
             "controller_status": controller_status,
             "registered_platforms": [p.value.lower() for p in PlatformType],
-            "installed_platforms": sorted(
-                item.value for item in processor_factory.get_supported_platforms()
-            ),
+            "installed_platforms": sorted(item.value for item in installed_platforms),
         }
 
     @router.get("/platforms")
-    async def list_supported_platforms() -> dict[str, Any]:
+    async def list_supported_platforms(request: Request) -> dict[str, Any]:
         """
         List all supported platforms and their webhook patterns.
 
@@ -193,7 +191,7 @@ def create_webhook_router(event_dispatcher: WappaEventDispatcher) -> APIRouter:
             Dict with all supported platforms and URL patterns
         """
         patterns = webhook_url_factory.get_supported_platforms()
-        installed_platforms = processor_factory.get_supported_platforms()
+        installed_platforms = webhook_controller.platforms(request)
 
         return {
             "registered_platforms": list(patterns.keys()),

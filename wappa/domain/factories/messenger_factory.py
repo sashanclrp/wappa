@@ -7,6 +7,7 @@ from collections import OrderedDict
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from wappa.core.config.settings import settings
 from wappa.core.logging.logger import get_logger
 from wappa.domain.inbox.errors import InboxDirectoryError
 from wappa.domain.inbox.identity import InboxRef
@@ -14,21 +15,6 @@ from wappa.domain.inbox.ports import IInboxCredentialResolver, ResolvedInboxCred
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.interfaces.sent_message_registry import ISentMessageRegistry
 from wappa.domain.interfaces.session_provider import HTTPSessionClosedError
-from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
-from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
-    WhatsAppInteractiveHandler,
-)
-from wappa.messaging.whatsapp.handlers.whatsapp_media_handler import (
-    WhatsAppMediaHandler,
-)
-from wappa.messaging.whatsapp.handlers.whatsapp_specialized_handler import (
-    WhatsAppSpecializedHandler,
-)
-from wappa.messaging.whatsapp.handlers.whatsapp_template_handler import (
-    WhatsAppTemplateHandler,
-)
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
-from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
     import httpx
@@ -78,9 +64,6 @@ class MessengerFactory:
         """Return the HTTP session via the lifecycle-aware provider."""
         return self._session_provider()
 
-    def _get_media_download_client(self) -> httpx.AsyncClient:
-        return self._media_download_client_provider()
-
     @staticmethod
     def _cache_key(inbox_ref: InboxRef) -> str:
         return str(inbox_ref)
@@ -108,7 +91,12 @@ class MessengerFactory:
 
         self.logger.debug("Creating new messenger for %s", cache_key)
 
-        if inbox_ref.platform not in {PlatformType.WHATSAPP, PlatformType.INSTAGRAM}:
+        # Imported here: the Platform Registry imports the inbound adapters,
+        # whose package imports the runtime that builds this factory.
+        from wappa.platforms import PLATFORMS, MessengerDeps
+
+        entry = PLATFORMS.get(inbox_ref.platform)
+        if entry is None:
             raise ValueError(f"Unsupported platform: {inbox_ref.platform.value}")
 
         resolved = credentials
@@ -126,22 +114,16 @@ class MessengerFactory:
                 f"for {inbox_ref}"
             )
 
+        deps = MessengerDeps(
+            session_provider=self._session_provider,
+            media_download_client_provider=self._media_download_client_provider,
+            # Without a Meta Application Configuration, its env defaults apply.
+            graph_api_version=self._graph_api_version or settings.api_version,
+            graph_base_url=self._graph_base_url or settings.base_url,
+            sent_registry=self._sent_registry,
+        )
         try:
-            messenger: IMessenger
-            if inbox_ref.platform is PlatformType.INSTAGRAM:
-                from wappa.messaging.instagram.messenger import InstagramMessenger
-
-                messenger = InstagramMessenger(
-                    inbox_ref=inbox_ref,
-                    access_token=resolved.access_token,
-                    session_provider=self._session_provider,
-                    graph_api_version=self._graph_api_version or "v26.0",
-                    graph_base_url=self._graph_base_url or "https://graph.facebook.com",
-                    media_download_client_provider=self._media_download_client_provider,
-                    sent_registry=self._sent_registry,
-                )
-            else:
-                messenger = self._create_whatsapp_messenger(resolved)
+            messenger = entry.build_messenger(resolved, deps)
         except InboxDirectoryError:
             raise
         except Exception as e:
@@ -157,48 +139,6 @@ class MessengerFactory:
                     "Evicted least-recently-used messenger for %s", evicted_key
                 )
         return messenger
-
-    def _create_whatsapp_messenger(
-        self, credentials: ResolvedInboxCredentials
-    ) -> WhatsAppMessenger:
-        inbox_id = credentials.inbox_id
-        session = self._get_session()
-        client_kwargs: dict[str, str] = {}
-        if self._graph_api_version is not None:
-            client_kwargs["api_version"] = self._graph_api_version
-        if self._graph_base_url is not None:
-            client_kwargs["base_url"] = self._graph_base_url
-        client = WhatsAppClient(
-            session=session,
-            access_token=credentials.access_token.get_secret_value(),
-            phone_number_id=inbox_id,
-            logger=self.logger,
-            **client_kwargs,
-        )
-        messenger = WhatsAppMessenger(
-            client=client,
-            media_handler=WhatsAppMediaHandler(
-                client=client,
-                inbox_id=inbox_id,
-                media_download_client=self._get_media_download_client(),
-            ),
-            interactive_handler=WhatsAppInteractiveHandler(
-                client=client, inbox_id=inbox_id
-            ),
-            template_handler=WhatsAppTemplateHandler(client=client, inbox_id=inbox_id),
-            specialized_handler=WhatsAppSpecializedHandler(
-                client=client, inbox_id=inbox_id
-            ),
-            inbox_id=inbox_id,
-        )
-        self.logger.info("✅ WhatsApp messenger created for inbox: %s", inbox_id)
-        return messenger
-
-    def get_supported_platforms(self) -> list[PlatformType]:
-        return [PlatformType.WHATSAPP, PlatformType.INSTAGRAM]
-
-    def is_platform_supported(self, platform: PlatformType) -> bool:
-        return platform in self.get_supported_platforms()
 
     def evict(self, inbox_ref: InboxRef) -> None:
         """Drop the cached Messenger for one Inbox (after rotation or deactivation)."""

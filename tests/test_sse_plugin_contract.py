@@ -176,7 +176,9 @@ async def test_custom_hub_recognizes_overflow_and_shutdown_close_signals() -> No
     slow = await hub.subscribe()
     from wappa.sse import sse_event_scope
 
-    async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
+    async with sse_event_scope(
+        platform="whatsapp", inbox_id="inbox-1", user_id="user-1"
+    ):
         for index in range(2):
             await hub.publish(
                 event_type="incoming_message", source="test", payload={"i": index}

@@ -207,9 +207,7 @@ async def test_real_http_callback_routes_each_user_and_does_not_reply_to_echo_or
 
 @pytest.mark.asyncio
 async def test_processor_has_native_identity_and_preserves_text():
-    parsed = await InstagramWebhookProcessor().create_universal_webhook(
-        payload(event())
-    )
+    parsed = await InstagramWebhookProcessor().translate(payload(event()))
     assert isinstance(parsed, InboundMessageWebhook)
     assert parsed.user.user_id == "12345"
     assert parsed.user.phone_number == "" and parsed.user.bsuid is None
@@ -232,7 +230,7 @@ async def test_processor_has_native_identity_and_preserves_text():
     ],
 )
 async def test_nontext_events_never_enter_echo_lane(message, expected):
-    parsed = await InstagramWebhookProcessor().create_universal_webhook(
+    parsed = await InstagramWebhookProcessor().translate(
         payload(event(message=message))
     )
     assert type(parsed).__name__ == expected

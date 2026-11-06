@@ -8,7 +8,8 @@ import pytest
 from pydantic import BaseModel
 
 from wappa.core.events.field_registry import FieldHandlerRegistry
-from wappa.processors.base_processor import ProcessorError
+from wappa.platforms import BUILTIN_FIELDS
+from wappa.processors.errors import ProcessorError
 from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.schemas.core.types import MessageType, PlatformType
 from wappa.webhooks.core.base_message import BaseMessage, BaseMessageContext
@@ -67,7 +68,7 @@ def test_schemas_package_exposes_only_shared_primitives() -> None:
 @pytest.mark.asyncio
 async def test_whatsapp_message_payload_parses_to_pydantic_universal_model() -> None:
     processor = WhatsAppWebhookProcessor()
-    webhook = await processor.create_universal_webhook(
+    webhook = await processor.translate(
         _payload(
             "messages",
             {
@@ -124,7 +125,7 @@ async def test_whatsapp_message_payload_parses_to_pydantic_universal_model() -> 
 @pytest.mark.asyncio
 async def test_whatsapp_status_ad_referral_accepts_missing_click_id() -> None:
     processor = WhatsAppWebhookProcessor()
-    webhook = await processor.create_universal_webhook(
+    webhook = await processor.translate(
         _payload(
             "messages",
             {
@@ -204,7 +205,7 @@ async def test_whatsapp_unknown_context_field_is_reported_as_meta_schema_drift(
     )
 
     with caplog.at_level("WARNING"), pytest.raises(ProcessorError):
-        await processor.create_universal_webhook(payload)
+        await processor.translate(payload)
 
     # Strict mode (set in conftest) turns Meta drift into an error; the drift
     # line names the field path and never the value.
@@ -216,7 +217,7 @@ async def test_whatsapp_unknown_context_field_is_reported_as_meta_schema_drift(
 @pytest.mark.asyncio
 async def test_whatsapp_status_payload_parses_to_pydantic_universal_model() -> None:
     processor = WhatsAppWebhookProcessor()
-    webhook = await processor.create_universal_webhook(
+    webhook = await processor.translate(
         _payload(
             "messages",
             {
@@ -258,7 +259,7 @@ async def test_whatsapp_status_payload_parses_to_pydantic_universal_model() -> N
 @pytest.mark.asyncio
 async def test_whatsapp_group_status_exposes_participant_bsuid() -> None:
     processor = WhatsAppWebhookProcessor()
-    webhook = await processor.create_universal_webhook(
+    webhook = await processor.translate(
         _payload(
             "messages",
             {
@@ -291,7 +292,7 @@ async def test_whatsapp_group_status_exposes_participant_bsuid() -> None:
 @pytest.mark.asyncio
 async def test_whatsapp_error_payload_parses_to_pydantic_universal_model() -> None:
     processor = WhatsAppWebhookProcessor()
-    webhook = await processor.create_universal_webhook(
+    webhook = await processor.translate(
         _payload(
             "messages",
             {
@@ -317,7 +318,7 @@ async def test_whatsapp_error_payload_parses_to_pydantic_universal_model() -> No
 @pytest.mark.asyncio
 async def test_whatsapp_system_payload_parses_to_pydantic_universal_model() -> None:
     processor = WhatsAppWebhookProcessor()
-    webhook = await processor.create_universal_webhook(
+    webhook = await processor.translate(
         _payload(
             "user_preferences",
             {
@@ -353,16 +354,15 @@ async def test_whatsapp_custom_field_payload_parses_to_pydantic_universal_model(
     async def handler(webhook: CustomWebhook) -> None:
         assert webhook.field_name == "message_template_status_update"
 
-    registry = FieldHandlerRegistry()
+    registry = FieldHandlerRegistry(BUILTIN_FIELDS)
     registry.register(
         "message_template_status_update",
         parser=TemplateStatusUpdate,
         handler=handler,
     )
 
-    processor = WhatsAppWebhookProcessor()
-    processor.set_field_registry(registry)
-    webhook = await processor.create_universal_webhook(
+    processor = WhatsAppWebhookProcessor(registry)
+    webhook = await processor.translate(
         _payload(
             "message_template_status_update",
             {
@@ -477,7 +477,7 @@ def test_future_platform_payload_can_map_to_same_universal_model_shape() -> None
 async def test_whatsapp_account_offboarded_parses_to_inbox_connection_webhook() -> None:
     """Coexistence account_offboarded → SystemWebhook (WABA-scoped, no user)."""
     processor = WhatsAppWebhookProcessor()
-    webhook = await processor.create_universal_webhook(
+    webhook = await processor.translate(
         _payload(
             "account_offboarded",
             {
@@ -503,7 +503,7 @@ async def test_whatsapp_account_reconnected_parses_to_inbox_connection_webhook()
 ):
     """Coexistence account_reconnected → SystemWebhook with phone_number_id."""
     processor = WhatsAppWebhookProcessor()
-    webhook = await processor.create_universal_webhook(
+    webhook = await processor.translate(
         _payload(
             "account_reconnected",
             {
@@ -531,7 +531,7 @@ async def test_account_event_value_is_strictly_validated() -> None:
     """
     processor = WhatsAppWebhookProcessor()
     with pytest.raises(ProcessorError):
-        await processor.create_universal_webhook(
+        await processor.translate(
             _payload(
                 "account_offboarded",
                 {"reason": "USER_INITIATED", "timestamp": 1655913600},

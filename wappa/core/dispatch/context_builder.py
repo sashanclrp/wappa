@@ -9,8 +9,8 @@ Factory, and the optional ``db`` / ``db_read`` session factories.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from wappa.core.messaging.pipeline import MessengerPipeline
@@ -32,6 +32,8 @@ if TYPE_CHECKING:
     from wappa.core.events.event_handler import WappaEventHandler
     from wappa.domain.interfaces.cache_factory import ICacheFactory
     from wappa.domain.interfaces.messaging_interface import IMessenger
+    from wappa.platforms import PlatformEntry
+    from wappa.schemas.core.types import PlatformType
 
 SessionFactory = Callable[[], Any]
 
@@ -66,6 +68,9 @@ class RuntimeCapabilities:
     meta_application_config: MetaApplicationConfig | None = None
     redis_manager: Any | None = None
     postgres_session_manager: Any | None = None
+    platforms: Mapping[PlatformType, PlatformEntry] = field(
+        default_factory=lambda: _default_platforms()
+    )
 
     @classmethod
     def from_app(cls, app: FastAPI) -> RuntimeCapabilities:
@@ -92,7 +97,16 @@ class RuntimeCapabilities:
             meta_application_config=getattr(state, "meta_application_config", None),
             redis_manager=getattr(state, "redis_manager", None),
             postgres_session_manager=getattr(state, "postgres_session_manager", None),
+            platforms=getattr(state, "platforms", None) or _default_platforms(),
         )
+
+
+def _default_platforms() -> Mapping[PlatformType, PlatformEntry]:
+    # Imported here: the Platform Registry imports the inbound adapters,
+    # whose package imports this module.
+    from wappa.platforms import PLATFORMS
+
+    return PLATFORMS
 
 
 class DispatchContextBuilder:

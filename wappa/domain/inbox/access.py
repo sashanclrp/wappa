@@ -22,6 +22,10 @@ from typing import Any
 
 from pydantic import SecretStr
 
+from wappa.core.config.meta_application import (
+    DEFAULT_GRAPH_API_VERSION,
+    DEFAULT_GRAPH_BASE_URL,
+)
 from wappa.domain.inbox.identity import InboxRef, PlatformAccountRef
 from wappa.domain.inbox.ports import IInboxCredentialResolver
 
@@ -53,8 +57,8 @@ class InboxCredentialAccess:
         self,
         resolver: IInboxCredentialResolver,
         *,
-        graph_api_version: str = "v26.0",
-        graph_base_url: str = "https://graph.facebook.com",
+        graph_api_version: str = DEFAULT_GRAPH_API_VERSION,
+        graph_base_url: str = DEFAULT_GRAPH_BASE_URL,
     ) -> None:
         self._resolver = resolver
         self._version = graph_api_version

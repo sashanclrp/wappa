@@ -99,7 +99,7 @@ def test_forwarded_button_context_still_rejected() -> None:
 async def test_universal_webhook_exposes_button_text() -> None:
     processor = WhatsAppWebhookProcessor()
 
-    webhook = await processor.create_universal_webhook(_payload(_button_message()))
+    webhook = await processor.translate(_payload(_button_message()))
 
     assert webhook.message.message_type is MessageType.BUTTON
     assert webhook.get_message_text() == "QUIERO PROMO SUERO"

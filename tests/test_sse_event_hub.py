@@ -24,7 +24,9 @@ async def test_subscriber_receives_published_events() -> None:
     hub = SSEEventHub()
     subscriber = await hub.subscribe()
 
-    async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
+    async with sse_event_scope(
+        platform="whatsapp", inbox_id="inbox-1", user_id="user-1"
+    ):
         assert await _publish(hub, "incoming_message", text="hi") == 1
 
     event = subscriber.queue.get_nowait()
@@ -40,7 +42,9 @@ async def test_events_fan_out_to_every_matching_subscriber() -> None:
     hub = SSEEventHub()
     subscribers = [await hub.subscribe() for _ in range(3)]
 
-    async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
+    async with sse_event_scope(
+        platform="whatsapp", inbox_id="inbox-1", user_id="user-1"
+    ):
         assert await _publish(hub, "incoming_message") == 3
 
     assert all(subscriber.queue.qsize() == 1 for subscriber in subscribers)
@@ -52,7 +56,9 @@ async def test_inbox_filter_excludes_other_inboxes() -> None:
     mine = await hub.subscribe(platform="whatsapp", inbox_id="inbox-1")
     theirs = await hub.subscribe(platform="whatsapp", inbox_id="inbox-2")
 
-    async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
+    async with sse_event_scope(
+        platform="whatsapp", inbox_id="inbox-1", user_id="user-1"
+    ):
         assert await _publish(hub, "incoming_message") == 1
 
     assert mine.queue.qsize() == 1
@@ -65,7 +71,9 @@ async def test_user_filter_excludes_other_users() -> None:
     mine = await hub.subscribe(user_id="user-1")
     theirs = await hub.subscribe(user_id="user-2")
 
-    async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
+    async with sse_event_scope(
+        platform="whatsapp", inbox_id="inbox-1", user_id="user-1"
+    ):
         await _publish(hub, "incoming_message")
 
     assert mine.queue.qsize() == 1
@@ -77,7 +85,9 @@ async def test_event_type_filter_only_delivers_subscribed_types() -> None:
     hub = SSEEventHub()
     subscriber = await hub.subscribe(event_types={"status_change"})
 
-    async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
+    async with sse_event_scope(
+        platform="whatsapp", inbox_id="inbox-1", user_id="user-1"
+    ):
         await _publish(hub, "incoming_message")
         await _publish(hub, "status_change")
 
@@ -89,7 +99,9 @@ async def test_event_type_filter_only_delivers_subscribed_types() -> None:
 async def test_publish_without_subscribers_delivers_nothing() -> None:
     hub = SSEEventHub()
 
-    async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
+    async with sse_event_scope(
+        platform="whatsapp", inbox_id="inbox-1", user_id="user-1"
+    ):
         assert await _publish(hub, "incoming_message") == 0
 
 
@@ -99,7 +111,9 @@ async def test_full_queue_closes_the_slow_subscription_with_a_delivery_gap() -> 
     hub = SSEEventHub(queue_size=1)
     subscriber = await hub.subscribe()
 
-    async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
+    async with sse_event_scope(
+        platform="whatsapp", inbox_id="inbox-1", user_id="user-1"
+    ):
         assert await _publish(hub, "incoming_message", index=0) == 1
         result = await _publish(hub, "incoming_message", index=1)
 
@@ -122,7 +136,9 @@ async def test_a_full_subscriber_does_not_starve_the_others() -> None:
     slow = await hub.subscribe()
     fast = await hub.subscribe()
 
-    async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
+    async with sse_event_scope(
+        platform="whatsapp", inbox_id="inbox-1", user_id="user-1"
+    ):
         await _publish(hub, "incoming_message", index=0)
         fast.queue.get_nowait()
         await _publish(hub, "incoming_message", index=1)
@@ -140,7 +156,9 @@ async def test_unsubscribe_stops_delivery_and_updates_stats() -> None:
 
     await hub.unsubscribe(subscriber.subscriber_id)
 
-    async with sse_event_scope(inbox_id="inbox-1", user_id="user-1"):
+    async with sse_event_scope(
+        platform="whatsapp", inbox_id="inbox-1", user_id="user-1"
+    ):
         assert await _publish(hub, "incoming_message") == 0
 
     assert hub.get_stats()["active_subscribers"] == 0

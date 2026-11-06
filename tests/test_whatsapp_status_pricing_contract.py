@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from wappa.processors.base_processor import ProcessorError
+from wappa.processors.errors import ProcessorError
 from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.webhooks.whatsapp.status_models import WhatsAppMessageStatus
 
@@ -65,7 +65,7 @@ async def test_status_webhook_accepts_pricing_subtype(
     extra: dict, caplog: pytest.LogCaptureFixture
 ) -> None:
     with caplog.at_level(logging.CRITICAL):
-        webhook = await WhatsAppWebhookProcessor().create_universal_webhook(
+        webhook = await WhatsAppWebhookProcessor().translate(
             _status_payload(_pricing(**extra))
         )
 
@@ -91,7 +91,7 @@ async def test_universal_conversation_exposes_pricing_subtype(
         "origin": {"type": "service"},
     }
 
-    webhook = await WhatsAppWebhookProcessor().create_universal_webhook(payload)
+    webhook = await WhatsAppWebhookProcessor().translate(payload)
 
     assert webhook.conversation is not None
     assert webhook.conversation.pricing_type == "free_customer_service"
@@ -119,6 +119,6 @@ async def test_pricing_schema_still_rejects_unknown_fields(
 ) -> None:
     """``subtype`` is an addition, not a relaxation of ``extra="forbid"``."""
     with caplog.at_level(logging.CRITICAL), pytest.raises(ProcessorError):
-        await WhatsAppWebhookProcessor().create_universal_webhook(
+        await WhatsAppWebhookProcessor().translate(
             _status_payload(_pricing(surprise_field="anything"))
         )

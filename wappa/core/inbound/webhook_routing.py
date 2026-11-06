@@ -9,7 +9,6 @@ resolver, proves that each phone-scoped change belongs to the WABA in
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 from pydantic import ValidationError
@@ -18,9 +17,7 @@ from wappa.domain.inbox.errors import InboxMembershipError, InboxNotFoundError
 from wappa.domain.inbox.identity import InboxRef, PlatformAccountRef
 from wappa.domain.inbox.ports import IInboxCredentialResolver, ResolvedInboxCredentials
 
-
-class PayloadRoutingError(Exception):
-    """An authenticated payload cannot identify a safe dispatch scope."""
+from .platform_webhooks import PayloadRoutingError, RoutedWebhookDelivery
 
 
 class PlatformAccountNotRegisteredError(PayloadRoutingError):
@@ -31,20 +28,6 @@ class PlatformAccountNotRegisteredError(PayloadRoutingError):
         super().__init__(
             f"No active Inbox is registered for Platform Account {account_ref}"
         )
-
-
-@dataclass(frozen=True, slots=True)
-class RoutedWebhookDelivery:
-    """One Platform change bound to one validated Inbox."""
-
-    inbox_ref: InboxRef
-    account_ref: PlatformAccountRef
-    credentials: ResolvedInboxCredentials
-    payload: dict[str, Any]
-
-    @property
-    def inbox_id(self) -> str:
-        return self.inbox_ref.inbox_id
 
 
 async def route_whatsapp_payload(
@@ -198,8 +181,6 @@ async def _resolve_change_inboxes(
 
 
 __all__ = [
-    "PayloadRoutingError",
     "PlatformAccountNotRegisteredError",
-    "RoutedWebhookDelivery",
     "route_whatsapp_payload",
 ]

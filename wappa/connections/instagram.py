@@ -20,6 +20,10 @@ from typing import TYPE_CHECKING, Any
 import httpx
 from pydantic import BaseModel, ConfigDict, SecretStr
 
+from wappa.core.config.meta_application import (
+    DEFAULT_GRAPH_API_VERSION,
+    DEFAULT_GRAPH_BASE_URL,
+)
 from wappa.domain.inbox.identity import InboxRef, PlatformAccountRef
 from wappa.domain.inbox.services import InboxCredentialService
 from wappa.schemas.core.types import PlatformType
@@ -116,8 +120,8 @@ class InstagramSubscriptions:
         self,
         *,
         client_provider: Callable[[], httpx.AsyncClient],
-        graph_api_version: str = "v26.0",
-        graph_base_url: str = "https://graph.facebook.com",
+        graph_api_version: str = DEFAULT_GRAPH_API_VERSION,
+        graph_base_url: str = DEFAULT_GRAPH_BASE_URL,
         app_id: str | None = None,
     ) -> None:
         self._client_provider = client_provider

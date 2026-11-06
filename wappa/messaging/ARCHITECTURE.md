@@ -73,7 +73,7 @@ messaging/
       error_helpers.py            # handle_whatsapp_error — uniform error → MessageResult
 ```
 
-Outside this folder but on every send path: the Messenger Pipeline (`MessengerPipeline`, middleware chain, `_PipelineTemplates`) lives in `wappa/core/messaging/pipeline.py`; `MessengerFactory` (Messenger construction per Inbox) lives in `wappa/domain/factories/messenger_factory.py`; shared media rendition selection lives in `wappa/domain/media_renditions.py`; the Platform-neutral interactive values (`ReplyButton`, `ButtonHeader`, `ListSection`, `ListRow`, `MessageCard`) and `ContactCard` live in `wappa/domain/interactive.py` and `wappa/domain/contacts.py`, and the neutral `MessageResult` in `wappa/domain/results.py`. No `IMessenger` signature imports a WhatsApp type.
+Outside this folder but on every send path: the Messenger Pipeline (`MessengerPipeline`, middleware chain, `_PipelineTemplates`) lives in `wappa/core/messaging/pipeline.py`; `MessengerFactory` (per-Inbox Messenger cache) lives in `wappa/domain/factories/messenger_factory.py` and builds through each Platform's `PlatformEntry.build_messenger` in `wappa/platforms.py`; shared media rendition selection lives in `wappa/domain/media_renditions.py`; the Platform-neutral interactive values (`ReplyButton`, `ButtonHeader`, `ListSection`, `ListRow`, `MessageCard`) and `ContactCard` live in `wappa/domain/interactive.py` and `wappa/domain/contacts.py`, and the neutral `MessageResult` in `wappa/domain/results.py`. No `IMessenger` signature imports a WhatsApp type.
 
 ## Changing a Messenger method
 

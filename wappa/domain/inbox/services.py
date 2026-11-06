@@ -20,18 +20,14 @@ from typing import TYPE_CHECKING, Any
 from pydantic import SecretStr, ValidationError
 
 from wappa.core.logging.logger import get_logger
-from wappa.schemas.core.types import PlatformType
 
 from .credentials import (
+    RECORD_TYPES,
     ActiveInboxCredentialRecord,
     InactiveInboxCredentialRecord,
-    InstagramActiveInboxCredentialRecord,
-    InstagramInactiveInboxCredentialRecord,
     PlatformAccountActiveIndexRecord,
     PlatformAccountEmptyIndexRecord,
     SecretBinding,
-    WhatsAppActiveInboxCredentialRecord,
-    WhatsAppInactiveInboxCredentialRecord,
     parse_inbox_credential_record,
     utc_now,
 )
@@ -55,14 +51,15 @@ if TYPE_CHECKING:
     from wappa.core.security.credential_codec import CredentialCodec
     from wappa.persistence.inbox_directory import InboxDirectoryRow, InboxDirectoryTable
 
-WHATSAPP_ACCESS_TOKEN_FIELD = "access_token"
+# Bound into every envelope's AAD; changing it would orphan stored records.
+_ACCESS_TOKEN_FIELD = "access_token"
 
 
 def _binding(inbox_ref: InboxRef) -> SecretBinding:
     return SecretBinding(
         platform=inbox_ref.platform,
         inbox_id=inbox_ref.inbox_id,
-        credential_field_name=WHATSAPP_ACCESS_TOKEN_FIELD,
+        credential_field_name=_ACCESS_TOKEN_FIELD,
     )
 
 
@@ -81,13 +78,8 @@ class InboxCredentialService:
         credential_version: int = 1,
     ) -> ActiveInboxCredentialRecord:
         """Encrypt a plaintext token into a persistable active record."""
-        self._require_platform(inbox_ref, account_ref)
+        record_type, _ = self._record_types(inbox_ref, account_ref)
         envelope = self._codec.encrypt(access_token, binding=_binding(inbox_ref))
-        record_type = (
-            InstagramActiveInboxCredentialRecord
-            if inbox_ref.platform is PlatformType.INSTAGRAM
-            else WhatsAppActiveInboxCredentialRecord
-        )
         return record_type(
             inbox_id=inbox_ref.inbox_id,
             platform_account_id=account_ref.platform_account_id,
@@ -116,11 +108,7 @@ class InboxCredentialService:
         self, previous: CredentialRecord
     ) -> InactiveInboxCredentialRecord:
         """Produce the deactivation record that follows ``previous``."""
-        record_type = (
-            InstagramInactiveInboxCredentialRecord
-            if previous.platform is PlatformType.INSTAGRAM
-            else WhatsAppInactiveInboxCredentialRecord
-        )
+        _, record_type = self._record_types(previous.inbox_ref, previous.account_ref)
         return record_type(
             inbox_id=previous.inbox_id,
             platform_account_id=previous.platform_account_id,
@@ -134,10 +122,8 @@ class InboxCredentialService:
         The canonical fields, including ``credential_version``, are unchanged;
         only the envelope is rewritten. Inactive records are returned as-is.
         """
-        if not isinstance(
-            record,
-            (WhatsAppActiveInboxCredentialRecord, InstagramActiveInboxCredentialRecord),
-        ):
+        active_type, _ = RECORD_TYPES[record.platform]
+        if not isinstance(record, active_type):
             return record
         envelope = self._codec.rotate(
             record.access_token, binding=_binding(record.inbox_ref)
@@ -145,11 +131,15 @@ class InboxCredentialService:
         return record.model_copy(update={"access_token": envelope})
 
     @staticmethod
-    def _require_platform(inbox_ref: InboxRef, account_ref: PlatformAccountRef) -> None:
-        if inbox_ref.platform not in {PlatformType.WHATSAPP, PlatformType.INSTAGRAM}:
+    def _record_types(
+        inbox_ref: InboxRef, account_ref: PlatformAccountRef
+    ) -> tuple[type[ActiveInboxCredentialRecord], type[InactiveInboxCredentialRecord]]:
+        record_types = RECORD_TYPES.get(inbox_ref.platform)
+        if record_types is None:
             raise ValueError("Credential records require an implemented Platform")
         if account_ref.platform is not inbox_ref.platform:
             raise ValueError("Inbox and Platform Account must share a Platform")
+        return record_types
 
 
 class InboxDirectory(IInboxCredentialResolver):
@@ -192,7 +182,7 @@ class InboxDirectory(IInboxCredentialResolver):
     async def check_health(self) -> bool:
         """Whether the directory's Table Cache answers a probe read."""
         try:
-            await self._table.get_row(InboxRef.whatsapp("0"))
+            await self._table.ping()
         except InboxDirectoryUnavailableError:
             return False
         return True
@@ -211,10 +201,8 @@ class InboxDirectory(IInboxCredentialResolver):
                 reason="inactive" if row.status == "inactive" else "unknown",
             )
         record = row.credential_record()
-        if not isinstance(
-            record,
-            (WhatsAppActiveInboxCredentialRecord, InstagramActiveInboxCredentialRecord),
-        ):
+        active_type, _ = RECORD_TYPES[record.platform]
+        if not isinstance(record, active_type):
             raise InboxCredentialIntegrityError(
                 f"active directory row for {inbox_ref} holds a non-active record"
             )
@@ -296,13 +284,8 @@ class InboxDirectory(IInboxCredentialResolver):
         record = await self.refresh_inbox(inbox_ref)
         if record is None:
             raise InboxNotFoundError(inbox_ref, reason="absent at the source")
-        if not isinstance(
-            record,
-            (
-                WhatsAppInactiveInboxCredentialRecord,
-                InstagramInactiveInboxCredentialRecord,
-            ),
-        ):
+        _, inactive_type = RECORD_TYPES[inbox_ref.platform]
+        if not isinstance(record, inactive_type):
             raise InboxMutationConflictError(
                 f"source still reports {inbox_ref} as active; commit the inactive "
                 "state before calling deactivate_inbox"
@@ -441,7 +424,6 @@ class InboxDirectory(IInboxCredentialResolver):
 
 
 __all__ = [
-    "WHATSAPP_ACCESS_TOKEN_FIELD",
     "InboxCredentialService",
     "InboxDirectory",
 ]

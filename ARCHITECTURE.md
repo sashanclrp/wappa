@@ -288,26 +288,16 @@ Wappa manages two separate HTTP client pools, both owned by `SessionLifecycle`:
 Wappa is multi-platform by design. Platform types remain stable while adapter capabilities are registered independently:
 
 1. **Universal Webhook Models** (`wappa/webhooks/core/`): `InboxBase`, `UserBase`, `MessageBase`, `StatusBase`, `ErrorBase`, `SystemBase` — platform-agnostic.
-2. **Platform Adapters** (`wappa/webhooks/whatsapp/`, `wappa/messaging/whatsapp/`): Parse WhatsApp-specific payloads into universal models; construct WhatsApp-specific API requests from universal send calls.
+2. **Platform Adapters**: per Platform, an inbound adapter (`wappa/webhooks/<platform>/`, `wappa/processors/<platform>_processor.py`, `wappa/core/inbound/<platform>_routing.py`) that implements `PlatformWebhooks` (`wappa/core/inbound/platform_webhooks.py`: `platform`, `builtin_fields`, `route`, `translate`) and an outbound adapter (`wappa/messaging/<platform>/`) that implements `IMessenger`. WhatsApp and Instagram are installed.
 3. **Shared Schema Primitives** (`wappa/schemas/core/types.py`, `wappa/schemas/core/recipient.py`): Cross-cutting enums and outbound recipient normalization shared by inbound, outbound, API, and runtime modules. Inbound webhook schemas do not live here.
-4. **PlatformType enum**: The supported vocabulary is stable. The router,
-   dispatcher, and factory resolve registered adapter capabilities rather than
-   treating a route name as proof that an adapter is installed.
-5. **Inbox Directory** (`wappa/domain/inbox/`): Wappa's canonical, Platform-discriminated credential records and the read-through directory that resolves them. Hosts supply only an `IInboxDirectorySource`; Wappa owns encryption, caching, versions, indexes, and Messenger eviction. The `InboxCredentialRecord` union grows one member per Platform.
-6. **Adding a new platform** requires:
-   - A webhook processor implementing the platform's payload → universal model mapping
-   - A messenger implementing `IMessenger` for that platform's send API
-   - A Platform member of `InboxCredentialRecord` naming the credential its adapter consumes (`InboxRef.cache_namespace` is already Platform-qualified, `<platform>__<inbox_id>`, so it needs no per-Platform encoding)
-   - Registration in `PlatformType` and the messenger/webhook factories
-   - The concrete file set, with Instagram as the worked example:
-     - Inbound adapter: `wappa/webhooks/instagram/models.py`, `wappa/processors/instagram_processor.py`, `wappa/core/inbound/instagram_routing.py`.
-     - Outbound adapter: `wappa/messaging/instagram/messenger.py` plus its capabilities `wappa/messaging/instagram/graph.py`, `wappa/messaging/instagram/media.py`, `wappa/messaging/instagram/media_library.py`, `wappa/messaging/instagram/content.py` and `wappa/messaging/instagram/history.py`.
-     - Callback: the Platform branch in `wappa/api/controllers/webhook_controller.py` (allowed set and payload router choice).
-     - Processor registration: `wappa/processors/factory.py` (processor construction).
-     - Messenger construction: the Platform branch in `wappa/domain/factories/messenger_factory.py`.
-     - Credentials: the Platform's active/inactive records in `wappa/domain/inbox/credentials.py`, and record selection in `wappa/domain/inbox/services.py`.
-     - Messaging HTTP API: a `RoutePlatform` member in `wappa/api/dependencies/inbox_context.py`.
-     - Connection (optional): a connector implementing `IInboxConnector`, as `wappa/connections/instagram.py`.
+4. **`PlatformType` is vocabulary; `PLATFORMS` is installation.** `wappa/platforms.py` is the composition root: `PLATFORMS: Mapping[PlatformType, PlatformEntry]` (each entry holds the `PlatformWebhooks` adapter, the Messenger builder and a display name), `BUILTIN_FIELDS` (each Platform's reserved webhook fields, which seed `FieldHandlerRegistry`) and `build_platforms(field_registry)`, which `WappaBuilder.build()` calls once per app and stores on `app.state.platforms`. The webhook controller (GET and POST), `/webhook/platforms`, the status route, `WappaCorePlugin`, `RoutePlatform` and `MessengerFactory` read it; a `PlatformType` member without an entry (Telegram, Teams) answers 400 on HTTP and raises `ValueError` in code, never falls through to WhatsApp. Platform imports and branches are legitimate only there and in adapter folders.
+5. **Inbox Directory** (`wappa/domain/inbox/`): Wappa's canonical, Platform-discriminated credential records and the read-through directory that resolves them. Hosts supply only an `IInboxDirectorySource`; Wappa owns encryption, caching, versions, indexes, and Messenger eviction. The `InboxCredentialRecord` union grows one active/inactive pair per Platform, and `RECORD_TYPES` beside it maps each Platform to that pair so `InboxCredentialService` never branches on Platform.
+6. **Adding a new platform** touches:
+   - Its adapter folders: `wappa/webhooks/<platform>/`, `wappa/processors/<platform>_processor.py` (plus `wappa/core/inbound/<platform>_routing.py` or routing folded in), `wappa/messaging/<platform>/`, optional capability adapters its Messenger registers, and optionally a connector implementing `IInboxConnector` (as `wappa/connections/instagram.py`).
+   - The composition root: one `PlatformEntry` in `build_platforms` and its `builtin_fields` in `BUILTIN_FIELDS` (`wappa/platforms.py`).
+   - Vocabulary: one `PlatformType` member (`wappa/schemas/core/types.py`) and one active/inactive record pair plus its `RECORD_TYPES` entry (`wappa/domain/inbox/credentials.py`). `InboxRef.cache_namespace` is already Platform-qualified (`<platform>__<inbox_id>`), so it needs no per-Platform encoding.
+   - A non-Meta Platform additionally adds `authenticate` to `PlatformWebhooks` and its own callback authenticator; today both Platforms are Meta callbacks sharing one App Secret (ADR-0010).
+   - Instagram is the worked example: `wappa/webhooks/instagram/models.py`, `wappa/processors/instagram_processor.py`, `wappa/core/inbound/instagram_routing.py`, `wappa/messaging/instagram/`, `wappa/connections/instagram.py`.
 
 Event lanes beyond message/status/error/system (message updates, comments, mentions) have optional `WappaEventHandler` hooks; a Platform without those events simply never emits them. User choices are not a lane: WhatsApp button/list replies and Instagram quick replies and postbacks all arrive as `InboundMessageWebhook` with `get_interactive_selection()`.
 

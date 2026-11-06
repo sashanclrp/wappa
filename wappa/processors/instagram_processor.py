@@ -28,14 +28,15 @@ other change field          SystemWebhook(UNSUPPORTED_EVENT)
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from wappa.core.inbound.instagram_routing import route_instagram_payload
+from wappa.core.inbound.platform_webhooks import RoutedWebhookDelivery
+from wappa.core.logging.logger import get_logger
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.messaging_targets import CommentRef, PostRef
-from wappa.processors.base_processor import BaseWebhookProcessor
-from wappa.schemas.core.types import MessageStatus, MessageType, PlatformType
+from wappa.schemas.core.types import MessageStatus, PlatformType
 from wappa.webhooks.core.base_message import BaseMessage
-from wappa.webhooks.core.base_status import BaseMessageStatus
 from wappa.webhooks.core.schema_drift import report_schema_drift
 from wappa.webhooks.core.webhook_interfaces.base_components import (
     InboxBase,
@@ -65,6 +66,7 @@ from wappa.webhooks.core.webhook_interfaces.universal_webhooks import (
 )
 from wappa.webhooks.instagram.models import (
     ATTACHMENT_CLASSES,
+    INSTAGRAM_BUILTIN_FIELDS,
     InstagramButtonReplyMessage,
     InstagramChange,
     InstagramCommentValue,
@@ -83,17 +85,7 @@ from wappa.webhooks.instagram.models import (
 
 if TYPE_CHECKING:
     from wappa.core.events.field_registry import FieldHandlerRegistry
-
-_SUPPORTED_TYPES = {
-    MessageType.TEXT,
-    MessageType.INTERACTIVE,
-    MessageType.IMAGE,
-    MessageType.VIDEO,
-    MessageType.AUDIO,
-    MessageType.DOCUMENT,
-    MessageType.SHARE,
-    MessageType.STORY_MENTION,
-}
+    from wappa.domain.inbox.ports import IInboxCredentialResolver
 
 
 def _timestamp(value: int | None) -> datetime:
@@ -128,55 +120,31 @@ def _referral(native: InstagramReferral | None) -> EntryReferral | None:
     )
 
 
-class InstagramWebhookProcessor(BaseWebhookProcessor):
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__()
-        self._field_registry: FieldHandlerRegistry | None = None
+class InstagramWebhookProcessor:
+    """Instagram ``PlatformWebhooks`` adapter: entry routing and translation."""
 
-    def set_field_registry(self, registry: FieldHandlerRegistry | None) -> None:
-        """Attach the app's registry for Instagram extension fields."""
-        self._field_registry = registry
+    builtin_fields: ClassVar[frozenset[str]] = INSTAGRAM_BUILTIN_FIELDS
+
+    def __init__(self, field_registry: FieldHandlerRegistry | None = None) -> None:
+        self.logger = get_logger(__name__)
+        # ``None`` means the Host registered no extension fields.
+        self._field_registry = field_registry
 
     @property
     def platform(self) -> PlatformType:
         return PlatformType.INSTAGRAM
 
-    def get_supported_message_types(self) -> set[MessageType]:
-        return set(_SUPPORTED_TYPES)
+    async def route(
+        self, payload: dict[str, Any], resolver: IInboxCredentialResolver
+    ) -> tuple[RoutedWebhookDelivery, ...]:
+        return await route_instagram_payload(payload, resolver)
 
-    def parse_webhook_container(
-        self, payload: dict[str, Any], **kwargs: Any
-    ) -> InstagramWebhook:
-        webhook = InstagramWebhook.model_validate(payload)
-        report_schema_drift(webhook, platform="instagram", logger=self.logger)
-        return webhook
-
-    def create_message_from_data(
-        self, message_data: dict[str, Any], message_type: MessageType, **kwargs: Any
-    ) -> BaseMessage:
-        if message_type is not MessageType.TEXT:
-            raise ValueError("Use create_universal_webhook for Instagram media")
-        message = InstagramTextMessage.model_validate(message_data)
-        report_schema_drift(message, platform="instagram", logger=self.logger)
-        return message
-
-    def create_status_from_data(
-        self, status_data: dict[str, Any], **kwargs: Any
-    ) -> BaseMessageStatus:
-        raise NotImplementedError(
-            "Instagram seen events translate directly to StatusWebhook"
-        )
-
-    def is_registered_change(self, field: str) -> bool:
-        return bool(
-            self._field_registry
-            and self._field_registry.get(field, PlatformType.INSTAGRAM)
-        )
-
-    async def create_universal_webhook(
-        self, payload: dict[str, Any], **kwargs: Any
+    async def translate(
+        self, payload: dict[str, Any], *, inbox_id: str | None = None
     ) -> UniversalWebhook:
-        container = self.parse_webhook_container(payload)
+        """Translate one routed event; the Inbox is the entry's account ID."""
+        container = InstagramWebhook.model_validate(payload)
+        report_schema_drift(container, platform="instagram", logger=self.logger)
         if len(container.entry) != 1:
             raise ValueError("Instagram processor requires one routed entry")
         entry = container.entry[0]
