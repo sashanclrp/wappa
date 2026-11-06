@@ -30,16 +30,10 @@ from wappa.api.dependencies.whatsapp_dependencies import (
     get_whatsapp_media_payloads,
 )
 from wappa.api.routes.whatsapp.route_families import RouteFamily
-from wappa.api.utils import dispatch_message_event
+from wappa.api.utils import direct_target, dispatch_message_event, map_send_errors
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
-from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.media_interface import IMediaHandler
 from wappa.domain.interfaces.messaging_interface import IMessenger
-from wappa.domain.messaging_targets import (
-    DeliveryAddresses,
-    DirectMessage,
-    UnsupportedOperationError,
-)
 from wappa.domain.models.media_result import (
     MediaDeleteResult,
     MediaInfoResult,
@@ -87,6 +81,7 @@ router = _family.router()  # reads: download, info, limits
         "Platform without a media library answers 501."
     ),
 )
+@map_send_errors("upload media")
 async def upload_media(
     file: UploadFile = File(..., description="Media file to upload"),
     media_type: str | None = Form(
@@ -96,46 +91,20 @@ async def upload_media(
 ) -> MediaUploadResult:
     """Upload media for the selected Inbox (any Platform with a media library).
 
-    Based on existing WhatsAppServiceMedia.upload_media() functionality.
-    Supports all WhatsApp media types with proper validation.
+    A failed result answers its mapped status: 415 for an unsupported MIME
+    type, 413 for an oversize file, 400 otherwise.
     """
-    try:
-        # Read file data
-        file_data = await file.read()
-
-        # Use provided MIME type or file's content type
-        content_type = media_type or file.content_type
-
-        if not content_type:
-            raise HTTPException(
-                status_code=400,
-                detail="Could not determine media type. Please provide media_type parameter.",
-            )
-
-        # Upload using media handler
-        result = await media_handler.upload_media_from_bytes(
-            file_data=file_data,
-            media_type=content_type,
-            filename=file.filename or "uploaded_file",
-        )
-
-        if not result.success:
-            if result.error_code == "MIME_TYPE_UNSUPPORTED":
-                raise HTTPException(status_code=415, detail=result.error)
-            elif result.error_code == "FILE_SIZE_EXCEEDED":
-                raise HTTPException(status_code=413, detail=result.error)
-            else:
-                raise HTTPException(status_code=400, detail=result.error)
-
-        return result
-
-    except HTTPException:
-        raise
-    except Exception as e:
+    content_type = media_type or file.content_type
+    if not content_type:
         raise HTTPException(
-            status_code=500,
-            detail=f"Media upload failed for file '{file.filename}': {type(e).__name__}: {e}",
-        ) from e
+            status_code=400,
+            detail="Could not determine media type. Please provide media_type parameter.",
+        )
+    return await media_handler.upload_media_from_bytes(
+        file_data=await file.read(),
+        media_type=content_type,
+        filename=file.filename or "uploaded_file",
+    )
 
 
 @send_router.post(
@@ -144,7 +113,8 @@ async def upload_media(
     summary="Send Image Message",
     description="Send an image message with optional caption and reply context",
 )
-@dispatch_message_event(platform="whatsapp")
+@map_send_errors("send image")
+@dispatch_message_event()
 async def send_image_message(
     request: ImageMessage,
     fastapi_request: Request,
@@ -155,35 +125,12 @@ async def send_image_message(
 
     Supports JPEG and PNG images up to 5MB with optional captions.
     """
-    try:
-        result = await messenger.send_image(
-            image_source=request.media_source,
-            target=DirectMessage(
-                inbox_ref=InboxRef(
-                    platform=messenger.platform, inbox_id=messenger.inbox_id
-                ),
-                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
-            ),
-            caption=request.caption,
-            reply_to_message_id=request.reply_to_message_id,
-        )
-
-        if not result.success:
-            raise HTTPException(status_code=400, detail=result.error)
-
-        return result
-
-    except HTTPException:
-        raise
-    except UnsupportedOperationError as e:  # not on this Platform
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except ValueError as e:  # rejected locally, before any Platform call
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send image to '{request.recipient}': {type(e).__name__}: {e}",
-        ) from e
+    return await messenger.send_image(
+        image_source=request.media_source,
+        target=direct_target(messenger, request),
+        caption=request.caption,
+        reply_to_message_id=request.reply_to_message_id,
+    )
 
 
 @send_router.post(
@@ -192,7 +139,8 @@ async def send_image_message(
     summary="Send Video Message",
     description="Send a video message with optional caption and reply context",
 )
-@dispatch_message_event(platform="whatsapp")
+@map_send_errors("send video")
+@dispatch_message_event()
 async def send_video_message(
     request: VideoMessage,
     fastapi_request: Request,
@@ -203,36 +151,13 @@ async def send_video_message(
 
     Supports MP4 and 3GP videos up to 16MB with optional captions.
     """
-    try:
-        result = await messenger.send_video(
-            video_source=request.media_source,
-            target=DirectMessage(
-                inbox_ref=InboxRef(
-                    platform=messenger.platform, inbox_id=messenger.inbox_id
-                ),
-                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
-            ),
-            caption=request.caption,
-            reply_to_message_id=request.reply_to_message_id,
-            transcript=request.transcript,
-        )
-
-        if not result.success:
-            raise HTTPException(status_code=400, detail=result.error)
-
-        return result
-
-    except HTTPException:
-        raise
-    except UnsupportedOperationError as e:  # not on this Platform
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except ValueError as e:  # rejected locally, before any Platform call
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send video to '{request.recipient}': {type(e).__name__}: {e}",
-        ) from e
+    return await messenger.send_video(
+        video_source=request.media_source,
+        target=direct_target(messenger, request),
+        caption=request.caption,
+        reply_to_message_id=request.reply_to_message_id,
+        transcript=request.transcript,
+    )
 
 
 @send_router.post(
@@ -245,7 +170,8 @@ async def send_video_message(
         "Instagram .aac/.m4a/.wav/.mp4 (25 MB). A wrong format answers 400."
     ),
 )
-@dispatch_message_event(platform="whatsapp")
+@map_send_errors("send audio")
+@dispatch_message_event()
 async def send_audio_message(
     request: AudioMessage,
     fastapi_request: Request,
@@ -253,36 +179,13 @@ async def send_audio_message(
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
     """Send audio on the path Platform; audio has no caption."""
-    try:
-        result = await messenger.send_audio(
-            audio_source=request.media_source,
-            target=DirectMessage(
-                inbox_ref=InboxRef(
-                    platform=messenger.platform, inbox_id=messenger.inbox_id
-                ),
-                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
-            ),
-            reply_to_message_id=request.reply_to_message_id,
-            transcript=request.transcript,
-            is_voice=request.is_voice,
-        )
-
-        if not result.success:
-            raise HTTPException(status_code=400, detail=result.error)
-
-        return result
-
-    except HTTPException:
-        raise
-    except UnsupportedOperationError as e:  # not on this Platform
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except ValueError as e:  # rejected locally, before any Platform call
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send audio to '{request.recipient}': {type(e).__name__}: {e}",
-        ) from e
+    return await messenger.send_audio(
+        audio_source=request.media_source,
+        target=direct_target(messenger, request),
+        reply_to_message_id=request.reply_to_message_id,
+        transcript=request.transcript,
+        is_voice=request.is_voice,
+    )
 
 
 @send_router.post(
@@ -291,7 +194,8 @@ async def send_audio_message(
     summary="Send Document Message",
     description="Send a document message with optional filename and reply context",
 )
-@dispatch_message_event(platform="whatsapp")
+@map_send_errors("send document")
+@dispatch_message_event()
 async def send_document_message(
     request: DocumentMessage,
     fastapi_request: Request,
@@ -302,36 +206,13 @@ async def send_document_message(
 
     Supports TXT, PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX up to 100MB.
     """
-    try:
-        result = await messenger.send_document(
-            document_source=request.media_source,
-            target=DirectMessage(
-                inbox_ref=InboxRef(
-                    platform=messenger.platform, inbox_id=messenger.inbox_id
-                ),
-                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
-            ),
-            filename=request.filename,
-            caption=request.caption,
-            reply_to_message_id=request.reply_to_message_id,
-        )
-
-        if not result.success:
-            raise HTTPException(status_code=400, detail=result.error)
-
-        return result
-
-    except HTTPException:
-        raise
-    except UnsupportedOperationError as e:  # not on this Platform
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except ValueError as e:  # rejected locally, before any Platform call
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send document to '{request.recipient}': {type(e).__name__}: {e}",
-        ) from e
+    return await messenger.send_document(
+        document_source=request.media_source,
+        target=direct_target(messenger, request),
+        filename=request.filename,
+        caption=request.caption,
+        reply_to_message_id=request.reply_to_message_id,
+    )
 
 
 @send_router.post(
@@ -345,7 +226,8 @@ async def send_document_message(
         "rejected with 400 before Meta is called."
     ),
 )
-@dispatch_message_event(platform="whatsapp")
+@map_send_errors("send sticker")
+@dispatch_message_event()
 async def send_sticker_message(
     request: StickerMessage,
     fastapi_request: Request,
@@ -358,34 +240,11 @@ async def send_sticker_message(
     A non-WebP source is a 400 here: Meta would accept a PNG link and only
     fail later with status 131053. Stickers do not support captions.
     """
-    try:
-        result = await messenger.send_sticker(
-            sticker_source=request.media_source,
-            target=DirectMessage(
-                inbox_ref=InboxRef(
-                    platform=messenger.platform, inbox_id=messenger.inbox_id
-                ),
-                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
-            ),
-            reply_to_message_id=request.reply_to_message_id,
-        )
-
-        if not result.success:
-            raise HTTPException(status_code=400, detail=result.error)
-
-        return result
-
-    except HTTPException:
-        raise
-    except ValueError as e:  # wrong sticker format, caught before any Meta call
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except UnsupportedOperationError as e:  # not on this Platform
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send sticker to '{request.recipient}': {type(e).__name__}: {e}",
-        ) from e
+    return await messenger.send_sticker(
+        sticker_source=request.media_source,
+        target=direct_target(messenger, request),
+        reply_to_message_id=request.reply_to_message_id,
+    )
 
 
 @router.get(

@@ -13,25 +13,20 @@ Router configuration:
 - Full URL: /api/whatsapp/interactive/
 """
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Request
 from pydantic import Field
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.inbox_context import get_inbox_messenger
 from wappa.api.routes.whatsapp.route_families import RouteFamily
 from wappa.api.utils import (
+    direct_target,
     dispatch_message_event,
-    raise_for_failed_result,
+    map_send_errors,
 )
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
-from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interactive import ButtonHeader, MessageCard
 from wappa.domain.interfaces.messaging_interface import IMessenger
-from wappa.domain.messaging_targets import (
-    DeliveryAddresses,
-    DirectMessage,
-    UnsupportedOperationError,
-)
 from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.models.interactive_models import (
     ButtonMessage,
@@ -39,36 +34,6 @@ from wappa.messaging.whatsapp.models.interactive_models import (
     ListMessage,
 )
 from wappa.schemas.core.recipient import DeliveryRequest
-
-# Error code groups for interactive operations
-_SIZE_ERRORS = (
-    "BODY_TOO_LONG",
-    "FOOTER_TOO_LONG",
-    "BUTTON_TITLE_TOO_LONG",
-    "BUTTON_ID_TOO_LONG",
-    "BUTTON_TEXT_TOO_LONG",
-    "HEADER_TOO_LONG",
-)
-_VALIDATION_ERRORS = (
-    "INVALID_HEADER_TYPE",
-    "INVALID_TEXT_HEADER",
-    "INVALID_MEDIA_HEADER",
-    "TOO_MANY_SECTIONS",
-    "TOO_MANY_ROWS",
-    "SECTION_TITLE_TOO_LONG",
-    "ROW_TITLE_TOO_LONG",
-    "ROW_ID_TOO_LONG",
-    "ROW_DESCRIPTION_TOO_LONG",
-    "DUPLICATE_ROW_ID",
-    "MISSING_REQUIRED_PARAMS",
-    "INVALID_URL_FORMAT",
-)
-
-# Error code to HTTP status mapping
-INTERACTIVE_ERROR_GROUPS = {
-    _SIZE_ERRORS: 413,
-    _VALIDATION_ERRORS: 400,
-}
 
 # Interactive sends are omissible outbound mutations; the limits endpoint
 # is a read an embedding host still uses for admission checks.
@@ -94,7 +59,8 @@ router = _family.router()
     summary="Send Button Message",
     description="Send an interactive button message with up to 3 quick reply buttons",
 )
-@dispatch_message_event(platform="whatsapp")
+@map_send_errors("send button message")
+@dispatch_message_event()
 async def send_button_message(
     request: ButtonMessage,
     fastapi_request: Request,
@@ -106,35 +72,14 @@ async def send_button_message(
     Supports up to 3 quick reply buttons with optional header and footer.
     Based on WhatsApp Cloud API 2025 interactive button specifications.
     """
-    try:
-        result = await messenger.send_button_message(
-            buttons=request.buttons,
-            target=DirectMessage(
-                inbox_ref=InboxRef(
-                    platform=messenger.platform, inbox_id=messenger.inbox_id
-                ),
-                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
-            ),
-            body=request.body,
-            header=request.header,
-            footer=request.footer,
-            reply_to_message_id=request.reply_to_message_id,
-        )
-
-        raise_for_failed_result(result, "send button message", INTERACTIVE_ERROR_GROUPS)
-        return result
-
-    except HTTPException:
-        raise
-    except UnsupportedOperationError as e:  # not on this Platform
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except ValueError as e:  # rejected locally, before any Platform call
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send button message to '{request.recipient}': {type(e).__name__}: {e}",
-        ) from e
+    return await messenger.send_button_message(
+        buttons=request.buttons,
+        target=direct_target(messenger, request),
+        body=request.body,
+        header=request.header,
+        footer=request.footer,
+        reply_to_message_id=request.reply_to_message_id,
+    )
 
 
 @send_router.post(
@@ -143,7 +88,8 @@ async def send_button_message(
     summary="Send List Message",
     description="Send an interactive list message with sectioned rows",
 )
-@dispatch_message_event(platform="whatsapp")
+@map_send_errors("send list message")
+@dispatch_message_event()
 async def send_list_message(
     request: ListMessage,
     fastapi_request: Request,
@@ -155,36 +101,15 @@ async def send_list_message(
     Supports sectioned lists with up to 10 sections and 10 rows per section.
     Based on WhatsApp Cloud API 2025 interactive list specifications.
     """
-    try:
-        result = await messenger.send_list_message(
-            sections=request.sections,
-            target=DirectMessage(
-                inbox_ref=InboxRef(
-                    platform=messenger.platform, inbox_id=messenger.inbox_id
-                ),
-                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
-            ),
-            body=request.body,
-            button_text=request.button_text,
-            header=ButtonHeader(text=request.header) if request.header else None,
-            footer=request.footer,
-            reply_to_message_id=request.reply_to_message_id,
-        )
-
-        raise_for_failed_result(result, "send list message", INTERACTIVE_ERROR_GROUPS)
-        return result
-
-    except HTTPException:
-        raise
-    except UnsupportedOperationError as e:  # not on this Platform
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except ValueError as e:  # rejected locally, before any Platform call
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send list message to '{request.recipient}': {type(e).__name__}: {e}",
-        ) from e
+    return await messenger.send_list_message(
+        sections=request.sections,
+        target=direct_target(messenger, request),
+        body=request.body,
+        button_text=request.button_text,
+        header=ButtonHeader(text=request.header) if request.header else None,
+        footer=request.footer,
+        reply_to_message_id=request.reply_to_message_id,
+    )
 
 
 @send_router.post(
@@ -193,7 +118,8 @@ async def send_list_message(
     summary="Send Call-to-Action Message",
     description="Send an interactive call-to-action message with URL button",
 )
-@dispatch_message_event(platform="whatsapp")
+@map_send_errors("send CTA message")
+@dispatch_message_event()
 async def send_cta_message(
     request: CTAMessage,
     fastapi_request: Request,
@@ -205,36 +131,15 @@ async def send_cta_message(
     Supports external URL buttons for call-to-action scenarios.
     Based on WhatsApp Cloud API 2025 CTA URL specifications.
     """
-    try:
-        result = await messenger.send_cta_message(
-            button_text=request.button_text,
-            button_url=request.button_url,
-            target=DirectMessage(
-                inbox_ref=InboxRef(
-                    platform=messenger.platform, inbox_id=messenger.inbox_id
-                ),
-                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
-            ),
-            body=request.body,
-            header=request.header,
-            footer=request.footer,
-            reply_to_message_id=request.reply_to_message_id,
-        )
-
-        raise_for_failed_result(result, "send CTA message", INTERACTIVE_ERROR_GROUPS)
-        return result
-
-    except HTTPException:
-        raise
-    except UnsupportedOperationError as e:  # not on this Platform
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except ValueError as e:  # rejected locally, before any Platform call
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send CTA message to '{request.recipient}': {type(e).__name__}: {e}",
-        ) from e
+    return await messenger.send_cta_message(
+        button_text=request.button_text,
+        button_url=request.button_url,
+        target=direct_target(messenger, request),
+        body=request.body,
+        header=request.header,
+        footer=request.footer,
+        reply_to_message_id=request.reply_to_message_id,
+    )
 
 
 class CarouselMessage(DeliveryRequest):
@@ -254,6 +159,7 @@ class CarouselMessage(DeliveryRequest):
         "template carousel. Platform rules are checked before any call (400)."
     ),
 )
+@map_send_errors("send carousel")
 @dispatch_message_event("carousel")
 async def send_carousel_message(
     request: CarouselMessage,
@@ -261,30 +167,11 @@ async def send_carousel_message(
     messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    try:
-        result = await messenger.send_carousel(
-            request.cards,
-            DirectMessage(
-                inbox_ref=InboxRef(
-                    platform=messenger.platform, inbox_id=messenger.inbox_id
-                ),
-                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
-            ),
-            request.body,
-        )
-        raise_for_failed_result(result, "send carousel", INTERACTIVE_ERROR_GROUPS)
-        return result
-    except HTTPException:
-        raise
-    except UnsupportedOperationError as e:  # not on this Platform
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except ValueError as e:  # rejected locally, before any Platform call
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send carousel to '{request.recipient}': {type(e).__name__}: {e}",
-        ) from e
+    return await messenger.send_carousel(
+        request.cards,
+        direct_target(messenger, request),
+        request.body,
+    )
 
 
 @router.get(

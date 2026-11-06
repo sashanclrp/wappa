@@ -26,6 +26,7 @@ from wappa.domain.events.api_message_event import APIMessageEvent
 from wappa.domain.interfaces.identity_resolver import IIdentityResolver
 from wappa.domain.results import MessageResult
 from wappa.messaging.classification import classify_outbound_payload
+from wappa.schemas.core.types import PlatformType
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,6 @@ T = TypeVar("T")
 def dispatch_message_event(
     message_type: str | None = None,
     *,
-    platform: str = "whatsapp",
     dispatcher_param: str = "api_dispatcher",
     request_param: str = "request",
     fastapi_request_param: str = "fastapi_request",
@@ -91,7 +91,6 @@ def dispatch_message_event(
             Omit it — the default — and the label is classified from the route's
             validated request payload, so a route cannot drift from what it
             actually sends. Pass one only for a payload Wappa does not classify.
-        platform: Messaging platform identifier (e.g., "whatsapp", "instagram", "telegram")
         dispatcher_param: Name of the dispatcher parameter in the route function
         request_param: Name of the Pydantic request model containing recipient and payload
         fastapi_request_param: Name of the FastAPI Request parameter for DB access
@@ -178,11 +177,9 @@ def dispatch_message_event(
                 response_error=message_result.error,
                 meta_response=getattr(message_result, "raw_response", None),
                 inbox_id=inbox_id,
-                # The Platform that actually sent (``/api/{platform}``).
-                platform=str(
-                    getattr(message_result.platform, "value", message_result.platform)
-                    or platform
-                ),
+                # The Platform that actually sent (``/api/{platform}``);
+                # ``use_enum_values`` stores it as the enum value.
+                platform=PlatformType(message_result.platform).value,
             )
             tracker = (
                 getattr(fastapi_request.app.state, "background_work_tracker", None)
@@ -221,7 +218,6 @@ def fire_api_event(
     request_payload: dict,
     recipient: str,
     fastapi_request: "Request | None" = None,
-    platform: str = "whatsapp",
     user_id: str | None = None,
 ) -> None:
     """
@@ -241,6 +237,9 @@ def fire_api_event(
         request_payload: Original API request payload
         recipient: Recipient phone number
         fastapi_request: FastAPI Request for database session access (recommended)
+        user_id: Canonical User id; resolved from ``recipient`` when omitted
+
+    The event's Platform is ``result.platform``, the Platform that sent.
     """
     if dispatcher is None:
         return
@@ -264,7 +263,7 @@ def fire_api_event(
             response_error=result.error,
             meta_response=getattr(result, "raw_response", None),
             inbox_id=inbox_id,
-            platform=platform,
+            platform=PlatformType(result.platform).value,
         )
         assert fastapi_request is not None
         await dispatcher.dispatch(event, fastapi_request)

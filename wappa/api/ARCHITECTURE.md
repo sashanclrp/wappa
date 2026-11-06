@@ -34,7 +34,7 @@ The route modules live in `wappa/api/routes/whatsapp/` (the folder name is histo
 
 - `requires_capability(kind)` asks the Inbox's Messenger for a Focused Capability (`ICommentControls`, `IConversationContentReader`, `IConversationHistoryReader`, `IMediaLibrary`) and answers 501 `"<platform> does not provide <kind>"` when it is missing.
 - WhatsApp-only routes (Templates, Template info, the WhatsApp Media API, limits, validators, `/health`) reach the client through `InboxExecutionContext.whatsapp_client()` or `.template_transport()`, which call `whatsapp_only(...)` and answer the same 501.
-- Send routes map `UnsupportedOperationError` to 501 and `ValueError` (a local rule violation, raised before I/O) to 400. Pydantic validation stays 422.
+- Send routes own no status mapping. Each builds its target with `direct_target(messenger, request)` and is decorated with `map_send_errors(operation)` (`wappa/api/utils/error_helpers.py`), the one mapper: `UnsupportedOperationError` → 501, `ValueError` (a local rule violation, raised before I/O) → 400, any other exception → 500, and a failed `MessageResult` (or `MediaUploadResult`) → the status its `error_code` maps to in `ERROR_CODE_MAPPING` (default 400) through `raise_for_failed_result`. Pydantic validation stays 422.
 
 ## Capability groups and profiles (ADR-0007, ADR-0009)
 
@@ -42,7 +42,7 @@ The route modules live in `wappa/api/routes/whatsapp/` (the folder name is histo
 
 ## Event tracking
 
-`dispatch_message_event` in `wappa/api/utils/event_decorators.py` decorates send routes: after the route returns a `MessageResult`, it builds an `APIMessageEvent` and submits `APIEventDispatcher` work (`process_api_message`) through `BackgroundWorkTracker`. The message-type label comes from `classify_outbound_payload` (`wappa/messaging/classification.py`) unless a route passes one. The dispatcher comes from `get_api_event_dispatcher` in `wappa/api/dependencies/event_dependencies.py`.
+`dispatch_message_event` in `wappa/api/utils/event_decorators.py` decorates send routes: after the route returns a `MessageResult`, it builds an `APIMessageEvent` and submits `APIEventDispatcher` work (`process_api_message`) through `BackgroundWorkTracker`. The event's Platform is `result.platform`, the Platform that sent; the decorator takes none. The message-type label comes from `classify_outbound_payload` (`wappa/messaging/classification.py`) unless a route passes one. `map_send_errors` sits above it, so a failed result is still recorded (`response_success=False`) before the route answers its error status. The dispatcher comes from `get_api_event_dispatcher` in `wappa/api/dependencies/event_dependencies.py`.
 
 ## Request models
 
@@ -62,6 +62,6 @@ The route modules live in `wappa/api/routes/whatsapp/` (the folder name is histo
 
 1. Pick its capability group; mint its router from the module's `RouteFamily` and include it in the matching branch of `create_messaging_router`. A new group needs a `WhatsAppRouteCapabilities` field, both profiles, `resolve_capabilities`, the `create_messaging_router` and `Wappa` parameters, and an ADR-0009 review.
 2. Depend on `get_inbox_messenger`, `requires_capability(kind)` or `get_inbox_execution_context`; never build a Messenger or client by hand.
-3. Use a `DeliveryRequest` subclass for sends; map `UnsupportedOperationError` to 501 and `ValueError` to 400.
-4. Add `@dispatch_message_event(...)` to send routes, and teach `classify_outbound_payload` any new request model.
+3. Use a `DeliveryRequest` subclass for sends and build the target with `direct_target(messenger, request)`; the handler body is the one Messenger call.
+4. Decorate send routes with `@map_send_errors("<operation>")` above `@dispatch_message_event()`, and teach `classify_outbound_payload` any new request model.
 5. Cover it in `tests/test_platform_messaging_api.py` and, for a new group, `tests/test_outbound_route_composition.py`; update `docs/public-contract.md` and `CHANGELOG.md`.

@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import httpx
 from pydantic import SecretStr
@@ -214,7 +214,7 @@ class InstagramMessenger(IMessenger):
         )
         self._media = InstagramMediaLibrary(self._graph, self._attachments)
         # Instagram-only actions (ADR-0016 exceptions), capability-gated.
-        self._capabilities: dict[type, object] = {
+        self._capabilities = {
             ICommentControls: InstagramCommentControls(self._graph),
             IConversationContentReader: InstagramContentReader(self._graph),
             IAttachmentMediaReader: self._attachments,
@@ -239,17 +239,6 @@ class InstagramMessenger(IMessenger):
     @property
     def supported_operations(self) -> frozenset[str]:
         return self._OPERATIONS
-
-    def capability[C](self, kind: Callable[..., C]) -> C | None:
-        wanted = cast(type, kind)
-        found = self._capabilities.get(wanted)
-        if found is None:
-            # Allow asking for the concrete Instagram class as well.
-            found = next(
-                (c for c in self._capabilities.values() if isinstance(c, wanted)),
-                None,
-            )
-        return cast(C | None, found)
 
     # ── transport ───────────────────────────────────────────────────────
 

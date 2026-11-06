@@ -9,8 +9,9 @@ Provides common functionality for route handlers including:
 """
 
 from .error_helpers import (
+    direct_target,
     map_error_to_status,
-    map_whatsapp_api_error_to_status,
+    map_send_errors,
     raise_for_failed_result,
 )
 from .event_decorators import dispatch_message_event, fire_api_event
@@ -25,10 +26,11 @@ __all__ = [
     "convert_body_parameters",
     "convert_buttons_to_dict",
     "convert_list_sections_to_dict",
+    "direct_target",
     "dispatch_message_event",
     "fire_api_event",
     "map_error_to_status",
-    "map_whatsapp_api_error_to_status",
+    "map_send_errors",
     "raise_for_failed_result",
     "require_inbox_context",
 ]

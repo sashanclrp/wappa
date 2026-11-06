@@ -32,6 +32,7 @@ from wappa.api.dependencies.inbox_context import (
     requires_capability,
 )
 from wappa.api.routes.whatsapp.route_families import RouteFamily
+from wappa.api.utils import map_send_errors
 from wappa.domain.interfaces.conversation_capabilities import (
     ICommentControls,
     IConversationContentReader,
@@ -44,7 +45,6 @@ from wappa.domain.messaging_targets import (
     CommentRef,
     PostRef,
     PrivateReply,
-    UnsupportedOperationError,
 )
 from wappa.domain.results import CommentResult, ControlResult, MessageResult
 
@@ -251,6 +251,7 @@ async def read_history(
 
 
 @private_reply_router.post("/send-private-reply", response_model=MessageResult)
+@map_send_errors("send private reply")
 async def send_private_reply(
     body: PrivateReplyRequest,
     request: Request,
@@ -262,18 +263,10 @@ async def send_private_reply(
     Meta allows one private reply per comment inside its window; the User
     must answer before a normal DM follows.
     """
-    try:
-        result = await messenger.send_text(
-            body.text,
-            PrivateReply(comment_ref=_comment(context, body.comment_id)),
-        )
-    except UnsupportedOperationError as e:
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    if not result.success:
-        raise HTTPException(status_code=400, detail=result.error)
-    return result
+    return await messenger.send_text(
+        body.text,
+        PrivateReply(comment_ref=_comment(context, body.comment_id)),
+    )
 
 
 __all__ = [

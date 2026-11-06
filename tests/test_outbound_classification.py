@@ -421,7 +421,7 @@ async def test_route_layer_labels_events_from_the_payload_it_received(
     class Req:
         app = App()
 
-    @dispatch_message_event(platform="whatsapp")
+    @dispatch_message_event()
     async def send(**kwargs: object) -> MessageResult:
         return MessageResult(
             success=True, message_id="wamid.1", platform="whatsapp", recipient=RECIPIENT

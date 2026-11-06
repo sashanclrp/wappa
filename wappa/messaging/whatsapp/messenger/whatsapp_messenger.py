@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 from wappa.core.logging.logger import get_logger
 from wappa.domain.contacts import ContactCard
@@ -79,14 +79,11 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         self._message_payloads = WhatsAppMessagePayloadBuilder()
         self._media_payloads = WhatsAppMediaPayloadBuilder()
         self.logger = get_logger(__name__)
-
-    def capability[C](self, kind: Callable[..., C]) -> C | None:
-        """Focused capabilities: Templates (WhatsApp-only) and the Media Library."""
-        if kind is ITemplateMessaging:
-            return cast(C, self)
-        if kind is IMediaLibrary:
-            return cast(C, WhatsAppMediaLibrary(self.media_handler, self._inbox_id))
-        return None
+        # Focused capabilities: Templates (WhatsApp-only) and the Media Library.
+        self._capabilities = {
+            ITemplateMessaging: self,
+            IMediaLibrary: WhatsAppMediaLibrary(self.media_handler, self._inbox_id),
+        }
 
     @property
     def supported_operations(self) -> frozenset[str]:

@@ -11,7 +11,7 @@ Router configuration:
 - Full URL: /api/whatsapp/messages/
 """
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Request
 
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.inbox_context import get_inbox_messenger
@@ -19,16 +19,13 @@ from wappa.api.dependencies.whatsapp_dependencies import (
     get_whatsapp_message_payloads,
 )
 from wappa.api.routes.whatsapp.route_families import RouteFamily
-from wappa.api.utils import dispatch_message_event
-from wappa.core.events.api_event_dispatcher import APIEventDispatcher
-from wappa.core.logging.logger import get_logger
-from wappa.domain.inbox.identity import InboxRef
-from wappa.domain.interfaces.messaging_interface import IMessenger
-from wappa.domain.messaging_targets import (
-    DeliveryAddresses,
-    DirectMessage,
-    UnsupportedOperationError,
+from wappa.api.utils import (
+    direct_target,
+    dispatch_message_event,
+    map_send_errors,
 )
+from wappa.core.events.api_event_dispatcher import APIEventDispatcher
+from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.models.basic_models import (
     BasicTextMessage,
@@ -55,146 +52,47 @@ router = _family.router()
     "/send-text",
     response_model=MessageResult,
     summary="Send Text Message",
-    description="Send a text message via WhatsApp with optional reply and preview control",
+    description=(
+        "Send a text message with optional reply and preview control. A failed "
+        "result answers its mapped 4xx status (default 400)."
+    ),
 )
-@dispatch_message_event(platform="whatsapp")
+@map_send_errors("send text message")
+@dispatch_message_event()
 async def send_text_message(
     request: BasicTextMessage,
     fastapi_request: Request,
     messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    """Send a text message via WhatsApp.
-
-    Sends a text message through WhatsApp Business API with support for:
-    - Reply to existing messages (threading)
-    - URL preview control
-    - Automatic URL detection and preview handling
-
-    Args:
-        request: Text message payload with recipient, content, and options
-        messenger: WhatsApp messenger implementation (injected)
-        api_dispatcher: API event dispatcher for tracking (injected)
-
-    Returns:
-        MessageResult with operation status, message ID, and metadata
-
-    Raises:
-        HTTPException 400: If message validation fails
-        HTTPException 401: If inbox credentials are invalid
-        HTTPException 500: If WhatsApp API call fails
-    """
-    logger = get_logger(__name__)
-
-    try:
-        logger.info(f"Sending text message to {request.recipient}")
-
-        result = await messenger.send_text(
-            text=request.text,
-            target=DirectMessage(
-                inbox_ref=InboxRef(
-                    platform=messenger.platform, inbox_id=messenger.inbox_id
-                ),
-                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
-            ),
-            reply_to_message_id=request.reply_to_message_id,
-            disable_preview=request.disable_preview,
-        )
-
-        if result.success:
-            logger.info(f"Text message sent successfully: {result.message_id}")
-        else:
-            logger.error(f"Failed to send text message: {result.error}")
-
-        return result
-
-    except ValueError as e:
-        logger.error(f"Validation error sending text message: {str(e)}")
-        raise HTTPException(
-            status_code=400,
-            detail=f"Text message validation failed for recipient '{request.recipient}': {e}",
-        ) from e
-    except UnsupportedOperationError as e:  # not on this Platform
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except Exception as e:
-        logger.error(f"Unexpected error sending text message: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"Failed to send text message to '{request.recipient}': "
-                f"{type(e).__name__}: {e}"
-            ),
-        ) from e
+    """Send text to the request's User on the path Inbox."""
+    return await messenger.send_text(
+        text=request.text,
+        target=direct_target(messenger, request),
+        reply_to_message_id=request.reply_to_message_id,
+        disable_preview=request.disable_preview,
+    )
 
 
 @send_router.post(
     "/mark-as-read",
     response_model=MessageResult,
     summary="Mark Message as Read",
-    description="Mark a WhatsApp message as read with optional typing indicator",
+    description=(
+        "Mark a message as read with an optional typing indicator. A failed "
+        "result answers its mapped 4xx status (default 400)."
+    ),
 )
+@map_send_errors("mark message as read")
 async def mark_message_as_read(
     request: ReadStatusMessage, messenger: IMessenger = Depends(get_inbox_messenger)
 ) -> MessageResult:
-    """Mark a WhatsApp message as read with optional typing indicator.
-
-    Marks a message as read through WhatsApp Business API with support for:
-    - Simple read receipt (typing=false)
-    - Read receipt with typing indicator (typing=true) - Key requirement
-
-    Args:
-        request: Read status payload with message ID and typing flag
-        messenger: WhatsApp messenger implementation (injected)
-
-    Returns:
-        MessageResult with operation status and metadata
-
-    Raises:
-        HTTPException 400: If message ID is invalid
-        HTTPException 401: If inbox credentials are invalid
-        HTTPException 500: If WhatsApp API call fails
-    """
-    logger = get_logger(__name__)
-
-    try:
-        action_desc = "with typing indicator" if request.typing else "without typing"
-        logger.info(f"Marking message {request.message_id} as read {action_desc}")
-
-        result = await messenger.mark_as_read(
-            request.message_id,
-            DirectMessage(
-                inbox_ref=InboxRef(
-                    platform=messenger.platform, inbox_id=messenger.inbox_id
-                ),
-                addresses=DeliveryAddresses.of(request.recipient),
-            ),
-            typing=request.typing,
-        )
-
-        if result.success:
-            logger.info(f"Message marked as read successfully: {request.message_id}")
-        else:
-            logger.error(f"Failed to mark message as read: {result.error}")
-
-        return result
-
-    except ValueError as e:
-        logger.error(f"Validation error marking message as read: {str(e)}")
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid message ID '{request.message_id}': {e}",
-        ) from e
-    except UnsupportedOperationError as e:  # not on this Platform
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except Exception as e:
-        logger.error(f"Unexpected error marking message as read: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=(
-                f"Failed to mark message '{request.message_id}' as read: "
-                f"{type(e).__name__}: {e}"
-            ),
-        ) from e
+    """Acknowledge the User's inbound message, optionally showing typing."""
+    return await messenger.mark_as_read(
+        request.message_id,
+        direct_target(messenger, request),
+        typing=request.typing,
+    )
 
 
 @router.get(

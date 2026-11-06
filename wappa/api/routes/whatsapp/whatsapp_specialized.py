@@ -6,17 +6,11 @@ from pydantic import BaseModel, Field, ValidationError
 from wappa.api.dependencies.event_dependencies import get_api_event_dispatcher
 from wappa.api.dependencies.inbox_context import get_inbox_messenger
 from wappa.api.routes.whatsapp.route_families import RouteFamily
-from wappa.api.utils import dispatch_message_event, map_whatsapp_api_error_to_status
+from wappa.api.utils import direct_target, dispatch_message_event, map_send_errors
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.logger import get_logger
 from wappa.domain.contacts import ContactCard
-from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.messaging_interface import IMessenger
-from wappa.domain.messaging_targets import (
-    DeliveryAddresses,
-    DirectMessage,
-    UnsupportedOperationError,
-)
 from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.models.specialized_models import (
     ContactMessage,
@@ -29,17 +23,6 @@ from wappa.messaging.whatsapp.models.specialized_models import (
 logger = get_logger(__name__)
 
 _EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
-
-
-def _raise_for_whatsapp_error(result: MessageResult, operation_name: str) -> None:
-    if result.success:
-        return
-
-    error_str = str(result.error or "")
-    status_code = map_whatsapp_api_error_to_status(error_str)
-    raise HTTPException(
-        status_code=status_code, detail=f"{operation_name}: {result.error}"
-    )
 
 
 # Contact/location sends are omissible outbound mutations; the validation
@@ -94,155 +77,54 @@ class CoordinateValidationRequest(BaseModel):
 
 
 @send_router.post("/send-contact", response_model=MessageResult)
-@dispatch_message_event(platform="whatsapp")
+@map_send_errors("send contact card")
+@dispatch_message_event()
 async def send_contact_card(
     request: ContactRequest,
     fastapi_request: Request,
     messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    try:
-        logger.info(f"Sending contact card to {request.recipient}")
-
-        result = await messenger.send_contact(
-            contact=request.contact,
-            target=DirectMessage(
-                inbox_ref=InboxRef(
-                    platform=messenger.platform, inbox_id=messenger.inbox_id
-                ),
-                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
-            ),
-            reply_to_message_id=request.reply_to_message_id,
-        )
-
-        _raise_for_whatsapp_error(result, "Failed to send contact card")
-
-        logger.info(
-            f"Contact card sent successfully to {request.recipient}, message_id: {result.message_id}"
-        )
-        return result
-
-    except ValidationError as e:
-        logger.error(f"Contact validation error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Contact validation failed: {str(e)}",
-        ) from e
-    except HTTPException:
-        raise
-    except UnsupportedOperationError as e:  # not on this Platform
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except ValueError as e:  # rejected locally, before any Platform call
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        logger.error(f"Unexpected error sending contact card: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send contact card to '{request.recipient}': {type(e).__name__}: {e}",
-        ) from e
+    return await messenger.send_contact(
+        contact=request.contact,
+        target=direct_target(messenger, request),
+        reply_to_message_id=request.reply_to_message_id,
+    )
 
 
 @send_router.post("/send-location", response_model=MessageResult)
-@dispatch_message_event(platform="whatsapp")
+@map_send_errors("send location")
+@dispatch_message_event()
 async def send_location_message(
     request: LocationRequest,
     fastapi_request: Request,
     messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    try:
-        logger.info(
-            f"Sending location to {request.recipient}: ({request.latitude}, {request.longitude})"
-        )
-
-        result = await messenger.send_location(
-            latitude=request.latitude,
-            longitude=request.longitude,
-            target=DirectMessage(
-                inbox_ref=InboxRef(
-                    platform=messenger.platform, inbox_id=messenger.inbox_id
-                ),
-                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
-            ),
-            name=request.name,
-            address=request.address,
-            reply_to_message_id=request.reply_to_message_id,
-        )
-
-        _raise_for_whatsapp_error(result, "Failed to send location")
-
-        logger.info(
-            f"Location sent successfully to {request.recipient}, message_id: {result.message_id}"
-        )
-        return result
-
-    except ValidationError as e:
-        logger.error(f"Location validation error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Location validation failed: {str(e)}",
-        ) from e
-    except HTTPException:
-        raise
-    except UnsupportedOperationError as e:  # not on this Platform
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except ValueError as e:  # rejected locally, before any Platform call
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        logger.error(f"Unexpected error sending location: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send location to '{request.recipient}': {type(e).__name__}: {e}",
-        ) from e
+    return await messenger.send_location(
+        latitude=request.latitude,
+        longitude=request.longitude,
+        target=direct_target(messenger, request),
+        name=request.name,
+        address=request.address,
+        reply_to_message_id=request.reply_to_message_id,
+    )
 
 
 @send_router.post("/send-location-request", response_model=MessageResult)
-@dispatch_message_event(platform="whatsapp")
+@map_send_errors("send location request")
+@dispatch_message_event()
 async def send_location_request_message(
     request: LocationRequestRequest,
     fastapi_request: Request,
     messenger: IMessenger = Depends(get_inbox_messenger),
     api_dispatcher: APIEventDispatcher | None = Depends(get_api_event_dispatcher),
 ) -> MessageResult:
-    try:
-        logger.info(f"Sending location request to {request.recipient}")
-
-        result = await messenger.send_location_request(
-            body=request.body,
-            target=DirectMessage(
-                inbox_ref=InboxRef(
-                    platform=messenger.platform, inbox_id=messenger.inbox_id
-                ),
-                addresses=DeliveryAddresses.of(request.recipient, *request.addresses),
-            ),
-            reply_to_message_id=request.reply_to_message_id,
-        )
-
-        _raise_for_whatsapp_error(result, "Failed to send location request")
-
-        logger.info(
-            f"Location request sent successfully to {request.recipient}, message_id: {result.message_id}"
-        )
-        return result
-
-    except ValidationError as e:
-        logger.error(f"Location request validation error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Location request validation failed: {str(e)}",
-        ) from e
-    except HTTPException:
-        raise
-    except UnsupportedOperationError as e:  # not on this Platform
-        raise HTTPException(status_code=501, detail=str(e)) from e
-    except ValueError as e:  # rejected locally, before any Platform call
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        logger.error(f"Unexpected error sending location request: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to send location request to '{request.recipient}': {type(e).__name__}: {e}",
-        ) from e
+    return await messenger.send_location_request(
+        body=request.body,
+        target=direct_target(messenger, request),
+        reply_to_message_id=request.reply_to_message_id,
+    )
 
 
 @router.post("/validate-contact", response_model=ContactValidationResult)

@@ -65,6 +65,10 @@ class _Resolver(IInboxCredentialResolver):
         return ()
 
 
+# send_text body → failed-result error_code the fake messenger returns.
+_FAILURES: dict[str, str | None] = {"reject": None, "too-long": "BODY_TOO_LONG"}
+
+
 class _Messenger:
     """Records calls; Instagram has no location request (501 path)."""
 
@@ -84,7 +88,38 @@ class _Messenger:
 
     async def send_text(self, text: str, target: Any, **_: Any) -> MessageResult:
         self.calls.append(("send_text", target))
+        if text in _FAILURES:
+            return self._failed(_FAILURES[text])
+        if text == "local-rule":
+            raise ValueError("text breaks a local rule")
+        if text == "crash":
+            raise RuntimeError("adapter bug")
         return self._ok(getattr(target, "recipient_id", "comment"))
+
+    def _failed(self, error_code: str | None) -> MessageResult:
+        return MessageResult(
+            success=False,
+            platform=self.platform,
+            error="Platform rejected the message",
+            error_code=error_code,
+            inbox_id=self.inbox_id,
+        )
+
+    async def mark_as_read(
+        self, message_id: str, target: Any, *, typing: bool = False
+    ) -> MessageResult:
+        self.calls.append(("mark_as_read", (message_id, target, typing)))
+        return self._failed(None)
+
+    async def send_location(self, *args: Any, **kwargs: Any) -> MessageResult:
+        # Specialized sends map the error_code, not words in the error text.
+        return MessageResult(
+            success=False,
+            platform=self.platform,
+            error="401 unauthorized rate limit",
+            error_code="INVALID_COORDINATES",
+            inbox_id=self.inbox_id,
+        )
 
     async def send_carousel(self, cards: Any, target: Any, body: str) -> MessageResult:
         self.calls.append(("send_carousel", (len(cards), body)))
@@ -393,6 +428,22 @@ def test_private_reply_sends_text_to_the_comment() -> None:
     assert target.kind == "private_reply" and target.comment_ref.comment_id == "c-9"
 
 
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [("reject", 400), ("too-long", 413), ("local-rule", 400), ("crash", 500)],
+)
+def test_private_reply_answers_one_status_per_failure(text: str, status: int) -> None:
+    app, _, _ = _app()
+
+    response = TestClient(app).post(
+        "/api/instagram/messages/send-private-reply",
+        json={"comment_id": "c-9", "text": text},
+        headers=IG_HEADERS,
+    )
+
+    assert response.status_code == status, response.text
+
+
 def test_media_upload_uses_the_instagram_media_library() -> None:
     app, _, runtime = _app()
     caps = _with_instagram_capabilities(runtime)
@@ -407,3 +458,76 @@ def test_media_upload_uses_the_instagram_media_library() -> None:
     body = response.json()
     assert body["media_id"] == "att-1" and body["platform"] == "instagram"
     assert caps[IMediaLibrary].uploaded == [("menu.png", "image", b"png-bytes")]
+
+
+@pytest.mark.parametrize(
+    ("text", "status"),
+    [("reject", 400), ("too-long", 413), ("local-rule", 400), ("crash", 500)],
+)
+def test_send_text_answers_one_status_per_failure(text: str, status: int) -> None:
+    app, _, _ = _app()
+
+    response = TestClient(app).post(
+        "/api/instagram/messages/send-text",
+        json={**TEXT, "text": text},
+        headers=IG_HEADERS,
+    )
+
+    assert response.status_code == status, response.text
+
+
+def test_failed_mark_as_read_is_a_4xx_not_a_200() -> None:
+    app, _, runtime = _app()
+
+    response = TestClient(app).post(
+        "/api/whatsapp/messages/mark-as-read",
+        json={"message_id": "wamid.1", "recipient": "573001112233", "typing": True},
+        headers={INBOX_ID_HEADER: WA_INBOX},
+    )
+
+    assert response.status_code == 400, response.text
+    _, (message_id, target, typing) = runtime.messengers[
+        InboxRef.whatsapp(WA_INBOX)
+    ].calls[0]
+    assert (message_id, target.recipient_id, typing) == (
+        "wamid.1",
+        "573001112233",
+        True,
+    )
+
+
+def test_specialized_failure_maps_the_error_code_not_the_error_text() -> None:
+    app, _, _ = _app()
+
+    response = TestClient(app).post(
+        "/api/whatsapp/specialized/send-location",
+        json={"recipient": "573001112233", "latitude": 4.6, "longitude": -74.1},
+        headers={INBOX_ID_HEADER: WA_INBOX},
+    )
+
+    assert response.status_code == 400, response.text
+
+
+def test_api_event_names_the_platform_that_sent_even_when_it_failed() -> None:
+    app, _, _ = _app()
+    events: list[Any] = []
+
+    class _Dispatcher:
+        async def dispatch(self, event: Any, request: Any) -> None:
+            events.append(event)
+
+    app.state.api_event_dispatcher = _Dispatcher()
+    client = TestClient(app)
+
+    ok = client.post("/api/instagram/messages/send-text", json=TEXT, headers=IG_HEADERS)
+    failed = client.post(
+        "/api/instagram/messages/send-text",
+        json={**TEXT, "text": "reject"},
+        headers=IG_HEADERS,
+    )
+
+    assert (ok.status_code, failed.status_code) == (200, 400)
+    assert [(e.platform, e.response_success) for e in events] == [
+        ("instagram", True),
+        ("instagram", False),
+    ]

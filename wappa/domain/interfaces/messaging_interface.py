@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
+from types import MappingProxyType
+from typing import TYPE_CHECKING, cast
 
 from wappa.domain.contacts import ContactCard
 from wappa.domain.media_renditions import MediaRenditions
@@ -44,6 +45,10 @@ class IMessenger(ABC):
     (``ICommentControls``).
     """
 
+    # Platform-only capabilities by interface, filled once in each adapter's
+    # constructor. The one lookup below reads it; adapters never override it.
+    _capabilities: Mapping[type, object] = MappingProxyType({})
+
     @property
     def supported_operations(self) -> frozenset[str]:
         """Implemented adapter operations, not the provider's full feature catalog."""
@@ -53,10 +58,17 @@ class IMessenger(ABC):
         """Return a focused optional capability (e.g. ``ICommentControls``).
 
         ``None`` means this Platform adapter does not implement it. Capabilities
-        are bound to this Messenger's Inbox and credentials.
+        are bound to this Messenger's Inbox and credentials. Asking for the
+        concrete adapter class (e.g. ``InstagramMediaLibrary``) also resolves.
         """
-        _ = kind
-        return None
+        wanted = cast(type, kind)
+        found = self._capabilities.get(wanted)
+        if found is None:
+            found = next(
+                (c for c in self._capabilities.values() if isinstance(c, wanted)),
+                None,
+            )
+        return cast("C | None", found)
 
     def require_capability[C](self, kind: Callable[..., C]) -> C:
         found = self.capability(kind)
