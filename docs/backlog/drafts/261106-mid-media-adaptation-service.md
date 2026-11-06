@@ -10,7 +10,7 @@ last_reviewed: 2026-11-06
 
 ## Code reality (2026-11-06)
 
-Platform-neutral media upload/download and rendition selection exist. Automatic probing, adaptation, worker execution, content-hash caching and public media URLs do not. The one-media-seam hardening does not absorb this service.
+Platform-neutral media upload/download and rendition selection exist. Since 2026-11-06 a first slice of phase 1 exists for WhatsApp: `wappa/domain/media_probe.py` reads the real type from the bytes (magic bytes and container headers, no dependency: animated WebP, OGG Opus vs Vorbis, HEVC vs H.264, WebP and PNG dimensions), and `wappa/messaging/whatsapp/media_rules.py` refuses before any call every case the live matrix showed Meta accepting and then failing. Adaptation, worker execution, content-hash caching, public media URLs, the shared `MediaSpec` and the Instagram side do not exist yet. The one-media-seam hardening does not absorb this service.
 
 The Messenger contract mirrors WhatsApp, and every other Platform's adapter emulates it so a Host never writes Platform-specific code. Media is where that promise breaks today. Each Platform accepts different containers, codecs, sizes and dimensions, and some sends need media in a form the Host never supplied: a public https URL instead of a Media ID, an image instead of a video, a WebP sticker, an OGG/Opus voice note. Wappa checks file extensions only and "never converts media" (`wappa/domain/media_renditions.py`), so the Host has to know every Platform's rules and prepare renditions itself. That is exactly the Platform-specific code Wappa exists to remove.
 
@@ -18,12 +18,12 @@ Media Adaptation adds one Platform-neutral engine that reads what a file really 
 
 ## Today
 
-- Rules live in two shapes: `MediaType.get_supported_mime_types` / `get_max_file_size` in `wappa/messaging/whatsapp/models/media_models.py`, and `MEDIA_RULES` (suffix sets and byte caps) in `wappa/messaging/instagram/media.py`. Both key off the file suffix or a guessed MIME type, never the bytes.
-- No rule covers codecs, channels, dimensions, animation, or the "needs a public URL" constraint. A wrong codec fails at Meta (WhatsApp `131053`, or silently unplayable on Android) instead of before I/O.
+- Rules live in three shapes: `MediaType.get_supported_mime_types` / `get_max_file_size` in `wappa/messaging/whatsapp/models/media_models.py` (the upload allow-list), `RULES` in `wappa/messaging/whatsapp/media_rules.py` (suffix, MIME from the bytes, size and content checks per use, from the live matrix), and `MEDIA_RULES` (suffix sets and byte caps) in `wappa/messaging/instagram/media.py`. Instagram still keys off the suffix only. Phase 1 folds all three into one `MediaSpec` per Platform.
+- WhatsApp now covers animation (WebP), codec (HEVC, OGG Vorbis), sticker dimensions and byte caps for local files and uploads, by suffix for URLs, and the stored MIME type for voice notes and stickers by Media ID. Still uncovered: channels, Instagram's codec rules, a remote URL's real content (no fetch), and the "needs a public URL" constraint.
 - `send_sticker` takes `MediaRenditions` and picks the first accepted suffix; the Host must ship `["s.webp", "s.png"]`.
 - `send_carousel` takes `MessageCard.header: CardMedia` (`kind` image or video, a public `url`, and `poster_url` for an Instagram video card). Card media is URL-only on both Platforms, because WhatsApp card headers take a public link and no Media ID. Instagram rejects a video card without `poster_url` before any call ("pass poster_url, or enable media adaptation"), and a Host with only a local file cannot build a card at all. This service fills exactly those cases.
 - `IMediaLibrary.upload(source: Path | bytes, family, *, mime_type=None, filename=None)` (ADR-0025) uploads whatever it is given. Instagram attachments cannot be downloaded back by ID, so an uploaded `attachment_id` cannot later become a card URL.
-- Drift found while checking: Wappa lists `video/3gp`, Meta documents `video/3gpp`; Wappa omits static WebP as a WhatsApp image, which Meta now accepts (and transcodes to JPEG).
+- Drift found while checking: Wappa listed `video/3gp`, Meta documents `video/3gpp` (fixed); Python guesses `audio/3gpp` for `.3gp`, so a 3GP video upload failed until ef05128; static WebP works as a WhatsApp image (verified live).
 
 ## Goals
 
@@ -97,6 +97,36 @@ Adaptations, all driven by `MediaRule.target`:
 | video | the frame at 1 second as JPEG (the poster; see Poster frame below) | `card_image` needed but the card has video (Instagram, or a missing `poster_url`) |
 | MP3, AAC, WAV, stereo Opus | OGG/Opus mono (48 kHz, voice bitrate) | `voice` on WhatsApp |
 | OGG, MP3, WebM audio | m4a (AAC) | `audio` / `voice` on Instagram |
+
+### Optimal target per scenario (from the live matrix, 2026-11-06)
+
+The engine converts to the cheapest format that was **verified live** for that Platform and use, and never to a format that only Meta's docs list. "Verified" means accepted, delivered, and rendered correctly on the phone. Instagram cells marked *pending* wait for the Instagram run (the first one hit the app rate limit, see `references/rate-limits.md` in the Instagram PRD).
+
+| Use | Input that fails | WhatsApp target (verified) | Instagram target |
+| --- | --- | --- | --- |
+| image | GIF (static) | PNG (lossless; JPEG when there is no alpha and the file is a photo) | as-is: GIF static was accepted |
+| image | GIF animated, animated WebP | first frame as PNG for an image; or MP4 H.264 when the Host asked for motion (send as video) | upload accepted, link rejected (400): *pending* rendering |
+| image | HEIC / HEIF, AVIF | JPEG | JPEG (HEIC rejected, 400) |
+| image | static WebP | as-is (works) | as-is by link (accepted, read); upload refused by Wappa's rule: *pending* rendering |
+| image | over 5 MB (WhatsApp) / 8 MB (Instagram), edge over 4096 px | downscale, then JPEG quality ladder | same, 8 MB cap |
+| video | HEVC in MP4, MOV, MKV, WebM VP8/VP9 | MP4, H.264 Main (Baseline for old Android), AAC, faststart, one audio stream | MP4 H.264 (the only format accepted so far; MOV and WebM *pending*, first run rate-limited) |
+| video | 3GP H.264 | as-is (works once sent as `video/3gpp`) | MP4 (3GP link rejected) |
+| video | over 16 MB (WhatsApp) / 25 MB (Instagram) | bitrate ladder from duration; refuse below the floor | same, 25 MB |
+| audio | WAV, WebM Opus, OGG Vorbis | MP3 or M4A (AAC); OGG/Opus also works | M4A (AAC) |
+| voice | MP3, M4A, AAC, WAV, WebM, OGG Vorbis | OGG/Opus mono, 48 kHz: the **only** format that renders a waveform (MP3/M4A/AAC deliver as a voice bubble without one) | M4A (AAC); Instagram has no voice flag |
+| sticker | PNG, JPEG, GIF | WebP 512x512 (fit with transparent padding), ≤ 100 KB static | PNG (sent as an image) |
+| sticker | WebP not 512x512 (256x256 failed: "expected dimension: 512x512") | resize and pad to 512x512 WebP | PNG |
+| sticker | animated GIF / APNG / short video | animated WebP 512x512 ≤ 500 KB (frame-rate and palette ladder) | GIF (*pending*) |
+| card_image / card_video | any of the image or video failures above | same target as image or video; check every card, one bad card fails the whole carousel | image or poster frame (JPEG) |
+| document | — | as-is (PDF, DOCX, XLSX, TXT all delivered) | PDF only; another type is shared as a link text |
+
+Rules the engine must follow, all from the matrix:
+
+- **Refuse or adapt before I/O.** A link Meta cannot use is still answered 200; the failure arrives later as a status webhook (seconds to minutes; a HEIC link failed after 6 minutes). Only a check before the call gives the Host a synchronous answer.
+- **Probe the bytes, not the name.** Three failures are invisible to a suffix: animated vs static WebP, OGG Vorbis vs Opus, sticker dimensions. HEVC hides inside a valid `.mp4`.
+- **Prefer upload + Media ID** for anything sent more than once: Meta recommends it for throughput, the URL cache lasts only 10 minutes, and a Media ID survives 30 days.
+- **Check Media IDs where the use is narrower than the upload.** A PNG uploads fine as an image, then fails as a sticker; an MP3 uploads as audio, then has no waveform as a voice note. WhatsApp checks the stored MIME type for voice notes and stickers today.
+- **Mind rate limits.** Adaptation must not multiply calls: one upload per content hash per Inbox, reuse the Media ID; Instagram allows 10 audio/video sends per second per account and an app-level hourly budget.
 
 Host-supplied renditions still win: `send_sticker(["s.webp", "s.png"])` keeps working and is adapted only when no rendition conforms. A Media ID input passes through untouched (it already lives on that Platform). A remote URL input passes through unless its probe is wanted; fetching it is a knob (section 7) because it turns Wappa into a URL fetcher.
 
@@ -212,7 +242,7 @@ Live checks (added to the live test plan, run by hand on test Inboxes, never in 
 ### 9. Phased rollout
 
 0. Format matrix (live, no Wappa code change; done first, because it decides the spec tables). See Format matrix below. Observed results override documentation where they disagree.
-1. Detection (no new dependency): `MediaSpec` on `PlatformEntry`, the two verified specs, `probe` with magic bytes and Pillow, `plan`, refusal errors before I/O, the `3gpp` and static-WebP drift fixes. Breaking only where a lying suffix used to slip through; listed in the CHANGELOG.
+1. Detection (no new dependency): `MediaSpec` on `PlatformEntry`, the two verified specs, `probe` with magic bytes and Pillow, `plan`, refusal errors before I/O, the `3gpp` and static-WebP drift fixes. Breaking only where a lying suffix used to slip through; listed in the CHANGELOG. **Partly done for WhatsApp (2026-11-06):** `wappa/domain/media_probe.py` (no Pillow yet) and `wappa/messaging/whatsapp/media_rules.py` refuse every failure the matrix found; what remains is the shared `MediaSpec`, `plan`, Pillow-backed details (bit depth, edge length), and the Instagram rules once its run is complete.
 2. Adaptation: the `wappa[media]` extra, `adapt`, the process pool, the content cache and the Media ID cache, pre-adaptation in `IMediaLibrary.upload`. Off by default.
 3. Public URLs: `MediaStore`, `/media/public/{token}`, `SYSTEM_PUBLIC_BASE_URL`, carousel filling with the URL-only `CardMedia(kind, url, poster_url)` card contract. Gate on the Instagram re-fetch live check.
 
