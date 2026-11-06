@@ -60,6 +60,35 @@ handover remain outside this series.
 
 I01–I06 runtime capabilities and I08 skills are implemented. November 5 live runs cover the DM/media/interaction paths, form validation and branching, public/private replies, comment mentions, post/comment reads and core Unified Login. Gate A is partial, core Gate B passed with the documented not-applicable cases, and Gate C remains unverified. The [live test plan](tests/live-test-plan.md) records observed results; the [capability matrix](references/capability-matrix.md) distinguishes unrun checks.
 
+## Host developer experience after the architecture hardening (2026-11-06)
+
+The [architecture hardening](../261106-architecture-hardening/plan.md) changed how a Host uses Wappa. The skills (I08) must teach this shape before Symphonai migrates (I07), so the order below puts the skill refresh between Gate A and Symphonai.
+
+**WhatsApp First** ([ADR-0028](../../../adr/0028-whatsapp-first.md)). Every Platform-neutral contract mirrors the WhatsApp Cloud API's shape and full feature set (all four interactive header kinds, media by link or ID, multi-card contacts). Limits on indivisible structured values (button and row titles, counts, card text) are the strictest across Platforms and fail when the value is built; divisible content (text, captions, contacts) keeps WhatsApp's limit and the stricter adapter splits it. Instagram adapts internally (Facade): a media header goes out as the media message then the buttons, long text is split, and one Host call returns one `MessageResult` listing every part in `platform_response["wappa_parts"]`. A Host never writes Platform-specific code for a shared action.
+
+**Prebuilt Messengers on the handler.** The runtime builds everything a Host needs for each dispatch from the Platform Registry, so a Host never builds or looks up a capability object:
+
+- `self.messenger`: the neutral `IMessenger`, every shared action through the middleware pipeline. Shared capabilities are plain attributes (`self.messenger.media` for upload and download on every Platform).
+- `self.whatsapp`: a WhatsApp Messenger on WhatsApp Inboxes, `None` elsewhere. It receives the core messenger, delegates every shared method to it, and adds only WhatsApp's own actions: `send_location_request`, `send_contact_request`, `.templates`, later `.flows` and `.calls`.
+- `self.instagram`: an Instagram Messenger on Instagram Inboxes, `None` elsewhere: `.comments`, `.content`, `.history`.
+- `IMessenger.capability()` stays the internal seam behind these objects and behind HTTP `requires_capability` (501 when absent); Hosts do not call it. Internal adapter classes are renamed `WhatsAppMessengerAdapter` / `InstagramMessengerAdapter`. (Planned as the group after the ADR compliance fixes; until it lands, the code still exposes `capability()` / `require_capability()`.)
+
+**Event lanes: put each Platform action in the hook that receives its event.**
+
+| Hook | Receives | Typical Platform-specific use |
+| --- | --- | --- |
+| `process_message` | DMs and conversation messages on every Platform (text, media, button/list/quick-reply/postback selections) | `self.whatsapp.send_location_request(...)`; `self.instagram.history.read_history(...)` to recap the thread |
+| `process_comment` | Instagram comments, including Live | `self.instagram.comments.reply_comment(webhook.comment_ref, ...)`; a private reply is `self.messenger.send_text(..., PrivateReply(comment_ref=...))` |
+| `process_mention` | Instagram mentions of the account | `self.instagram.content.get_mentioned_post(...)` / `get_mentioned_comment(...)` |
+| `process_history_sync` | Instagram history sync | none needed beyond reading the webhook |
+| `process_call` | WhatsApp calls | `self.whatsapp.calls` when the Calling PRD lands |
+| `process_status` | delivery and read statuses on every Platform | correlate with the `MessageResult.message_id` (and `wappa_parts` IDs) the Host stored |
+| `process_inbox_connection` | WhatsApp account offboarded / reconnected | update the Host's account records |
+
+Comment actions belong in `process_comment` / `process_mention`, conversation actions in `process_message`; inside a lane that only one Platform emits (comments today), the Platform Messenger is always present. `IMessenger.resolve_platform_user_profile(webhook.user)` works in every lane: WhatsApp resolves from webhook evidence, Instagram adds a Graph lookup.
+
+**Order before Gate C.** Architecture hardening and ADR compliance fixes → Platform Messengers on the handler → Gate A re-run on the migrated lab (both Platforms) and the Media Adaptation phase 0 format matrix → **I08 skill refresh** to this Host shape → I07 Symphonai migration → Gate C.
+
 ## Code reality
 
 | Artifact | Current evidence | Remaining gate |
@@ -105,7 +134,9 @@ flowchart TD
     OAUTH --> I06[I06 Unified Login implementation]
     A --> B[Gate B: complete login experience]
     I06 --> B
-    B --> I07[I07 Symphonai integration]
+    B --> HX[Hardening + Platform Messengers + Gate A re-run]
+    HX --> SKR[I08 skill refresh to the hardened Host shape]
+    SKR --> I07[I07 Symphonai integration]
     I07 --> C[Gate C: agent and host takeover]
     I01 --> SK[I08 incremental developer skills and setup]
     A --> SK

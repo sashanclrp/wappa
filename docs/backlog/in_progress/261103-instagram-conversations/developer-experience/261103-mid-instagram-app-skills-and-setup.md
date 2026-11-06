@@ -14,6 +14,45 @@ Three skills are authored and have recorded lint/lane checks and deterministic t
 
 See the [series plan](../plan.md), [capability matrix](../references/capability-matrix.md) and [live evidence](../tests/live-test-plan.md). Historical test results do not replace the remaining live gates.
 
+## Skill refresh after the architecture hardening (last step before I07)
+
+The three skills (`wappa-instagram-apps`, `wappa-conversational-scores`, `wappa-runtime-state`) were written against the pre-hardening Host API. Before Symphonai migrates (I07), they are refreshed to teach how to use Wappa properly after the [architecture hardening](../../261106-architecture-hardening/plan.md), following the Host shape in the [series plan](../plan.md#host-developer-experience-after-the-architecture-hardening-2026-11-06). The refresh starts only after the Platform Messengers land and Gate A is re-run, so the skills teach shipped code, never proposed APIs. It ends with the evals below passing on every declared harness/model.
+
+### What the skills must teach (Host usage guide)
+
+1. **One code path for every Platform.** Write each shared action once against `self.messenger` (`IMessenger`); never branch on `PlatformType` for an action both Platforms have. Shapes follow WhatsApp ([ADR-0028](../../../../adr/0028-whatsapp-first.md)); Wappa adapts Instagram internally.
+2. **Targets.** Build a `DirectMessage(inbox_ref=self.inbox_ref, addresses=webhook.user.delivery_addresses())` for a conversation reply; a reply to an Instagram comment's author in DM is `send_text(..., PrivateReply(comment_ref=...))`. Never pass a raw recipient string.
+3. **Prebuilt Messengers.** `self.messenger` for shared actions and shared capabilities as attributes (`self.messenger.media`); `self.whatsapp` / `self.instagram` for Platform-only actions (`send_location_request`, `send_contact_request`, `.templates`; `.comments`, `.content`, `.history`), `None` on other Platforms. Never build capability objects, never call `capability()` / `require_capability()` in Host code, never import adapter classes.
+4. **Event lanes.** Put each action in the hook that receives its event: conversation actions in `process_message`, comment actions in `process_comment`, mentions in `process_mention`, statuses in `process_status`, calls in `process_call`, account lifecycle in `process_inbox_connection`. The lane table in the series plan is the reference.
+5. **Interactive values and limits.** `InteractiveHeader.of_text/of_image/of_video/of_document` (media by `url` or `media_id`, `filename` for documents) for buttons and CTA; a list header is plain text; `ListSection` / `ListRow` / `ReplyButton` / `MessageCard(header=CardMedia(kind, url, poster_url))`. Limits are the strictest across Platforms and fail when the value is built (`ValidationError`) or before any call (`ValueError`); keep titles ≤ 20, ≤ 10 rows in total, and so on, and let the error tell you. Video carousel cards need `poster_url` on Instagram until Media Adaptation ships.
+6. **Long content.** Text and captions keep WhatsApp's limits (4096 / 1024); Instagram splits them. One call returns one `MessageResult`: `success` only when every part was accepted, the tapped message's `message_id`, every part in `platform_response["wappa_parts"]`, and on a partial failure an error saying how many parts were already delivered. Never resend a whole split message blindly.
+7. **Media.** Send by public https URL, by a Media ID from `self.messenger.media.upload(...)` on the same Inbox, or by local `Path`; download inbound media with `self.messenger.media.download(webhook.message.media_id, max_bytes=...)` on every Platform. Media IDs belong to one Inbox. Format conversion is not shipped yet ([Media Adaptation draft](../../../drafts/261106-mid-media-adaptation-service.md)); teach the clear pre-send errors, not workarounds.
+8. **Users.** `resolve_platform_user_profile(webhook.user)` returns everything the Platform provides (WhatsApp from webhook evidence, Instagram adds a Graph lookup, a failure outcome instead of an exception). Read `webhook.user` fields directly, never with `getattr(..., None)`. The Host owns merging, persistence and display-name policy.
+9. **Acknowledge.** `mark_as_read(message_id, target, typing=True)` on every Platform.
+10. **Results and statuses.** Store `MessageResult.message_id` (and the `wappa_parts` IDs) to correlate later `process_status` webhooks; `outcome` and `error_code` decide retries; `indeterminate` sends are never retried automatically.
+11. **HTTP.** `/api/{platform}/...` routes take the same neutral request models; a capability the Inbox's Platform lacks answers 501; failed sends answer 4xx.
+12. **State.** Caches are scoped per Inbox through `InboxRef.cache_namespace`; never build keys by hand (runtime-state skill).
+13. **What never to do.** Call the Graph API directly (Wappa owns credentials), branch on Platform for a shared action, catch and swallow `ValueError` from limits, put comment logic in `process_message`, or teach anything listed as proposed.
+
+### Skill mapping
+
+| Skill | Refresh |
+| --- | --- |
+| `wappa-instagram-apps` | Items 1-11 for Instagram and WhatsApp side by side: Platform Messengers, lanes, comment and mention lanes with `self.instagram`, emulations and `wappa_parts`, headers, cards with `poster_url`, profile resolution, media library |
+| `wappa-conversational-scores` | Items 1-6 and 10 inside Scores: Scores receive the prebuilt Messengers, use `InteractiveHeader` / list values within the shared limits, and handle selections identically on both Platforms |
+| `wappa-runtime-state` | Item 12, plus storing message IDs and profile facts per User and Inbox |
+
+### Evals for the refresh (write before editing)
+
+- A fresh agent asked for "a bot that replies to Instagram comments and DMs" puts comment replies in `process_comment` using `self.instagram.comments`, DM replies in `process_message` using `self.messenger`, and writes no Platform branch for shared actions.
+- Asked for "send a button message with a video header to WhatsApp and Instagram users", it writes one `send_button_message(..., header=InteractiveHeader.of_video(url=...))` call with no Platform code.
+- Asked for "ask WhatsApp users for their location", it uses `self.whatsapp.send_location_request(...)` guarded by `if self.whatsapp:`, never `require_capability`.
+- Asked to "greet the user by name on both Platforms", it uses `resolve_platform_user_profile(webhook.user)` and no `getattr`.
+- Asked to "send a long policy text", it sends once and reads `wappa_parts` instead of chunking itself.
+- Asked for a form intake, the Score's list rows stay within the shared limits and the agent explains the limit error instead of truncating silently.
+
+Each eval runs on every declared harness/model; the I08 exit criteria below also require these to pass before I07 starts.
+
 ## Context
 
 The user explicitly requested `skills-engineering` to make app-building guidance
