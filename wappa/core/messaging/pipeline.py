@@ -48,6 +48,8 @@ from ...schemas.core.types import PlatformType
 if TYPE_CHECKING:
     from wappa.domain.interactive import InteractiveHeader, ListSection, ReplyButton
     from wappa.domain.results import MessageResult
+    from wappa.domain.user_profile import PlatformUserProfile
+    from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
 
     from ...domain.interactive import MessageCard
 
@@ -298,6 +300,12 @@ class MessengerPipeline(IMessenger):
         # mark_as_read isn't really an outbound message — skip the pipeline
         # to preserve semantics (no wrapper ever published it anyway).
         return await self._raw.mark_as_read(message_id, target, typing=typing)
+
+    async def resolve_platform_user_profile(
+        self, user: UserBase
+    ) -> PlatformUserProfile:
+        # A read, not an outbound message: no SendInvocation, no middleware.
+        return await self._raw.resolve_platform_user_profile(user)
 
     async def send_carousel(
         self,

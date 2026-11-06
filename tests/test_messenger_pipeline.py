@@ -34,8 +34,10 @@ from wappa.core.sse import SSEEventHub
 from wappa.core.sse.context import sse_event_scope
 from wappa.domain.inbox import InboxRef
 from wappa.domain.results import MessageResult
+from wappa.domain.user_profile import PlatformUserProfile
 from wappa.messaging import DeliveryAddresses, DirectMessage
 from wappa.schemas.core.types import PlatformType
+from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
 
 TARGET = DirectMessage(
     inbox_ref=InboxRef.whatsapp("test-inbox"), addresses=DeliveryAddresses.of("5599")
@@ -233,6 +235,21 @@ async def test_mark_as_read_bypasses_pipeline():
     await pipeline.mark_as_read("wamid.123", target, typing=True)
 
     raw.mark_as_read.assert_awaited_once_with("wamid.123", target, typing=True)
+    assert log == []
+
+
+@pytest.mark.asyncio
+async def test_profile_resolution_reaches_the_adapter_without_middleware():
+    """A profile read is not an outbound message; middleware must not fire."""
+    raw = _make_raw()
+    user = UserBase(phone_number="5599", profile_name="Ana")
+    profile = PlatformUserProfile.from_evidence(PlatformType.WHATSAPP, user)
+    raw.resolve_platform_user_profile = AsyncMock(return_value=profile)
+    log: list[str] = []
+    pipeline = MessengerPipeline(raw=raw, middleware=[(_Recorder("any", log), 50)])
+
+    assert await pipeline.resolve_platform_user_profile(user) is profile
+    raw.resolve_platform_user_profile.assert_awaited_once_with(user)
     assert log == []
 
 

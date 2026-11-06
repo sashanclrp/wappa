@@ -58,4 +58,4 @@ These are your policies, not Wappa behavior. Document them for your users.
 
 ## Verify
 
-Test the Score with a recording `IMessenger` fake (implement `platform`, `inbox_id` and the sends you use) plus Wappa's real memory cache: `create_cache_factory("memory")(inbox_id=ref.cache_namespace, user_id=...)`. Cover validation, branching, a stale tap, resume, cancel, completion and two concurrent Users in two Inboxes. See `references/intake-flow.md`.
+Test the Score with a recording `IMessenger` fake (implement `platform`, `inbox_id`, `resolve_platform_user_profile` (return `PlatformUserProfile.from_evidence(self.platform, user)`) and the sends you use) plus Wappa's real memory cache: `create_cache_factory("memory")(inbox_id=ref.cache_namespace, user_id=...)`. Cover validation, branching, a stale tap, resume, cancel, completion and two concurrent Users in two Inboxes. See `references/intake-flow.md`.

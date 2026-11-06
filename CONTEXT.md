@@ -83,7 +83,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **Private Reply Target** | An Inbox-qualified Comment Reference used to address a comment-triggered private response rather than an ordinary Direct Message Target. |
 | **Comment Control** | A Platform operation that changes comment visibility, existence, or whether media accepts comments, distinct from the Host's moderation policy. |
 | **Event Dispatch** | The act of routing a parsed universal model to the appropriate WappaEventHandler processor method. |
-| **Messenger** | The outbound conversation-message interface. Sends text, media, interactive and specialized messages to a User on a Platform via an Inbox. WhatsApp Templates and media storage are Focused Capabilities, not Messenger methods. |
+| **Messenger** | The outbound conversation-message interface. Sends text, media, interactive and specialized messages to a User on a Platform via an Inbox, and resolves the User's Platform User Profile. WhatsApp Templates and media storage are Focused Capabilities, not Messenger methods. |
 | **WhatsApp Template** | A WhatsApp Business Platform message definition submitted for approval and identified by its Platform identity and language; **Template** is shorthand only inside an explicitly WhatsApp-scoped context. |
 | **Interactive Message** | A message containing selectable actions or structured presentation, with concrete forms and constraints defined by its Platform. |
 | **Conversational Flow** | A Host Application-owned sequence of conversation steps, answers, and transitions composed from messages and Interactive Selections. |
@@ -95,6 +95,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | **Postback** | Instagram's native evidence for a Reply Button tap, delivered as an Interactive Selection. |
 | **Message Card** | One card of a Message Carousel: a media header (image or video), title, optional subtitle and default URL, and buttons. It is one visual unit: its media is never sent apart from the card. |
 | **Message Carousel** | A horizontally scrollable sequence of Message Cards. |
+| **Platform User Profile** | Every fact a Platform provides about one User, from the inbound webhook evidence and, where the Platform has one, an API lookup, read with `resolve_platform_user_profile`. Read-only: the Host owns merging, persistence and display-name policy. Distinct from the Inbox's own business profile. |
 | **Sender Action** | Instagram's native non-message signal (seen, typing); Wappa exposes it only through `mark_as_read`. |
 | **Messenger Action** | Something a Host asks a Messenger to do; an action available on more than one Platform has exactly one Messenger method (ADR-0025). |
 | **WhatsApp First** | The rule that shapes every Platform-neutral contract: it mirrors the WhatsApp Cloud API's seams and full feature set, every limit on a structured value is the most restrictive across the installed Platforms and is enforced when the value is built, and other Platforms emulate, rejecting only what cannot be emulated ([ADR-0028](docs/adr/0028-whatsapp-first.md)). |

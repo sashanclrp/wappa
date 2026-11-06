@@ -25,12 +25,16 @@ from wappa.messaging.whatsapp.media_library import WhatsAppMediaLibrary
 from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
 from wappa.schemas.core.types import PlatformType
 
-# Every cross-Platform action on the contract: ``send_text`` (abstract) plus
-# the optional operations whose base default raises UnsupportedOperationError.
+# Every cross-Platform action on the contract: the abstract ones every
+# Platform implements plus the optional operations whose base default raises
+# UnsupportedOperationError.
 OPERATIONS = tuple(
     name
     for name, member in vars(IMessenger).items()
     if inspect.iscoroutinefunction(member) and not name.startswith("_")
+)
+REQUIRED = frozenset(
+    name for name in OPERATIONS if name in IMessenger.__abstractmethods__
 )
 TEMPLATE_OPERATIONS = tuple(
     name
@@ -70,6 +74,7 @@ def _instagram() -> InstagramMessenger:
 
 def test_operations_list_is_the_contract():
     assert "send_text" in OPERATIONS and "mark_as_read" in OPERATIONS
+    assert {"send_text", "resolve_platform_user_profile"} == REQUIRED
     assert set(TEMPLATE_OPERATIONS) == {
         "send_text_template",
         "send_media_template",
@@ -110,10 +115,10 @@ def test_supported_operations_equal_overridden_methods_plus_qualifiers(build):
         if getattr(type(messenger), name) is not getattr(IMessenger, name)
     }
     qualifiers = {op for op in messenger.supported_operations if ":" in op}
-    assert messenger.supported_operations - qualifiers == overridden | {"send_text"}
+    assert messenger.supported_operations - qualifiers == overridden | REQUIRED
     # A qualifier token (``operation:qualifier``) refines a listed operation.
     for token in qualifiers:
-        assert token.split(":", 1)[0] in overridden | {"send_text"}, token
+        assert token.split(":", 1)[0] in overridden | REQUIRED, token
 
 
 class _Recorder(IMessenger, ITemplateMessaging):

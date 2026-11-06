@@ -66,6 +66,7 @@ from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.interfaces.template_messaging import ITemplateMessaging
 from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.domain.results import MessageResult
+from wappa.domain.user_profile import PlatformUserProfile
 from wappa.platforms import (
     BUILTIN_FIELDS,
     MessengerDeps,
@@ -198,7 +199,7 @@ class FakeWebhooks:
 
 
 class FakeMessenger(IMessenger):
-    """Records ``send_text``; registers no capabilities."""
+    """Records ``send_text``; profiles come from evidence; no capabilities."""
 
     def __init__(self, inbox_ref: InboxRef) -> None:
         self._inbox_ref = inbox_ref
@@ -227,6 +228,13 @@ class FakeMessenger(IMessenger):
             recipient=target.recipient_id,
             inbox_id=self.inbox_id,
             platform_response={"ok": True},
+        )
+
+    async def resolve_platform_user_profile(
+        self, user: UserBase
+    ) -> PlatformUserProfile:
+        return PlatformUserProfile.from_evidence(FAKE, user).model_copy(
+            update={"profile_name": f"Fake {user.platform_user_id}"}
         )
 
 
@@ -456,6 +464,10 @@ async def test_a_signed_callback_dispatches_and_the_reply_runs_the_pipeline(
     assert sent[1].addresses == DeliveryAddresses.of("u-7")
     (result,) = platform.handler.results
     assert result.success and result.platform == FAKE
+    # The core profile read reaches the adapter through the same pipeline.
+    profile = await messenger.resolve_platform_user_profile(webhook.user)
+    assert profile.found and profile.platform is FAKE
+    assert (profile.platform_user_id, profile.profile_name) == ("u-7", "Fake u-7")
 
 
 async def test_the_app_table_is_the_installed_set(platform: FakePlatform) -> None:

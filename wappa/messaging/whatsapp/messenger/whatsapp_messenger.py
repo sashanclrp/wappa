@@ -28,6 +28,7 @@ from wappa.domain.messaging_targets import (
     require_direct_message,
 )
 from wappa.domain.results import MessageResult
+from wappa.domain.user_profile import PlatformUserProfile
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
     WhatsAppInteractiveHandler,
@@ -62,6 +63,7 @@ from wappa.schemas.core.recipient import (
     whatsapp_delivery_order,
 )
 from wappa.schemas.core.types import PlatformType
+from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
 
 
 class WhatsAppMessenger(IMessenger, ITemplateMessaging):
@@ -108,6 +110,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
                 "send_contact",
                 "send_location",
                 "send_location_request",
+                "resolve_platform_user_profile",
             ]
         )
 
@@ -329,6 +332,17 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
                 inbox_id=self._inbox_id,
                 logger=self.logger,
             )
+
+    async def resolve_platform_user_profile(
+        self, user: UserBase
+    ) -> PlatformUserProfile:
+        """The webhook evidence as the profile; Cloud API has no User lookup."""
+        if user.platform_user_id is not None:
+            raise ValueError(
+                "WhatsApp profiles resolve from WhatsApp evidence "
+                "(phone number, BSUID), not a native Platform user ID"
+            )
+        return PlatformUserProfile.from_evidence(PlatformType.WHATSAPP, user)
 
     # Media
 

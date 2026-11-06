@@ -36,6 +36,7 @@ and test-lane rules before changing it.
 - Demonstrate a trusted backend extension obtaining current credentials from
   the same connection, reacting correctly to rotation/deactivation and handling
   a registered non-core field using a sanitized fixture if no live field is available.
+- Replace Symphonai's `getattr` reads of `webhook.user` (profile name, username, BSUID, phone) with `await messenger.resolve_platform_user_profile(webhook.user)` (Wappa H-26, ADR-0025 rule 10) and persist its `PlatformUserProfile` fields into the Chat record field for field. On Instagram the call adds the User's name, username and picture from Graph; check `profile.found` and keep the evidence on a failure outcome. Symphonai owns when to re-resolve and how to merge with stored values; Wappa never calls it during intake.
 - Update existing developer/consumer skills and scaffold templates affected by
   Instagram, `target=` and the revised extension seam; coordinate with I08.
 

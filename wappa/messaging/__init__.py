@@ -79,6 +79,7 @@ from wappa.domain.results import (
     OperationOutcome,
     message_outcome,
 )
+from wappa.domain.user_profile import PlatformUserProfile
 
 from .classification import (
     OutboundClassification,
@@ -146,6 +147,8 @@ __all__ = [
     "CommentControlOperation",
     "OperationOutcome",
     "message_outcome",
+    # User profile (IMessenger.resolve_platform_user_profile)
+    "PlatformUserProfile",
     # Optional focused capabilities (IMessenger.capability(kind))
     "ICommentControls",
     "IConversationContentReader",

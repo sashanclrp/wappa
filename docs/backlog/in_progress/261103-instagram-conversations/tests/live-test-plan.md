@@ -129,6 +129,7 @@ Implemented on the Symphonai branch `feat/instagram-wappa-adoption`. The branch 
 - Every send path uses `target=` (`services/wappa/targets.py`, `ScoreDependencies.user_target`, `require_user_target()`).
 - Inbound and delayed agent runs call `messenger.mark_as_read(message_id, target=direct_target(...))`, which is Platform-neutral (Instagram: `mark_seen`, then `typing_on` when asked), so they no longer abort on Instagram and need no Platform branch.
 - Operator (human) sends accept Instagram text.
+- Open: Symphonai still reads `webhook.user` with `getattr` to fill its Chat record; replace those reads with `messenger.resolve_platform_user_profile(webhook.user)` (Wappa H-26) and persist the `PlatformUserProfile` fields, so Instagram Chats get the User's name, username and picture.
 - The cache middleware records `send_carousel` like the other interactive sends; `mark_as_read` and `IMediaLibrary` calls are not cached as messages.
 
 | ID | Step | Expect |

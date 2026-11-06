@@ -24,7 +24,7 @@ Progress:
 | Request | Reference |
 | --- | --- |
 | Meta app, dashboard, tokens, webhook fields, testers | `references/meta-app-setup.md` |
-| Text, media send/receive, location/contact/sticker, `IMediaLibrary` upload/download, `mark_as_read` | `references/text-and-media.md` |
+| Text, media send/receive, location/contact/sticker, `IMediaLibrary` upload/download, `mark_as_read`, the User's name (`resolve_platform_user_profile`) | `references/text-and-media.md` |
 | Buttons, lists (quick replies), carousels, selections, comments, mentions, private/public replies, controls, post reads | `references/interactions-and-comments.md` |
 | Self-service login, multiple accounts, token reuse by other services, extra webhook fields | `references/unified-login-and-extensions.md` |
 | Something fails, or proving it works | `references/testing-and-troubleshooting.md` |

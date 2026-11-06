@@ -19,6 +19,9 @@ Contract mappings (ADR-0025: one Messenger method per action):
 - ``send_carousel`` → intro text, then ``template_type = generic`` (2–10); a
   video card shows its poster image and opens the video on tap
 - ``mark_as_read`` → ``sender_action`` ``mark_seen`` then ``typing_on``
+- ``resolve_platform_user_profile`` → ``GET /{igsid}?fields=name,username,
+  profile_pic`` merged over the webhook evidence; a failure returns the
+  evidence with the failure outcome
 - media by https URL, by ``IMediaLibrary.upload`` attachment_id, or a ``Path``
   (uploaded first)
 - ``send_location`` / ``send_contact`` → text (maps link / one block per card);
@@ -71,9 +74,11 @@ from wappa.domain.messaging_targets import (
     require_direct_message,
 )
 from wappa.domain.results import MessageResult, OperationOutcome
+from wappa.domain.user_profile import PlatformUserProfile
 from wappa.schemas.core.types import PlatformType
+from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
 
-from .content import InstagramCommentControls, InstagramContentReader
+from .content import InstagramCommentControls, InstagramContentReader, _read_failure
 from .graph import GraphResponse, InstagramGraphClient
 from .history import InstagramHistoryReader
 from .media import (
@@ -86,6 +91,7 @@ from .media_library import InstagramMediaLibrary
 TEXT_MAX_BYTES = 1000
 BUTTON_TEXT_MAX = 640
 BUTTONS_MAX = 3
+PROFILE_FIELDS = "name,username,profile_pic"
 # Interactive titles, IDs, card texts and counts need no check here: the
 # neutral values already enforce the minimum across Platforms
 # (wappa.domain.interactive).
@@ -226,6 +232,7 @@ class InstagramMessenger(IMessenger):
             "send_sticker",
             "send_location",
             "send_contact",
+            "resolve_platform_user_profile",
         }
     )
 
@@ -843,4 +850,46 @@ class InstagramMessenger(IMessenger):
                 "mark_seen": seen.outcome.value,
                 "typing_on": typed.outcome.value if typed else None,
             },
+        )
+
+    # ── User profile (read-only, Host-called) ───────────────────────────
+
+    async def resolve_platform_user_profile(
+        self, user: UserBase
+    ) -> PlatformUserProfile:
+        """Graph profile lookup by IGSID, merged over the webhook evidence.
+
+        Never raises for Platform failures: a refused or unknown lookup
+        returns the evidence with ``not_found`` / ``access_denied`` /
+        ``rejected`` / ``unavailable``.
+        """
+        if not user.platform_user_id:
+            raise ValueError(
+                "Instagram profiles resolve from Instagram evidence "
+                "(UserBase.platform_user_id)"
+            )
+        evidence = PlatformUserProfile.from_evidence(self.platform, user)
+        response = await self._graph.request(
+            "GET",
+            user.platform_user_id,
+            params={"fields": PROFILE_FIELDS},
+            operation="Instagram user profile read",
+        )
+        if not response.ok:
+            return evidence.model_copy(
+                update={"outcome": _read_failure(response).outcome}
+            )
+        body = response.body
+
+        def text(key: str) -> str | None:
+            value = body.get(key)
+            return value if isinstance(value, str) and value.strip() else None
+
+        return evidence.model_copy(
+            update={
+                "profile_name": text("name") or evidence.profile_name,
+                "username": text("username") or evidence.username,
+                "picture_url": text("profile_pic"),
+                "raw": body,
+            }
         )

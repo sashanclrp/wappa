@@ -25,6 +25,8 @@ if TYPE_CHECKING:
         ReplyButton,
     )
     from wappa.domain.results import MessageResult
+    from wappa.domain.user_profile import PlatformUserProfile
+    from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
 
 TemplateBodyParameters = list[dict] | None
 TemplateRoutingPolicyValue = str
@@ -52,7 +54,7 @@ class IMessenger(ABC):
     @property
     def supported_operations(self) -> frozenset[str]:
         """Implemented adapter operations, not the provider's full feature catalog."""
-        return frozenset({"send_text"})
+        return frozenset({"send_text", "resolve_platform_user_profile"})
 
     def capability[C](self, kind: Callable[..., C]) -> C | None:
         """Return a focused optional capability (e.g. ``ICommentControls``).
@@ -117,6 +119,20 @@ class IMessenger(ABC):
         raise UnsupportedOperationError(
             f"{self.platform.value} does not support mark_as_read"
         )
+
+    @abstractmethod
+    async def resolve_platform_user_profile(
+        self, user: UserBase
+    ) -> PlatformUserProfile:
+        """Every fact this Platform provides about ``user`` (ADR-0025 rule 10).
+
+        Read-only and never called by Wappa during intake or dispatch; the
+        Host merges, persists and re-resolves. WhatsApp maps the webhook
+        evidence with no I/O. Instagram adds a Graph profile lookup with the
+        Inbox token and, when it fails, returns the evidence with the failure
+        ``outcome`` instead of raising. ``user`` must be this Platform's
+        evidence (``ValueError`` otherwise).
+        """
 
     # Media
     async def send_image(
