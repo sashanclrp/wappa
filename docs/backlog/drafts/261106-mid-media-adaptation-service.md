@@ -1,5 +1,5 @@
 ---
-status: draft (design proposed 2026-11-06; no code; needs a grill session and an ADR before pending/)
+status: draft (design proposed 2026-11-06; universal-targets simplification proposed the same day; phase 1 detection partly built; needs a grill session and an ADR before pending/)
 origin: WhatsApp First facade gap for media (send_sticker renditions, carousel card media, voice notes)
 checked_on: 2026-11-06
 supersedes_on_acceptance: the "Wappa never converts media" rule in wappa/domain/media_renditions.py and docs/public-contract.md (send_sticker paragraph)
@@ -42,6 +42,45 @@ Media Adaptation adds one Platform-neutral engine that reads what a file really 
 - No media hosting product: the public URL exists only so a Platform can fetch a send, and it expires.
 - No inbound adaptation. `IMediaLibrary.download` returns the bytes the User sent, unchanged.
 - No new Platform behaviour (for example Instagram custom stickers); adaptation only fills existing facades.
+
+## Universal targets: one format per use that works on both Platforms (proposal, 2026-11-06)
+
+The matrix shows that most uses have one format both Platforms accept and render, so the default design can be much smaller than "convert per Platform": pick that format once per use, convert into it once, and send the same file everywhere. Only two uses need a second rendition. This section is the proposed default; the per-Platform table under Design stays as the reference for why each target was chosen.
+
+| Use | Universal target | WhatsApp | Instagram | Second rendition |
+| --- | --- | --- | --- | --- |
+| image (photo) | JPEG | ✅ link and upload | ✅ link and upload | — |
+| image (graphic, transparency) | PNG | ✅ (alpha kept) | ✅; alpha becomes white by link, kept by upload | flatten onto a Host background when the look must not depend on the lane |
+| image (animated) | none: GIF animates only on Instagram, WhatsApp images cannot animate | send as MP4 video | GIF | yes: MP4 for WhatsApp, GIF for Instagram, or send as video on both |
+| video | MP4, H.264 Main (Baseline for old Android), AAC, faststart, ≤ 16 MB | ✅ | ✅ link and upload | — |
+| audio | M4A (AAC) | ✅ | listed by Meta; *rendering pending* | — |
+| voice | OGG/Opus mono 48 kHz | ✅ the only format with a waveform | not on Instagram's audio list (OGG link *pending*); Instagram has no voice flag | yes: M4A (AAC) for Instagram |
+| document | PDF | ✅ | ✅ (the only attachable type; others become a link text) | — |
+| sticker (static) | WebP 512×512, ≤ 100 KB | ✅ | ✅ **by URL only** (the upload endpoint answers HTTP 500) | PNG when it must be uploaded to Instagram |
+| sticker (animated) | animated WebP 512×512, ≤ 500 KB | ✅ | shows only the first frame | yes: GIF for Instagram |
+| card image / card video | JPEG or PNG / MP4 as above, by public URL | ✅ | ✅ (a video card needs `poster_url`, a JPEG) | the poster frame |
+
+Answers to the question this proposal starts from:
+
+- **Stickers always WebP?** Yes for WhatsApp, which requires 512×512 WebP. On Instagram a static WebP works only by URL, and an animated one freezes on its first frame, so a sticker library ships WebP plus PNG (static) or GIF (animated). `send_sticker(["s.webp", "s.gif"])` already picks the right one per Platform.
+- **Videos always MP4?** Yes: MP4 H.264 + AAC is the single format verified on both, by link and upload. HEVC, MOV, WebM, MKV and 3GP all fail on at least one Platform.
+- **Audio always OGG/Opus?** Only for WhatsApp voice notes, where it is the only format with a waveform. Instagram does not list OGG at all, so plain audio should be M4A (AAC), which both Platforms accept, and a voice note needs two renditions (OGG/Opus for WhatsApp, M4A for Instagram) until the Instagram OGG link is verified.
+- **Documents always PDF?** Yes: WhatsApp takes any type, Instagram attaches only PDF and shares anything else as a link.
+- **Images PNG or WebP?** JPEG for photos and PNG for graphics. Not WebP: WhatsApp takes it, but Instagram cannot upload it, and an animated WebP is broken on both (refused as a WhatsApp image, frozen on Instagram).
+
+### Does Wappa need a runtime engine at all?
+
+Probably not first. When the Host authors its media (a bot's own stickers, menus, product videos), the cheapest design is to prepare the universal targets **once, ahead of time**, and send them by Media ID or URL: no ffmpeg in the server, no process pool, no cache, no public URL service. Wappa already does the other half: since 2026-11-06 it refuses every non-conforming file before any call (phase 1 detection on WhatsApp, the WebP and animation rules on Instagram), so a wrong asset fails loudly at send time instead of failing silently minutes later.
+
+A runtime engine is needed only for media Wappa did not author: a User's media relayed to another Platform or Inbox (a WhatsApp voice note forwarded to Instagram, an iPhone HEIC photo), AI-generated media, and Host uploads whose format is unknown. No current Host needs that.
+
+Proposed order, replacing phases 2 and 3 until such a Host exists:
+
+1. **Universal targets in the spec** (this table), enforced by the existing before-I/O rules on both Platforms.
+2. **`wappa media prepare <file> --use sticker|voice|video|...`**, a CLI command (in the `wappa[media]` extra) that writes the universal target and any second rendition next to the source, so a Host prepares its library offline with one command.
+3. **The runtime engine** (sections 2-4 below) only when a Host relays media it did not author; the content cache and public URLs come with it.
+
+The grill session decides between this order and the original phases.
 
 ## Design
 
