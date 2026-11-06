@@ -412,8 +412,11 @@ async def test_whatsapp_sends_several_cards_in_one_contacts_message() -> None:
     assert result.success
     contacts = client.posted[0]["contacts"]
     assert contacts == [
-        {"name": {"formatted_name": "Ana"}, "phones": [{"phone": "+57 300 111 2233"}]},
-        {"name": {"formatted_name": "Front desk"}},
+        {
+            "name": {"formatted_name": "Ana", "first_name": "Ana"},
+            "phones": [{"phone": "+57 300 111 2233"}],
+        },
+        {"name": {"formatted_name": "Front desk", "first_name": "Front desk"}},
     ]
     assert (await wa.send_contact(_contact("Solo"), WA_DM)).success
 
@@ -510,3 +513,13 @@ async def test_limits_endpoint_reports_the_shared_cta_and_card_limits() -> None:
     assert limits["carousels"]["max_card_text_length"] == 160
     assert limits["carousels"]["max_card_buttons"] == 2
     assert limits["carousels"]["supported_card_header_kinds"] == ["image", "video"]
+
+
+def test_a_name_without_parts_takes_first_name_from_formatted_name() -> None:
+    # WhatsApp answers 131009 "ContactName should have at least one optional
+    # value be set along with formatted Name" otherwise.
+    from wappa.domain.contacts import ContactName
+
+    assert ContactName(formatted_name="Wappa Support").first_name == "Wappa Support"
+    named = ContactName(formatted_name="Ana Ruiz", last_name="Ruiz")
+    assert named.first_name is None and named.last_name == "Ruiz"

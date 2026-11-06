@@ -2,13 +2,15 @@
 
 One typed value for ``IMessenger.send_contact`` on every Platform: WhatsApp
 sends one or several cards as a native contacts message; Instagram renders
-each card as a text block. As in the WhatsApp Cloud API, only
-``name.formatted_name`` is required.
+each card as a text block. Only ``name.formatted_name`` is
+required: WhatsApp also needs one name part, so a name without any takes
+``first_name`` from ``formatted_name`` when it is built.
 """
 
 from collections.abc import Sequence
+from typing import Self
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # Type values are free strings on WhatsApp ("HOME", "WORK", "CELL", ...).
 
@@ -48,6 +50,22 @@ class ContactName(BaseModel):
         if not v or not v.strip():
             raise ValueError("formatted_name is required and cannot be empty")
         return v.strip()
+
+    @model_validator(mode="after")
+    def _one_name_part(self) -> Self:
+        # WhatsApp rejects a name with only formatted_name (131009, "ContactName
+        # should have at least one optional value be set along with formatted
+        # Name"), so a card that builds always carries one part.
+        parts = (
+            self.first_name,
+            self.last_name,
+            self.middle_name,
+            self.suffix,
+            self.prefix,
+        )
+        if not any(parts):
+            self.first_name = self.formatted_name[:50]
+        return self
 
 
 class ContactOrganization(BaseModel):
