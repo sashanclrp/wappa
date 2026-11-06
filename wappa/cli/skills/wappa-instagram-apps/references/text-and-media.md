@@ -45,7 +45,7 @@ await self.messenger.send_document(Path("assets/menu.pdf"), target)  # uploaded 
 | `send_text` | text over 1000 UTF-8 bytes is sent as several messages, cut on a word boundary when possible, with the reply context on the first; a `PrivateReply` over the limit raises `ValueError` (one reply per comment) |
 | `send_image` | http(s) URL (WebP works by URL) or local png/jpeg/gif ≤ 8 MB; a WebP file is refused (the upload endpoint answers HTTP 500); an animated WebP shows only its first frame, a GIF animates |
 | `send_audio` | aac/m4a/wav/mp4 ≤ 25 MB; another format by URL (`.mp3`, `.ogg`, `.amr`) is shared as a text with the file name and link |
-| `send_video` | mp4/ogg/avi/mov/webm ≤ 25 MB; another format by URL (`.3gp`) is shared as a link |
+| `send_video` | by URL mp4/ogg/avi/mov/webm ≤ 25 MB; as a local file only an H.264 MP4 (MOV, WebM and HEVC uploads fail); another format by URL (`.3gp`) is shared as a link |
 | `send_document` | pdf ≤ 25 MB; another format by URL (`.docx`, `.xlsx`, `.txt` …) is shared as a text with `filename` (else the URL's file name) and the link; a local `Path` uploads under `filename` |
 
 On WhatsApp the same calls check Meta's media rules before sending and raise `ValueError` for a format Meta would accept and then fail (131053): images are JPEG, PNG or static WebP (no GIF, HEIC or animated WebP); video is MP4 or 3GP with H.264 (no HEVC, MOV, MKV or WebM); audio is AAC, AMR, MP3, M4A or OGG/Opus; a voice note (`is_voice=True`) is OGG/Opus only, the only format that shows a waveform; a sticker is 512x512 WebP. Convert first; a refusal never reaches Meta.

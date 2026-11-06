@@ -8,7 +8,10 @@ states no URL scheme and no file-name rule, so an http(s) URL passes through
 format matrix (2026-11-06) adds static WebP **by URL** (it renders), while
 the attachment upload endpoint answers a WebP with HTTP 500 ("unknown
 error", code 1), so a WebP upload is refused before I/O; an animated WebP
-renders only its first frame (GIF animates).
+renders only its first frame (GIF animates). Video uploads work only as MP4
+with H.264: MOV and WebM answer HTTP 500 and an HEVC MP4 uploads but its send
+is refused ("Public attachments are not allowed to be sent directly",
+3/1545003), so those go by URL only.
 
 Inbound attachment URLs are signed Meta CDN URLs
 (``lookaside.fbsbx.com/ig_messaging_cdn/...``) that may expire within minutes.
@@ -124,8 +127,13 @@ def ascii_name(name: str) -> str:
     return (fold(path.stem) or "file") + fold(path.suffix)
 
 
-# Formats Instagram renders by URL but its upload endpoint fails (HTTP 500).
-URL_ONLY: dict[str, frozenset[str]] = {"image": frozenset({".webp"})}
+# Formats Instagram takes by URL but not as an upload (HTTP 500 on upload),
+# and the format to upload instead.
+URL_ONLY: dict[str, frozenset[str]] = {
+    "image": frozenset({".webp"}),
+    "video": frozenset({".ogg", ".avi", ".mov", ".webm"}),
+}
+_UPLOAD_INSTEAD = {"image": "a PNG or JPEG", "video": "an MP4 (H.264)"}
 
 
 def validate_upload(name: str, size: int, family: str) -> MediaRule:
@@ -133,9 +141,9 @@ def validate_upload(name: str, size: int, family: str) -> MediaRule:
     suffix = PurePosixPath(name).suffix
     if suffix.lower() in URL_ONLY.get(family, frozenset()):
         raise ValueError(
-            f"Instagram renders a {suffix} {family} sent by URL, but its upload "
-            "endpoint fails on it (HTTP 500); send it by URL, or upload a PNG or "
-            f"JPEG ({CONVERT_HINT})"
+            f"Instagram takes a {suffix} {family} by URL, but its upload "
+            f"endpoint fails on it (HTTP 500); send it by URL, or upload "
+            f"{_UPLOAD_INSTEAD[family]} ({CONVERT_HINT})"
         )
     if suffix.lower() not in rule.extensions:
         raise ValueError(
@@ -151,10 +159,21 @@ def validate_upload(name: str, size: int, family: str) -> MediaRule:
     return rule
 
 
-def check_image_content(data: bytes) -> None:
-    """Refuse WebP content under another name: an animated WebP shows only its
-    first frame, and the upload endpoint fails on any WebP (HTTP 500)."""
+def check_upload_content(data: bytes, wire_type: str) -> None:
+    """Refuse upload content Instagram fails on, whatever the file's name.
+
+    Images: any WebP (the upload endpoint answers HTTP 500; an animated WebP
+    would show only its first frame anyway). Video: HEVC, which uploads but
+    whose send Meta refuses (3/1545003).
+    """
     found = probe(data)
+    if wire_type == "video" and found.codec == "hevc":
+        raise ValueError(
+            "Instagram refuses to send an uploaded HEVC video (3/1545003); upload "
+            f"an MP4 with H.264 video ({CONVERT_HINT})"
+        )
+    if wire_type != "image":
+        return
     if found.mime == "image/webp" and not found.animated:
         raise ValueError(
             "Instagram's upload endpoint fails on WebP (HTTP 500); send it by "

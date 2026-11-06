@@ -34,7 +34,7 @@ In short: **video MP4 (H.264 + AAC), documents PDF, photos JPEG, graphics PNG, a
 ## What Wappa refuses before any call
 
 - **WhatsApp** (`wappa/messaging/whatsapp/media_rules.py`, content read by `wappa/domain/media_probe.py`): by suffix, image `.jpg/.jpeg/.png/.webp`, video `.mp4/.3gp`, audio `.aac/.amr/.mp3/.m4a/.ogg`, voice `.ogg`, sticker `.webp`; by content for local files and uploads, animated WebP as an image, GIF, HEIC, HEVC, MOV, WebM, OGG without Opus, WAV, a sticker not 512×512, size caps (image 5 MB, video and audio 16 MB, sticker 500 KB, static sticker 100 KB, document 100 MB); by stored MIME type for a voice note (`audio/ogg`) or sticker (`image/webp`) sent by Media ID; every carousel card.
-- **Instagram** (`wappa/messaging/instagram/media.py`): image png/jpeg/gif (and WebP by URL only), audio aac/m4a/wav/mp4, video mp4/ogg/avi/mov/webm, document pdf, image 8 MB and the rest 25 MB; a WebP file (the upload endpoint answers HTTP 500) and animated WebP bytes. A document, audio or video **URL** in another format is shared as a text with the file name and link instead of failing.
+- **Instagram** (`wappa/messaging/instagram/media.py`): image png/jpeg/gif (and WebP by URL only), audio aac/m4a/wav/mp4, video mp4/ogg/avi/mov/webm by URL, document pdf, image 8 MB and the rest 25 MB; a WebP file (the upload endpoint answers HTTP 500) and animated WebP bytes; a video file other than an H.264 MP4 (MOV and WebM uploads answer HTTP 500, an HEVC upload's send is refused). A document, audio or video **URL** in another format is shared as a text with the file name and link instead of failing.
 - Not covered: an extension-less URL or a Media ID for images and video (no fetch); Meta decides those.
 
 ## Live results
@@ -60,6 +60,7 @@ Findings for the spec and the engine:
 - By Media ID nothing has a suffix. Wappa now checks the stored MIME type (`GET /{media_id}`) for voice notes (`audio/ogg`) and stickers (`image/webp`) before sending (677f34a, 13cec65); other families still pass through.
 - Python maps `.3gp` to `audio/3gpp`; WhatsApp needs `video/3gpp` for a video. Fixed in the Media Library (ef05128) and in the lab's asset server.
 - A carousel should be checked card by card before sending, since one bad card loses the whole message.
+- Re-check after the MetaGraphClient move (15:02): HEVC, MOV, MKV, WebM VP8 and VP9 are refused by Wappa before any call on both the link and upload lanes; only the lab's `link-raw` lane, which bypasses Wappa's rules, reaches Meta and fails by status (131053).
 
 ### Instagram (2026-11-06, test account; partial: the development app's rate limit)
 
@@ -68,16 +69,18 @@ API = Meta's response; Instagram sends no `failed` status (every accepted send c
 | Use | Works | Fails or degrades | Notes |
 | --- | --- | --- | --- |
 | image | JPEG, PNG, static GIF, static WebP, HEIC by link; animated GIF **animates** (link and upload) | animated WebP shows only its first frame; PNG with alpha: transparent area filled **white by link**, kept (chat background shows through) **by upload** | a static WebP **upload** answers HTTP 500 ("unknown error", code 1, rerun 14:50) while the same file renders by URL; Wappa now accepts WebP URLs and refuses WebP files and animated WebP bytes before I/O |
-| video | MP4 H.264 Baseline and High, link and upload | MOV and WebM VP8 uploads: HTTP **500** from `message_attachments` (Wappa reports `indeterminate` and now logs Meta's fields for a 5xx) | links for HEVC, MOV, 3GP, WebM VP8/VP9 and MKV *pending* |
+| video | MP4 H.264 Baseline and High, link and upload; WebM VP8 and VP9 links accepted (rendering *pending*) | uploads: MOV, WebM VP8 and VP9 answer HTTP **500** (code 1); an HEVC MP4 uploads but its send is refused, 3/1545003 "Public attachments are not allowed to be sent directly"; MKV link: shared as link text (Wappa's rule) | Wappa now refuses every video upload except an H.264 MP4 before I/O; links for HEVC, MOV, 3GP *pending* |
 | sticker (sent as image) | PNG 512 (link and upload; same alpha behaviour as images), static WebP 512 and 256 | animated WebP 512 shows its first frame | Instagram has no sticker size rule |
 | card_image | JPEG, PNG, PNG with alpha, static WebP, animated WebP (first frame) | — | GIF and video cards *pending* |
-| audio, voice, document | — | — | *pending* |
+| audio and voice (links) | M4A AAC, AAC ADTS, WAV PCM: a voice-note bubble with "View transcription" | MP3, OGG Opus mono and stereo, OGG Vorbis, WebM Opus: outside Instagram's audio list, so Wappa shares each as a text with the file name and link (by design, not a Meta failure) | Instagram has no separate voice-note type: `is_voice` changes nothing, audio and voice render the same; uploads *pending* |
+| document | PDF, link and upload | other types by link: shared as a link text (Wappa's rule) | — |
 
 Findings:
 
 - Instagram's verdict is the phone, not a status: accepted sends are `read`, never `failed`, so a format Instagram degrades (animated WebP, alpha) looks like a success to the Host. Only rules enforced before I/O protect the Host.
 - Animation: GIF is Instagram's animation format; WhatsApp's is animated WebP (stickers) or MP4 (video). A Host that animates on both ships both renditions.
 - Transparency depends on the lane on Instagram (white matte by link, transparent by upload), so a Host that needs a predictable look flattens transparent images onto its own background before sending.
+- Audio: M4A (AAC) is the one audio file that plays on both Platforms (WhatsApp audio and Instagram voice bubble). A WhatsApp voice note still needs OGG/Opus, which Instagram does not play, so a Host that sends voice notes on both keeps two renditions (OGG/Opus and M4A).
 - An Instagram upload that answers HTTP 500 is a format refusal in practice (MOV, WebM video, WebP image: code 1 "unknown error"), not an outage: MP4 stays the only video upload format until a rerun says otherwise.
 
 ## What the skills teach

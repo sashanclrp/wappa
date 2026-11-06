@@ -188,7 +188,7 @@ def test_instagram_takes_webp_by_url_only():
     first frame (GIF animates)."""
     from wappa.messaging.instagram.media import (
         MEDIA_RULES,
-        check_image_content,
+        check_upload_content,
         url_format_accepted,
         validate_upload,
     )
@@ -197,8 +197,27 @@ def test_instagram_takes_webp_by_url_only():
     assert url_format_accepted("https://x.test/a.webp", "image")
     with pytest.raises(ValueError, match="by URL"):
         validate_upload("a.webp", 10, "image")
-    check_image_content(GIF)  # GIFs animate on Instagram
+    check_upload_content(GIF, "image")  # GIFs animate on Instagram
     with pytest.raises(ValueError, match="HTTP 500"):
-        check_image_content(_webp_vp8x(512, 512, animated=False))  # renamed .png
+        check_upload_content(_webp_vp8x(512, 512, animated=False), "image")
     with pytest.raises(ValueError, match="first frame"):
-        check_image_content(_webp_vp8x(512, 512, animated=True))
+        check_upload_content(_webp_vp8x(512, 512, animated=True), "image")
+
+
+def test_instagram_uploads_video_only_as_h264_mp4():
+    """Live matrix 2026-11-06: MOV and WebM uploads answer HTTP 500; an HEVC
+    MP4 uploads but its send is refused (3/1545003). By URL they still go."""
+    from wappa.messaging.instagram.media import (
+        check_upload_content,
+        url_format_accepted,
+        validate_upload,
+    )
+
+    validate_upload("a.mp4", 10, "video")
+    check_upload_content(MP4_H264, "video")
+    for name in ("a.mov", "a.webm", "a.ogg", "a.avi"):
+        with pytest.raises(ValueError, match="MP4 \\(H.264\\)"):
+            validate_upload(name, 10, "video")
+        assert url_format_accepted(f"https://x.test/{name}", "video")
+    with pytest.raises(ValueError, match="HEVC"):
+        check_upload_content(MP4_HEVC, "video")
