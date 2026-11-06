@@ -9,7 +9,13 @@ from wappa.domain.contacts import ContactCard
 from wappa.domain.factories.media_factory import WhatsAppMediaFactory
 from wappa.domain.factories.message_factory import WhatsAppMessageFactory
 from wappa.domain.inbox.identity import InboxRef
-from wappa.domain.interactive import MessageCard, ReplyButton, UrlButton
+from wappa.domain.interactive import (
+    ButtonHeader,
+    ListSection,
+    MessageCard,
+    ReplyButton,
+    UrlButton,
+)
 from wappa.domain.interfaces.media_library import IMediaLibrary
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.interfaces.template_messaging import ITemplateMessaging
@@ -19,6 +25,7 @@ from wappa.domain.messaging_targets import (
     MessageTarget,
     require_direct_message,
 )
+from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
     WhatsAppInteractiveHandler,
@@ -33,11 +40,7 @@ from wappa.messaging.whatsapp.handlers.whatsapp_template_handler import (
     WhatsAppTemplateHandler,
 )
 from wappa.messaging.whatsapp.media_library import WhatsAppMediaLibrary
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
-from wappa.messaging.whatsapp.models.interactive_models import (
-    InteractiveHeader,
-    ListSection,
-)
+from wappa.messaging.whatsapp.models.basic_models import message_result_from_payload
 from wappa.messaging.whatsapp.models.media_models import MediaType
 from wappa.messaging.whatsapp.models.template_models import (
     WhatsAppTemplateMediaType,
@@ -129,7 +132,6 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
             error=error,
             error_code=error_code,
             inbox_id=self._inbox_id,
-            api_response=None,
         )
 
     def _convert_body_parameters(
@@ -262,7 +264,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
 
             self.logger.debug(f"Sending text message to {recipient}: {text[:50]}...")
             response = await self.client.post_request(payload)
-            result = MessageResult.from_response_payload(
+            result = message_result_from_payload(
                 response,
                 inbox_id=self._inbox_id,
                 fallback_recipient=recipient,
@@ -284,15 +286,15 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
     async def mark_as_read(
         self,
         message_id: str,
+        target: DirectMessage,
+        *,
         typing: bool = False,
-        target: DirectMessage | None = None,
     ) -> MessageResult:
-        # The read receipt is addressed by message ID; ``target`` (optional,
-        # for Platform-neutral callers) is only checked against this Inbox.
-        if target is not None:
-            require_direct_message(target, "WhatsApp mark_as_read").resolve(
-                InboxRef.whatsapp(self._inbox_id)
-            )
+        # The read receipt is addressed by message ID; ``target`` is only
+        # checked against this Inbox.
+        require_direct_message(target, "WhatsApp mark_as_read").resolve(
+            InboxRef.whatsapp(self._inbox_id)
+        )
         try:
             # Cloud API: typing_indicator rides on the read receipt itself and
             # needs only the inbound message ID.
@@ -316,7 +318,6 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
                 recipient_phone=None,
                 platform=PlatformType.WHATSAPP,
                 inbox_id=self._inbox_id,
-                api_response=None,
             )
 
         except Exception as e:
@@ -582,7 +583,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
 
             self.logger.debug(f"Sending {media_type.value} message to {recipient}")
             response = await self.client.post_request(payload)
-            result = MessageResult.from_response_payload(
+            result = message_result_from_payload(
                 response,
                 inbox_id=self._inbox_id,
                 fallback_recipient=recipient,
@@ -609,7 +610,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         buttons: list[ReplyButton],
         target: DirectMessage,
         body: str,
-        header: InteractiveHeader | None = None,
+        header: ButtonHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
@@ -631,7 +632,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         target: DirectMessage,
         body: str,
         button_text: str,
-        header: str | None = None,
+        header: ButtonHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
@@ -707,7 +708,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging):
         try:
             apply_recipient_to_payload(payload, recipient)
             response = await self.client.post_request(payload)
-            return MessageResult.from_response_payload(
+            return message_result_from_payload(
                 response, inbox_id=self._inbox_id, fallback_recipient=recipient
             )
         except Exception as e:

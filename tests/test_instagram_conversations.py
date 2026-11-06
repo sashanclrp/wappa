@@ -25,14 +25,13 @@ from wappa.domain.inbox import InboxRef, PlatformAccountRef
 from wappa.domain.inbox.errors import InboxNotFoundError
 from wappa.domain.inbox.ports import IInboxCredentialResolver, ResolvedInboxCredentials
 from wappa.messaging import (
+    ButtonHeader,
     CommentRef,
     ContactCard,
     DeliveryAddresses,
     DirectMessage,
-    HeaderType,
     ICommentControls,
     IConversationContentReader,
-    InteractiveHeader,
     ListRow,
     ListSection,
     MessageCard,
@@ -698,7 +697,7 @@ async def test_every_dm_operation_uses_native_wire_format():
                 DM,
                 "Pick",
                 "Open",
-                header="Head",
+                header=ButtonHeader(text="Head"),
                 footer="Foot",
             )
         ).success
@@ -730,9 +729,7 @@ async def test_every_dm_operation_uses_native_wire_format():
                 [ReplyButton(id="ok", title="OK")],
                 DM,
                 "Card title",
-                header=InteractiveHeader(
-                    type=HeaderType.IMAGE, image={"link": "https://example.com/c.png"}
-                ),
+                header=ButtonHeader(image_url="https://example.com/c.png"),
                 footer="Card subtitle",
             )
         ).success
@@ -822,10 +819,35 @@ async def test_private_reply_public_reply_and_target_rules():
     )
     assert public.parent_comment_id == "c1"
     assert len(sent) == 2
-    with pytest.raises(ValueError, match="only implemented for Instagram"):
-        PrivateReply(
-            comment_ref=CommentRef(inbox_ref=InboxRef.whatsapp("1"), comment_id="c")
-        )
+
+
+async def test_private_reply_is_platform_neutral_and_rejected_at_send():
+    """Constructing a PrivateReply names no Platform; an adapter without
+    comment-addressed replies rejects it when sending."""
+    reply = PrivateReply(
+        comment_ref=CommentRef(inbox_ref=InboxRef.whatsapp("pnid"), comment_id="c")
+    )
+    assert reply.inbox_ref == InboxRef.whatsapp("pnid")
+    posted: list = []
+
+    class Client:
+        async def post_request(self, payload):
+            posted.append(payload)
+            return {"success": True}
+
+    from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
+
+    wa = WhatsAppMessenger(
+        client=Client(),  # type: ignore[arg-type]
+        media_handler=None,  # type: ignore[arg-type]
+        interactive_handler=None,  # type: ignore[arg-type]
+        template_handler=None,  # type: ignore[arg-type]
+        specialized_handler=None,  # type: ignore[arg-type]
+        inbox_id="pnid",
+    )
+    with pytest.raises(UnsupportedOperationError, match="PrivateReply"):
+        await wa.send_text("hi", reply)
+    assert posted == []
 
 
 async def test_local_limits_reject_before_io():
@@ -861,19 +883,23 @@ async def test_local_limits_reject_before_io():
             )
         with pytest.raises(ValueError, match="need a subtitle"):
             await messenger.send_carousel([MessageCard(title="only")] * 2, DM, "x")
-        with pytest.raises(UnsupportedOperationError, match="video header"):
+        with pytest.raises(UnsupportedOperationError, match="image_url"):
             await messenger.send_button_message(
                 [ReplyButton(id="a", title="A")],
                 DM,
                 "x",
-                header=InteractiveHeader(
-                    type=HeaderType.VIDEO, video={"link": "https://example.com/v.mp4"}
-                ),
+                header=ButtonHeader(image_media_id="wa-media-1"),
+            )
+        with pytest.raises(UnsupportedOperationError, match="only a text header"):
+            await messenger.send_list_message(
+                [ListSection(title="a", rows=[ListRow(id="1", title="t")])],
+                DM,
+                "x",
+                "Open",
+                header=ButtonHeader(image_url="https://example.com/c.png"),
             )
         with pytest.raises(ValueError, match="https"):
             await messenger.send_image("http://insecure.example/a.png", DM)
-        with pytest.raises(ValueError, match="needs target"):
-            await messenger.mark_as_read("m1")
     assert sent == []
     assert {
         "send_button_message",
@@ -1197,7 +1223,7 @@ async def test_whatsapp_mark_as_read_sends_typing_and_accepts_a_target():
     )
     assert (await wa.mark_as_read("wamid.1", typing=True, target=wa_dm)).success
     assert posted[0]["typing_indicator"] == {"type": "text"}
-    assert (await wa.mark_as_read("wamid.2")).success
+    assert (await wa.mark_as_read("wamid.2", wa_dm)).success
     assert "typing_indicator" not in posted[1]
     with pytest.raises(TargetInboxMismatchError):
         await wa.mark_as_read("wamid.3", target=DM)

@@ -16,7 +16,7 @@ from wappa.api.routes.whatsapp.whatsapp_specialized import (
     LocationRequestRequest,
 )
 from wappa.domain.contacts import ContactCard, ContactName, ContactPhone
-from wappa.domain.interactive import ReplyButton
+from wappa.domain.interactive import ListRow, ListSection, ReplyButton
 from wappa.messaging import (
     LocationTemplateTransportRequest,
     MediaTemplateTransportRequest,
@@ -39,8 +39,6 @@ from wappa.messaging.whatsapp.models.interactive_models import (
     CTAMessage,
     InteractiveMessage,
     ListMessage,
-    ListRow,
-    ListSection,
 )
 from wappa.messaging.whatsapp.models.media_models import (
     AudioMessage,
@@ -178,7 +176,7 @@ ORDINARY_PAYLOADS = [
         id="contact",
     ),
     pytest.param(
-        ReadStatusMessage(message_id="wamid.abc"),
+        ReadStatusMessage(message_id="wamid.abc", recipient="5511999999999"),
         OutboundTransportFamily.READ_RECEIPT,
         None,
         "read_receipt",
@@ -398,7 +396,7 @@ async def test_route_layer_labels_events_from_the_payload_it_received(
     """The decorator no longer restates a family the payload already carries."""
     from wappa.api.utils.event_decorators import dispatch_message_event
     from wappa.core.logging.context import clear_request_context, set_request_context
-    from wappa.messaging.whatsapp.models.basic_models import MessageResult
+    from wappa.domain.results import MessageResult
 
     labels: list[str] = []
     pending: list[object] = []

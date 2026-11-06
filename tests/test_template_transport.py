@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from wappa.api.routes.whatsapp_combined import create_messaging_router
 from wappa.domain.inbox import InboxRef
 from wappa.domain.interfaces.session_provider import RuntimeDrainingError
+from wappa.domain.results import MessageResult
 from wappa.messaging import (
     BsuidTemplateRecipient,
     DeliveryAddresses,
@@ -34,7 +35,6 @@ from wappa.messaging import (
     TemplateTransportRouting,
     TextTemplateTransportRequest,
 )
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.schemas.core.types import PlatformType
 
 
@@ -133,6 +133,7 @@ def test_accepted_result_requires_platform_message_id() -> None:
 async def test_text_transport_returns_normalized_acceptance_and_exact_mapping() -> None:
     messenger = _Messenger(
         MessageResult(
+            platform=PlatformType.WHATSAPP,
             success=True,
             message_id="wamid.1",
             recipient="CO.user",
@@ -227,7 +228,11 @@ async def test_header_template_requests_map_to_the_matching_pipeline_method(
     kind: str,
     header_values: dict[str, Any],
 ) -> None:
-    messenger = _Messenger(MessageResult(success=True, message_id="wamid.2"))
+    messenger = _Messenger(
+        MessageResult(
+            platform=PlatformType.WHATSAPP, success=True, message_id="wamid.2"
+        )
+    )
     result = await _transport(_Runtime(messenger)).send(template_request)
 
     assert result.outcome is TemplateTransportOutcome.ACCEPTED
@@ -238,7 +243,15 @@ async def test_header_template_requests_map_to_the_matching_pipeline_method(
 @pytest.mark.asyncio
 async def test_success_without_message_identity_is_indeterminate() -> None:
     result = await _transport(
-        _Runtime(_Messenger(MessageResult(success=True, recipient="573001112233")))
+        _Runtime(
+            _Messenger(
+                MessageResult(
+                    platform=PlatformType.WHATSAPP,
+                    success=True,
+                    recipient="573001112233",
+                )
+            )
+        )
     ).send(_text_request())
 
     assert result.outcome is TemplateTransportOutcome.INDETERMINATE
@@ -251,6 +264,7 @@ async def test_success_without_message_identity_is_indeterminate() -> None:
     [
         (
             MessageResult(
+                platform=PlatformType.WHATSAPP,
                 success=False,
                 error_code="131026",
                 error="raw response must not escape",
@@ -259,6 +273,7 @@ async def test_success_without_message_identity_is_indeterminate() -> None:
         ),
         (
             MessageResult(
+                platform=PlatformType.WHATSAPP,
                 success=False,
                 error_code="platform_outcome_indeterminate",
                 error="Bearer secret-token",
@@ -267,6 +282,7 @@ async def test_success_without_message_identity_is_indeterminate() -> None:
         ),
         (
             MessageResult(
+                platform=PlatformType.WHATSAPP,
                 success=False,
                 error_code="runtime_unavailable",
                 error="closed session detail",
@@ -354,7 +370,11 @@ def test_authentication_templates_reject_bsuid_recipients(
 
 @pytest.mark.asyncio
 async def test_marketing_fallback_is_explicit_and_recorded() -> None:
-    messenger = _Messenger(MessageResult(success=True, message_id="wamid.fallback"))
+    messenger = _Messenger(
+        MessageResult(
+            platform=PlatformType.WHATSAPP, success=True, message_id="wamid.fallback"
+        )
+    )
     request = _text_request(
         category=TemplateCategory.MARKETING,
         routing=TemplateTransportRouting(
@@ -385,7 +405,11 @@ def test_template_routes_require_explicit_capability_and_mount_once() -> None:
 @pytest.mark.asyncio
 async def test_transport_reuses_credentials_the_caller_already_resolved() -> None:
     """A route holding an InboxExecutionContext must not make the directory answer twice."""
-    messenger = _Messenger(MessageResult(success=True, message_id="wamid.reuse"))
+    messenger = _Messenger(
+        MessageResult(
+            platform=PlatformType.WHATSAPP, success=True, message_id="wamid.reuse"
+        )
+    )
     runtime = _Runtime(messenger)
     resolved = object()
 
@@ -405,7 +429,11 @@ async def test_transport_without_caller_credentials_resolves_through_the_runtime
     None
 ):
     """Non-HTTP callers pass nothing and let the runtime resolve the Inbox itself."""
-    messenger = _Messenger(MessageResult(success=True, message_id="wamid.noreuse"))
+    messenger = _Messenger(
+        MessageResult(
+            platform=PlatformType.WHATSAPP, success=True, message_id="wamid.noreuse"
+        )
+    )
     runtime = _Runtime(messenger)
 
     transport = InboxTemplateTransport(runtime=runtime, inbox_id="inbox-1")  # type: ignore[arg-type]

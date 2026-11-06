@@ -137,7 +137,7 @@ from wappa.core.messaging.pipeline import (
     SendNext,
     PRIORITY_CACHE,
 )
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
+from wappa.domain.results import MessageResult
 
 
 class CacheMessengerMiddleware(MessengerMiddleware):

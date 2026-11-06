@@ -118,7 +118,15 @@ class StateCommandsScore(ScoreBase):
 
             # Mark message as read with typing indicator first
             await self.messenger.mark_as_read(
-                message_id=webhook.message.message_id, typing=True
+                webhook.message.message_id,
+                DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=webhook.user.delivery_addresses(),
+                ),
+                typing=True,
             )
 
             # Send activation message
@@ -180,7 +188,15 @@ class StateCommandsScore(ScoreBase):
 
                 # Mark message as read with typing indicator first
                 await self.messenger.mark_as_read(
-                    message_id=webhook.message.message_id, typing=True
+                    webhook.message.message_id,
+                    DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=self.messenger.platform,
+                            inbox_id=self.messenger.inbox_id,
+                        ),
+                        addresses=webhook.user.delivery_addresses(),
+                    ),
+                    typing=True,
                 )
 
                 # Send exit message
@@ -260,7 +276,15 @@ class StateCommandsScore(ScoreBase):
 
                 # Mark message as read with typing indicator first
                 await self.messenger.mark_as_read(
-                    message_id=webhook.message.message_id, typing=True
+                    webhook.message.message_id,
+                    DirectMessage(
+                        inbox_ref=InboxRef(
+                            platform=self.messenger.platform,
+                            inbox_id=self.messenger.inbox_id,
+                        ),
+                        addresses=webhook.user.delivery_addresses(),
+                    ),
+                    typing=True,
                 )
 
                 # Send WAPPA response

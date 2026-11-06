@@ -3,26 +3,18 @@
 from typing import Any
 
 from wappa.core.logging.logger import get_logger
-from wappa.domain.interactive import ReplyButton
+from wappa.domain.interactive import ButtonHeader, ListSection, ReplyButton
+from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
+from wappa.messaging.whatsapp.models.basic_models import message_result_from_payload
 from wappa.messaging.whatsapp.models.interactive_models import (
-    HeaderType,
-    InteractiveHeader,
-    ListSection,
     validate_buttons_menu_limits,
-    validate_header_constraints,
 )
 from wappa.messaging.whatsapp.utils.error_helpers import handle_whatsapp_error
 from wappa.schemas.core.recipient import apply_recipient_to_payload
 from wappa.schemas.core.types import PlatformType
 
-_VALID_HEADER_TYPES = {
-    HeaderType.TEXT,
-    HeaderType.IMAGE,
-    HeaderType.VIDEO,
-    HeaderType.DOCUMENT,
-}
+_HEADER_TEXT_MAX = 60
 
 
 class WhatsAppInteractiveHandler:
@@ -45,7 +37,6 @@ class WhatsAppInteractiveHandler:
             recipient_phone=None,
             platform=PlatformType.WHATSAPP,
             inbox_id=self._inbox_id,
-            api_response=None,
         )
 
     def _check_validations(
@@ -55,29 +46,6 @@ class WhatsAppInteractiveHandler:
         for condition, error, code in validations:
             if condition:
                 return self._validation_error(error, code, recipient)
-        return None
-
-    def _validate_media_header(
-        self, header: InteractiveHeader, recipient: str
-    ) -> MessageResult | None:
-        match header.type:
-            case HeaderType.IMAGE:
-                media_field, media_name = header.image, "Image"
-            case HeaderType.VIDEO:
-                media_field, media_name = header.video, "Video"
-            case HeaderType.DOCUMENT:
-                media_field, media_name = header.document, "Document"
-            case _:
-                return None
-
-        if not media_field or (
-            not media_field.get("id") and not media_field.get("link")
-        ):
-            return self._validation_error(
-                f"{media_name} header must include either 'id' or 'link'",
-                "INVALID_MEDIA_HEADER",
-                recipient,
-            )
         return None
 
     def _build_interactive_payload(
@@ -101,24 +69,22 @@ class WhatsAppInteractiveHandler:
         self, payload: dict[str, Any], recipient: str
     ) -> MessageResult:
         response = await self.client.post_request(payload)
-        return MessageResult.from_response_payload(
+        return message_result_from_payload(
             response,
             inbox_id=self._inbox_id,
             fallback_recipient=recipient,
         )
 
-    def _build_header_dict(self, header: InteractiveHeader) -> dict[str, Any]:
-        header_dict: dict[str, Any] = {"type": header.type.value}
-        match header.type:
-            case HeaderType.TEXT:
-                header_dict["text"] = header.text
-            case HeaderType.IMAGE if header.image:
-                header_dict["image"] = header.image
-            case HeaderType.VIDEO if header.video:
-                header_dict["video"] = header.video
-            case HeaderType.DOCUMENT if header.document:
-                header_dict["document"] = header.document
-        return header_dict
+    @staticmethod
+    def _build_header_dict(header: ButtonHeader) -> dict[str, Any]:
+        if header.text is not None:
+            return {"type": "text", "text": header.text}
+        image = (
+            {"link": str(header.image_url)}
+            if header.image_url is not None
+            else {"id": header.image_media_id}
+        )
+        return {"type": "image", "image": image}
 
     @property
     def platform(self) -> PlatformType:
@@ -133,14 +99,12 @@ class WhatsAppInteractiveHandler:
         recipient: str,
         body: str,
         buttons: list[ReplyButton],
-        header: InteractiveHeader | None = None,
+        header: ButtonHeader | None = None,
         footer_text: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
         try:
             validate_buttons_menu_limits(buttons)
-            if header:
-                validate_header_constraints(header, footer_text)
 
             basic_validations: list[tuple[bool, str, str]] = [
                 (
@@ -157,22 +121,15 @@ class WhatsAppInteractiveHandler:
             if error := self._check_validations(basic_validations, recipient):
                 return error
 
-            if header:
+            if header and header.text is not None:
                 header_validations: list[tuple[bool, str, str]] = [
                     (
-                        header.type not in _VALID_HEADER_TYPES,
-                        f"Header type must be one of {[t.value for t in _VALID_HEADER_TYPES]}",
-                        "INVALID_HEADER_TYPE",
-                    ),
-                    (
-                        header.type == HeaderType.TEXT and not header.text,
-                        "Text header must include 'text' field",
-                        "INVALID_TEXT_HEADER",
+                        len(header.text) > _HEADER_TEXT_MAX,
+                        f"Header text cannot exceed {_HEADER_TEXT_MAX} characters",
+                        "HEADER_TOO_LONG",
                     ),
                 ]
                 if error := self._check_validations(header_validations, recipient):
-                    return error
-                if error := self._validate_media_header(header, recipient):
                     return error
 
             formatted_buttons = []
@@ -235,7 +192,7 @@ class WhatsAppInteractiveHandler:
         body: str,
         button_text: str,
         sections: list[ListSection],
-        header: str | None = None,
+        header: ButtonHeader | None = None,
         footer_text: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
@@ -265,8 +222,15 @@ class WhatsAppInteractiveHandler:
                     "TOO_MANY_SECTIONS",
                 ),
                 (
-                    header is not None and len(header) > 60,
-                    "Header text cannot exceed 60 characters",
+                    header is not None and header.text is None,
+                    "WhatsApp list messages accept only a text header",
+                    "INVALID_HEADER_TYPE",
+                ),
+                (
+                    header is not None
+                    and header.text is not None
+                    and len(header.text) > _HEADER_TEXT_MAX,
+                    f"Header text cannot exceed {_HEADER_TEXT_MAX} characters",
                     "HEADER_TOO_LONG",
                 ),
                 (
@@ -345,7 +309,7 @@ class WhatsAppInteractiveHandler:
                 reply_to_message_id=reply_to_message_id,
             )
             if header:
-                payload["interactive"]["header"] = {"type": "text", "text": header}
+                payload["interactive"]["header"] = self._build_header_dict(header)
             if footer_text:
                 payload["interactive"]["footer"] = {"text": footer_text}
 

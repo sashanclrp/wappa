@@ -84,4 +84,4 @@ if got.found:
 
 ## Sender actions
 
-To acknowledge an inbound message on any Platform, call `await self.messenger.mark_as_read(message_id, typing=True, target=target)`. On WhatsApp it marks that message read and shows typing. On Instagram it marks the thread seen (there is no per-message seen), then sends `typing_on`, and it needs `target`. It returns a `MessageResult`. It is not a message, and it is the only seen/typing call on every Platform.
+To acknowledge an inbound message on any Platform, call `await self.messenger.mark_as_read(message_id, target, typing=True)`; `target` is required and `typing` is keyword-only. On WhatsApp it marks that message read and shows typing. On Instagram it marks the thread seen (there is no per-message seen), then sends `typing_on`. It returns a `MessageResult`. It is not a message, and it is the only seen/typing call on every Platform.

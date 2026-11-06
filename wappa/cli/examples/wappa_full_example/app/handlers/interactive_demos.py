@@ -9,16 +9,10 @@ here as plain Messenger calls a handler can invoke.
 from __future__ import annotations
 
 from wappa.domain.inbox.identity import InboxRef
-from wappa.domain.interactive import ReplyButton
+from wappa.domain.interactive import ButtonHeader, ListRow, ListSection, ReplyButton
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
-from wappa.messaging.whatsapp.models.interactive_models import (
-    HeaderType,
-    InteractiveHeader,
-    ListRow,
-    ListSection,
-)
+from wappa.domain.results import MessageResult
 
 
 async def send_complex_button_demo(
@@ -30,7 +24,7 @@ async def send_complex_button_demo(
         ReplyButton(id="no_button", title="No"),
         ReplyButton(id="maybe_button", title="Maybe"),
     ]
-    header = InteractiveHeader(type=HeaderType.TEXT, text="Quick Decision Required")
+    header = ButtonHeader(text="Quick Decision Required")
     return await messenger.send_button_message(
         buttons=buttons,
         target=DirectMessage(
@@ -110,6 +104,6 @@ async def send_menu_list_demo(messenger: IMessenger, recipient: str) -> MessageR
             "you'd like to order."
         ),
         button_text="View Menu",
-        header="Restaurant Menu",
+        header=ButtonHeader(text="Restaurant Menu"),
         footer="Prices include tax - Free delivery over $25",
     )

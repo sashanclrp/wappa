@@ -26,7 +26,15 @@ from wappa.domain.contacts import (
     ContactPhone,
     ContactUrl,
 )
-from wappa.domain.interactive import CardButton, MessageCard, ReplyButton, UrlButton
+from wappa.domain.interactive import (
+    ButtonHeader,
+    CardButton,
+    ListRow,
+    ListSection,
+    MessageCard,
+    ReplyButton,
+    UrlButton,
+)
 from wappa.domain.interfaces.conversation_capabilities import (
     CommentContent,
     ContentPage,
@@ -67,12 +75,6 @@ from wappa.domain.results import (
     MessageResult,
     OperationOutcome,
     message_outcome,
-)
-from wappa.messaging.whatsapp.models.interactive_models import (
-    HeaderType,
-    InteractiveHeader,
-    ListRow,
-    ListSection,
 )
 
 from .classification import (
@@ -131,8 +133,7 @@ __all__ = [
     "MessageCard",
     "ListSection",
     "ListRow",
-    "InteractiveHeader",
-    "HeaderType",
+    "ButtonHeader",
     # Results
     "MessageResult",
     "CommentResult",

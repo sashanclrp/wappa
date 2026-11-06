@@ -6,8 +6,8 @@ import pytest
 
 from wappa.core.messaging.pipeline import MessengerPipeline, SendInvocation
 from wappa.domain.inbox import InboxRef
+from wappa.domain.results import MessageResult
 from wappa.messaging import DeliveryAddresses, DirectMessage, ITemplateMessaging
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.schemas.core.types import PlatformType
 
 
@@ -35,7 +35,9 @@ class _StrictTemplateMessenger:
         authentication_method: str | None = None,
         authentication_button_index: int = 0,
     ) -> MessageResult:
-        return MessageResult(success=True, message_id="text-tmpl-ok")
+        return MessageResult(
+            platform=PlatformType.WHATSAPP, success=True, message_id="text-tmpl-ok"
+        )
 
     async def send_media_template(
         self,
@@ -50,7 +52,9 @@ class _StrictTemplateMessenger:
         template_type: str,
         routing_policy: str = "category_default",
     ) -> MessageResult:
-        return MessageResult(success=True, message_id="media-tmpl-ok")
+        return MessageResult(
+            platform=PlatformType.WHATSAPP, success=True, message_id="media-tmpl-ok"
+        )
 
     async def send_location_template(
         self,
@@ -66,7 +70,9 @@ class _StrictTemplateMessenger:
         template_type: str,
         routing_policy: str = "category_default",
     ) -> MessageResult:
-        return MessageResult(success=True, message_id="loc-tmpl-ok")
+        return MessageResult(
+            platform=PlatformType.WHATSAPP, success=True, message_id="loc-tmpl-ok"
+        )
 
 
 @pytest.fixture

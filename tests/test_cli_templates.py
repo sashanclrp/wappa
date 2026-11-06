@@ -48,9 +48,8 @@ async def test_master_event_template_replies_to_a_direct_message() -> None:
 
     await handler.process_message(webhook)
 
-    (_, read_args, read_kwargs), (_, send_args, _) = handler.messenger.calls
-    assert read_args == ("wamid.1",)
+    (_, read_args, _), (_, send_args, _) = handler.messenger.calls
     target = send_args[1]
     assert isinstance(target, DirectMessage)
     assert target.inbox_ref == inbox_ref
-    assert read_kwargs["target"] == target
+    assert read_args == ("wamid.1", target)

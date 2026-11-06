@@ -24,6 +24,7 @@ Usage (User Request: Quick access to WhatsApp models for endpoint schemas):
 
 # Re-export WhatsApp models with cleaner path (User Request: Quick access)
 from ..domain.contacts import ContactCard
+from ..domain.results import MessageResult
 from ..messaging.whatsapp.models import (
     AudioMessage,
     # Basic Models
@@ -43,7 +44,6 @@ from ..messaging.whatsapp.models import (
     LocationValidationResult,
     # Media Models
     MediaType,
-    MessageResult,
     PersonalContact,
     ReadStatusMessage,
     StickerMessage,

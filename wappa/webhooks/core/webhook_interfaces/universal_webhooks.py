@@ -58,35 +58,6 @@ class SystemEventType(StrEnum):
     UNSUPPORTED_EVENT = "unsupported_event"
 
 
-class WhatsAppIncomingWebhookData(BaseModel):
-    """WhatsApp-specific sender data for incoming webhooks."""
-
-    model_config = ConfigDict(
-        extra="forbid", str_strip_whitespace=True, validate_assignment=True
-    )
-
-    wa_id: str | None = Field(
-        default=None,
-        description="WhatsApp numeric user ID / phone number if available",
-    )
-    bsuid: str | None = Field(
-        default=None,
-        description="Business Scoped User ID if available",
-    )
-    parent_bsuid: str | None = Field(
-        default=None,
-        description="Parent Business Scoped User ID if available",
-    )
-    username: str | None = Field(
-        default=None,
-        description="WhatsApp username if available",
-    )
-    country_code: str | None = Field(
-        default=None,
-        description="WhatsApp country code if available",
-    )
-
-
 class InboundMessageWebhook(BaseModel):
     """
     Universal interface for all incoming messages from users to businesses.
@@ -105,10 +76,6 @@ class InboundMessageWebhook(BaseModel):
     # Core identification
     inbox: InboxBase = Field(description="Business inbox identification")
     user: UserBase = Field(description="User/sender identification")
-    whatsapp: WhatsAppIncomingWebhookData | None = Field(
-        default=None,
-        description="WhatsApp-specific sender data",
-    )
 
     # Message content (supports all message types)
     message: BaseMessage = Field(

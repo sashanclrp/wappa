@@ -9,13 +9,8 @@ import time
 from typing import Any
 
 from wappa.domain.inbox.identity import InboxRef
-from wappa.domain.interactive import ReplyButton
+from wappa.domain.interactive import ButtonHeader, ListRow, ListSection, ReplyButton
 from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
-from wappa.messaging.whatsapp.models.interactive_models import (
-    InteractiveHeader,
-    ListRow,
-    ListSection,
-)
 from wappa.webhooks import InboundMessageWebhook
 
 from ..models.state_models import ButtonState, ListState, StateType
@@ -100,7 +95,7 @@ class CommandHandlers:
                     addresses=DeliveryAddresses.of(user_id),
                 ),
                 body="🎯 *Button Demo Activated!*\n\nChoose your favorite animal below. You have 10 minutes to make your selection, or the state will expire automatically.",
-                header=InteractiveHeader(type="text", text="Interactive Button Demo"),
+                header=ButtonHeader(text="Interactive Button Demo"),
                 footer="⏰ Expires in 10 minutes",
                 reply_to_message_id=message_id,
             )
@@ -237,7 +232,7 @@ class CommandHandlers:
                 ),
                 body="🎯 *List Demo Activated!*\n\nSelect the type of media file you want to receive. You have 10 minutes to make your selection, or the state will expire automatically.",
                 button_text="Choose Media",
-                header="Interactive List Demo",
+                header=ButtonHeader(text="Interactive List Demo"),
                 footer="⏰ Expires in 10 minutes",
                 reply_to_message_id=message_id,
             )

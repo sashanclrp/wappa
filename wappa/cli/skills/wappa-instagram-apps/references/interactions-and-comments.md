@@ -21,7 +21,7 @@ One Messenger method per action, identical on WhatsApp and Instagram (ADR-0016).
 
 ```python
 from wappa.messaging import (
-    HeaderType, InteractiveHeader, ListRow, ListSection, MessageCard, ReplyButton, UrlButton,
+    ButtonHeader, ListRow, ListSection, MessageCard, ReplyButton, UrlButton,
 )
 
 await m.send_list_message(
@@ -34,7 +34,7 @@ await m.send_button_message(
 )
 await m.send_button_message(  # one card: image header
     buttons=[ReplyButton(id="plan:pro", title="Choose")], target=target, body="Pro", footer="$29/mo",
-    header=InteractiveHeader(type=HeaderType.IMAGE, image={"link": "https://example.com/pro.png"}),
+    header=ButtonHeader(image_url="https://example.com/pro.png"),
 )
 await m.send_cta_message(button_text="Pricing", button_url="https://example.com/pricing", target=target, body="See plans")
 await m.send_carousel(
@@ -46,8 +46,8 @@ await m.send_carousel(
 
 Instagram mappings and limits (checked before any provider call):
 
-- `send_list_message` → quick replies. All rows are flattened, at most 13, row title 20 characters or fewer, and the row `id` is the payload. Section titles, row descriptions and `button_text` are dropped; header and footer fold into the text.
-- `send_button_message` → button template: text at most 640 characters, 1–3 `ReplyButton`s with titles of 20 or fewer. A text header and footer fold into the text. An image header turns it into a one-card generic template (body = title, footer = subtitle, each at most 80). Video and document headers raise `UnsupportedOperationError`.
+- `send_list_message` → quick replies. All rows are flattened, at most 13, row title 20 characters or fewer, and the row `id` is the payload. Section titles, row descriptions and `button_text` are dropped; a text header (`ButtonHeader(text=...)`) and footer fold into the text, and an image header raises `UnsupportedOperationError`.
+- `send_button_message` → button template: text at most 640 characters, 1–3 `ReplyButton`s with titles of 20 or fewer. A text header and footer fold into the text. An image header (`ButtonHeader(image_url=...)`) turns it into a one-card generic template (body = title, footer = subtitle, each at most 80). A `ButtonHeader(image_media_id=...)` raises `UnsupportedOperationError`, because Instagram cannot reference a media ID in a header.
 - `send_cta_message` → button template with one URL button.
 - `send_carousel` → 2–10 cards; `body` is sent first as a text message, then a generic template (title/subtitle at most 80, up to 3 buttons). On WhatsApp every card needs `image_url`, title + subtitle become a 160-character card body, and every card carries the same buttons kind and count (one `UrlButton` or 1–2 `ReplyButton`s). For a single card, use `send_button_message` with an image header.
 
@@ -84,7 +84,7 @@ result = await controls.reply_comment(webhook.comment_ref, "Thanks!")   # public
 dm = await m.send_text("Here is the price list…", target=PrivateReply(comment_ref=webhook.comment_ref))
 ```
 
-A private reply is text only, and only one is allowed per comment: within 7 days for posts/Reels, and only during the broadcast for Live. The DM lands in Requests unless the User follows you. You may send ordinary `DirectMessage`s only after the User answers, and only within 24 hours of that answer. Never build a `DirectMessage` from a commenter's ID, and never switch between public and private silently. Public replies work only on top-level, non-hidden comments, and not on Live. `PrivateReply` is Instagram-only, and any other send rejects it.
+A private reply is text only, and only one is allowed per comment: within 7 days for posts/Reels, and only during the broadcast for Live. The DM lands in Requests unless the User follows you. You may send ordinary `DirectMessage`s only after the User answers, and only within 24 hours of that answer. Never build a `DirectMessage` from a commenter's ID, and never switch between public and private silently. Public replies work only on top-level, non-hidden comments, and not on Live. `send_text` is the only send that accepts a `PrivateReply`, and only Instagram delivers it today; every other send, and every other Platform's adapter, rejects it.
 
 ## Comment Controls
 

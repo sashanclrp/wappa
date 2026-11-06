@@ -98,9 +98,7 @@ async def test_create_universal_webhook_accepts_contact_without_profile() -> Non
     assert webhook.user.user_id == "CO.2186878922080769"  # BSUID preferred (v0.3.3)
     assert webhook.user.phone_number == "573168227670"
     assert webhook.user.bsuid == "CO.2186878922080769"
-    assert webhook.whatsapp is not None
-    assert webhook.whatsapp.wa_id == "573168227670"
-    assert webhook.whatsapp.bsuid == "CO.2186878922080769"
+    assert not hasattr(webhook, "whatsapp")
 
 
 def test_user_id_prefers_bsuid_over_phone() -> None:

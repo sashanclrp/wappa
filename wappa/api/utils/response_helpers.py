@@ -5,8 +5,6 @@ Provides common data transformation functions to eliminate duplication
 across route handlers.
 """
 
-from typing import Any
-
 
 def convert_body_parameters(
     body_parameters: list | None,
@@ -51,7 +49,7 @@ def convert_list_sections_to_dict(sections: list) -> list[dict]:
     """Convert Pydantic list sections to dict format for messenger.
 
     Args:
-        sections: List of ListSection Pydantic models
+        sections: List of ListSection values
 
     Returns:
         List of section dicts with 'title' and 'rows' keys
@@ -66,29 +64,3 @@ def convert_list_sections_to_dict(sections: list) -> list[dict]:
             section_dict["rows"].append(row_dict)
         result.append(section_dict)
     return result
-
-
-def convert_header_to_dict(header: Any) -> dict[str, str] | None:
-    """Convert InteractiveHeader Pydantic model to dict format.
-
-    Args:
-        header: InteractiveHeader Pydantic model or None
-
-    Returns:
-        Dict format expected by messenger, or None if no header
-    """
-    if not header:
-        return None
-
-    header_dict = {"type": header.type.value}
-
-    if header.type.value == "text" and header.text:
-        header_dict["text"] = header.text
-    elif header.type.value == "image" and header.image:
-        header_dict["image"] = header.image
-    elif header.type.value == "video" and header.video:
-        header_dict["video"] = header.video
-    elif header.type.value == "document" and header.document:
-        header_dict["document"] = header.document
-
-    return header_dict

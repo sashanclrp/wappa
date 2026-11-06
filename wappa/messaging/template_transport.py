@@ -28,7 +28,7 @@ from wappa.domain.interfaces.session_provider import (
     RuntimeDrainingError,
 )
 from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
+from wappa.domain.results import MessageResult
 from wappa.schemas.core.recipient import RecipientKind, resolve_recipient
 
 if TYPE_CHECKING:

@@ -461,7 +461,15 @@ class WappaFullExampleHandler(WappaEventHandler):
         try:
             assert self.messenger is not None
             result = await self.messenger.mark_as_read(
-                message_id=webhook.message.message_id, typing=False
+                webhook.message.message_id,
+                DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=webhook.user.delivery_addresses(),
+                ),
+                typing=False,
             )
 
             if result.success:

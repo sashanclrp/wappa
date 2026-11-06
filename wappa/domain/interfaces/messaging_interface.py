@@ -17,12 +17,13 @@ from wappa.domain.messaging_targets import (
 from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
-    from wappa.domain.interactive import MessageCard, ReplyButton
-    from wappa.messaging.whatsapp.models.basic_models import MessageResult
-    from wappa.messaging.whatsapp.models.interactive_models import (
-        InteractiveHeader,
+    from wappa.domain.interactive import (
+        ButtonHeader,
         ListSection,
+        MessageCard,
+        ReplyButton,
     )
+    from wappa.domain.results import MessageResult
 
 TemplateBodyParameters = list[dict] | None
 TemplateRoutingPolicyValue = str
@@ -89,16 +90,17 @@ class IMessenger(ABC):
     async def mark_as_read(
         self,
         message_id: str,
+        target: DirectMessage,
+        *,
         typing: bool = False,
-        target: DirectMessage | None = None,
     ) -> MessageResult:
         """Acknowledge the User's inbound message, optionally showing typing.
 
         One call for every Platform. WhatsApp marks ``message_id`` read and,
         with ``typing``, shows the indicator until the reply (or ~25 s).
-        Instagram has no per-message read: it marks the thread seen, then
-        ``typing_on``, so it needs ``target``. Passing ``target`` everywhere
-        keeps host code Platform-neutral; WhatsApp only checks its Inbox.
+        Instagram has no per-message read: it marks the thread seen named by
+        ``target``, then ``typing_on``. WhatsApp only checks ``target``
+        against its Inbox.
         """
         raise UnsupportedOperationError(
             f"{self.platform.value} does not support mark_as_read"
@@ -198,7 +200,7 @@ class IMessenger(ABC):
         buttons: list[ReplyButton],
         target: DirectMessage,
         body: str,
-        header: InteractiveHeader | None = None,
+        header: ButtonHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
@@ -212,7 +214,7 @@ class IMessenger(ABC):
         target: DirectMessage,
         body: str,
         button_text: str,
-        header: str | None = None,
+        header: ButtonHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:

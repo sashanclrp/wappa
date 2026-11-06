@@ -22,7 +22,7 @@ from wappa.domain.interfaces.messaging_interface import (
 from wappa.domain.messaging_targets import DirectMessage
 
 if TYPE_CHECKING:
-    from wappa.messaging.whatsapp.models.basic_models import MessageResult
+    from wappa.domain.results import MessageResult
 
 
 class ITemplateMessaging(ABC):

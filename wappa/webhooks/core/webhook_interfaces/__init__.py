@@ -59,7 +59,6 @@ from .universal_webhooks import (
     SystemEventType,
     SystemWebhook,
     UniversalWebhook,
-    WhatsAppIncomingWebhookData,
 )
 
 __all__ = [
@@ -74,7 +73,6 @@ __all__ = [
     # Universal webhook interfaces
     "InboundMessageWebhook",
     "CallWebhook",
-    "WhatsAppIncomingWebhookData",
     "StatusWebhook",
     "ErrorWebhook",
     "SystemWebhook",

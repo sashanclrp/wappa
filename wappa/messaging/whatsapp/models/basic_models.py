@@ -1,19 +1,12 @@
 """Basic message models for WhatsApp messaging."""
 
-from datetime import UTC, datetime
-from typing import Self
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
-from wappa.schemas.core.recipient import (
-    DeliveryRequest,
-    looks_like_bsuid,
-)
+from wappa.domain.results import MessageResult
+from wappa.schemas.core.recipient import DeliveryRequest
 from wappa.schemas.core.types import PlatformType
-
-
-def _utc_now() -> datetime:
-    return datetime.now(UTC)
 
 
 class ResponseProfile(BaseModel):
@@ -98,102 +91,53 @@ class WhatsAppAPIResponse(BaseModel):
         return contact.recipient_id if contact else None
 
 
-class MessageResult(BaseModel):
-    model_config = ConfigDict(use_enum_values=True)
+def message_result_from_api_response(
+    response: WhatsAppAPIResponse,
+    *,
+    success: bool = True,
+    inbox_id: str | None = None,
+    error: str | None = None,
+    error_code: str | None = None,
+    raw: dict[str, Any] | None = None,
+) -> MessageResult:
+    """Build the neutral ``MessageResult`` from a parsed Cloud API response.
 
-    platform_response: dict | None = Field(
-        default=None, exclude=True, description="Native non-WhatsApp response evidence"
-    )
-    success: bool
-    platform: PlatformType = PlatformType.WHATSAPP
-    message_id: str | None = None
-    recipient: str | None = Field(
-        None,
-        description="Recipient identifier (BSUID if available, else phone number)",
-    )
-    recipient_bsuid: str | None = Field(
-        None,
-        description="Business Scoped User ID if message was sent to BSUID",
-    )
-    recipient_phone: str | None = Field(
-        None,
-        description="Recipient phone evidence, excluding proven BSUID digit echoes",
-    )
-    recipient_parent_bsuid: str | None = None
-    recipient_username: str | None = None
-    attempted_recipients: tuple[str, ...] = Field(
-        default=(),
-        description=(
-            "Every Delivery Address tried, in order, when the adapter fell back "
-            "(ADR-0019); empty when the first address decided the outcome"
+    ``raw`` is the native response body; when absent, the parsed response is
+    dumped so ``platform_response`` always carries the native evidence.
+    """
+    contact = response.primary_contact
+    return MessageResult(
+        success=success,
+        platform=PlatformType.WHATSAPP,
+        message_id=response.message_id,
+        recipient=contact.recipient_id if contact else None,
+        recipient_bsuid=contact.bsuid if contact else None,
+        recipient_phone=contact.wa_id if contact and contact.wa_id else None,
+        recipient_parent_bsuid=contact.parent_bsuid if contact else None,
+        recipient_username=contact.resolved_username if contact else None,
+        inbox_id=inbox_id,
+        error=error,
+        error_code=error_code,
+        platform_response=(
+            raw if raw is not None else response.model_dump(by_alias=True)
         ),
     )
-    error: str | None = None
-    error_code: str | None = None
-    timestamp: datetime = Field(default_factory=_utc_now)
-    inbox_id: str | None = None
-    api_response: WhatsAppAPIResponse | None = Field(
-        None,
-        description="Full API response (for advanced use cases)",
-        exclude=True,
+
+
+def message_result_from_payload(
+    response_payload: dict[str, Any],
+    *,
+    inbox_id: str | None = None,
+    fallback_recipient: str | None = None,
+) -> MessageResult:
+    """Build the neutral ``MessageResult`` from a raw Cloud API send response."""
+    response = WhatsAppAPIResponse.model_validate(response_payload)
+    result = message_result_from_api_response(
+        response, inbox_id=inbox_id, raw=response_payload
     )
-
-    @model_validator(mode="after")
-    def _exclude_bsuid_digit_echo(self) -> Self:
-        if not self.recipient_phone:
-            return self
-
-        phone = self.recipient_phone.strip().removeprefix("+")
-        for identifier in (
-            self.recipient_bsuid,
-            self.recipient_parent_bsuid,
-            self.recipient,
-        ):
-            if identifier and looks_like_bsuid(identifier):
-                suffix = identifier.strip().rsplit(".", 1)[-1]
-                if suffix.isascii() and suffix.isdigit() and phone == suffix:
-                    self.recipient_phone = None
-                    break
-        return self
-
-    @classmethod
-    def from_api_response(
-        cls,
-        response: WhatsAppAPIResponse,
-        *,
-        success: bool = True,
-        inbox_id: str | None = None,
-        error: str | None = None,
-        error_code: str | None = None,
-    ) -> "MessageResult":
-        contact = response.primary_contact
-        return cls(
-            success=success,
-            message_id=response.message_id,
-            recipient=contact.recipient_id if contact else None,
-            recipient_bsuid=contact.bsuid if contact else None,
-            recipient_phone=contact.wa_id if contact and contact.wa_id else None,
-            recipient_parent_bsuid=contact.parent_bsuid if contact else None,
-            recipient_username=contact.resolved_username if contact else None,
-            inbox_id=inbox_id,
-            error=error,
-            error_code=error_code,
-            api_response=response,
-        )
-
-    @classmethod
-    def from_response_payload(
-        cls,
-        response_payload: dict,
-        *,
-        inbox_id: str | None = None,
-        fallback_recipient: str | None = None,
-    ) -> "MessageResult":
-        response = WhatsAppAPIResponse.model_validate(response_payload)
-        result = cls.from_api_response(response, inbox_id=inbox_id)
-        if result.recipient is None:
-            result.recipient = fallback_recipient
-        return result
+    if result.recipient is None:
+        result.recipient = fallback_recipient
+    return result
 
 
 class BasicTextMessage(DeliveryRequest):
@@ -210,11 +154,12 @@ class BasicTextMessage(DeliveryRequest):
 
 class ReadStatusMessage(BaseModel):
     message_id: str = Field(..., min_length=1, description="Message ID to mark as read")
-    recipient: str | None = Field(
-        None,
+    recipient: str = Field(
+        ...,
+        min_length=1,
         description=(
-            "The User whose thread to mark. Required on Instagram (no per-message "
-            "read); optional on WhatsApp"
+            "The User who sent the message; Instagram marks this User's thread "
+            "seen, WhatsApp checks it against the Inbox"
         ),
     )
     typing: bool = Field(

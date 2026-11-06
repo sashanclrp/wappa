@@ -35,7 +35,6 @@ if TYPE_CHECKING:
         SystemWebhook,
         UniversalWebhook,
         UserBase,
-        WhatsAppIncomingWebhookData,
     )
     from wappa.webhooks.whatsapp.coexistence_events import (
         CoexistenceMessage,
@@ -761,7 +760,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
 
         # Create user base from contacts
         user_base = self._create_user_base_from_contacts(webhook, message.sender_id)
-        whatsapp_data = self._create_whatsapp_incoming_data(webhook, message.sender_id)
 
         # Extract WhatsApp-specific contexts
         business_context = self._extract_business_context(raw_message)
@@ -771,7 +769,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
         return InboundMessageWebhook(
             inbox=inbox_base,
             user=user_base,
-            whatsapp=whatsapp_data,
             message=message,
             business_context=business_context,
             forward_context=forward_context,
@@ -1425,29 +1422,6 @@ class WhatsAppWebhookProcessor(BaseWebhookProcessor):
             country_code=None,
             profile_name=None,
             identity_key_hash=None,
-        )
-
-    def _create_whatsapp_incoming_data(
-        self, webhook: "WhatsAppWebhook", sender_id: str
-    ) -> "WhatsAppIncomingWebhookData":
-        from wappa.webhooks.core.webhook_interfaces import WhatsAppIncomingWebhookData
-
-        for contact in webhook.get_contacts():
-            if contact.user_id == sender_id:
-                return WhatsAppIncomingWebhookData(
-                    wa_id=getattr(contact, "wa_id", None) or None,
-                    bsuid=getattr(contact, "bsuid", None),
-                    parent_bsuid=getattr(contact, "parent_bsuid", None),
-                    username=getattr(contact, "username", None),
-                    country_code=getattr(contact, "country_code", None),
-                )
-
-        return WhatsAppIncomingWebhookData(
-            wa_id=sender_id if looks_like_phone_number(sender_id) else None,
-            bsuid=sender_id if looks_like_bsuid(sender_id) else None,
-            parent_bsuid=None,
-            username=None,
-            country_code=None,
         )
 
     def _create_status_user_from_contacts(

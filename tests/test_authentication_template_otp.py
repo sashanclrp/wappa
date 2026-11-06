@@ -19,6 +19,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from wappa.domain.results import MessageResult
 from wappa.messaging import (
     BsuidTemplateRecipient,
     LocationTemplateTransportRequest,
@@ -36,7 +37,6 @@ from wappa.messaging.template_transport import _request_digest, _send_request
 from wappa.messaging.whatsapp.handlers.whatsapp_template_handler import (
     WhatsAppTemplateHandler,
 )
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.messaging.whatsapp.models.template_info_models import TemplateInfo
 from wappa.messaging.whatsapp.models.template_models import (
     TemplateParameter,

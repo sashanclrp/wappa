@@ -41,9 +41,9 @@ Every action that exists on more than one Platform has exactly one `IMessenger` 
 | `send_location(latitude, longitude, target, name=None, address=None)` | location message | text: name, address and a `📍` Google Maps link |
 | `send_contact(contact, target)` | contacts message | text card (👤 name, organization, 📞 phones, ✉️ emails, 🔗 urls), validated with the WhatsApp `ContactCard` shape |
 | `send_location_request` / `send_contact_request` | interactive request | `UnsupportedOperationError`: a text prompt cannot return the data; gate on `supported_operations` |
-| `mark_as_read(message_id, typing=False, target=None)` | marks the message read; `typing` sends the typing indicator | thread-level `mark_seen`, then `typing_on` if `typing` (only after seen is accepted); `target` required; returns `MessageResult` |
-| `send_button_message(buttons, target, body, header=None, footer=None, reply_to_message_id=None)` | interactive reply buttons | button template with postback buttons: text ≤ 640, 1–3 `ReplyButton`, title ≤ 20; text header and footer fold into the text (`"\n\n"`-joined); an image header (`InteractiveHeader(type=HeaderType.IMAGE, image={"link": "https://..."})`) becomes a one-element generic card (body = title ≤ 80, footer = subtitle ≤ 80); video/document headers raise `UnsupportedOperationError` |
-| `send_list_message(sections, target, body, button_text, header=None, footer=None)` | interactive list | quick replies: all rows flattened, ≤ 13, row title ≤ 20, row `id` = payload; section titles, row descriptions and `button_text` are dropped; header/footer fold into the text |
+| `mark_as_read(message_id, target, *, typing=False)` | marks the message read; `typing` sends the typing indicator; `target` is checked against the Inbox | thread-level `mark_seen` on `target`'s thread, then `typing_on` if `typing` (only after seen is accepted); returns `MessageResult` |
+| `send_button_message(buttons, target, body, header=None, footer=None, reply_to_message_id=None)` | interactive reply buttons | button template with postback buttons: text ≤ 640, 1–3 `ReplyButton`, title ≤ 20; text header and footer fold into the text (`"\n\n"`-joined); an image header (`ButtonHeader(image_url="https://...")`) becomes a one-element generic card (body = title ≤ 80, footer = subtitle ≤ 80); `ButtonHeader(image_media_id=...)` raises `UnsupportedOperationError` |
+| `send_list_message(sections, target, body, button_text, header=None, footer=None)` | interactive list; text header only (an image `ButtonHeader` fails with `INVALID_HEADER_TYPE`) | quick replies: all rows flattened, ≤ 13, row title ≤ 20, row `id` = payload; section titles, row descriptions and `button_text` are dropped; a text header and the footer fold into the text; an image header raises `UnsupportedOperationError` |
 | `send_cta_message(...)` | `cta_url` | button template with one `web_url` button; header/footer fold into the text |
 | `send_carousel(cards, target, body)` | 2–10 cards; interactive media carousel; every card needs `image_url`; title + subtitle become the card body (≤ 160); buttons are one `UrlButton` or 1–2 `ReplyButton`s, same kind and count on every card | 2–10 cards; `body` is sent as a text message first, then a generic template (title/subtitle ≤ 80, ≤ 3 buttons) |
 
@@ -53,7 +53,7 @@ For a single card, use `send_button_message` with an image header. Media storage
 
 Known gap: `send_reaction(message_id, emoji, target)` is a missing core method (WhatsApp, Instagram and Telegram all support reactions); no Platform sends reactions yet. Inbound reactions on both Platforms arrive in `process_message` as `BaseReactionMessage`. See `docs/backlog/drafts/261105-mid-send-reaction-core-method.md`.
 
-Interactive values `ReplyButton(id, title)`, `UrlButton`, `CardButton = ReplyButton | UrlButton`, `MessageCard(title, subtitle, image_url, default_url, buttons)`, `ListSection`, `ListRow`, `InteractiveHeader` and `HeaderType`, and results (`MessageResult`, `CommentResult`, `ControlResult`, `OperationOutcome`, `message_outcome`) are exported from `wappa.messaging`. `ReplyButton` lives in the neutral `wappa.domain.interactive` and is re-exported by the WhatsApp models; results live in `wappa.domain.results` (`MessageResult`'s class still lives in the WhatsApp basic-models module). Outcomes are `accepted`/`rejected`/`indeterminate`; indeterminate sends and mutations are never retried.
+Interactive values `ReplyButton(id, title)`, `UrlButton`, `CardButton = ReplyButton | UrlButton`, `MessageCard(title, subtitle, image_url, default_url, buttons)`, `ButtonHeader`, `ListSection(title, rows)` and `ListRow(id, title, description=None)`, and results (`MessageResult`, `CommentResult`, `ControlResult`, `OperationOutcome`, `message_outcome`) are exported from `wappa.messaging`. The interactive values are defined in the neutral `wappa.domain.interactive`, the results in `wappa.domain.results`; no WhatsApp module defines or re-exports them. `ButtonHeader` is the one header of `send_button_message` and `send_list_message`: exactly one of `text`, `image_url` or `image_media_id` (a media ID from the Inbox's own Platform). Video and document headers are not neutral and are not offered. Platform limits (WhatsApp: header text ≤ 60, section and row title ≤ 24, ≤ 10 sections and rows; Instagram: see the table) are checked by each adapter, not by the neutral values; `ListSection` only requires at least one row and unique row IDs. `MessageResult.platform` is required, and `platform_response` is its single native-evidence field (the WhatsApp adapter stores the Cloud API response body there; it is excluded from serialization). Outcomes are `accepted`/`rejected`/`indeterminate`; indeterminate sends and mutations are never retried.
 
 ### Focused capabilities (separate responsibilities and Platform-only exceptions)
 
@@ -141,7 +141,8 @@ DirectMessage is immutable, rejects extra fields/blank recipients, and includes
 InboxRef. Cross-Inbox targets fail before middleware/provider I/O. Bare strings
 and the `recipient` keyword no longer work on IMessenger; there is no compatibility
 wrapper. This applies to WhatsApp sends too. Read actions retain their separate
-message-ID contract. `send_text` additionally accepts PrivateReply (Instagram).
+message-ID contract. `send_text` additionally accepts PrivateReply; adapters
+whose Platform has no comment-addressed replies (WhatsApp) reject it at send.
 WhatsApp REST request models and independent typed Template transport retain
 their recipient inputs and explicitly translate them inside their adapters.
 
@@ -187,7 +188,7 @@ Resolution happens once per request through `get_inbox_execution_context` (`from
 Platform behaviour of the same routes:
 
 - Send routes call the Inbox's own Messenger through `OutboundRuntime` (with app Messenger middleware), so `/api/instagram/messages/send-text` and `/api/whatsapp/messages/send-text` are the same call. `POST /interactive/send-carousel` maps to `send_carousel`.
-- Send bodies (`DeliveryRequest`) take `recipient` plus optional `addresses` (the User's other known addresses; WhatsApp falls back between phone and BSUID, ADR-0019). `mark-as-read` takes an optional `recipient`, required on Instagram.
+- Send bodies (`DeliveryRequest`) take `recipient` plus optional `addresses` (the User's other known addresses; WhatsApp falls back between phone and BSUID, ADR-0019). `mark-as-read` requires `recipient` (the User who sent the message) on every Platform. `send-buttons` takes `header` as a `ButtonHeader` object (`{"text": ...}`, `{"image_url": ...}` or `{"image_media_id": ...}`); `send-list` keeps a plain-text `header`.
 - Every Platform gap answers **501** `"<platform> does not provide <capability>"`. Capability routes gate on what the Inbox's Messenger provides (`requires_capability(kind)`): comments and post reads (`ICommentControls`, `IConversationContentReader`), history (`IConversationHistoryReader`), media upload (`IMediaLibrary`; WhatsApp keeps its Media API handler). Routes with no capability interface yet (Templates, Template info, media info/download/delete, limits, validators, `/health`) are WhatsApp-only.
 - Capability routes: `POST /comments/{id}/reply|hide|unhide`, `DELETE /comments/{id}`, `POST /posts/{media_id}/comments-enabled` (group `comment_controls`), `GET /posts/{media_id}`, `/posts/{media_id}/comments`, `/comments/{id}`, `/comments/{id}/replies`, `/conversations/{user_id}/messages` (always mounted), `POST /messages/send-private-reply` (outbound transport).
 - A Host route that depends on `get_inbox_execution_context` must declare a `{platform}` path parameter.
@@ -672,8 +673,8 @@ and phones without corroborating BSUID evidence do not establish an echo;
 distinct phone values are preserved verbatim.
 
 The canonical recipient, BSUID fields, username, Inbox, Message ID, and send
-outcome are preserved. `ResponseContact.wa_id` and the typed `api_response` remain
-raw provider evidence. `TemplateTransportResult.returned_phone_number` projects
+outcome are preserved. `ResponseContact.wa_id` and the Cloud API body in
+`platform_response` remain raw provider evidence. `TemplateTransportResult.returned_phone_number` projects
 the sanitized phone and remains nullable; an accepted Template with a Message ID
 remains `accepted` when its phone becomes unknown. This adds no discovery call,
 address rewrite, or retry. Host Applications still own durable identity policy.

@@ -4,10 +4,13 @@ import json
 
 import pytest
 
+from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.models.basic_models import (
-    MessageResult,
     WhatsAppAPIResponse,
+    message_result_from_api_response,
+    message_result_from_payload,
 )
+from wappa.schemas.core.types import PlatformType
 
 DIGITS = "988391070925723"
 
@@ -55,6 +58,7 @@ def test_phone_evidence_normalization(
     if construction == "direct":
         result = MessageResult(
             success=True,
+            platform=PlatformType.WHATSAPP,
             message_id="wamid.synthetic.identity-echo",
             recipient=recipient or bsuid or DIGITS,
             recipient_phone=phone,
@@ -65,15 +69,19 @@ def test_phone_evidence_normalization(
         )
     elif construction == "typed":
         response = WhatsAppAPIResponse.model_validate(payload)
-        result = MessageResult.from_api_response(response, inbox_id="inbox-test")
-        assert result.api_response is response
+        result = message_result_from_api_response(response, inbox_id="inbox-test")
+        assert result.platform_response == response.model_dump(by_alias=True)
     else:
-        result = MessageResult.from_response_payload(payload, inbox_id="inbox-test")
+        result = message_result_from_payload(payload, inbox_id="inbox-test")
+        assert result.platform_response == payload
 
     if construction != "direct":
         # Factories already normalize empty provider phones to unknown.
         expected = expected or None
-        assert result.api_response.primary_contact.wa_id == (phone or "")
+        assert result.platform_response is not None
+        native = WhatsAppAPIResponse.model_validate(result.platform_response)
+        assert native.primary_contact is not None
+        assert native.primary_contact.wa_id == (phone or "")
     assert result.recipient_phone == expected
     expected_recipient = recipient or bsuid or phone or DIGITS
     if construction != "direct" and bsuid:
@@ -94,13 +102,18 @@ def test_phone_evidence_normalization(
 
 @pytest.mark.parametrize("recipient", [f"CO.{DIGITS}", f"CO.ENT.{DIGITS}"])
 def test_resolved_bsuid_recipient_also_excludes_echo(recipient: str) -> None:
-    result = MessageResult(success=True, recipient=recipient, recipient_phone=DIGITS)
+    result = MessageResult(
+        success=True,
+        platform=PlatformType.WHATSAPP,
+        recipient=recipient,
+        recipient_phone=DIGITS,
+    )
     assert result.recipient == recipient
     assert result.recipient_phone is None
 
 
 def test_bsuid_input_without_user_id_remains_canonical() -> None:
-    result = MessageResult.from_response_payload(
+    result = message_result_from_payload(
         {
             "contacts": [{"input": f"CO.{DIGITS}", "wa_id": ""}],
             "messages": [{"id": "wamid.input-only"}],
@@ -111,7 +124,7 @@ def test_bsuid_input_without_user_id_remains_canonical() -> None:
 
 
 def test_error_semantics_survive_phone_normalization() -> None:
-    result = MessageResult.from_api_response(
+    result = message_result_from_api_response(
         WhatsAppAPIResponse.model_validate(
             {
                 "contacts": [
@@ -130,7 +143,7 @@ def test_error_semantics_survive_phone_normalization() -> None:
 
 
 def test_unrelated_contacts_and_requested_address_are_not_corroboration() -> None:
-    result = MessageResult.from_response_payload(
+    result = message_result_from_payload(
         {
             "contacts": [
                 {"input": DIGITS, "wa_id": DIGITS},
@@ -142,3 +155,16 @@ def test_unrelated_contacts_and_requested_address_are_not_corroboration() -> Non
     )
     assert result.recipient == DIGITS
     assert result.recipient_phone == DIGITS
+
+
+def test_message_result_requires_a_platform() -> None:
+    with pytest.raises(ValueError):
+        MessageResult(success=True)  # type: ignore[call-arg]
+
+
+def test_platform_response_is_not_serialized() -> None:
+    result = message_result_from_payload(
+        {"contacts": [], "messages": [{"id": "wamid.native"}]}
+    )
+    assert "platform_response" not in result.model_dump()
+    assert "api_response" not in result.model_dump()

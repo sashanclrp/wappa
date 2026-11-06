@@ -25,14 +25,14 @@ from wappa.api.utils import (
 )
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.domain.inbox.identity import InboxRef
-from wappa.domain.interactive import MessageCard
+from wappa.domain.interactive import ButtonHeader, MessageCard
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.messaging_targets import (
     DeliveryAddresses,
     DirectMessage,
     UnsupportedOperationError,
 )
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
+from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.models.interactive_models import (
     ButtonMessage,
     CTAMessage,
@@ -166,7 +166,7 @@ async def send_list_message(
             ),
             body=request.body,
             button_text=request.button_text,
-            header=request.header,
+            header=ButtonHeader(text=request.header) if request.header else None,
             footer=request.footer,
             reply_to_message_id=request.reply_to_message_id,
         )

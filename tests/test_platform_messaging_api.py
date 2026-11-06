@@ -28,8 +28,8 @@ from wappa.domain.inbox import (
     ResolvedInboxCredentials,
 )
 from wappa.domain.messaging_targets import UnsupportedOperationError
+from wappa.domain.results import MessageResult
 from wappa.messaging.template_transport import OutboundRuntime
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.schemas.core.types import PlatformType
 
 IG_INBOX = "17841457247424017"

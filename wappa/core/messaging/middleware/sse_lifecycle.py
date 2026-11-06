@@ -17,7 +17,7 @@ from ...sse.handlers import publish_sse_event
 from ..pipeline import MessengerMiddleware, SendInvocation, SendNext, _to_serializable
 
 if TYPE_CHECKING:
-    from ....messaging.whatsapp.models.basic_models import MessageResult
+    from wappa.domain.results import MessageResult
 
 
 class SSELifecycleMiddleware(MessengerMiddleware):

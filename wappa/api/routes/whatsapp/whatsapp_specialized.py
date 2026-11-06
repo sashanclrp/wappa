@@ -17,7 +17,7 @@ from wappa.domain.messaging_targets import (
     DirectMessage,
     UnsupportedOperationError,
 )
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
+from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.models.specialized_models import (
     ContactMessage,
     ContactValidationResult,

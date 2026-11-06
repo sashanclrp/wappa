@@ -21,7 +21,7 @@ from ...sse.context import get_sse_context
 from ..pipeline import MessengerMiddleware, SendInvocation, SendNext
 
 if TYPE_CHECKING:
-    from ....messaging.whatsapp.models.basic_models import MessageResult
+    from wappa.domain.results import MessageResult
 
 
 class PubSubNotificationMiddleware(MessengerMiddleware):

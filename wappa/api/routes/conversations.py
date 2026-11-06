@@ -46,8 +46,7 @@ from wappa.domain.messaging_targets import (
     PrivateReply,
     UnsupportedOperationError,
 )
-from wappa.domain.results import CommentResult, ControlResult
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
+from wappa.domain.results import CommentResult, ControlResult, MessageResult
 
 _READ_STATUS = {
     ReadOutcome.NOT_FOUND: 404,

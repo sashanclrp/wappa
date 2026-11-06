@@ -21,7 +21,15 @@ class TranscriptEventHandler(WappaEventHandler):
         message_type = webhook.get_message_type_name()
         messenger = cast(WhatsAppMessenger, self.messenger)
 
-        await messenger.mark_as_read(webhook.message.message_id)
+        await messenger.mark_as_read(
+            webhook.message.message_id,
+            DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=webhook.user.delivery_addresses(),
+            ),
+        )
 
         if message_type == "audio":
             audio_message = cast(WhatsAppAudioMessage, webhook.message)

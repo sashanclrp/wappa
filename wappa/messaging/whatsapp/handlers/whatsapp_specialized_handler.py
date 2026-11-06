@@ -4,8 +4,9 @@ from typing import Any
 
 from wappa.core.logging.logger import get_logger
 from wappa.domain.contacts import ContactCard
+from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.client.whatsapp_client import WhatsAppClient
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
+from wappa.messaging.whatsapp.models.basic_models import message_result_from_payload
 from wappa.messaging.whatsapp.utils.error_helpers import handle_whatsapp_error
 from wappa.schemas.core.recipient import apply_recipient_to_payload
 
@@ -51,7 +52,7 @@ class WhatsAppSpecializedHandler:
         self, payload: dict[str, Any], recipient: str
     ) -> MessageResult:
         response = await self.client.post_request(payload)
-        return MessageResult.from_response_payload(
+        return message_result_from_payload(
             response,
             inbox_id=self._inbox_id,
             fallback_recipient=recipient,

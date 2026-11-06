@@ -48,7 +48,7 @@ from wappa.domain.models.media_result import (
     MediaInfoResult,
     MediaUploadResult,
 )
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
+from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.models.media_models import (
     AudioMessage,
     DocumentMessage,

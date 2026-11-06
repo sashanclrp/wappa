@@ -46,14 +46,10 @@ from ...domain.messaging_targets import DirectMessage, MessageTarget
 from ...schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
-    from wappa.domain.interactive import ReplyButton
+    from wappa.domain.interactive import ButtonHeader, ListSection, ReplyButton
+    from wappa.domain.results import MessageResult
 
     from ...domain.interactive import MessageCard
-    from ...messaging.whatsapp.models.basic_models import MessageResult
-    from ...messaging.whatsapp.models.interactive_models import (
-        InteractiveHeader,
-        ListSection,
-    )
 
 
 # Canonical priority bands. Middleware registers with a numeric priority;
@@ -295,12 +291,13 @@ class MessengerPipeline(IMessenger):
     async def mark_as_read(
         self,
         message_id: str,
+        target: DirectMessage,
+        *,
         typing: bool = False,
-        target: DirectMessage | None = None,
     ) -> MessageResult:
         # mark_as_read isn't really an outbound message — skip the pipeline
         # to preserve semantics (no wrapper ever published it anyway).
-        return await self._raw.mark_as_read(message_id, typing, target)
+        return await self._raw.mark_as_read(message_id, target, typing=typing)
 
     async def send_carousel(
         self,
@@ -427,7 +424,7 @@ class MessengerPipeline(IMessenger):
         buttons: list[ReplyButton],
         target: DirectMessage,
         body: str,
-        header: InteractiveHeader | None = None,
+        header: ButtonHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
@@ -451,7 +448,7 @@ class MessengerPipeline(IMessenger):
         target: DirectMessage,
         body: str,
         button_text: str,
-        header: str | None = None,
+        header: ButtonHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:

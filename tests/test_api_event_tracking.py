@@ -7,7 +7,8 @@ import pytest
 
 from wappa.core.lifecycle import BackgroundWorkTracker
 from wappa.core.logging.context import clear_request_context, set_request_context
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
+from wappa.domain.results import MessageResult
+from wappa.schemas.core.types import PlatformType
 
 
 @pytest.fixture(autouse=True)
@@ -29,6 +30,7 @@ def _fake_request(tracker: BackgroundWorkTracker) -> MagicMock:
 
 def _dummy_result() -> MessageResult:
     return MessageResult(
+        platform=PlatformType.WHATSAPP,
         success=True,
         message_id="wamid.test123",
         error=None,

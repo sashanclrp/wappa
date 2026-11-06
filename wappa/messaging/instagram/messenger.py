@@ -38,7 +38,14 @@ from pydantic import SecretStr
 
 from wappa.domain.contacts import ContactCard
 from wappa.domain.inbox.identity import InboxRef
-from wappa.domain.interactive import CardButton, MessageCard, ReplyButton, UrlButton
+from wappa.domain.interactive import (
+    ButtonHeader,
+    CardButton,
+    ListSection,
+    MessageCard,
+    ReplyButton,
+    UrlButton,
+)
 from wappa.domain.interfaces.conversation_capabilities import (
     IAttachmentMediaReader,
     ICommentControls,
@@ -56,12 +63,7 @@ from wappa.domain.messaging_targets import (
     UnsupportedOperationError,
     require_direct_message,
 )
-from wappa.domain.results import OperationOutcome
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
-from wappa.messaging.whatsapp.models.interactive_models import (
-    InteractiveHeader,
-    ListSection,
-)
+from wappa.domain.results import MessageResult, OperationOutcome
 from wappa.schemas.core.types import PlatformType
 
 from .content import InstagramCommentControls, InstagramContentReader
@@ -122,21 +124,13 @@ def _card_button(button: CardButton) -> dict[str, Any]:
     return _url_button(button) if isinstance(button, UrlButton) else _reply(button)
 
 
-def _header_kind(header: InteractiveHeader | None) -> str | None:
-    if header is None:
-        return None
-    kind = header.type
-    return str(getattr(kind, "value", kind))
-
-
-def _header_link(header: InteractiveHeader) -> str:
-    link = (header.image or {}).get("link")
-    if not link:
+def _header_image_url(header: ButtonHeader) -> str:
+    if header.image_url is None:
         raise UnsupportedOperationError(
-            "Instagram image headers need an https 'link'; WhatsApp media IDs "
-            "do not exist on Instagram"
+            "Instagram image headers need image_url; Platform media IDs from "
+            "another Platform do not exist on Instagram"
         )
-    return validate_media_url(link)
+    return validate_media_url(str(header.image_url))
 
 
 def _check_carousel(cards: Sequence[MessageCard]) -> None:
@@ -565,7 +559,7 @@ class InstagramMessenger(IMessenger):
         buttons: list[ReplyButton],
         target: DirectMessage,
         body: str,
-        header: InteractiveHeader | None = None,
+        header: ButtonHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
@@ -573,20 +567,18 @@ class InstagramMessenger(IMessenger):
 
         A tap returns as an ``InboundMessageWebhook`` whose selection is the
         button ``id``, exactly like a WhatsApp ``button_reply``. A text header
-        and the footer fold into the text. An image header (``link``) makes it a
-        generic card: image, ``body`` as title (≤ 80), ``footer`` as subtitle.
-        Video and document headers have no Instagram equivalent.
+        and the footer fold into the text. An image header (``image_url``)
+        makes it a generic card: image, ``body`` as title (≤ 80), ``footer`` as
+        subtitle. An ``image_media_id`` header has no Instagram equivalent.
         """
         direct = self._direct(target, "send_button_message")
         converted = [_reply(b) for b in buttons]
-        kind = _header_kind(header)
-        if kind == "image":
-            assert header is not None
+        if header is not None and header.kind == "image":
             if not 1 <= len(converted) <= BUTTONS_MAX:
                 raise ValueError(f"Instagram buttons: 1–{BUTTONS_MAX} allowed")
             element: dict[str, Any] = {
                 "title": _check_len(body, CARD_TEXT_MAX, "Instagram card title"),
-                "image_url": _header_link(header),
+                "image_url": _header_image_url(header),
                 "buttons": converted,
             }
             if footer:
@@ -604,10 +596,6 @@ class InstagramMessenger(IMessenger):
                 operation="Instagram button card send",
                 reply_to_message_id=reply_to_message_id,
             )
-        if kind not in (None, "text"):
-            raise UnsupportedOperationError(
-                f"Instagram has no {kind} header for buttons; use an image or text header"
-            )
         text = _fold(header.text if header else None, body, footer)
         return await self._button_template(
             direct,
@@ -623,7 +611,7 @@ class InstagramMessenger(IMessenger):
         target: DirectMessage,
         body: str,
         button_text: str,
-        header: str | None = None,
+        header: ButtonHeader | None = None,
         footer: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
@@ -632,10 +620,14 @@ class InstagramMessenger(IMessenger):
         Every row becomes one quick reply (≤ 13, title ≤ 20). A tap returns as
         an ``InboundMessageWebhook`` whose selection is the row ``id``, like a
         WhatsApp ``list_reply``. Section titles, row descriptions and
-        ``button_text`` are presentation Instagram cannot show; header and
-        footer fold into the text.
+        ``button_text`` are presentation Instagram cannot show; a text header
+        and the footer fold into the text. Image headers are rejected.
         """
         direct = self._direct(target, "send_list_message")
+        if header is not None and header.text is None:
+            raise UnsupportedOperationError(
+                "Instagram list messages accept only a text header"
+            )
         rows = [row for section in sections for row in section.rows]
         if not 1 <= len(rows) <= QUICK_REPLY_MAX:
             raise ValueError(
@@ -656,7 +648,9 @@ class InstagramMessenger(IMessenger):
         return await self._send(
             direct,
             {
-                "text": _check_text(_fold(header, body, footer)),
+                "text": _check_text(
+                    _fold(header.text if header else None, body, footer)
+                ),
                 "quick_replies": options,
             },
             operation="Instagram list (quick replies) send",
@@ -722,8 +716,9 @@ class InstagramMessenger(IMessenger):
     async def mark_as_read(
         self,
         message_id: str,
+        target: DirectMessage,
+        *,
         typing: bool = False,
-        target: DirectMessage | None = None,
     ) -> MessageResult:
         """``mark_seen`` on the thread, then ``typing_on`` when ``typing``.
 
@@ -731,11 +726,6 @@ class InstagramMessenger(IMessenger):
         ``message_id`` is echoed in the result. Typing is attempted only after
         the seen action was accepted.
         """
-        if target is None:
-            raise ValueError(
-                "Instagram mark_as_read needs target=DirectMessage(...): "
-                "Instagram marks the thread seen, not one message"
-            )
         direct = self._direct(target, "mark_as_read")
         seen = await self._sender_action(direct, "mark_seen")
         typed = (

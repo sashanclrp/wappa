@@ -33,8 +33,8 @@ from wappa.core.messaging.pipeline import (
 from wappa.core.sse import SSEEventHub
 from wappa.core.sse.context import sse_event_scope
 from wappa.domain.inbox import InboxRef
+from wappa.domain.results import MessageResult
 from wappa.messaging import DeliveryAddresses, DirectMessage
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
 from wappa.schemas.core.types import PlatformType
 
 TARGET = DirectMessage(
@@ -48,7 +48,12 @@ def _make_raw() -> MagicMock:
     raw.inbox_id = "test-inbox"
 
     async def _ok(*args, **kwargs) -> MessageResult:
-        return MessageResult(success=True, message_id="wamid.test", recipient="5599")
+        return MessageResult(
+            platform=PlatformType.WHATSAPP,
+            success=True,
+            message_id="wamid.test",
+            recipient="5599",
+        )
 
     for method in (
         "send_text",
@@ -221,9 +226,13 @@ async def test_mark_as_read_bypasses_pipeline():
         middleware=[(_Recorder("any", log), 50)],
     )
 
-    await pipeline.mark_as_read("wamid.123", typing=True)
+    target = DirectMessage(
+        inbox_ref=InboxRef.whatsapp("inbox-test"),
+        addresses=DeliveryAddresses.of("5599"),
+    )
+    await pipeline.mark_as_read("wamid.123", target, typing=True)
 
-    raw.mark_as_read.assert_awaited_once_with("wamid.123", True, None)
+    raw.mark_as_read.assert_awaited_once_with("wamid.123", target, typing=True)
     assert log == []
 
 

@@ -1,6 +1,6 @@
 """WhatsApp models package."""
 
-from .basic_models import BasicTextMessage, MessageResult, ReadStatusMessage
+from .basic_models import BasicTextMessage, ReadStatusMessage
 from .interactive_models import ButtonMessage, CTAMessage, ListMessage
 from .media_models import (
     AudioMessage,
@@ -28,7 +28,6 @@ from .template_models import (
 )
 
 __all__ = [
-    "MessageResult",
     "BasicTextMessage",
     "ReadStatusMessage",
     "ButtonMessage",

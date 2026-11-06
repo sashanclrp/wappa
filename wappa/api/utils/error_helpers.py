@@ -2,7 +2,7 @@ from collections.abc import Mapping
 
 from fastapi import HTTPException
 
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
+from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.utils.error_helpers import BSUID_ERROR_TAG
 
 # Error code to HTTP status code mapping

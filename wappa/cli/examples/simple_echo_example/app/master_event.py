@@ -61,7 +61,17 @@ class SimpleEchoHandler(WappaEventHandler):
         try:
             assert self.messenger is not None
             # Mark message as read with typing indicator
-            await self.messenger.mark_as_read(message_id=message_id, typing=True)
+            await self.messenger.mark_as_read(
+                message_id,
+                DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=webhook.user.delivery_addresses(),
+                ),
+                typing=True,
+            )
 
             # Handle different message types
             await self._handle_message_by_type(

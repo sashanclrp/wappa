@@ -18,14 +18,12 @@ from .inbox_helpers import require_inbox_context
 from .response_helpers import (
     convert_body_parameters,
     convert_buttons_to_dict,
-    convert_header_to_dict,
     convert_list_sections_to_dict,
 )
 
 __all__ = [
     "convert_body_parameters",
     "convert_buttons_to_dict",
-    "convert_header_to_dict",
     "convert_list_sections_to_dict",
     "dispatch_message_event",
     "fire_api_event",

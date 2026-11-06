@@ -61,9 +61,9 @@ messaging/
     messenger/
       whatsapp_messenger.py       # IMessenger + ITemplateMessaging impl; composes all four handlers
     models/
-      basic_models.py             # MessageResult, BasicTextMessage, ReadStatusMessage
+      basic_models.py             # BasicTextMessage, ReadStatusMessage, WhatsAppAPIResponse; message_result_from_* builders
       media_models.py             # MediaType enum, MIME types, media send request models
-      interactive_models.py       # ButtonMessage, ListMessage, CTAMessage, ListSection, InteractiveHeader
+      interactive_models.py       # ButtonMessage, ListMessage, CTAMessage request models (neutral values in wappa/domain/interactive.py)
       template_models.py          # WhatsAppTemplateType, WhatsAppTemplateMediaType, TemplateParameter
       specialized_models.py       # ContactMessage, LocationMessage, LocationRequestMessage, validation results
       template_info_models.py     # Request/response models for template read operations
@@ -73,7 +73,7 @@ messaging/
       error_helpers.py            # handle_whatsapp_error — uniform error → MessageResult
 ```
 
-Outside this folder but on every send path: the Messenger Pipeline (`MessengerPipeline`, middleware chain, `_PipelineTemplates`) lives in `wappa/core/messaging/pipeline.py`; the WhatsApp text/read-status and media payload factories live in `wappa/domain/factories/message_factory.py` and `wappa/domain/factories/media_factory.py`; `MessengerFactory` (Messenger construction per Inbox) lives in `wappa/domain/factories/messenger_factory.py`; shared media rendition selection lives in `wappa/domain/media_renditions.py`; the Platform-neutral `ReplyButton` and `ContactCard` live in `wappa/domain/interactive.py` and `wappa/domain/contacts.py`.
+Outside this folder but on every send path: the Messenger Pipeline (`MessengerPipeline`, middleware chain, `_PipelineTemplates`) lives in `wappa/core/messaging/pipeline.py`; the WhatsApp text/read-status and media payload factories live in `wappa/domain/factories/message_factory.py` and `wappa/domain/factories/media_factory.py`; `MessengerFactory` (Messenger construction per Inbox) lives in `wappa/domain/factories/messenger_factory.py`; shared media rendition selection lives in `wappa/domain/media_renditions.py`; the Platform-neutral interactive values (`ReplyButton`, `ButtonHeader`, `ListSection`, `ListRow`, `MessageCard`) and `ContactCard` live in `wappa/domain/interactive.py` and `wappa/domain/contacts.py`, and the neutral `MessageResult` in `wappa/domain/results.py`. No `IMessenger` signature imports a WhatsApp type.
 
 ## Changing a Messenger method
 
@@ -129,7 +129,7 @@ Host application
       → handler validates constraints (character limits, required fields)
       → WhatsAppClient.post_request(payload)
           → httpx POST to Graph API
-      → MessageResult.from_response_payload(response)
+      → message_result_from_payload(response)  # neutral wappa.domain.results.MessageResult
   ← MessageResult returned to host application
 ```
 
@@ -157,8 +157,8 @@ outer whitespace and a leading `+` on the phone; alphanumeric suffixes are never
 stripped into digits. Distinct phones retain their original value, and a phone
 without corroborating BSUID evidence keeps its existing behavior.
 
-`ResponseContact.wa_id` and the typed `MessageResult.api_response` retain raw
-provider evidence. Canonical identity, Message ID, and acceptance/error semantics
+`ResponseContact.wa_id` and the Cloud API body in `MessageResult.platform_response`
+retain raw provider evidence. Canonical identity, Message ID, and acceptance/error semantics
 are preserved. Template transport projects this same sanitized phone into its
 nullable `returned_phone_number`, with no second interpretation or retry.
 
@@ -233,4 +233,4 @@ All recipient-based `IMessenger` sends accept `DirectMessage`, including WhatsAp
 
 `supported_operations` distinguishes implemented adapter operations from provider catalogs. IMessenger's optional-operation defaults raise `UnsupportedOperationError`; each adapter advertises its implemented methods, and the pipeline delegates discovery. Capabilities are discovered with `capability(kind)` instead: Instagram returns `None` for `ITemplateMessaging`.
 
-The shared MessageResult is still housed in the historical WhatsApp basic-model module. Instagram sets its Platform explicitly, leaves WA-specific recipient evidence empty, and uses the excluded `platform_response` field for native evidence instead of fabricating a WhatsApp response. Moving result ownership into a neutral module remains an explicit follow-up.
+The shared `MessageResult` is defined in `wappa/domain/results.py` with a required `platform`. Every adapter keeps its native response in the excluded `platform_response` field (WhatsApp: the Cloud API body, built by `message_result_from_payload` in `wappa/messaging/whatsapp/models/basic_models.py`). Instagram leaves the BSUID and phone recipient evidence empty.

@@ -30,9 +30,9 @@ from wappa.domain.messaging_targets import (
     DirectMessage,
     UnsupportedOperationError,
 )
+from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.models.basic_models import (
     BasicTextMessage,
-    MessageResult,
     ReadStatusMessage,
 )
 
@@ -161,18 +161,14 @@ async def mark_message_as_read(
         logger.info(f"Marking message {request.message_id} as read {action_desc}")
 
         result = await messenger.mark_as_read(
-            message_id=request.message_id,
-            typing=request.typing,  # Key requirement: typing boolean support
-            target=(
-                DirectMessage(
-                    inbox_ref=InboxRef(
-                        platform=messenger.platform, inbox_id=messenger.inbox_id
-                    ),
-                    addresses=DeliveryAddresses.of(request.recipient),
-                )
-                if request.recipient
-                else None
+            request.message_id,
+            DirectMessage(
+                inbox_ref=InboxRef(
+                    platform=messenger.platform, inbox_id=messenger.inbox_id
+                ),
+                addresses=DeliveryAddresses.of(request.recipient),
             ),
+            typing=request.typing,
         )
 
         if result.success:

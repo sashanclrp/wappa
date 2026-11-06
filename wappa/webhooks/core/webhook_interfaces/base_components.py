@@ -2,8 +2,8 @@
 Universal base components for platform-agnostic webhook interfaces.
 
 These components provide the building blocks for all universal webhook types.
-They are designed based on WhatsApp's comprehensive webhook structure and
-represent the "standard" that all messaging platforms should adapt to.
+Every Platform adapter fills the fields it has evidence for; identity fields a
+Platform does not supply (phone number, BSUID, username) stay ``None``.
 """
 
 from datetime import UTC, datetime
@@ -18,8 +18,8 @@ class InboxBase(BaseModel):
     """
     Universal inbox identification component.
 
-    Represents the business inbox that messages are sent to/from.
-    Based on WhatsApp's metadata structure but platform-agnostic.
+    Represents the business inbox that messages are sent to/from on any
+    Platform.
     """
 
     model_config = ConfigDict(
@@ -47,8 +47,9 @@ class UserBase(BaseModel):
     """
     Universal user/contact identification component.
 
-    Represents the end user sending messages to the business.
-    Based on WhatsApp's contact structure but platform-agnostic.
+    Represents the end user sending messages to the business. Identity
+    evidence is Platform-optional: each adapter sets what its Platform
+    supplies and leaves the rest ``None``.
 
     Field vs Property Pattern:
     - phone_number: Raw phone number field from webhook (WhatsApp wa_id)

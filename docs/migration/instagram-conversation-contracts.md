@@ -68,7 +68,7 @@ Every action that exists on both Platforms has one `IMessenger` method; the Inst
 
 | Action | Method | Instagram mapping |
 | --- | --- | --- |
-| acknowledge | `mark_as_read(message_id, typing=False, target=None)` | thread seen, then `typing_on`; requires `target` |
+| acknowledge | `mark_as_read(message_id, target, *, typing=False)` | thread seen, then `typing_on` |
 | up to 3 choices | `send_button_message(buttons: list[ReplyButton], target, body, header=None, footer=None)` | button template with postbacks; image header becomes a one-card generic template |
 | up to 13 choices | `send_list_message(sections, target, body, button_text, ...)` | quick replies (rows flattened; section titles, descriptions and `button_text` dropped) |
 | open a URL | `send_cta_message(...)` | button template with one `web_url` |

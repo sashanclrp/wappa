@@ -9,5 +9,5 @@ class MasterEventHandler(WappaEventHandler):
             inbox_ref=self.inbox_ref,
             addresses=webhook.user.delivery_addresses(),
         )
-        await self.messenger.mark_as_read(webhook.message.message_id, target=target)
+        await self.messenger.mark_as_read(webhook.message.message_id, target)
         await self.messenger.send_text("Wappa App ready", target)

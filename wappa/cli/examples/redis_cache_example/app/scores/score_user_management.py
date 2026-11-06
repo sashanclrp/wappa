@@ -187,8 +187,15 @@ class UserManagementScore(ScoreBase):
 
             # Step 1: Mark message as read with typing indicator
             read_result = await self.messenger.mark_as_read(
-                message_id=webhook.message.message_id,
-                typing=True,  # Show typing indicator
+                webhook.message.message_id,
+                DirectMessage(
+                    inbox_ref=InboxRef(
+                        platform=self.messenger.platform,
+                        inbox_id=self.messenger.inbox_id,
+                    ),
+                    addresses=webhook.user.delivery_addresses(),
+                ),
+                typing=True,
             )
 
             if not read_result.success:

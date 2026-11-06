@@ -19,7 +19,7 @@ from wappa.core.logging.context import require_inbox_context
 from wappa.domain.events.api_message_event import APIMessageEvent
 
 if TYPE_CHECKING:
-    from wappa.messaging.whatsapp.models.basic_models import MessageResult
+    from wappa.domain.results import MessageResult
 
 logger = logging.getLogger(__name__)
 

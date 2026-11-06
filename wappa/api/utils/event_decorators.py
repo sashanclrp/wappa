@@ -24,8 +24,8 @@ from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.context import require_inbox_context
 from wappa.domain.events.api_message_event import APIMessageEvent
 from wappa.domain.interfaces.identity_resolver import IIdentityResolver
+from wappa.domain.results import MessageResult
 from wappa.messaging.classification import classify_outbound_payload
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
 
 logger = logging.getLogger(__name__)
 

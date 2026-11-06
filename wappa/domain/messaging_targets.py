@@ -8,10 +8,9 @@ addressed through a comment, a public comment reply is a separate operation
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from wappa.domain.inbox.identity import InboxRef
-from wappa.schemas.core.types import PlatformType
 
 
 def _nonblank(value: str, name: str) -> str:
@@ -147,21 +146,17 @@ class PostRef(BaseModel):
 
 
 class PrivateReply(BaseModel):
-    """Instagram-only private message addressed through a triggering Comment.
+    """Private message addressed through a triggering Comment.
 
-    Meta allows one private reply per comment inside the provider's window; a
-    normal DM follow-up requires the User to answer first.
+    Adapters whose Platform has no comment-addressed replies reject it at send
+    time. Where supported, the Platform may allow one private reply per comment
+    inside its window, and a normal DM follow-up may require the User to answer
+    first.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
     kind: Literal["private_reply"] = "private_reply"
     comment_ref: CommentRef
-
-    @model_validator(mode="after")
-    def _instagram_only(self) -> "PrivateReply":
-        if self.comment_ref.inbox_ref.platform is not PlatformType.INSTAGRAM:
-            raise ValueError("PrivateReply is only implemented for Instagram")
-        return self
 
     @property
     def inbox_ref(self) -> InboxRef:

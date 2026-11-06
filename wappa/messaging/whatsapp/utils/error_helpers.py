@@ -7,7 +7,7 @@ from wappa.domain.interfaces.session_provider import (
     HTTPSessionClosedError,
     RuntimeDrainingError,
 )
-from wappa.messaging.whatsapp.models.basic_models import MessageResult
+from wappa.domain.results import MessageResult
 from wappa.resilience import is_transient_http_error
 from wappa.schemas.core.types import PlatformType
 
@@ -83,7 +83,6 @@ def handle_whatsapp_error(
         recipient_phone=None,
         platform=PlatformType.WHATSAPP,
         inbox_id=inbox_id,
-        api_response=None,
     )
 
 
