@@ -1,8 +1,8 @@
 """WhatsApp Template sends as a focused capability (ADR-0025).
 
 Templates are a WhatsApp business-initiated message family with no equivalent
-on other Platforms, so they are not ``IMessenger`` methods. Reach them with
-``messenger.require_capability(ITemplateMessaging)``. Through a
+on other Platforms, so they are not ``IMessenger`` methods. Hosts reach them
+prebuilt as ``self.whatsapp.templates`` (ADR-0025 rule 12). Through a
 ``MessengerPipeline`` the capability still runs the message middleware chain
 under the method names ``send_text_template`` / ``send_media_template`` /
 ``send_location_template``. Hosts that resolve Templates per Inbox use

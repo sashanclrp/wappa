@@ -16,4 +16,4 @@ Discover skills by name in the current harness, then read the installed source. 
 - Plain Wappa must work without any Symphonai skill installed.
 - In a Symphonai Host, send with `target=self.deps.user_target` (Scores and StateHandlers) or `self.deps.require_user_target()` (external Scores). Don't reimplement Symphonai's Score engine with plain-Wappa patterns.
 - If the right specialist skill is missing, name it and say it ships with Symphonai, then continue on the generic supported path where one exists. Don't invent a path or install packages silently.
-- WhatsApp Template work is not Instagram work. Don't run Instagram setup for it; Templates go through `messenger.require_capability(ITemplateMessaging)` or `OutboundRuntime.templates`.
+- WhatsApp Template work is not Instagram work. Don't run Instagram setup for it; Templates go through `self.whatsapp.templates` or `OutboundRuntime.templates`.

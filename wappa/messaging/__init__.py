@@ -4,8 +4,11 @@ Wappa Messaging Components
 Public outbound interfaces, middleware contracts, and Inbox-scoped capabilities.
 
 WhatsApp clients, handlers, and Messenger construction are adapter internals.
-Host Applications receive ``IMessenger`` from Wappa runtime contexts or resolve
-the smaller Template capability through ``OutboundRuntime``.
+Host Applications receive ``IMessenger`` (with ``media`` ready) and the
+prebuilt Platform Messengers (``self.whatsapp``, ``self.instagram``) from Wappa
+runtime contexts, or resolve the smaller Template capability through
+``OutboundRuntime``. The capability interfaces below are exported for typing
+and custom adapters; Hosts never look them up.
 """
 
 # Core Messaging Interface
@@ -150,7 +153,8 @@ __all__ = [
     "message_outcome",
     # User profile (IMessenger.resolve_platform_user_profile)
     "PlatformUserProfile",
-    # Optional focused capabilities (IMessenger.capability(kind))
+    # Focused capability interfaces (prebuilt on messenger.media and the
+    # Platform Messengers; capability(kind) is the internal seam)
     "ICommentControls",
     "IConversationContentReader",
     "ITemplateMessaging",

@@ -24,7 +24,7 @@ from wappa.schemas.core.recipient import apply_recipient_to_payload
 
 
 class WhatsAppTemplateHandler:
-    """Template message operations for WhatsAppMessenger."""
+    """Template message operations for WhatsAppMessengerAdapter."""
 
     def __init__(self, client: WhatsAppClient, inbox_id: str):
         self.client = client

@@ -352,10 +352,12 @@ class Pong(WappaEventHandler):
         super().__init__()
         self.received: list[tuple[InboundMessageWebhook, InboxRef, IMessenger]] = []
         self.results: list[MessageResult] = []
+        self.platform_messengers: list[tuple[object, object]] = []
 
     async def process_message(self, webhook: InboundMessageWebhook) -> None:
         assert self.inbox_ref is not None and self.messenger is not None
         self.received.append((webhook, self.inbox_ref, self.messenger))
+        self.platform_messengers.append((self.whatsapp, self.instagram))
         self.results.append(
             await self.messenger.send_text(
                 "pong",
@@ -456,6 +458,8 @@ async def test_a_signed_callback_dispatches_and_the_reply_runs_the_pipeline(
     assert webhook.platform is FAKE and webhook.get_message_text() == "ping"
     assert isinstance(messenger, MessengerPipeline)
     assert messenger.platform is FAKE
+    # The fake entry adds no Platform Messenger: neither Platform's is bound.
+    assert platform.handler.platform_messengers == [(None, None)]
     # The reply reached the fake adapter through the Messenger Pipeline.
     (invocation,) = platform.middleware.seen
     assert invocation.method_name == "send_text"
@@ -620,6 +624,10 @@ def test_shared_code_does_not_branch_on_a_platform() -> None:
 _ALLOWED_ADAPTER_IMPORTS: dict[str, str] = {
     "api/dependencies/whatsapp_dependencies.py": (
         "dependencies of the WhatsApp extension router, which only WhatsApp mounts"
+    ),
+    "core/events/event_handler.py": (
+        "TYPE_CHECKING-only types of the self.whatsapp / self.instagram Platform "
+        "Messenger attributes (ADR-0025 rule 12); the registry builds them"
     ),
 }
 

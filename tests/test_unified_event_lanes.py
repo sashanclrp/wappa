@@ -9,7 +9,7 @@ from pydantic import SecretStr
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.conversation_capabilities import ReadOutcome
 from wappa.messaging import IConversationHistoryReader
-from wappa.messaging.instagram.messenger import InstagramMessenger
+from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
 from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.schemas.core.types import MessageType, PlatformType
 from wappa.webhooks import (
@@ -191,7 +191,7 @@ async def test_instagram_history_reader_returns_the_shared_thread_shape():
         )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(transport)) as client:
-        messenger = InstagramMessenger(
+        messenger = InstagramMessengerAdapter(
             inbox_ref=IG_REF,
             access_token=SecretStr("tkn"),
             session_provider=lambda: client,

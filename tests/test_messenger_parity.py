@@ -21,6 +21,7 @@ from wappa.core.messaging.pipeline import (
     _PipelineTemplates,
     _PipelineUserDataRequests,
 )
+from wappa.core.messaging.platform_messenger import PlatformMessenger
 from wappa.domain.inbox import InboxRef
 from wappa.domain.interfaces.media_library import IMediaLibrary
 from wappa.domain.interfaces.messaging_interface import IMessenger
@@ -32,9 +33,11 @@ from wappa.domain.interfaces.user_data_requests import (
 from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.domain.results import MessageResult
 from wappa.messaging.instagram.media_library import InstagramMediaLibrary
-from wappa.messaging.instagram.messenger import InstagramMessenger
+from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
 from wappa.messaging.whatsapp.media_library import WhatsAppMediaLibrary
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
+from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+    WhatsAppMessengerAdapter,
+)
 from wappa.processors.instagram_processor import InstagramWebhookProcessor
 from wappa.processors.whatsapp_processor import WhatsAppWebhookProcessor
 from wappa.schemas.core.types import PlatformType
@@ -65,8 +68,8 @@ def _shape(func: Any) -> list[tuple[str, Any, Any]]:
     ]
 
 
-def _whatsapp() -> WhatsAppMessenger:
-    return WhatsAppMessenger(
+def _whatsapp() -> WhatsAppMessengerAdapter:
+    return WhatsAppMessengerAdapter(
         client=None,  # type: ignore[arg-type]
         media_handler=None,  # type: ignore[arg-type]
         interactive_handler=None,  # type: ignore[arg-type]
@@ -76,8 +79,8 @@ def _whatsapp() -> WhatsAppMessenger:
     )
 
 
-def _instagram() -> InstagramMessenger:
-    return InstagramMessenger(
+def _instagram() -> InstagramMessengerAdapter:
+    return InstagramMessengerAdapter(
         inbox_ref=IG_REF,
         access_token=SecretStr("tkn"),
         session_provider=httpx.AsyncClient,
@@ -101,6 +104,11 @@ def test_pipeline_signature_matches_imessenger(name: str):
     assert _shape(getattr(MessengerPipeline, name)) == _shape(getattr(IMessenger, name))
 
 
+@pytest.mark.parametrize("name", OPERATIONS)
+def test_platform_messenger_signature_matches_imessenger(name: str):
+    assert _shape(getattr(PlatformMessenger, name)) == _shape(getattr(IMessenger, name))
+
+
 @pytest.mark.parametrize("name", TEMPLATE_OPERATIONS)
 def test_pipeline_templates_signature_matches_itemplatemessaging(name: str):
     assert _shape(getattr(_PipelineTemplates, name)) == _shape(
@@ -108,7 +116,9 @@ def test_pipeline_templates_signature_matches_itemplatemessaging(name: str):
     )
 
 
-@pytest.mark.parametrize("adapter", [WhatsAppMessenger, InstagramMessenger])
+@pytest.mark.parametrize(
+    "adapter", [WhatsAppMessengerAdapter, InstagramMessengerAdapter]
+)
 def test_adapter_signatures_match_the_contract(adapter: type[IMessenger]):
     # The pipeline forwards positionally, so the adapter order must match too.
     contracts: list[type] = [IMessenger, ITemplateMessaging]
@@ -125,7 +135,7 @@ def test_pipeline_user_data_requests_signature_matches_iuserdatarequests():
         assert _shape(getattr(_PipelineUserDataRequests, name)) == _shape(
             getattr(IUserDataRequests, name)
         )
-        assert _shape(getattr(WhatsAppMessenger, name)) == _shape(
+        assert _shape(getattr(WhatsAppMessengerAdapter, name)) == _shape(
             getattr(IUserDataRequests, name)
         )
 
@@ -245,6 +255,14 @@ async def test_pipeline_forwards_each_argument_under_its_own_name(name: str):
     assert raw.calls == [(name, expected)]
 
 
+@pytest.mark.parametrize("name", OPERATIONS)
+async def test_platform_messenger_forwards_each_argument_to_its_messenger(name: str):
+    raw = _Recorder()
+    args, kwargs, expected = _sentinel_call(getattr(IMessenger, name))
+    await getattr(PlatformMessenger(MessengerPipeline(raw)), name)(*args, **kwargs)
+    assert raw.calls == [(name, expected)]
+
+
 @pytest.mark.parametrize("name", TEMPLATE_OPERATIONS)
 async def test_pipeline_templates_forward_each_argument_under_its_own_name(name: str):
     raw = _Recorder()
@@ -255,7 +273,7 @@ async def test_pipeline_templates_forward_each_argument_under_its_own_name(name:
 
 
 def test_capability_lookup_is_one_base_implementation():
-    for adapter in (WhatsAppMessenger, InstagramMessenger):
+    for adapter in (WhatsAppMessengerAdapter, InstagramMessengerAdapter):
         assert "capability" not in vars(adapter), adapter
         assert "require_capability" not in vars(adapter), adapter
 

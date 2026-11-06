@@ -167,6 +167,7 @@ class ExternalWebhookRuntime:
             cache_factory=context.cache_factory,
             db=context.db,
             db_read=context.db_read,
+            platforms=context.platforms,
         )
         return AdmittedExternalWebhook(
             event=event,

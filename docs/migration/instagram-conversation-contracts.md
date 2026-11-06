@@ -49,15 +49,14 @@ Template-transport requests remain documented adapter boundaries.
 ## Private and public comment replies
 
 ```python
-from wappa.messaging import DeliveryAddresses, DirectMessage, ICommentControls, PrivateReply
+from wappa.messaging import DeliveryAddresses, DirectMessage, PrivateReply
 
 # Ordinary DM versus comment-triggered private reply (text only, Instagram only).
 await messenger.send_text("Hello", target=DirectMessage(inbox_ref=ref, addresses=DeliveryAddresses.of(igsid)))
 await messenger.send_text("Hello", target=PrivateReply(comment_ref=webhook.comment_ref))
 
-# Explicitly public reply through the comment capability; returns CommentResult (a Comment ID, never a DM ID).
-controls = messenger.require_capability(ICommentControls)
-result = await controls.reply_comment(webhook.comment_ref, "Thanks!")
+# Explicitly public reply on the Instagram Platform Messenger; returns CommentResult (a Comment ID, never a DM ID).
+result = await self.instagram.comments.reply_comment(webhook.comment_ref, "Thanks!")
 ```
 
 `send_text` now accepts `MessageTarget = DirectMessage | PrivateReply`. Every other send rejects `PrivateReply` with `UnsupportedOperationError`, and WhatsApp rejects it too. `PrivateReply` cannot combine with `reply_to_message_id`. Middleware: `SendInvocation.target` is the union; `SendInvocation.recipient` is `target.address` (`comment:<id>` for a private reply, because the User is not yet addressable). `ICommentControls.reply_comment` bypasses message middleware (a public comment is not a private message).
@@ -78,20 +77,20 @@ Every action that exists on both Platforms has one `IMessenger` method; the Inst
 | send a sticker | `send_sticker(source, target)` | sent as an image (png/jpeg/gif; `.webp` rejected before I/O) |
 | send media with a caption | `send_image/video/document(..., caption=...)` | media (http(s) URL, attachment_id or local `Path`), then the caption as a follow-up text, one result; a document, audio or video URL in a format Instagram cannot attach is sent as a text with the file name and the link; `filename` names a `Path` upload (transliterated to ASCII) or that link text; `transcript` is middleware-only metadata on every Platform |
 
-Location and phone-number requests are the WhatsApp-only `IUserDataRequests` capability: Instagram does not provide it because a text prompt cannot return the data, so gate on `messenger.capability(IUserDataRequests)`. Reactions have no send method yet (`send_reaction` is a recorded gap: deprioritized by the user on 2026-11-06).
+Location and phone-number requests are WhatsApp-only (`self.whatsapp.send_location_request` / `send_contact_request`): Instagram does not provide them because a text prompt cannot return the data, so gate on `self.whatsapp is not None`. Reactions have no send method yet (`send_reaction` is a recorded gap: deprioritized by the user on 2026-11-06).
 
 `mark_as_read` gained an optional `target`. WhatsApp marks the message read (and now really sends the typing indicator); existing WhatsApp calls without `target` are unchanged. Custom `IMessenger` implementations and test fakes that override `mark_as_read` must accept the new keyword. Earlier unreleased drafts exposed `mark_seen`, `set_typing`, `send_quick_replies`, `send_buttons`, `send_card`, `IMessenger.reply_comment`, `QuickReply`, `PostbackButton`, `SenderActionResult`, `IMessenger.download_media` and an `InteractionWebhook`/`process_interaction` lane; none of them exist in the released contract.
 
 ## Media Library
 
-Uploading and downloading media is the `IMediaLibrary` capability, not a Messenger method. It replaces the unreleased `IMessenger.download_media`.
+Uploading and downloading media is the `IMediaLibrary` capability, not a Messenger method, ready on every Messenger as `messenger.media`. It replaces the unreleased `IMessenger.download_media`.
 
 ```python
 from pathlib import Path
 
-from wappa.messaging import IMediaLibrary, MediaFamily
+from wappa.messaging import MediaFamily
 
-library = messenger.require_capability(IMediaLibrary)
+library = messenger.media
 stored = await library.upload(Path("menu.png"), MediaFamily.IMAGE)
 if stored.success:
     await messenger.send_image(stored.media_id, target)
@@ -103,7 +102,7 @@ WhatsApp uses the Media API (Media ID). Instagram uploads to `message_attachment
 
 ## WhatsApp Templates (breaking, released API)
 
-`send_text_template`, `send_media_template` and `send_location_template` left `IMessenger` and `MessengerPipeline` for the WhatsApp-only `ITemplateMessaging` capability, with the same signatures: `await messenger.require_capability(ITemplateMessaging).send_text_template(...)`. Middleware still sees the same method names, and `OutboundRuntime` / `InboxTemplateTransport` callers change nothing. See `CHANGELOG.md`.
+`send_text_template`, `send_media_template` and `send_location_template` left `IMessenger` and `MessengerPipeline` for the WhatsApp-only `ITemplateMessaging` capability, with the same signatures, ready in a handler as `await self.whatsapp.templates.send_text_template(...)`. Middleware still sees the same method names, and `OutboundRuntime` / `InboxTemplateTransport` callers change nothing. See `CHANGELOG.md`.
 
 ## New event lanes and hooks
 
@@ -143,7 +142,7 @@ reply loops.
 
 ## Focused capabilities
 
-`IMessenger.capability(kind)` / `require_capability(kind)` return optional, Inbox-bound capabilities: `IMediaLibrary` (WhatsApp and Instagram, above), `ITemplateMessaging` (WhatsApp Templates), and for Instagram-only actions `ICommentControls` (`reply_comment`, hide/unhide/delete, enable/disable comments on media), `IConversationContentReader` (post, comment, comments/replies pages). Bounded, credential-free CDN downloads are `IMediaLibrary.download(media_id, max_bytes=...)`; the Instagram-only `IAttachmentMediaReader` capability was removed in 0.34. Custom `IMessenger` implementations inherit a `None` default; `MessengerPipeline` delegates to the raw Messenger.
+Focused capabilities are prebuilt; Hosts never look them up ([ADR-0025](../adr/0025-messenger-contract.md) rule 12): `messenger.media` (`IMediaLibrary`, WhatsApp and Instagram, above), `self.whatsapp.templates` (WhatsApp Templates), and for Instagram-only actions `self.instagram.comments` (`ICommentControls`: `reply_comment`, hide/unhide/delete, enable/disable comments on media), `self.instagram.content` (`IConversationContentReader`: post, comment, comments/replies pages) and `self.instagram.history` (`IConversationHistoryReader`). Bounded, credential-free CDN downloads are `messenger.media.download(media_id, max_bytes=...)`; the Instagram-only `IAttachmentMediaReader` capability was removed in 0.34. Custom `IMessenger` implementations register capabilities in `_capabilities` for the internal `capability()` lookup (empty by default); `MessengerPipeline` delegates to the raw Messenger.
 
 ## Trusted credential access (Symphonai migration)
 

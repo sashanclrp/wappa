@@ -272,6 +272,7 @@ class CronPlugin:
                 cache_factory=ctx.cache_factory,
                 db=ctx.db,
                 db_read=ctx.db_read,
+                platforms=ctx.platforms,
             )
 
         # System cron: database-only context. System Scope is a Table Cache

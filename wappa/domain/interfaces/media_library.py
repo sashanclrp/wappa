@@ -19,7 +19,7 @@ implements it:
   SHA-256) and ``delete(media_id)`` removes it. A Platform without such an
   endpoint raises ``UnsupportedOperationError`` (Instagram has neither).
 
-Reach it with ``messenger.require_capability(IMediaLibrary)``.
+Every Messenger has it ready as ``messenger.media`` (ADR-0025 rule 12).
 """
 
 from __future__ import annotations

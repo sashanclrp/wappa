@@ -118,7 +118,12 @@ class WappaFullExampleHandler(WappaEventHandler):
 
             # 4. Check for active interactive states first
             state_result = await handle_user_in_state(
-                webhook, user_profile, self.messenger, self.cache_factory, self.logger
+                webhook,
+                user_profile,
+                self.messenger,
+                self.cache_factory,
+                self.logger,
+                templates=self.whatsapp.templates if self.whatsapp else None,
             )
 
             if state_result is not None:
@@ -360,7 +365,10 @@ class WappaFullExampleHandler(WappaEventHandler):
                 self.messenger, self.cache_factory, self.logger
             )
             self.state_handlers = StateHandlers(
-                self.messenger, self.cache_factory, self.logger
+                self.messenger,
+                self.cache_factory,
+                self.logger,
+                self.whatsapp.templates if self.whatsapp else None,
             )
 
             self.logger.debug("✅ Handler dependencies initialized successfully")

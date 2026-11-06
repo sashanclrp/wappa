@@ -3,8 +3,9 @@
 A location request and a contact (phone number) request open a native
 Platform flow that returns the User's location or phone number as a webhook.
 WhatsApp has both; a text prompt elsewhere would not return the data, so they
-are not ``IMessenger`` methods. Reach them with
-``messenger.require_capability(IUserDataRequests)``; HTTP routes gate on
+are not ``IMessenger`` methods. Hosts call them prebuilt on
+``self.whatsapp`` (``send_location_request``, ``send_contact_request``,
+ADR-0025 rule 12); HTTP routes gate on
 ``requires_capability(IUserDataRequests)`` (501 elsewhere). Through a
 ``MessengerPipeline`` the capability still runs the message middleware chain
 under the method names ``send_location_request`` / ``send_contact_request``.

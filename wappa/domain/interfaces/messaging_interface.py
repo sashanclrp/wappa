@@ -24,6 +24,7 @@ if TYPE_CHECKING:
         MessageCard,
         ReplyButton,
     )
+    from wappa.domain.interfaces.media_library import IMediaLibrary
     from wappa.domain.results import MessageResult
     from wappa.domain.user_profile import PlatformUserProfile
     from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
@@ -42,10 +43,12 @@ class IMessenger(ABC):
     Each Platform adapter maps these methods onto its native API. Operations a
     Platform lacks raise ``UnsupportedOperationError``; check
     ``supported_operations`` instead of branching on the Platform name.
-    Platform-only actions live behind ``capability()``: e.g. WhatsApp
-    Templates (``ITemplateMessaging``), WhatsApp location and phone-number
-    requests (``IUserDataRequests``) and Instagram comments
-    (``ICommentControls``).
+    A capability every Platform provides is a ready attribute: ``media``
+    (``IMediaLibrary``). Platform-only actions are ready on that Platform's
+    Platform Messenger (``self.whatsapp.templates``,
+    ``self.instagram.comments`` on the handler). ``capability()`` is the
+    internal seam both are built on (adapters, ``MessengerPipeline``, HTTP
+    ``requires_capability``); Host code does not call it.
 
     ``transcript`` (``send_video`` / ``send_audio``) is middleware-only
     metadata: no adapter sends it to the Platform, and middleware reads it
@@ -78,6 +81,17 @@ class IMessenger(ABC):
                 f"{self.platform.value} does not provide {getattr(kind, '__name__', kind)}"
             )
         return found
+
+    @property
+    def media(self) -> IMediaLibrary:
+        """This Inbox's Media Library (ADR-0025 rule 9), ready on every Platform.
+
+        Upload, download, describe and delete Platform media. Raises
+        ``UnsupportedOperationError`` only on an adapter that provides none.
+        """
+        from wappa.domain.interfaces.media_library import IMediaLibrary
+
+        return self.require_capability(IMediaLibrary)
 
     @property
     @abstractmethod

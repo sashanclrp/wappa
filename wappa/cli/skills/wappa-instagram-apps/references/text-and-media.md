@@ -60,17 +60,17 @@ The same calls work on both Platforms; Instagram adapts them instead of raising:
 | `send_contact(contacts, target)` | one text block per card (👤 name, organization, 📞 phones, ✉️ emails, 🔗 urls), split over 1000 UTF-8 bytes; `contacts` is one `ContactCard` or a list, in WhatsApp's contact-card shape (only `name.formatted_name` required) |
 | `send_sticker(source, target)` | an image; png/jpeg/gif only, a `.webp` file is rejected before I/O |
 
-Location and phone-number requests are the WhatsApp-only `IUserDataRequests` capability (`send_location_request`, `send_contact_request`), because a text prompt on Instagram cannot return the location or phone. Check `requests = self.messenger.capability(IUserDataRequests)` (`from wappa.messaging import IUserDataRequests`) and ask the User to type the answer when it is `None`.
+Location and phone-number requests are WhatsApp-only (`self.whatsapp.send_location_request`, `self.whatsapp.send_contact_request`), because a text prompt on Instagram cannot return the location or phone. `self.whatsapp` is `None` in an Instagram dispatch, so ask the User to type the answer there.
 
 ## Media Library: upload and download
 
-Storing and reading media is the shared `IMediaLibrary` capability, not a Messenger method:
+Storing and reading media is the shared Media Library (`IMediaLibrary`), ready on every Messenger as `self.messenger.media`:
 
 ```python
 from pathlib import Path
-from wappa.messaging import IMediaLibrary, MediaFamily
+from wappa.messaging import MediaFamily
 
-library = self.messenger.require_capability(IMediaLibrary)
+library = self.messenger.media
 stored = await library.upload(Path("assets/menu.png"), MediaFamily.IMAGE)
 if stored.success:
     await self.messenger.send_image(stored.media_id, target)  # reuse the id on this Inbox

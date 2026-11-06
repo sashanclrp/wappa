@@ -4,7 +4,7 @@ from wappa import WappaEventHandler
 from wappa.core.config import settings
 from wappa.core.logging import get_logger
 from wappa.domain.inbox import InboxRef
-from wappa.messaging import DirectMessage, IMediaLibrary
+from wappa.messaging import DirectMessage
 from wappa.webhooks import InboundMessageWebhook
 from wappa.webhooks.core.base_message import BaseAudioMessage
 
@@ -36,8 +36,7 @@ class TranscriptEventHandler(WappaEventHandler):
 
         # The shared media seam: the same call on WhatsApp and Instagram.
         # Pass the webhook's media_id unchanged; the bytes stay in memory.
-        library = messenger.require_capability(IMediaLibrary)
-        download = await library.download(webhook.message.media_id)
+        download = await messenger.media.download(webhook.message.media_id)
         if not download.found or download.value is None:
             logger.error(f"Failed to download audio: {download.error}")
             await messenger.send_text(

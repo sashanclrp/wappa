@@ -26,8 +26,10 @@ from wappa.messaging import (
     UnsupportedOperationError,
     UrlButton,
 )
-from wappa.messaging.instagram.messenger import InstagramMessenger
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
+from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
+from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+    WhatsAppMessengerAdapter,
+)
 from wappa.schemas.core.types import PlatformType
 
 WA_DM = DirectMessage(
@@ -60,9 +62,9 @@ class _Media:
         return self.result
 
 
-def _wa(media: object = None) -> tuple[WhatsAppMessenger, _Client]:
+def _wa(media: object = None) -> tuple[WhatsAppMessengerAdapter, _Client]:
     client = _Client()
-    messenger = WhatsAppMessenger(
+    messenger = WhatsAppMessengerAdapter(
         client=client,  # type: ignore[arg-type]
         media_handler=media,  # type: ignore[arg-type]
         interactive_handler=None,  # type: ignore[arg-type]
@@ -101,7 +103,7 @@ def test_templates_are_a_whatsapp_capability_not_a_contract_method():
     assert wa.capability(ITemplateMessaging) is wa
     assert wa.capability(ICommentControls) is None
     client = httpx.AsyncClient()
-    ig = InstagramMessenger(
+    ig = InstagramMessengerAdapter(
         inbox_ref=IG_REF,
         access_token=SecretStr("tkn"),
         session_provider=lambda: client,
@@ -238,7 +240,7 @@ async def test_instagram_media_library_download_reads_the_attachment_url():
         )
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    ig = InstagramMessenger(
+    ig = InstagramMessengerAdapter(
         inbox_ref=IG_REF,
         access_token=SecretStr("tkn"),
         session_provider=lambda: client,
@@ -281,7 +283,7 @@ async def test_upload_once_then_send_by_media_id_on_both_platforms(tmp_path):
         return httpx.Response(200, json={"recipient_id": "u1", "message_id": "mid"})
 
     http = httpx.AsyncClient(transport=httpx.MockTransport(graph))
-    ig = InstagramMessenger(
+    ig = InstagramMessengerAdapter(
         inbox_ref=IG_REF,
         access_token=SecretStr("tkn"),
         session_provider=lambda: http,
@@ -365,7 +367,7 @@ async def test_voice_note_renditions_serve_both_platforms_from_one_call():
         return httpx.Response(200, json={"recipient_id": "u1", "message_id": "mid"})
 
     http = httpx.AsyncClient(transport=httpx.MockTransport(graph))
-    ig = InstagramMessenger(
+    ig = InstagramMessengerAdapter(
         inbox_ref=IG_REF,
         access_token=SecretStr("tkn"),
         session_provider=lambda: http,

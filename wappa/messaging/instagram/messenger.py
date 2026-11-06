@@ -30,7 +30,7 @@ Contract mappings (ADR-0025: one Messenger method per action):
 - ``send_location`` / ``send_contact`` → text (maps link / one block per card);
   ``send_sticker`` → image
 - ``IUserDataRequests`` (location / phone-number requests) → not provided
-  (``capability()`` is ``None``; a text prompt would not return the data)
+  (``self.whatsapp`` is ``None`` here; a text prompt would not return the data)
 - reply: top-level ``reply_to: {"mid"}``
 
 Known local constraints are rejected before I/O; provider refusals and
@@ -301,7 +301,7 @@ def _contact_text(card: ContactCard) -> str:
     return "\n".join(lines)
 
 
-class InstagramMessenger(IMessenger):
+class InstagramMessengerAdapter(IMessenger):
     """One professional account; lifecycle-owned HTTP and no automatic retries."""
 
     _OPERATIONS = frozenset(
@@ -336,7 +336,7 @@ class InstagramMessenger(IMessenger):
         sent_registry: ISentMessageRegistry | None = None,
     ) -> None:
         if inbox_ref.platform is not PlatformType.INSTAGRAM:
-            raise ValueError("InstagramMessenger requires an Instagram Inbox")
+            raise ValueError("InstagramMessengerAdapter requires an Instagram Inbox")
         self._inbox_ref = inbox_ref
         # Instagram echoes Wappa's own sends; recording them lets the Inbound
         # Runtime drop those echoes (ADR-0023).

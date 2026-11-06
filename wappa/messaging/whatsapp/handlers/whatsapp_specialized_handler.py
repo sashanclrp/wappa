@@ -21,7 +21,7 @@ def _copy_optional(src: Any, dst: dict[str, Any], fields: tuple[str, ...]) -> No
 
 
 class WhatsAppSpecializedHandler:
-    """Contact cards, locations, and location-request messaging for WhatsAppMessenger."""
+    """Contact cards, locations, and location-request messaging for WhatsAppMessengerAdapter."""
 
     def __init__(self, client: WhatsAppClient, inbox_id: str):
         self.client = client

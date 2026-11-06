@@ -36,14 +36,16 @@ from wappa.domain.interactive import (
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.domain.results import MessageResult
-from wappa.messaging.instagram.messenger import PARTS_KEY, InstagramMessenger
+from wappa.messaging.instagram.messenger import PARTS_KEY, InstagramMessengerAdapter
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
     WhatsAppInteractiveHandler,
 )
 from wappa.messaging.whatsapp.handlers.whatsapp_specialized_handler import (
     WhatsAppSpecializedHandler,
 )
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
+from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+    WhatsAppMessengerAdapter,
+)
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
 
@@ -205,9 +207,9 @@ class _WhatsAppClient:
         }
 
 
-def _whatsapp() -> tuple[WhatsAppMessenger, Callable[[], str]]:
+def _whatsapp() -> tuple[WhatsAppMessengerAdapter, Callable[[], str]]:
     client = _WhatsAppClient()
-    messenger = WhatsAppMessenger(
+    messenger = WhatsAppMessengerAdapter(
         client=client,  # type: ignore[arg-type]
         media_handler=None,  # type: ignore[arg-type]
         interactive_handler=WhatsAppInteractiveHandler(client, "pnid"),  # type: ignore[arg-type]
@@ -241,9 +243,9 @@ class _Graph:
         ).replace('":', '": ')
 
 
-def _instagram(graph: _Graph) -> InstagramMessenger:
+def _instagram(graph: _Graph) -> InstagramMessengerAdapter:
     http = httpx.AsyncClient(transport=httpx.MockTransport(graph))
-    return InstagramMessenger(
+    return InstagramMessengerAdapter(
         inbox_ref=IG_REF,
         access_token=SecretStr("tkn"),
         session_provider=lambda: http,
@@ -315,9 +317,13 @@ async def test_every_parameter_reaches_the_wire(
     if platform is WA:
         messenger: IMessenger
         messenger, wire = _whatsapp()
-        adapter: type = WhatsAppMessenger
+        adapter: type = WhatsAppMessengerAdapter
     else:
-        messenger, wire, adapter = _instagram(graph), graph.wire, InstagramMessenger
+        messenger, wire, adapter = (
+            _instagram(graph),
+            graph.wire,
+            InstagramMessengerAdapter,
+        )
     args, kwargs = _call(name, platform)
     result = await getattr(messenger, name)(*args, **kwargs)
 
@@ -351,7 +357,7 @@ def _long(word: str, size: int = 1200) -> str:
     return " ".join([word] * (size // (len(word) + 1)))
 
 
-EMULATIONS: dict[str, Callable[[InstagramMessenger], Any]] = {
+EMULATIONS: dict[str, Callable[[InstagramMessengerAdapter], Any]] = {
     "split text": lambda m: m.send_text(_long("word"), IG_DM),
     "image with caption": lambda m: m.send_image(
         "https://example.com/a.png", IG_DM, caption="cap"
@@ -407,7 +413,7 @@ EMULATIONS: dict[str, Callable[[InstagramMessenger], Any]] = {
 
 @pytest.mark.parametrize("build", EMULATIONS.values(), ids=EMULATIONS.keys())
 async def test_every_instagram_emulation_returns_one_result_listing_its_parts(
-    build: Callable[[InstagramMessenger], Any],
+    build: Callable[[InstagramMessengerAdapter], Any],
 ) -> None:
     graph = _Graph()
     result = await build(_instagram(graph))

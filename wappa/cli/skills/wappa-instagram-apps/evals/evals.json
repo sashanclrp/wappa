@@ -44,7 +44,7 @@
     {
       "id": "negative-whatsapp-template",
       "prompt": "Send an approved WhatsApp Template 'order_confirmed' to a customer with Wappa.",
-      "expected_output": "Does not run the Instagram setup flow; routes to WhatsApp Template guidance (messenger.require_capability(ITemplateMessaging).send_text_template with a DirectMessage, or OutboundRuntime.templates).",
+      "expected_output": "Does not run the Instagram setup flow; routes to WhatsApp Template guidance (self.whatsapp.templates.send_text_template with a DirectMessage, or OutboundRuntime.templates).",
       "assertions": [
         "does not load Instagram Meta setup",
         "does not call Instagram-only operations"

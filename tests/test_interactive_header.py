@@ -24,11 +24,13 @@ from wappa.domain.interactive import (
     check_list_message,
 )
 from wappa.messaging import CommentRef, DeliveryAddresses, DirectMessage, PrivateReply
-from wappa.messaging.instagram.messenger import InstagramMessenger
+from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
     WhatsAppInteractiveHandler,
 )
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
+from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+    WhatsAppMessengerAdapter,
+)
 from wappa.messaging.whatsapp.payload_builders import WhatsAppMediaPayloadBuilder
 from wappa.schemas.core.types import PlatformType
 
@@ -54,9 +56,9 @@ class _Client:
         }
 
 
-def _wa() -> tuple[WhatsAppMessenger, _Client]:
+def _wa() -> tuple[WhatsAppMessengerAdapter, _Client]:
     client = _Client()
-    messenger = WhatsAppMessenger(
+    messenger = WhatsAppMessengerAdapter(
         client=client,  # type: ignore[arg-type]
         media_handler=None,  # type: ignore[arg-type]
         interactive_handler=WhatsAppInteractiveHandler(client, "pnid"),  # type: ignore[arg-type]
@@ -67,7 +69,7 @@ def _wa() -> tuple[WhatsAppMessenger, _Client]:
     return messenger, client
 
 
-def _ig() -> tuple[InstagramMessenger, httpx.AsyncClient, list[dict[str, Any]]]:
+def _ig() -> tuple[InstagramMessengerAdapter, httpx.AsyncClient, list[dict[str, Any]]]:
     sent: list[dict[str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -77,7 +79,7 @@ def _ig() -> tuple[InstagramMessenger, httpx.AsyncClient, list[dict[str, Any]]]:
         )
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    messenger = InstagramMessenger(
+    messenger = InstagramMessengerAdapter(
         inbox_ref=IG_REF,
         access_token=SecretStr("tkn"),
         session_provider=lambda: client,
@@ -396,7 +398,7 @@ async def test_instagram_partial_failure_says_how_many_parts_went_out() -> None:
         return httpx.Response(200, json={"message_id": f"mid.{len(sent)}"})
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    messenger = InstagramMessenger(
+    messenger = InstagramMessengerAdapter(
         inbox_ref=IG_REF,
         access_token=SecretStr("tkn"),
         session_provider=lambda: client,

@@ -8,7 +8,7 @@ and a factory to create contexts from app.state.
 from __future__ import annotations
 
 import copy
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -22,6 +22,8 @@ if TYPE_CHECKING:
 
     from wappa.domain.interfaces.cache_factory import ICacheFactory
     from wappa.domain.interfaces.messaging_interface import IMessenger
+    from wappa.platforms import PlatformEntry
+    from wappa.schemas.core.types import PlatformType
 
 
 @dataclass
@@ -42,6 +44,9 @@ class WappaContext:
     db_read: Callable[[], AbstractAsyncContextManager[AsyncSession]] | None = None
     cache_factory: ICacheFactory | None = None
     messenger: IMessenger | None = None
+    # The app's Platform Registry table; ``with_context(platforms=...)`` builds
+    # the handler's Platform Messenger from it.
+    platforms: Mapping[PlatformType, PlatformEntry] | None = None
 
     # Logger
     logger: ContextLogger = field(default_factory=lambda: get_logger("wappa.context"))
@@ -159,6 +164,7 @@ class WappaContextFactory:
             db_read=db_read,
             cache_factory=cache_factory,
             messenger=messenger,
+            platforms=builder.capabilities.platforms if builder is not None else None,
         )
 
         self.logger.debug(

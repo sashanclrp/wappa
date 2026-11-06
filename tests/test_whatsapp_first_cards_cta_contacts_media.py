@@ -40,14 +40,16 @@ from wappa.messaging import (
     DirectMessage,
     UnsupportedOperationError,
 )
-from wappa.messaging.instagram.messenger import InstagramMessenger
+from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
 from wappa.messaging.whatsapp.handlers.whatsapp_interactive_handler import (
     WhatsAppInteractiveHandler,
 )
 from wappa.messaging.whatsapp.handlers.whatsapp_specialized_handler import (
     WhatsAppSpecializedHandler,
 )
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
+from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+    WhatsAppMessengerAdapter,
+)
 from wappa.schemas.core.types import PlatformType
 
 PHONE = "573001112233"
@@ -126,9 +128,9 @@ class _MediaHandler:
         )
 
 
-def _wa(media: object = None) -> tuple[WhatsAppMessenger, _Client]:
+def _wa(media: object = None) -> tuple[WhatsAppMessengerAdapter, _Client]:
     client = _Client()
-    messenger = WhatsAppMessenger(
+    messenger = WhatsAppMessengerAdapter(
         client=client,  # type: ignore[arg-type]
         media_handler=media,  # type: ignore[arg-type]
         interactive_handler=WhatsAppInteractiveHandler(client, "pnid"),  # type: ignore[arg-type]
@@ -139,7 +141,7 @@ def _wa(media: object = None) -> tuple[WhatsAppMessenger, _Client]:
     return messenger, client
 
 
-def _ig() -> tuple[InstagramMessenger, httpx.AsyncClient, list[httpx.Request]]:
+def _ig() -> tuple[InstagramMessengerAdapter, httpx.AsyncClient, list[httpx.Request]]:
     sent: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -151,7 +153,7 @@ def _ig() -> tuple[InstagramMessenger, httpx.AsyncClient, list[httpx.Request]]:
         )
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    messenger = InstagramMessenger(
+    messenger = InstagramMessengerAdapter(
         inbox_ref=IG_REF,
         access_token=SecretStr("tkn"),
         session_provider=lambda: client,

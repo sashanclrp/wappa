@@ -59,7 +59,7 @@ Interactive limits are the minimum across WhatsApp and Instagram and hold when y
 - `send_cta_message` → button template with one URL button; its header is emulated exactly as for `send_button_message`.
 - `send_carousel` → `body` is sent first as a text message (with the reply context), then a generic template. `CardMedia` is URL-only (`url`, plus `poster_url` for a video), so one card serves both Platforms. An image card shows `header.url`; a video card shows `header.poster_url` and opens the video on tap. A video card without `poster_url` raises `UnsupportedOperationError` before any call: card media is never sent apart from its card. Every card needs a `header` (image or video by URL; WhatsApp sends it as the header `link` and takes no Media ID) and a button: one `UrlButton` or 1–2 `ReplyButton`s, never a mix, checked when the `MessageCard` is built; every card in a carousel carries the same button kind and count (`check_carousel`). On WhatsApp title + subtitle become the card body. For a single card, use `send_button_message` with a media header.
 
-Instagram has no phone/email quick replies, so ask the User to type those. WhatsApp Templates are the WhatsApp-only `ITemplateMessaging` capability. "Template" in Meta's Instagram wire format is not a WhatsApp Template.
+Instagram has no phone/email quick replies, so ask the User to type those. WhatsApp Templates are WhatsApp-only, on `self.whatsapp.templates`. "Template" in Meta's Instagram wire format is not a WhatsApp Template.
 
 ## Selections
 
@@ -84,12 +84,14 @@ Wappa filters nothing; your handler decides.
 
 ## Replies: public versus private
 
-```python
-from wappa.messaging import ICommentControls, PrivateReply
+`self.instagram` is the Instagram Platform Messenger, ready in every Instagram dispatch (`None` on other Platforms): the same Messenger as `self.messenger` plus `comments`, `content` and `history`.
 
-controls = m.require_capability(ICommentControls)
-result = await controls.reply_comment(webhook.comment_ref, "Thanks!")   # public; CommentResult.comment_id
-dm = await m.send_text("Here is the price list…", target=PrivateReply(comment_ref=webhook.comment_ref))
+```python
+from wappa.messaging import PrivateReply
+
+ig = self.instagram  # None outside an Instagram dispatch
+result = await ig.comments.reply_comment(webhook.comment_ref, "Thanks!")   # public; CommentResult.comment_id
+dm = await ig.send_text("Here is the price list…", target=PrivateReply(comment_ref=webhook.comment_ref))
 ```
 
 A private reply is text only, and only one is allowed per comment: within 7 days for posts/Reels, and only during the broadcast for Live. The DM lands in Requests unless the User follows you. You may send ordinary `DirectMessage`s only after the User answers, and only within 24 hours of that answer. Never build a `DirectMessage` from a commenter's ID, and never switch between public and private silently. Public replies work only on top-level, non-hidden comments, and not on Live. `send_text` is the only send that accepts a `PrivateReply`, and only Instagram delivers it today; every other send, and every other Platform's adapter, rejects it.
@@ -97,12 +99,10 @@ A private reply is text only, and only one is allowed per comment: within 7 days
 ## Comment Controls
 
 ```python
-from wappa.messaging import ICommentControls
-
-controls = m.require_capability(ICommentControls)
-await controls.hide_comment(ref); await controls.unhide_comment(ref)
-await controls.delete_comment(ref)                      # media owner only
-await controls.set_comments_enabled(webhook.post_ref, False)
+comments = self.instagram.comments
+await comments.hide_comment(ref); await comments.unhide_comment(ref)
+await comments.delete_comment(ref)                      # media owner only
+await comments.set_comments_enabled(webhook.post_ref, False)
 ```
 
 These return `ControlResult` (`accepted`/`rejected`/`indeterminate`). None of them work on Live. Never retry a destructive control on an indeterminate outcome. A successful control does not mean a webhook will follow. Moderation policy (what to hide, who may) belongs to the app, so test only on disposable comments.
@@ -110,9 +110,7 @@ These return `ControlResult` (`accepted`/`rejected`/`indeterminate`). None of th
 ## Post and comment reads
 
 ```python
-from wappa.messaging import IConversationContentReader
-
-reader = m.require_capability(IConversationContentReader)
+reader = self.instagram.content
 post = await reader.get_post(webhook.post_ref)          # caption, media_type, permalink, children, counts
 page = await reader.list_comments(webhook.post_ref, limit=25)   # top-level, ≤ 50; page.value.next_cursor
 replies = await reader.list_replies(webhook.comment_ref, after=cursor)

@@ -13,7 +13,9 @@ from wappa.core.messaging.middleware.pubsub_notification import _destination_use
 from wappa.core.messaging.pipeline import SendInvocation
 from wappa.domain.inbox import InboxRef
 from wappa.messaging import DeliveryAddresses, DirectMessage
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
+from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+    WhatsAppMessengerAdapter,
+)
 from wappa.schemas.core.recipient import whatsapp_delivery_order
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
@@ -46,8 +48,8 @@ class _Client:
         return {"messages": [{"id": "wamid.out"}], "contacts": [{"input": address}]}
 
 
-def _wa(client: _Client) -> WhatsAppMessenger:
-    return WhatsAppMessenger(
+def _wa(client: _Client) -> WhatsAppMessengerAdapter:
+    return WhatsAppMessengerAdapter(
         client=client,  # type: ignore[arg-type]
         media_handler=None,  # type: ignore[arg-type]
         interactive_handler=None,  # type: ignore[arg-type]

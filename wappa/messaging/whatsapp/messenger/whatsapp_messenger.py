@@ -69,7 +69,7 @@ from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
 
 
-class WhatsAppMessenger(IMessenger, ITemplateMessaging, IUserDataRequests):
+class WhatsAppMessengerAdapter(IMessenger, ITemplateMessaging, IUserDataRequests):
     def __init__(
         self,
         client: WhatsAppClient,
@@ -165,7 +165,7 @@ class WhatsAppMessenger(IMessenger, ITemplateMessaging, IUserDataRequests):
             else:
                 self.logger.warning(
                     "Skipping unsupported template body parameter type '%s' in "
-                    "WhatsAppMessenger._convert_body_parameters",
+                    "WhatsAppMessengerAdapter._convert_body_parameters",
                     p.get("type"),
                 )
         return result

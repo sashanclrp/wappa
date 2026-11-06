@@ -1,10 +1,10 @@
 """Focused, optional conversation capabilities beside the Messenger facade.
 
-These are not methods every Messenger must implement. A Messenger advertises
-them through ``IMessenger.capability(kind)``; callers receive ``None`` (or
-``UnsupportedOperationError`` from ``require_capability``) when the Platform
-adapter has no implementation. Host policy decides whether and when to call
-them — Wappa ships the mechanism only.
+These are not methods every Messenger must implement. An adapter registers
+them in its ``_capabilities``; Hosts reach them prebuilt on the Instagram
+Platform Messenger (``self.instagram.comments``, ``self.instagram.content``),
+built on the internal ``IMessenger.capability(kind)`` seam. Host policy
+decides whether and when to call them — Wappa ships the mechanism only.
 """
 
 from __future__ import annotations

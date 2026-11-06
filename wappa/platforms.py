@@ -2,7 +2,8 @@
 
 ``PLATFORMS.keys()`` is the one installed-Platform set. Each ``PlatformEntry``
 names the Platform's inbound ``PlatformWebhooks`` adapter, its Messenger
-builder and its display name. ``PlatformType`` is vocabulary: a member with no
+builder, its display name and, optionally, its Platform Messenger builder (the
+Host-facing ``self.whatsapp`` / ``self.instagram`` on the handler). ``PlatformType`` is vocabulary: a member with no
 entry (Telegram, Teams) is reserved, not installed, and every lookup of a
 missing key fails loudly instead of falling through to another Platform.
 
@@ -44,15 +45,25 @@ class MessengerDeps:
 
 
 MessengerBuilder = Callable[["ResolvedInboxCredentials", MessengerDeps], "IMessenger"]
+PlatformMessengerBuilder = Callable[["IMessenger"], "IMessenger"]
+"""Extend the dispatch's core Messenger (pipeline-wrapped) with Platform-only
+capabilities. It never builds a second Messenger."""
 
 
 @dataclass(frozen=True, slots=True)
 class PlatformEntry:
-    """One installed Platform."""
+    """One installed Platform.
+
+    ``build_platform_messenger`` receives the core Messenger already built for
+    a dispatch and returns that Platform's Platform Messenger, bound on the
+    handler under the Platform's value (``self.whatsapp``, ``self.instagram``).
+    ``None`` means the Platform has no Platform-only capabilities to add.
+    """
 
     webhooks: PlatformWebhooks
     build_messenger: MessengerBuilder
     display_name: str
+    build_platform_messenger: PlatformMessengerBuilder | None = None
 
 
 def _build_whatsapp_messenger(
@@ -73,7 +84,7 @@ def _build_whatsapp_messenger(
         WhatsAppTemplateHandler,
     )
     from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
-        WhatsAppMessenger,
+        WhatsAppMessengerAdapter,
     )
 
     inbox_id = credentials.inbox_id
@@ -85,7 +96,7 @@ def _build_whatsapp_messenger(
         api_version=deps.graph_api_version,
         base_url=deps.graph_base_url,
     )
-    return WhatsAppMessenger(
+    return WhatsAppMessengerAdapter(
         client=client,
         media_handler=WhatsAppMediaHandler(
             client=client,
@@ -106,9 +117,9 @@ def _build_whatsapp_messenger(
 def _build_instagram_messenger(
     credentials: ResolvedInboxCredentials, deps: MessengerDeps
 ) -> IMessenger:
-    from wappa.messaging.instagram.messenger import InstagramMessenger
+    from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
 
-    return InstagramMessenger(
+    return InstagramMessengerAdapter(
         inbox_ref=credentials.inbox_ref,
         access_token=credentials.access_token,
         session_provider=deps.session_provider,
@@ -117,6 +128,18 @@ def _build_instagram_messenger(
         media_download_client_provider=deps.media_download_client_provider,
         sent_registry=deps.sent_registry,
     )
+
+
+def _build_whatsapp_platform_messenger(messenger: IMessenger) -> IMessenger:
+    from wappa.messaging.whatsapp.platform_messenger import WhatsAppMessenger
+
+    return WhatsAppMessenger(messenger)
+
+
+def _build_instagram_platform_messenger(messenger: IMessenger) -> IMessenger:
+    from wappa.messaging.instagram.platform_messenger import InstagramMessenger
+
+    return InstagramMessenger(messenger)
 
 
 BUILTIN_FIELDS: Mapping[PlatformType, frozenset[str]] = MappingProxyType(
@@ -138,11 +161,13 @@ def build_platforms(
                 webhooks=WhatsAppWebhookProcessor(field_registry),
                 build_messenger=_build_whatsapp_messenger,
                 display_name="WhatsApp",
+                build_platform_messenger=_build_whatsapp_platform_messenger,
             ),
             PlatformType.INSTAGRAM: PlatformEntry(
                 webhooks=InstagramWebhookProcessor(field_registry),
                 build_messenger=_build_instagram_messenger,
                 display_name="Instagram",
+                build_platform_messenger=_build_instagram_platform_messenger,
             ),
         }
     )
@@ -158,11 +183,29 @@ on ``app.state.platforms``; the keys are always the same installed set.
 """
 
 
+def platform_messenger(
+    messenger: IMessenger,
+    platforms: Mapping[PlatformType, PlatformEntry] | None = None,
+) -> IMessenger | None:
+    """The Platform Messenger for ``messenger``'s Platform, or ``None``.
+
+    Looks the Platform up in ``platforms`` (the app's table; ``PLATFORMS``
+    when omitted) and lets its entry extend the given Messenger. ``None`` when
+    the Platform is not in the table or adds no Platform Messenger.
+    """
+    entry = (platforms if platforms is not None else PLATFORMS).get(messenger.platform)
+    if entry is None or entry.build_platform_messenger is None:
+        return None
+    return entry.build_platform_messenger(messenger)
+
+
 __all__ = [
     "BUILTIN_FIELDS",
     "PLATFORMS",
     "MessengerBuilder",
     "MessengerDeps",
     "PlatformEntry",
+    "PlatformMessengerBuilder",
     "build_platforms",
+    "platform_messenger",
 ]

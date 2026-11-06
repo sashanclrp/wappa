@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -23,6 +24,7 @@ from wappa.domain.inbox import InboxRef
 from wappa.domain.interfaces.external_webhook_context import (
     ResolvedExternalWebhookContext,
 )
+from wappa.schemas.core.types import PlatformType
 from wappa.webhooks import InboundMessageWebhook
 
 
@@ -98,7 +100,8 @@ class _ContextFactory:
         self.calls: list[dict[str, Any]] = []
         self.db = object()
         self.db_read = object()
-        self.messenger = object()
+        # A Messenger stand-in on a Platform with no Platform Messenger.
+        self.messenger = SimpleNamespace(platform=PlatformType.TELEGRAM)
         self.cache_factory = object()
 
     async def create_context(

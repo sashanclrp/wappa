@@ -11,8 +11,8 @@ from typing import Any
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.cache_factory import ICacheFactory
 from wappa.domain.interfaces.messaging_interface import IMessenger
-from wappa.domain.interfaces.template_messaging import ITemplateMessaging
 from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
+from wappa.messaging import ITemplateMessaging
 from wappa.webhooks import InboundMessageWebhook
 
 from ..models.state_models import ButtonState, ListState, StateType
@@ -26,7 +26,11 @@ class StateHandlers:
     """Collection of handlers for interactive state management."""
 
     def __init__(
-        self, messenger: IMessenger, cache_factory: ICacheFactory, logger: Any
+        self,
+        messenger: IMessenger,
+        cache_factory: ICacheFactory,
+        logger: Any,
+        templates: ITemplateMessaging | None = None,
     ) -> None:
         """
         Initialize state handlers.
@@ -35,8 +39,10 @@ class StateHandlers:
             messenger: IMessenger instance for sending messages
             cache_factory: Cache factory for data persistence
             logger: Logger instance
+            templates: ``self.whatsapp.templates`` from the handler (None off WhatsApp)
         """
         self.messenger = messenger
+        self.templates = templates
         self.cache_helper = CacheHelper(cache_factory)
         self.logger = logger
 
@@ -576,9 +582,11 @@ class StateHandlers:
         self.logger.info(f"🔄 Echoing template '{template_name}' to user {user_id}")
 
         try:
-            # Echo template back (simple text template)
-            templates = self.messenger.require_capability(ITemplateMessaging)
-            result = await templates.send_text_template(
+            # Echo template back (simple text template). Templates are
+            # WhatsApp-only: the handler passes self.whatsapp.templates.
+            if self.templates is None:
+                return {"success": False, "error": "Templates are WhatsApp-only"}
+            result = await self.templates.send_text_template(
                 target=DirectMessage(
                     inbox_ref=InboxRef(
                         platform=self.messenger.platform,
@@ -759,6 +767,7 @@ async def handle_user_in_state(
     messenger: IMessenger,
     cache_factory: ICacheFactory,
     logger: Any,
+    templates: ITemplateMessaging | None = None,
 ) -> dict[str, Any] | None:
     """
     Handle user response when they are in an active state (convenience function).
@@ -773,7 +782,7 @@ async def handle_user_in_state(
     Returns:
         Result dictionary or None if no active state
     """
-    handlers = StateHandlers(messenger, cache_factory, logger)
+    handlers = StateHandlers(messenger, cache_factory, logger, templates)
     cache_helper = CacheHelper(cache_factory)
 
     # Check for active button state

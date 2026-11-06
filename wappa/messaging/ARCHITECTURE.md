@@ -2,7 +2,7 @@
 
 ## Responsibilities
 
-`IMessenger` has one method per conversation action on every Platform; each adapter maps it onto its native API ([ADR-0025](../../docs/adr/0025-messenger-contract.md)). Besides sending and acknowledging, it has one read: `resolve_platform_user_profile(user)` returns a `PlatformUserProfile` (`wappa/domain/user_profile.py`) with every fact the Platform provides about a User. WhatsApp maps the webhook evidence with no I/O; Instagram adds a Graph `GET /{igsid}?fields=name,username,profile_pic` with the Inbox token and, on failure, returns the evidence with the `ReadOutcome` instead of raising. Wappa never calls it during intake or dispatch, and the pipeline forwards it without middleware; the Host merges and persists the result (ADR-0025 rule 10). Separate responsibilities are Focused Capabilities reached with `messenger.capability(kind)`: `IMediaLibrary` (WhatsApp and Instagram upload/download), `ITemplateMessaging` (WhatsApp Templates), `IUserDataRequests` (WhatsApp location and phone-number requests), and the Instagram-only `ICommentControls` and `IConversationContentReader`. Their existence does not put consumer moderation policy, AI or publishing/analytics inside messaging. Extra provider clients remain extension-owned and use `InboxCredentialAccess`.
+`IMessenger` has one method per conversation action on every Platform; each adapter maps it onto its native API ([ADR-0025](../../docs/adr/0025-messenger-contract.md)). Besides sending and acknowledging, it has one read: `resolve_platform_user_profile(user)` returns a `PlatformUserProfile` (`wappa/domain/user_profile.py`) with every fact the Platform provides about a User. WhatsApp maps the webhook evidence with no I/O; Instagram adds a Graph `GET /{igsid}?fields=name,username,profile_pic` with the Inbox token and, on failure, returns the evidence with the `ReadOutcome` instead of raising. Wappa never calls it during intake or dispatch, and the pipeline forwards it without middleware; the Host merges and persists the result (ADR-0025 rule 10). Separate responsibilities are Focused Capabilities, registered in each adapter's `_capabilities` and looked up internally with `messenger.capability(kind)`: `IMediaLibrary` (WhatsApp and Instagram upload/download), `ITemplateMessaging` (WhatsApp Templates), `IUserDataRequests` (WhatsApp location and phone-number requests), and the Instagram-only `ICommentControls`, `IConversationContentReader` and `IConversationHistoryReader`. Hosts never look one up (ADR-0025 rule 12): a shared capability is an `IMessenger` attribute (`messenger.media`), and a Platform-only one is ready on that Platform's Platform Messenger, `WhatsAppMessenger` (`wappa/messaging/whatsapp/platform_messenger.py`: `templates`, `send_location_request`, `send_contact_request`) or `InstagramMessenger` (`wappa/messaging/instagram/platform_messenger.py`: `comments`, `content`, `history`). Both extend `PlatformMessenger` (`wappa/core/messaging/platform_messenger.py`), which receives the dispatch's pipeline-wrapped Messenger and forwards every `IMessenger` member to it, so middleware runs and no second Messenger is built; each `PlatformEntry.build_platform_messenger` builds one and `WappaEventHandler.with_context` binds it as `self.whatsapp` / `self.instagram`. The concrete adapters are `WhatsAppMessengerAdapter` and `InstagramMessengerAdapter`. Their existence does not put consumer moderation policy, AI or publishing/analytics inside messaging. Extra provider clients remain extension-owned and use `InboxCredentialAccess`.
 
 - Implement `IMessenger` for WhatsApp and Instagram, and `IMediaLibrary` for both (`wappa/messaging/whatsapp/media_library.py`, `wappa/messaging/instagram/media_library.py`).
 - Own the `WhatsAppClient` HTTP adapter: token auth, JSON and multipart POST, GET, DELETE, and streaming GET against the Meta Graph API.
@@ -18,7 +18,7 @@
   This deep module resolves credentials and active clients, constructs the
   platform Messenger and Messenger Pipeline, executes Template transport, and
   normalizes platform evidence without exposing its composition.
-- Keep `Messenger` / `IMessenger` as the general outbound seam for conversation messages. WhatsApp Templates are the `ITemplateMessaging` capability (`WhatsAppMessenger` implements it; `MessengerPipeline.capability(ITemplateMessaging)` wraps it so message middleware still runs under the `send_*_template` method names). Template-only Host Applications use the smaller public Template transport capability.
+- Keep `Messenger` / `IMessenger` as the general outbound seam for conversation messages. WhatsApp Templates are the `ITemplateMessaging` capability (`WhatsAppMessengerAdapter` implements it; `MessengerPipeline.capability(ITemplateMessaging)` wraps it so message middleware still runs under the `send_*_template` method names). Hosts reach it as `self.whatsapp.templates`. Template-only Host Applications use the smaller public Template transport capability.
   Internal WhatsApp handlers may stay grouped by message family, but public
   `TextMessenger`, `MediaMessenger`, or similar seams are deferred until there is
   concrete pressure from multiple platform adapters or tests.
@@ -44,13 +44,15 @@ messaging/
   outbound_runtime.py           # Public OutboundRuntime: the outbound Messenger factory for every Platform
   template_transport.py         # Inbox Template capability (InboxTemplateTransport) and its request/result values
   instagram/
-    messenger.py                # InstagramMessenger: IMessenger impl, _OPERATIONS, capability lookup
+    platform_messenger.py       # InstagramMessenger: the Host-facing Platform Messenger (self.instagram)
+    messenger.py                # InstagramMessengerAdapter: IMessenger impl, _OPERATIONS, capability registration
     graph.py                    # graph_request: the one bearer Graph call + outcome classification (also used by connections.InstagramSubscriptions)
     media.py                    # Instagram media rules + credential-free InstagramAttachmentReader (private)
     media_library.py            # IMediaLibrary: message_attachments upload (file or bytes), CDN download
     content.py                  # ICommentControls + IConversationContentReader
     history.py                  # IConversationHistoryReader (conversation message reads)
   whatsapp/
+    platform_messenger.py       # WhatsAppMessenger: the Host-facing Platform Messenger (self.whatsapp)
     media_library.py            # IMediaLibrary over the Cloud API Media endpoints (upload, download, info, delete)
     client/
       whatsapp_client.py          # HTTP session wrapper; WhatsAppUrlBuilder, WhatsAppManagementUrlBuilder
@@ -60,7 +62,7 @@ messaging/
       whatsapp_template_handler.py     # Text, media-header, location-header templates
       whatsapp_specialized_handler.py  # Contact cards, locations, location requests
     messenger/
-      whatsapp_messenger.py       # IMessenger + ITemplateMessaging + IUserDataRequests impl; composes all four handlers
+      whatsapp_messenger.py       # WhatsAppMessengerAdapter: IMessenger + ITemplateMessaging + IUserDataRequests impl; composes all four handlers
     models/
       basic_models.py             # WhatsAppAPIResponse wire models; message_result_from_* builders
       media_models.py             # MediaType enum, WhatsApp MIME types and size caps, MediaUploadRequest
@@ -74,7 +76,7 @@ messaging/
       error_helpers.py            # handle_whatsapp_error — uniform error → MessageResult
 ```
 
-Outside this folder but on every send path: the Messenger Pipeline (`MessengerPipeline`, middleware chain, `_PipelineTemplates`) lives in `wappa/core/messaging/pipeline.py`; `MessengerFactory` (per-Inbox Messenger cache) lives in `wappa/domain/factories/messenger_factory.py` and builds through each Platform's `PlatformEntry.build_messenger` in `wappa/platforms.py`; shared media rendition selection lives in `wappa/domain/media_renditions.py`; the Platform-neutral interactive values (`ReplyButton`, `InteractiveHeader`, `MediaRef`, `ListSection`, `ListRow`, `MessageCard`), their shared limits (the minimum across Platforms, enforced at construction and by `check_button_message` / `check_list_message` / `check_cta_message` / `check_carousel`, which each adapter calls before I/O), the free-form limits `TEXT_MAX` / `CAPTION_MAX` (WhatsApp's, checked by `check_text` / `check_caption` in every adapter before I/O) and `ContactCard` live in `wappa/domain/interactive.py` and `wappa/domain/contacts.py`, and the neutral `MessageResult` in `wappa/domain/results.py`; the neutral HTTP send request models live in `wappa/schemas/requests/`. No `IMessenger` signature imports a WhatsApp type.
+Outside this folder but on every send path: the Messenger Pipeline (`MessengerPipeline`, middleware chain, `_PipelineTemplates`) lives in `wappa/core/messaging/pipeline.py`; the `PlatformMessenger` base every Platform Messenger extends (forwarding the whole `IMessenger` contract to the dispatch's Messenger) lives in `wappa/core/messaging/platform_messenger.py`, and each Platform's `PlatformEntry.build_platform_messenger` builds it; `MessengerFactory` (per-Inbox Messenger cache) lives in `wappa/domain/factories/messenger_factory.py` and builds through each Platform's `PlatformEntry.build_messenger` in `wappa/platforms.py`; shared media rendition selection lives in `wappa/domain/media_renditions.py`; the Platform-neutral interactive values (`ReplyButton`, `InteractiveHeader`, `MediaRef`, `ListSection`, `ListRow`, `MessageCard`), their shared limits (the minimum across Platforms, enforced at construction and by `check_button_message` / `check_list_message` / `check_cta_message` / `check_carousel`, which each adapter calls before I/O), the free-form limits `TEXT_MAX` / `CAPTION_MAX` (WhatsApp's, checked by `check_text` / `check_caption` in every adapter before I/O) and `ContactCard` live in `wappa/domain/interactive.py` and `wappa/domain/contacts.py`, and the neutral `MessageResult` in `wappa/domain/results.py`; the neutral HTTP send request models live in `wappa/schemas/requests/`. No `IMessenger` signature imports a WhatsApp type.
 
 ## Changing a Messenger method
 
@@ -84,9 +86,9 @@ One action touches this chain, in order. Each hop is a real edit or a deliberate
 2. Platform adapters: `wappa/messaging/whatsapp/messenger/whatsapp_messenger.py` and `wappa/messaging/instagram/messenger.py`. Update each adapter's `supported_operations` (Instagram's `_OPERATIONS` set) when a Platform gains or loses the operation.
 3. Media rules, for media actions: `wappa/domain/media_renditions.py` (`pick_rendition`, which rendition each Platform accepts), the WhatsApp suffix sets (`WHATSAPP_STICKER_SUFFIXES` and siblings) at the bottom of `wappa/messaging/whatsapp/messenger/whatsapp_messenger.py`, and `wappa/messaging/instagram/media.py` (Instagram formats and size limits).
 4. WhatsApp payload builders: `wappa/messaging/whatsapp/payload_builders.py` (`WhatsAppMessagePayloadBuilder` for text, read status and text limits; `WhatsAppMediaPayloadBuilder` for media payloads and media limits), private to the adapter. Interactive, template and specialized payloads are built in the handlers under `wappa/messaging/whatsapp/handlers/`.
-5. `wappa/core/messaging/pipeline.py`: the matching `MessengerPipeline` method, so middleware sees the call (reads such as `mark_as_read` and `resolve_platform_user_profile` forward to the raw Messenger without middleware). Template methods live on `_PipelineTemplates` and the user-data requests on `_PipelineUserDataRequests` in the same file.
+5. `wappa/core/messaging/pipeline.py` and `wappa/core/messaging/platform_messenger.py`: the matching `MessengerPipeline` method and the `PlatformMessenger` forwarder, so middleware sees the call (reads such as `mark_as_read` and `resolve_platform_user_profile` forward to the raw Messenger without middleware). Template methods live on `_PipelineTemplates` and the user-data requests on `_PipelineUserDataRequests` in the same file.
 6. HTTP API: the request model (a `DeliveryRequest` subclass from `wappa/schemas/core/recipient.py`, kept in the neutral `wappa/schemas/requests/`), the shared route under `wappa/api/routes/` (or `wappa/api/routes/conversations.py`), and `classify_outbound_payload` in `wappa/messaging/classification.py` when the request model is new. See `wappa/api/ARCHITECTURE.md`.
-7. Tests: `tests/test_one_method_per_action.py` (both adapters, unsupported paths), `tests/test_messenger_parity.py` (pipeline and adapter signatures, forwarded arguments, `supported_operations` against overridden methods; it fails until steps 1, 2 and 5 agree), `tests/test_messenger_parameter_reach.py` (one neutral value set through both adapters: every parameter reaches the wire or is listed as ignored and documented; every multi-message Instagram emulation returns one result with `wappa_parts`), `tests/test_capability_map.py` (each adapter's `_capabilities` equal the ADR-0025 contract map), `tests/test_messenger_pipeline.py` (pipeline delegation), `tests/test_platform_messaging_api.py` (route, 501/400/failed-result mapping).
+7. Tests: `tests/test_one_method_per_action.py` (both adapters, unsupported paths), `tests/test_messenger_parity.py` (pipeline, Platform Messenger and adapter signatures, forwarded arguments, `supported_operations` against overridden methods; it fails until steps 1, 2 and 5 agree), `tests/test_messenger_parameter_reach.py` (one neutral value set through both adapters: every parameter reaches the wire or is listed as ignored and documented; every multi-message Instagram emulation returns one result with `wappa_parts`), `tests/test_capability_map.py` (each adapter's `_capabilities` equal the ADR-0025 contract map), `tests/test_messenger_pipeline.py` (pipeline delegation), `tests/test_platform_messaging_api.py` (route, 501/400/failed-result mapping).
 8. `docs/public-contract.md` ("Messenger operations" and "Messenger") and `CHANGELOG.md`, listing every break.
 
 ## Key Classes and Roles
@@ -94,9 +96,11 @@ One action touches this chain, in order. Each hop is a real edit or a deliberate
 | Class | Role |
 |---|---|
 | `IMessenger` (`wappa/domain/interfaces/messaging_interface.py`) | Abstract outbound messaging contract all platforms must implement. |
-| `WhatsAppMessenger` | Facade implementing `IMessenger`. Delegates each message family to the appropriate handler; owns media-source resolution logic. |
+| `PlatformMessenger` (`wappa/core/messaging/platform_messenger.py`) | Base of the Host-facing Platform Messengers: receives the dispatch's pipeline-wrapped Messenger and forwards every `IMessenger` member to it. |
+| `WhatsAppMessenger` / `InstagramMessenger` | The Platform Messengers bound as `self.whatsapp` / `self.instagram`: the dispatch's Messenger plus `templates`, `send_location_request`, `send_contact_request` (WhatsApp) or `comments`, `content`, `history` (Instagram). |
+| `WhatsAppMessengerAdapter` | Facade implementing `IMessenger`. Delegates each message family to the appropriate handler; owns media-source resolution logic. |
 | `WhatsAppClient` | Single httpx session per inbox. Holds `phone_number_id` (= `inbox_id`). Used by all handlers and the template info service. |
-| `WhatsAppMediaHandler` | Concrete WhatsApp Media API client (no ABC) behind `WhatsAppMediaLibrary` (upload, download, info, delete), also reached as `WhatsAppMessenger.media_handler` for WhatsApp-only extras (URL upload, tempfile, stream, limits). Enforces WhatsApp MIME and size limits. |
+| `WhatsAppMediaHandler` | Concrete WhatsApp Media API client (no ABC) behind `WhatsAppMediaLibrary` (upload, download, info, delete), also reached as `WhatsAppMessengerAdapter.media_handler` for WhatsApp-only extras (URL upload, tempfile, stream, limits). Enforces WhatsApp MIME and size limits. |
 | `WhatsAppInteractiveHandler` | Builds interactive payloads; `wa_header` and `wa_media_object` map the neutral `InteractiveHeader` and `MediaRef` 1:1 (`id` before `link`). The shared limits are checked earlier by the neutral values and `check_*` functions. |
 | `WhatsAppTemplateHandler` | Builds template component trees; resolves marketing vs. standard send URL via `_resolve_template_send_url`. |
 | `WhatsAppSpecializedHandler` | Sends contact cards, location pins, and location-request messages. |
@@ -114,17 +118,17 @@ deactivation. It never becomes a second credential-lifetime authority.
 
 ## Design Patterns
 
-- **Composition over inheritance**: `WhatsAppMessenger` holds handler instances injected at construction; it does not extend them.
+- **Composition over inheritance**: `WhatsAppMessengerAdapter` holds handler instances injected at construction; it does not extend them.
 - **Dependency injection**: `WhatsAppClient` and `httpx.AsyncClient` are injected, enabling per-inbox isolation and testability.
 - **Value objects for URLs**: `WhatsAppUrlBuilder` and `WhatsAppManagementUrlBuilder` are stateless URL factories, not services.
-- **Strategy pattern for media source**: `_resolve_media_object` in `WhatsAppMessenger` selects URL-link, media-ID, or upload path based on the shape of the input.
+- **Strategy pattern for media source**: `_resolve_media_object` in `WhatsAppMessengerAdapter` selects URL-link, media-ID, or upload path based on the shape of the input.
 - **Result object**: All send methods return `MessageResult` rather than raising; error details are captured in the result.
 
 ## Data Flow — Outbound Message
 
 ```
 Host application
-  → WhatsAppMessenger.send_*(recipient, ...)
+  → WhatsAppMessengerAdapter.send_*(recipient, ...)
       → recipient normalized via schemas.core.recipient.apply_recipient_to_payload
       → factory builds API payload dict
       → handler validates constraints (character limits, required fields)
@@ -167,7 +171,7 @@ nullable `returned_phone_number`, with no second interpretation or retry.
 ## Data Flow — Media Upload (file path)
 
 ```
-WhatsAppMessenger._resolve_media_object(path, ...)
+WhatsAppMessengerAdapter._resolve_media_object(path, ...)
   → WhatsAppMediaHandler.upload_media(path)
       → MIME detection + size validation
       → WhatsAppClient.post_request(multipart form, media endpoint)

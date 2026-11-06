@@ -6,8 +6,10 @@ from pydantic import SecretStr
 
 from wappa.domain.inbox import InboxRef
 from wappa.messaging import PlatformUserProfile, ReadOutcome
-from wappa.messaging.instagram.messenger import InstagramMessenger
-from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
+from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
+from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+    WhatsAppMessengerAdapter,
+)
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.webhook_interfaces.base_components import UserBase
 
@@ -15,8 +17,8 @@ IG_REF = InboxRef(platform=PlatformType.INSTAGRAM, inbox_id="17890001")
 IG_USER = UserBase(platform_user_id="6551596044932863")
 
 
-def _whatsapp() -> WhatsAppMessenger:
-    return WhatsAppMessenger(
+def _whatsapp() -> WhatsAppMessengerAdapter:
+    return WhatsAppMessengerAdapter(
         client=None,  # type: ignore[arg-type]
         media_handler=None,  # type: ignore[arg-type]
         interactive_handler=None,  # type: ignore[arg-type]
@@ -26,7 +28,7 @@ def _whatsapp() -> WhatsAppMessenger:
     )
 
 
-def _instagram(handler) -> tuple[InstagramMessenger, list[httpx.Request]]:
+def _instagram(handler) -> tuple[InstagramMessengerAdapter, list[httpx.Request]]:
     seen: list[httpx.Request] = []
 
     def record(request: httpx.Request) -> httpx.Response:
@@ -34,7 +36,7 @@ def _instagram(handler) -> tuple[InstagramMessenger, list[httpx.Request]]:
         return handler(request)
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(record))
-    messenger = InstagramMessenger(
+    messenger = InstagramMessengerAdapter(
         inbox_ref=IG_REF,
         access_token=SecretStr("tkn"),
         session_provider=lambda: client,

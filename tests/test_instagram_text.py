@@ -31,7 +31,7 @@ from wappa.messaging import (
     MessengerPipeline,
     UnsupportedOperationError,
 )
-from wappa.messaging.instagram.messenger import InstagramMessenger
+from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
 from wappa.processors.instagram_processor import InstagramWebhookProcessor
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks import (
@@ -275,7 +275,7 @@ async def test_target_and_unsupported_operations_make_no_http_call():
         transport=httpx.MockTransport(lambda r: calls.append(r))
     ) as client:
         ref = InboxRef(platform=PlatformType.INSTAGRAM, inbox_id=ACCOUNT)
-        raw = InstagramMessenger(
+        raw = InstagramMessengerAdapter(
             inbox_ref=ref,
             access_token=SecretStr("test"),
             session_provider=lambda: client,
@@ -342,7 +342,7 @@ async def test_send_errors_are_bounded_and_never_retried(status, body, expected)
 
     ref = InboxRef(platform=PlatformType.INSTAGRAM, inbox_id=ACCOUNT)
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
-        raw = InstagramMessenger(
+        raw = InstagramMessengerAdapter(
             inbox_ref=ref,
             access_token=SecretStr("test-account-token"),
             session_provider=lambda: client,
@@ -370,7 +370,7 @@ async def test_network_timeout_is_indeterminate_without_retry():
 
     ref = InboxRef(platform=PlatformType.INSTAGRAM, inbox_id=ACCOUNT)
     async with httpx.AsyncClient(transport=httpx.MockTransport(timeout)) as client:
-        raw = InstagramMessenger(
+        raw = InstagramMessengerAdapter(
             inbox_ref=ref,
             access_token=SecretStr("test-account-token"),
             session_provider=lambda: client,

@@ -174,7 +174,7 @@ async def test_adapter_phone_evidence_reaches_template_transport(phone: str) -> 
         TextTemplateTransportRequest,
     )
     from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
-        WhatsAppMessenger,
+        WhatsAppMessengerAdapter,
     )
 
     # Synthetic contradiction, not a recovered production response.
@@ -194,7 +194,7 @@ async def test_adapter_phone_evidence_reaches_template_transport(phone: str) -> 
     client = _GoldenClient(response)
     handler = WhatsAppTemplateHandler(client=client, inbox_id="inbox-test")
 
-    messenger = WhatsAppMessenger(
+    messenger = WhatsAppMessengerAdapter(
         client=client,
         media_handler=None,
         interactive_handler=None,

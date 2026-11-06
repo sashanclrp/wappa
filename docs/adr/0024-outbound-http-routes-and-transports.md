@@ -4,7 +4,7 @@ Accepted, 2026-11-06. Consolidates the outbound decisions first recorded on 2026
 
 ## Context
 
-Wappa's optional HTTP API lived under `/api/whatsapp` and built a raw `WhatsAppMessenger`, so an Instagram Inbox could not use it and API sends skipped the app's Messenger middleware. An embedding Host that owns an authenticated Operator boundary cannot expose routes that send, delete or rewrite state with only Wappa's Inbox credentials behind them, but it still needs uploads, reads and lookups under the same prefixes. Host Applications also need Template transport without constructing Wappa's client, handler and pipeline classes, and a send whose outcome is unknown must never look like a retryable failure.
+Wappa's optional HTTP API lived under `/api/whatsapp` and built a raw `WhatsAppMessengerAdapter`, so an Instagram Inbox could not use it and API sends skipped the app's Messenger middleware. An embedding Host that owns an authenticated Operator boundary cannot expose routes that send, delete or rewrite state with only Wappa's Inbox credentials behind them, but it still needs uploads, reads and lookups under the same prefixes. Host Applications also need Template transport without constructing Wappa's client, handler and pipeline classes, and a send whose outcome is unknown must never look like a retryable failure.
 
 ## Decision
 

@@ -47,7 +47,7 @@ from wappa.messaging import (
 )
 from wappa.messaging.instagram.media import InstagramAttachmentReader
 from wappa.messaging.instagram.media_library import InstagramMediaLibrary
-from wappa.messaging.instagram.messenger import InstagramMessenger
+from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
 from wappa.platforms import BUILTIN_FIELDS, build_platforms
 from wappa.processors.instagram_processor import InstagramWebhookProcessor
 from wappa.schemas.core.types import MessageType, PlatformType
@@ -641,7 +641,7 @@ async def test_extension_parse_failure_rejects_whole_batch():
 
 def _messenger(handler):
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    messenger = InstagramMessenger(
+    messenger = InstagramMessengerAdapter(
         inbox_ref=REF,
         access_token=SecretStr("tkn"),
         session_provider=lambda: client,
@@ -849,9 +849,11 @@ async def test_private_reply_is_platform_neutral_and_rejected_at_send():
             posted.append(payload)
             return {"success": True}
 
-    from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
+    from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+        WhatsAppMessengerAdapter,
+    )
 
-    wa = WhatsAppMessenger(
+    wa = WhatsAppMessengerAdapter(
         client=Client(),  # type: ignore[arg-type]
         media_handler=None,  # type: ignore[arg-type]
         interactive_handler=None,  # type: ignore[arg-type]
@@ -1124,9 +1126,11 @@ async def test_attachment_reader_is_bounded_and_credential_free():
 
 
 async def test_whatsapp_rejects_private_reply_explicitly():
-    from wappa.messaging.whatsapp.messenger.whatsapp_messenger import WhatsAppMessenger
+    from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
+        WhatsAppMessengerAdapter,
+    )
 
-    wa = WhatsAppMessenger.__new__(WhatsAppMessenger)
+    wa = WhatsAppMessengerAdapter.__new__(WhatsAppMessengerAdapter)
     wa._inbox_id = "555"
     with pytest.raises(UnsupportedOperationError):
         await wa.send_text(
@@ -1196,7 +1200,7 @@ async def test_mark_as_read_rejects_a_target_from_another_inbox():
 
 async def test_whatsapp_mark_as_read_sends_typing_and_accepts_a_target():
     from wappa.messaging.whatsapp.messenger.whatsapp_messenger import (
-        WhatsAppMessenger,
+        WhatsAppMessengerAdapter,
     )
 
     posted: list[dict] = []
@@ -1206,7 +1210,7 @@ async def test_whatsapp_mark_as_read_sends_typing_and_accepts_a_target():
             posted.append(payload)
             return {"success": True}
 
-    wa = WhatsAppMessenger(
+    wa = WhatsAppMessengerAdapter(
         client=Client(),  # type: ignore[arg-type]
         media_handler=None,  # type: ignore[arg-type]
         interactive_handler=None,  # type: ignore[arg-type]

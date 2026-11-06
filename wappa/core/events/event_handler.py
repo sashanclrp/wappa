@@ -7,7 +7,7 @@ This provides the interface that developers implement to handle WhatsApp webhook
 import contextlib
 import copy
 from abc import ABC, abstractmethod
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import AbstractAsyncContextManager
 from typing import TYPE_CHECKING, Any, Self
 
@@ -28,6 +28,10 @@ if TYPE_CHECKING:
     from wappa.domain.inbox.identity import InboxRef
     from wappa.domain.interfaces.cache_factory import ICacheFactory
     from wappa.domain.interfaces.messaging_interface import IMessenger
+    from wappa.messaging.instagram.platform_messenger import InstagramMessenger
+    from wappa.messaging.whatsapp.platform_messenger import WhatsAppMessenger
+    from wappa.platforms import PlatformEntry
+    from wappa.schemas.core.types import PlatformType
     from wappa.webhooks import (
         CallWebhook,
         ErrorWebhook,
@@ -54,6 +58,9 @@ class WappaEventHandler(ABC):
     - inbox_id: Inbox identifier for this request's context
     - user_id: User identifier for this request's context
     - messenger: IMessenger created with correct inbox_id for each request
+    - whatsapp / instagram: the Platform Messenger for this dispatch's Platform,
+      ready to call (``self.whatsapp.templates``, ``self.instagram.comments``);
+      the other is ``None``
     - cache_factory: Cache factory for inbox-specific data persistence
     - db: Database session factory for write operations (PostgresDatabasePlugin)
     - db_read: Database session factory for read operations (uses replicas if configured)
@@ -116,6 +123,11 @@ class WappaEventHandler(ABC):
 
         # Per-request dependencies (set via with_context() - NOT mutable on prototype)
         self.messenger: IMessenger | None = None
+        # The Platform Messenger for the dispatch's Platform: ``self.messenger``
+        # plus that Platform's ready capabilities. Exactly one is set when a
+        # Messenger is bound; both stay None otherwise (ADR-0025 rule 12).
+        self.whatsapp: WhatsAppMessenger | None = None
+        self.instagram: InstagramMessenger | None = None
         self.cache_factory: ICacheFactory | None = None
 
         # Database session factories (set via with_context())
@@ -151,6 +163,7 @@ class WappaEventHandler(ABC):
         db_read: Callable[[], AbstractAsyncContextManager["AsyncSession"]]
         | None = None,
         inbox_ref: "InboxRef | None" = None,
+        platforms: "Mapping[PlatformType, PlatformEntry] | None" = None,
     ) -> Self:
         """
         Create a context-bound copy of this handler for a specific request.
@@ -166,6 +179,8 @@ class WappaEventHandler(ABC):
             cache_factory: Cache factory for this request's context
             db: Optional database write session factory
             db_read: Optional database read session factory
+            platforms: The app's Platform Registry table that builds the
+                Platform Messenger (``PLATFORMS`` when omitted)
 
         Returns:
             A new handler instance with the specified context bound
@@ -193,6 +208,18 @@ class WappaEventHandler(ABC):
         handler.cache_factory = cache_factory
         handler.db = db
         handler.db_read = db_read
+
+        # The Platform Messenger extends this same Messenger, so its sends run
+        # the same middleware. The registry entry builds it; the handler binds
+        # it under the Platform's value (``self.whatsapp``, ``self.instagram``).
+        handler.whatsapp = None
+        handler.instagram = None
+        if messenger is not None:
+            from wappa.platforms import platform_messenger
+
+            extended = platform_messenger(messenger, platforms)
+            if extended is not None:
+                setattr(handler, messenger.platform.value, extended)
 
         return handler
 
@@ -402,7 +429,7 @@ class WappaEventHandler(ABC):
         """Override to store past conversations the Platform pushed.
 
         Pull-only Platforms (Instagram) offer the same ``HistoryThread`` via
-        ``messenger.capability(IConversationHistoryReader)``.
+        ``self.instagram.history.read_history(...)``.
         """
         _ = webhook
         return None

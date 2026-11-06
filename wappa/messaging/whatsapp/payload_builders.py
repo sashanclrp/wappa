@@ -1,6 +1,6 @@
 """WhatsApp Cloud API payload builders for text, read status and media.
 
-Private to the WhatsApp adapter: ``WhatsAppMessenger`` builds its send
+Private to the WhatsApp adapter: ``WhatsAppMessengerAdapter`` builds its send
 payloads here and the WhatsApp limits routes read the limits. Interactive,
 Template and specialized payloads are built in ``handlers/``.
 """

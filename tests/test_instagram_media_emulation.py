@@ -23,7 +23,7 @@ from wappa.domain.interactive import ListRow, ListSection
 from wappa.domain.interfaces.media_library import MediaFamily
 from wappa.domain.messaging_targets import DeliveryAddresses, DirectMessage
 from wappa.messaging.instagram.media import ascii_name
-from wappa.messaging.instagram.messenger import PARTS_KEY, InstagramMessenger
+from wappa.messaging.instagram.messenger import PARTS_KEY, InstagramMessengerAdapter
 from wappa.schemas.core.types import PlatformType
 
 IG_REF = InboxRef(platform=PlatformType.INSTAGRAM, inbox_id="17890001")
@@ -50,9 +50,9 @@ class _Graph:
         ]
 
 
-def _messenger(graph: _Graph) -> InstagramMessenger:
+def _messenger(graph: _Graph) -> InstagramMessengerAdapter:
     http = httpx.AsyncClient(transport=httpx.MockTransport(graph))
-    return InstagramMessenger(
+    return InstagramMessengerAdapter(
         inbox_ref=IG_REF,
         access_token=SecretStr("tkn"),
         session_provider=lambda: http,

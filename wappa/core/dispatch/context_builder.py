@@ -204,6 +204,7 @@ class DispatchContextBuilder:
             cache_factory=cache_factory,
             db=db,
             db_read=db_read,
+            platforms=self.capabilities.platforms,
         )
 
 

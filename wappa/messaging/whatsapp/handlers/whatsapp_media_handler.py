@@ -24,7 +24,7 @@ from wappa.schemas.core.types import PlatformType
 class WhatsAppMediaHandler:
     """WhatsApp Media API: upload, info, download, stream, delete and limits.
 
-    WhatsApp-only extension surface (``WhatsAppMessenger.media_handler``).
+    WhatsApp-only extension surface (``WhatsAppMessengerAdapter.media_handler``).
     The shared HandlingMedia seam is ``IMediaLibrary``; ``WhatsAppMediaLibrary``
     wraps this class.
     """

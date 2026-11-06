@@ -36,7 +36,7 @@ def wa_header(header: InteractiveHeader) -> dict[str, Any]:
 
 
 class WhatsAppInteractiveHandler:
-    """WhatsApp interactive messaging via composition in WhatsAppMessenger."""
+    """WhatsApp interactive messaging via composition in WhatsAppMessengerAdapter."""
 
     def __init__(self, client: WhatsAppClient, inbox_id: str):
         self.client = client

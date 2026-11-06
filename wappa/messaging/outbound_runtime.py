@@ -1,7 +1,7 @@
 """The outbound Messenger factory every Platform's sends go through.
 
 ``OutboundRuntime`` resolves Inbox credentials and Wappa's live HTTP clients,
-builds the Inbox's Platform Messenger and wraps it in the app's Messenger
+builds the Inbox's Messenger Adapter and wraps it in the app's Messenger
 Pipeline. Host-initiated sends, the Messaging HTTP API and the Template
 transport all start here.
 """

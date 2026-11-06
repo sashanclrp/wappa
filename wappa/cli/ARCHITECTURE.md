@@ -72,7 +72,7 @@ The scaffolded `app/main.py` imports `Wappa` and calls `app.set_event_handler(Ma
 
 ## Explicit targets in generated handlers
 
-Generated scaffolds and bundled consumer examples construct `DirectMessage` with the Messenger's Platform/Inbox and a native recipient address. They do not send bare recipient strings to `IMessenger`. Examples that send WhatsApp Templates reach them through `messenger.require_capability(ITemplateMessaging)`. `wappa dev` continues importing `<module>:<app_var>.asgi`; the sibling `wappa_examples/simple_echo_example` uses that existing command with its Instagram host source. No new CLI command or hidden credential authority is introduced.
+Generated scaffolds and bundled consumer examples construct `DirectMessage` with the Messenger's Platform/Inbox and a native recipient address. They do not send bare recipient strings to `IMessenger`. Examples never build or look up a capability: WhatsApp Templates are `self.whatsapp.templates`, media storage is `self.messenger.media`, and Instagram comments are `self.instagram.comments` (ADR-0025 rule 12). `wappa dev` continues importing `<module>:<app_var>.asgi`; the sibling `wappa_examples/simple_echo_example` uses that existing command with its Instagram host source. No new CLI command or hidden credential authority is introduced.
 
 ## Developer skills (`wappa/cli/skills/`)
 

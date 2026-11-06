@@ -67,9 +67,9 @@ One method per step on every Platform (ADR-0025); the adapter maps it.
 | choose one of ≤ 10 | `send_list_message` with `ListSection`/`ListRow` (row title ≤ 20) | quick replies (section titles and descriptions folded into the text as a numbered menu) | list |
 | open a URL | `send_cta_message` | button template with one URL button | CTA URL button |
 | summary + confirm | `send_button_message` with two `ReplyButton`s (optional `InteractiveHeader` image) | the image first, then the button template | reply buttons with an image header |
-| email/phone | ask for typed text | typed text | typed text, or `send_contact_request` when `messenger.capability(IUserDataRequests)` is not `None` |
+| email/phone | ask for typed text | typed text | typed text, or `whatsapp.send_contact_request` when the handler's `self.whatsapp` is not `None` |
 
-Selections from every row come back through `event.get_interactive_selection()`. Check `messenger.capability(kind)` once for WhatsApp-only extras (location and phone-number requests are `capability(IUserDataRequests)`, `None` on Instagram); don't try operations and catch exceptions as a control flow.
+Selections from every row come back through `event.get_interactive_selection()`. WhatsApp-only extras (location and phone-number requests) are on the handler's prebuilt `self.whatsapp`, `None` on Instagram: check it once instead of trying operations and catching exceptions as a control flow.
 
 ## Tests
 
