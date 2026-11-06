@@ -111,7 +111,20 @@ Host-supplied renditions still win: `send_sticker(["s.webp", "s.png"])` keeps wo
 - Campaigns upload once. For media that does not need a URL (template headers, ordinary media messages), the cheapest path is Meta's own Media ID: upload once per Inbox, cache the ID (WhatsApp IDs live 30 days; Instagram `is_reusable` attachment IDs), and every send references the ID, so neither S3 nor Redis nor Wappa's public route is touched per message. The Media ID cache (below) is tried before any URL path. Only carousel cards, which accept URLs only, need the public-URL path.
 - Pre-adaptation at upload: `IMediaLibrary.upload(path, family)` adapts for that Inbox's spec before uploading and also stores the adapted bytes keyed by the returned Media ID. That is the only way an Instagram `attachment_id` can later become a card URL, since Instagram offers no download.
 
-### Media ID cache (per Inbox, Redis DB 6)
+### Media ID cache (per Inbox) — UNDECIDED: Wappa's job or the Host's?
+
+**Status: open decision, to settle in the grill session before this PRD moves to pending.** The design below describes the Wappa-owned option; it is not yet accepted.
+
+What it is: after an upload, Meta returns a Media ID that the same Inbox can reuse for 30 days (WhatsApp). The cache remembers "this exact file, adapted for this use, was already uploaded for this Inbox: its ID is X", so a campaign of 10,000 sends with the same header video uploads once instead of 10,000 times.
+
+| Option | How it works | For | Against |
+| --- | --- | --- | --- |
+| **A. Wappa owns it (automatic)** | Adapters consult the cache before every upload; described below | Facade: Hosts never think about uploads; Wappa already knows the Inbox lifecycle (disconnect, credential rotation, `evict_inbox`) needed to invalidate IDs, and the content hash of the adapted bytes, which only Wappa computes; self-healing re-upload on an expired ID is natural in the adapter | Wappa takes on another stateful cache, its storage, TTLs and failure modes; more surface in a library |
+| **B. The Host owns it (primitives only)** | Wappa already offers the primitives: `IMediaLibrary.upload(...)` returns the Media ID, and every `send_*` accepts a Media ID. A Host such as Symphonai uploads its campaign assets once and stores the IDs in its own database next to the campaign | Nothing new in Wappa; campaigns, assets and their lifetimes are Host business concepts; the Host decides persistence | Every Host reimplements it; the Host must handle ID expiry and Inbox credential rotation itself; when adaptation changes the bytes, the Host must upload through Wappa to get the ID of the adapted file |
+| **C. Both: primitives plus an opt-in Wappa cache** | B by default; A behind a setting | Simple Hosts get A, Hosts with their own asset store use B | Two paths to document and test |
+
+Storage, if A or C: one Redis pool or two. The separate `media_ids` pool on DB 6 shown below is also **undecided**: Redis eviction is per instance, not per DB, and both key families can live in the `media` pool on DB 5 with `decode_responses=False` (the JSON record decoded by the cache class), separated by `KeyFactory` prefixes (`media:...` for bytes, `{inbox}:mediaid:...` for IDs). The leaning is one pool unless the grill session finds a reason for two.
+
 
 The Media ID cache is the critical cache: it is what makes a campaign of thousands of sends cost one upload. It is per Inbox by construction, because a Media ID belongs to the Inbox (WhatsApp phone number, Instagram account) whose token uploaded it and is meaningless on any other Inbox or Platform.
 
@@ -163,7 +176,7 @@ The Media ID cache is the critical cache: it is what makes a campaign of thousan
 | `SYSTEM_MEDIA_URL_TTL_SECONDS` | 600 | lifetime of Redis-held artifacts and their public URLs (regenerated on miss) |
 | `SYSTEM_MEDIA_STORE` | `redis` when the cache backend is Redis, else `dir` | `redis` (pool alias `media`, DB 5), `s3`, or `dir` (server folder) |
 | `REDIS_MEDIA_URL` | the Redis URL with DB 5 | connection for the `media` pool (bytes); may point at a separate instance |
-| `REDIS_MEDIA_IDS_URL` | the Redis URL with DB 6 | connection for the `media_ids` pool (per-Inbox Media ID cache) |
+| `REDIS_MEDIA_IDS_URL` | the Redis URL with DB 6 | only if the Media ID cache is Wappa-owned AND a separate pool is chosen (both undecided) |
 | `SYSTEM_MEDIA_REDIS_MAX_OBJECT_BYTES` | 1 MB | refuse larger objects in Redis (use S3) |
 | `SYSTEM_MEDIA_S3_BUCKET` / `SYSTEM_MEDIA_S3_PREFIX` / `SYSTEM_MEDIA_S3_ENDPOINT` | unset | S3-compatible store; credentials from the standard provider chain, never from Wappa settings |
 | `SYSTEM_MEDIA_STORE_DIR` | `./.wappa/media` | server-folder store, used when the cache backend is JSON or memory (or `SYSTEM_MEDIA_STORE=dir`) |
@@ -228,6 +241,8 @@ Ingress is free on most clouds, so the worst case costs about a quarter of a cor
 When a video card has no `poster_url`, the poster is the frame at **1 second** (a seek by timestamp, not by frame index, because frame rates vary: 1 second is frame 30 at 30 fps and frame 25 at 25 fps). The first frame is often black or a fade-in, so it is used only when the clip is shorter than 1 second. If the frame at 1 second is near-black (mean luminance below a small threshold), the engine tries 2 seconds, then falls back to the first decodable frame. The poster keeps the video's aspect ratio, is scaled to the `card_image` rule, and is encoded as JPEG. The whole step (download, decode, encode, publish) runs in the background pool under the same per-job timeout and cache as every other adaptation, and its failure returns the same pre-send rejection as adaptation off, so a send never half-completes.
 
 ## Open questions
+
+- **Who owns the Media ID cache: Wappa (automatic), the Host (primitives only), or both?** And if Wappa, one Redis pool (DB 5, two key families) or a separate DB 6? See Media ID cache.
 
 - License of the bundled FFmpeg in PyAV wheels (likely GPL through x264/x265): accept for the opt-in extra, or require a system FFmpeg or OpenH264 for H.264 encoding?
 - Does Instagram copy `image_url` at send (working assumption: yes, bytes are served from Meta's CDN) or hotlink it at render? Live check: send a card whose image URL expires after 10 minutes, then open the thread on a device that never loaded it. If it hotlinks, card images must use the S3 adapter.
