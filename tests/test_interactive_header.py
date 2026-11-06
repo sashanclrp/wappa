@@ -364,3 +364,73 @@ async def test_instagram_long_caption_follow_up_is_split() -> None:
         True,
         True,
     ]
+
+
+# ── an emulated send is one result listing every part ───────────────────
+
+
+def _parts(result: Any) -> dict[str, Any]:
+    return result.platform_response["wappa_parts"]
+
+
+async def test_instagram_split_text_lists_every_part() -> None:
+    messenger, client, _ = _ig()
+    async with client:
+        result = await messenger.send_text(" ".join(["palabra"] * 300), IG_DM)
+    assert result.success and result.message_id == "mid.3"
+    assert _parts(result) == {
+        "message_ids": ["mid.1", "mid.2", "mid.3"],
+        "delivered": 3,
+    }
+
+
+async def test_instagram_partial_failure_says_how_many_parts_went_out() -> None:
+    sent: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        if len(sent) == 2:
+            return httpx.Response(
+                400, json={"error": {"message": "refused", "code": 100}}
+            )
+        return httpx.Response(200, json={"message_id": f"mid.{len(sent)}"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    messenger = InstagramMessenger(
+        inbox_ref=IG_REF,
+        access_token=SecretStr("tkn"),
+        session_provider=lambda: client,
+        graph_api_version="v26.0",
+        graph_base_url="https://graph.facebook.com",
+    )
+    async with client:
+        result = await messenger.send_text(" ".join(["palabra"] * 300), IG_DM)
+    assert not result.success
+    assert len(sent) == 2  # the third part is never sent
+    assert _parts(result) == {"message_ids": ["mid.1"], "delivered": 1}
+    assert "1 earlier part(s) already delivered" in (result.error or "")
+
+
+async def test_instagram_single_message_send_carries_no_parts_record() -> None:
+    messenger, client, _ = _ig()
+    async with client:
+        result = await messenger.send_text("hola", IG_DM)
+    assert result.success
+    assert "wappa_parts" not in (result.platform_response or {})
+
+
+async def test_instagram_nested_emulation_flattens_every_part() -> None:
+    messenger, client, sent = _ig()
+    async with client:
+        result = await messenger.send_button_message(
+            BUTTONS,
+            IG_DM,
+            "b" * 640,
+            header=InteractiveHeader.of_image(url="https://example.com/a.png"),
+            footer="f" * 60,
+        )
+    assert result.success
+    assert _parts(result)["message_ids"] == [
+        f"mid.{n}" for n in range(1, len(sent) + 1)
+    ]
+    assert result.message_id == f"mid.{len(sent)}"

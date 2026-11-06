@@ -106,6 +106,56 @@ def _check_text(text: str, *, what: str = "Instagram text") -> str:
     return text
 
 
+PARTS_KEY = "wappa_parts"
+
+
+class _Parts:
+    """Fold the messages of one emulated send into one ``MessageResult``.
+
+    An emulation (split text, media header then buttons, caption follow-up,
+    carousel intro) is one Host call, so it returns one result: success only
+    when every part was accepted, the final part's ``message_id``, and every
+    part's ID under ``platform_response["wappa_parts"]``. On a refusal the
+    failed result says how many parts were already delivered, so a Host never
+    resends the whole message blindly. Nested emulations are flattened.
+    """
+
+    def __init__(self) -> None:
+        self.ids: list[str] = []
+
+    def add(self, result: MessageResult) -> bool:
+        if not result.success:
+            return False
+        nested = (result.platform_response or {}).get(PARTS_KEY)
+        if nested:
+            self.ids.extend(nested["message_ids"])
+        elif result.message_id:
+            self.ids.append(result.message_id)
+        return True
+
+    def result(
+        self, last: MessageResult, *, primary: MessageResult | None = None
+    ) -> MessageResult:
+        """``last`` is the final part's result, or the first refused one.
+
+        On success the returned ``message_id`` is ``primary``'s when given
+        (the media of a media-plus-caption send), else ``last``'s (the
+        interactive message a User taps).
+        """
+        if last.success and primary is not None:
+            last = last.model_copy(update={"message_id": primary.message_id})
+        delivered = len(self.ids)
+        response = dict(last.platform_response or {})
+        response[PARTS_KEY] = {"message_ids": list(self.ids), "delivered": delivered}
+        update: dict[str, Any] = {"platform_response": response}
+        if not last.success and delivered:
+            update["error"] = (
+                f"{last.error or 'part refused'} "
+                f"({delivered} earlier part(s) already delivered)"
+            )
+        return last.model_copy(update=update)
+
+
 def _split_text(text: str, limit: int = TEXT_MAX_BYTES) -> list[str]:
     """Split ``text`` into chunks of at most ``limit`` UTF-8 bytes.
 
@@ -403,11 +453,20 @@ class InstagramMessenger(IMessenger):
         """Send ``text`` in ≤ 1000-byte chunks; ``last`` extends the final one.
 
         ``last`` carries extra message fields (quick replies) on the final
-        chunk. The first refusal returns; otherwise the final result returns.
+        chunk. Several chunks return one result listing every part (``_Parts``);
+        the first refusal stops the send.
         """
         if not text or not text.strip():
             raise ValueError("Instagram text must not be empty")
         chunks = _split_text(text)
+        if len(chunks) == 1 and not last:
+            return await self._send(
+                direct,
+                {"text": chunks[0]},
+                operation=operation,
+                reply_to_message_id=reply_to_message_id,
+            )
+        parts = _Parts()
         result: MessageResult | None = None
         for index, chunk in enumerate(chunks):
             final = index == len(chunks) - 1
@@ -420,10 +479,10 @@ class InstagramMessenger(IMessenger):
                 operation=operation if final else "Instagram text send",
                 reply_to_message_id=reply_to_message_id if index == 0 else None,
             )
-            if not result.success:
-                return result
+            if not parts.add(result):
+                break
         assert result is not None
-        return result
+        return parts.result(result)
 
     # ── media ───────────────────────────────────────────────────────────
 
@@ -476,15 +535,19 @@ class InstagramMessenger(IMessenger):
     ) -> MessageResult:
         """Instagram attachments carry no caption: send it as a follow-up text.
 
-        The media result returns unless the caption was refused, in which case
-        that refusal returns (the media was already delivered; nothing retries).
+        One result: the media's ``message_id``, every part under
+        ``platform_response["wappa_parts"]``; a refused caption returns a failed
+        result saying the media was already delivered (nothing retries).
         """
         result = await self._send_media(family, source, target, reply_to_message_id)
-        if caption and caption.strip() and result.success:
-            follow_up = await self.send_text(caption, target)
-            if not follow_up.success:
-                return follow_up
-        return result
+        if not (caption and caption.strip()):
+            return result
+        parts = _Parts()
+        if not parts.add(result):
+            return result
+        follow_up = await self.send_text(caption, target)
+        parts.add(follow_up)
+        return parts.result(follow_up, primary=result)
 
     async def send_image(
         self,
@@ -688,21 +751,32 @@ class InstagramMessenger(IMessenger):
                 if header.media.url is not None
                 else str(header.media.media_id)
             )
+        parts = _Parts()
+        if header is not None and header.media is not None:
+            source = (
+                str(header.media.url)
+                if header.media.url is not None
+                else str(header.media.media_id)
+            )
             media = await self._send_media(
                 header.kind, source, direct, reply_to_message_id
             )
-            if not media.success:
-                return media
+            if not parts.add(media):
+                return parts.result(media)
             reply_to_message_id = None
         lead, text = _button_texts(text_header, body, footer)
         if lead:
             intro = await self._send_texts(lead, direct, reply_to_message_id)
-            if not intro.success:
-                return intro
+            if not parts.add(intro):
+                return parts.result(intro)
             reply_to_message_id = None
-        return await self._button_template(
+        final = await self._button_template(
             direct, text, buttons, operation, reply_to_message_id
         )
+        if not parts.ids:
+            return final
+        parts.add(final)
+        return parts.result(final)
 
     async def send_list_message(
         self,
@@ -782,15 +856,18 @@ class InstagramMessenger(IMessenger):
         check_carousel(cards, body)
         direct = self._direct(target, "send_carousel")
         elements = [_card(c) for c in cards]
+        parts = _Parts()
         intro = await self._send_texts(body, direct, reply_to_message_id)
-        if not intro.success:
-            return intro
+        if not parts.add(intro):
+            return parts.result(intro)
         template = {"template_type": "generic", "elements": elements}
-        return await self._send(
+        final = await self._send(
             direct,
             {"attachment": {"type": "template", "payload": template}},
             operation="Instagram carousel send",
         )
+        parts.add(final)
+        return parts.result(final)
 
     # ── acknowledge (seen + typing are private sender actions) ──────────
 
