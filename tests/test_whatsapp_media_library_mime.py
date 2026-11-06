@@ -31,12 +31,12 @@ async def test_a_3gp_video_uploads_as_video_3gpp(tmp_path: Path) -> None:
 
     await library.upload(clip, MediaFamily.VIDEO)
     await library.upload(b"x", MediaFamily.VIDEO, filename="clip.3gp")
-    await library.upload(b"x", MediaFamily.AUDIO, filename="note.3gp")
+    with pytest.raises(ValueError, match="WhatsApp audio accepts"):
+        await library.upload(b"x", MediaFamily.AUDIO, filename="note.3gp")
     await library.upload(clip, MediaFamily.VIDEO, mime_type="video/mp4")
 
     assert handler.calls == [
         ("path", "video/3gpp"),
         ("bytes", "video/3gpp"),
-        ("bytes", "audio/3gpp"),
         ("path", "video/mp4"),
     ]

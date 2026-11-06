@@ -27,6 +27,7 @@ from wappa.domain.interfaces.media_library import (
     UploadResult,
 )
 from wappa.domain.results import OperationOutcome
+from wappa.messaging.whatsapp.media_rules import check_bytes, check_file
 from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
@@ -60,6 +61,12 @@ class WhatsAppMediaLibrary(IMediaLibrary):
         mime_type: str | None = None,
         filename: str | None = None,
     ) -> UploadResult:
+        use = family.value
+        # An explicit mime_type overrides the name; the content is checked anyway.
+        if isinstance(source, bytes):
+            check_bytes(source, use, name=None if mime_type else filename)
+        else:
+            check_file(source, use, by_name=mime_type is None)
         if isinstance(source, bytes):
             name = filename or "upload"
             mime = mime_type or _guess_mime(name, family)

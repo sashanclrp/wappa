@@ -46,6 +46,7 @@ from wappa.messaging.whatsapp.handlers.whatsapp_template_handler import (
     WhatsAppTemplateHandler,
 )
 from wappa.messaging.whatsapp.media_library import WhatsAppMediaLibrary
+from wappa.messaging.whatsapp.media_rules import check_file, check_name
 from wappa.messaging.whatsapp.models.basic_models import message_result_from_payload
 from wappa.messaging.whatsapp.models.media_models import MediaType
 from wappa.messaging.whatsapp.models.template_models import (
@@ -358,6 +359,7 @@ class WhatsAppMessengerAdapter(IMessenger, ITemplateMessaging, IUserDataRequests
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
         check_caption(caption)
+        _check_media_source(image_source, "image")
         media_cache: dict[str, Any] = {}  # upload once across fallback attempts
         return await self._deliver(
             target,
@@ -380,6 +382,7 @@ class WhatsAppMessengerAdapter(IMessenger, ITemplateMessaging, IUserDataRequests
         transcript: str | None = None,
     ) -> MessageResult:
         check_caption(caption)
+        _check_media_source(video_source, "video")
         media_cache: dict[str, Any] = {}  # upload once across fallback attempts
         return await self._deliver(
             target,
@@ -408,6 +411,7 @@ class WhatsAppMessengerAdapter(IMessenger, ITemplateMessaging, IUserDataRequests
             WHATSAPP_VOICE_SUFFIXES if is_voice else WHATSAPP_AUDIO_SUFFIXES,
             what="WhatsApp voice note" if is_voice else "WhatsApp audio",
         )
+        _check_media_source(audio_source, "voice" if is_voice else "audio")
         if is_voice:
             await self._check_media_id_mime(
                 audio_source, "audio/ogg", what="voice note", fix="OGG/Opus"
@@ -456,6 +460,7 @@ class WhatsAppMessengerAdapter(IMessenger, ITemplateMessaging, IUserDataRequests
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
         check_caption(caption)
+        _check_media_source(document_source, "document")
         media_cache: dict[str, Any] = {}  # upload once across fallback attempts
         return await self._deliver(
             target,
@@ -481,6 +486,7 @@ class WhatsAppMessengerAdapter(IMessenger, ITemplateMessaging, IUserDataRequests
         sticker_source = pick_rendition(
             sticker_source, WHATSAPP_STICKER_SUFFIXES, what="WhatsApp sticker"
         )
+        _check_media_source(sticker_source, "sticker")
         await self._check_media_id_mime(
             sticker_source, "image/webp", what="sticker", fix="WebP"
         )
@@ -741,6 +747,8 @@ class WhatsAppMessengerAdapter(IMessenger, ITemplateMessaging, IUserDataRequests
         ``button_reply`` with the button ``id``.
         """
         check_carousel(cards, body)
+        for card in cards:  # one bad card fails the whole carousel (131053)
+            check_name(str(card.header.url), card.header.kind)
         target.resolve_all(InboxRef.whatsapp(self._inbox_id))
         interactive = {
             "type": "carousel",
@@ -966,6 +974,22 @@ class WhatsAppMessengerAdapter(IMessenger, ITemplateMessaging, IUserDataRequests
 WHATSAPP_STICKER_SUFFIXES = frozenset({".webp"})
 WHATSAPP_AUDIO_SUFFIXES = frozenset({".aac", ".amr", ".mp3", ".m4a", ".ogg"})
 WHATSAPP_VOICE_SUFFIXES = frozenset({".ogg"})
+
+
+def _check_media_source(source: str | Path, use: str) -> None:
+    """Apply WhatsApp's media rules to a send's source before any call.
+
+    A URL or name is checked by suffix; a local file also by content (size,
+    real type, animated WebP, OGG codec, HEVC, sticker size). A Media ID has
+    no suffix and passes (voice notes and stickers by ID are checked against
+    Meta's stored MIME type separately).
+    """
+    if isinstance(source, Path) or (
+        not source.startswith(("http://", "https://")) and Path(source).is_file()
+    ):
+        check_file(Path(source), use)
+    else:
+        check_name(source, use)
 
 
 def _wa_cards(cards: Sequence[MessageCard]) -> list[dict[str, Any]]:
