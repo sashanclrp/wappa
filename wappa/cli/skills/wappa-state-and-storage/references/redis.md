@@ -60,4 +60,4 @@ wappa migrate cache-namespaces -i <pnid> [-i <pnid2>] --redis-url "$REDIS_URL"  
 wappa migrate cache-namespaces -i <pnid> --redis-url "$REDIS_URL" --apply                # rename, keeps TTLs
 ```
 
-Add `--json-root PATH` for the JSON backend. Conflicts are reported, never overwritten. Pub/Sub subscribers move to `wappa:notify:whatsapp__<pnid>:*`.
+Add `--json-root PATH` for the JSON backend. Conflicts are reported, never overwritten, and the command exits 1 while any remain, so don't cut over on that status. `--json` prints the complete report. Pub/Sub subscribers move to `wappa:notify:whatsapp__<pnid>:*`.

@@ -98,5 +98,7 @@ async def get_template_state_service(
     """Template state service scoped to the selected Inbox."""
     cache_factory = build_cache_factory(request, context, recipient="template-api")
     return TemplateStateService(
-        cache_factory, identity_resolver=get_identity_resolver(request)
+        cache_factory,
+        inbox_ref=context.inbox_ref,
+        identity_resolver=get_identity_resolver(request),
     )

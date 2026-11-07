@@ -80,6 +80,6 @@ async with self.scope(user_id=owner_id) as owner:      # or inbox_ref=other_inbo
 
 ### Identity
 
-Your `IIdentityResolver` runs before any User cache exists, so `event.user_id` and `self.user_id` are canonical inside the hook. A resolver failure stops the task; if a stale identifier should still fire, catch the failure inside your resolver. SSE publishes the Inbox and canonical User: call `update_identity(bsuid=..., phone_number=...)` (`wappa.sse`) when subscribers need more.
+Your `IIdentityResolver` gets the task's `inbox_ref` and runs before any User cache exists, so `event.user_id` and `self.user_id` are canonical inside the hook. A resolver failure stops the task; if a stale identifier should still fire, catch the failure inside your resolver. SSE publishes the Inbox and canonical User: call `update_identity(bsuid=..., phone_number=...)` (`wappa.sse`) when subscribers need more.
 
 **5. Verify.** Unit test the hook once per scope, using the pattern in `references/testing.md`. Then fire one real task and check the log line, the side effect, and a raised failure reaching your engine. Correct at most three times against specific failing evidence, and report what stays unproven.

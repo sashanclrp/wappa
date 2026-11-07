@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from wappa.core.logging.logger import get_logger
+from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.cache_factory import ICacheFactory
 from wappa.domain.interfaces.identity_resolver import (
     IIdentityResolver,
@@ -46,6 +47,8 @@ class TemplateStateService:
     def __init__(
         self,
         cache_factory: ICacheFactory,
+        *,
+        inbox_ref: InboxRef,
         identity_resolver: IIdentityResolver | None = None,
     ):
         """
@@ -53,11 +56,14 @@ class TemplateStateService:
 
         Args:
             cache_factory: Factory for creating cache instances with context
+            inbox_ref: The WhatsApp Inbox this service runs for; identity
+                resolution gets it, never the factory's cache namespace.
             identity_resolver: Maps transport recipients to canonical user
                 ids for cache scoping. Defaults to passthrough (recipient
                 used as-is), which preserves pre-existing behavior.
         """
         self.cache_factory = cache_factory
+        self.inbox_ref = inbox_ref
         self.identity_resolver = identity_resolver or PassthroughIdentityResolver()
         self.logger = get_logger(__name__)
 
@@ -96,7 +102,7 @@ class TemplateStateService:
         try:
             cache_user_id = user_id or await self.identity_resolver.resolve(
                 recipient,
-                inbox_id=self.cache_factory.inbox_id,
+                inbox_ref=self.inbox_ref,
             )
 
             state_key = self._make_state_key(state_config.state_value)

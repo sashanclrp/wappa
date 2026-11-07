@@ -17,6 +17,7 @@ from wappa.api.utils.event_decorators import resolve_event_user_id
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.context import require_inbox_context
 from wappa.domain.events.api_message_event import APIMessageEvent
+from wappa.domain.inbox.identity import InboxRef
 from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
@@ -78,7 +79,7 @@ async def dispatch_api_message_event(
         recipient=recipient,
         explicit_user_id=user_id,
         fastapi_request=request,
-        inbox_id=inbox_id,
+        inbox_ref=InboxRef(platform=PlatformType(result.platform), inbox_id=inbox_id),
     )
 
     event = APIMessageEvent(

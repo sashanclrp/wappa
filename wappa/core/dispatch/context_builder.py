@@ -232,7 +232,7 @@ class DispatchContextBuilder:
         resolver = self.capabilities.identity_resolver
         if resolver is None:
             return subject
-        canonical = await resolver.resolve(subject, inbox_id=inbox_ref.inbox_id)
+        canonical = await resolver.resolve(subject, inbox_ref=inbox_ref)
         if not canonical:
             raise ValueError(
                 f"Identity resolver returned no User for a subject in {inbox_ref}"

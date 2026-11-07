@@ -166,8 +166,8 @@ class _BuilderRegistrationMixin:
         Example::
 
             class CanonicalIdResolver(IIdentityResolver):
-                async def resolve(self, recipient: str, *, inbox_id: str) -> str:
-                    return await db.lookup_canonical_id(inbox_id, recipient)
+                async def resolve(self, recipient: str, *, inbox_ref: InboxRef) -> str:
+                    return await db.lookup_canonical_id(inbox_ref, recipient)
 
             builder.with_identity_resolver(CanonicalIdResolver())
         """

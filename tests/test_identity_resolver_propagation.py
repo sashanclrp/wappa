@@ -16,9 +16,12 @@ import pytest
 
 from wappa.api.services.handler_state_service import HandlerStateService
 from wappa.domain.events.api_message_event import APIMessageEvent
+from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.identity_resolver import IIdentityResolver
 from wappa.messaging.whatsapp.capabilities.templates import TemplateStateService
 from wappa.messaging.whatsapp.models.template_models import TemplateStateConfig
+
+INBOX = InboxRef.whatsapp("inbox-1")
 
 
 class _FakeStateCache:
@@ -75,15 +78,15 @@ class _RecordingCacheFactory:
 class _PrefixResolver(IIdentityResolver):
     """Test resolver that maps any recipient to ``CO.<recipient>``."""
 
-    async def resolve(self, recipient: str, *, inbox_id: str) -> str:
+    async def resolve(self, recipient: str, *, inbox_ref: InboxRef) -> str:
         return f"CO.{recipient}"
 
 
 class _InboxAwareResolver(IIdentityResolver):
     """Resolve one recipient independently inside each Inbox."""
 
-    async def resolve(self, recipient: str, *, inbox_id: str) -> str:
-        return f"{inbox_id}:{recipient}"
+    async def resolve(self, recipient: str, *, inbox_ref: InboxRef) -> str:
+        return f"{inbox_ref.inbox_id}:{recipient}"
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +97,9 @@ class _InboxAwareResolver(IIdentityResolver):
 @pytest.mark.asyncio
 async def test_handler_state_default_passthrough_uses_recipient():
     factory = _RecordingCacheFactory()
-    service = HandlerStateService(factory)  # default = PassthroughIdentityResolver
+    service = HandlerStateService(
+        factory, inbox_ref=INBOX
+    )  # default = PassthroughIdentityResolver
 
     await service.set_handler_state(
         recipient="573168227670", handler_value="flow_a", ttl_seconds=60
@@ -107,7 +112,9 @@ async def test_handler_state_default_passthrough_uses_recipient():
 @pytest.mark.asyncio
 async def test_handler_state_custom_resolver_keys_under_canonical_id():
     factory = _RecordingCacheFactory()
-    service = HandlerStateService(factory, identity_resolver=_PrefixResolver())
+    service = HandlerStateService(
+        factory, inbox_ref=INBOX, identity_resolver=_PrefixResolver()
+    )
 
     await service.set_handler_state(
         recipient="573168227670", handler_value="flow_a", ttl_seconds=60
@@ -126,6 +133,7 @@ async def test_same_recipient_resolves_independently_across_inboxes():
 
     await HandlerStateService(
         inbox_a_factory,
+        inbox_ref=InboxRef.whatsapp("inbox-a"),
         identity_resolver=resolver,
     ).set_handler_state(
         recipient="573168227670",
@@ -134,6 +142,7 @@ async def test_same_recipient_resolves_independently_across_inboxes():
     )
     await HandlerStateService(
         inbox_b_factory,
+        inbox_ref=InboxRef.whatsapp("inbox-b"),
         identity_resolver=resolver,
     ).set_handler_state(
         recipient="573168227670",
@@ -148,7 +157,9 @@ async def test_same_recipient_resolves_independently_across_inboxes():
 @pytest.mark.asyncio
 async def test_handler_state_explicit_user_id_bypasses_resolver():
     factory = _RecordingCacheFactory()
-    service = HandlerStateService(factory, identity_resolver=_PrefixResolver())
+    service = HandlerStateService(
+        factory, inbox_ref=INBOX, identity_resolver=_PrefixResolver()
+    )
 
     await service.set_handler_state(
         recipient="573168227670",
@@ -165,7 +176,9 @@ async def test_handler_state_explicit_user_id_bypasses_resolver():
 @pytest.mark.asyncio
 async def test_handler_state_get_uses_resolved_user_id():
     factory = _RecordingCacheFactory()
-    service = HandlerStateService(factory, identity_resolver=_PrefixResolver())
+    service = HandlerStateService(
+        factory, inbox_ref=INBOX, identity_resolver=_PrefixResolver()
+    )
 
     await service.set_handler_state(
         recipient="573168227670", handler_value="flow_a", ttl_seconds=60
@@ -182,7 +195,9 @@ async def test_handler_state_get_uses_resolved_user_id():
 @pytest.mark.asyncio
 async def test_handler_state_delete_uses_resolved_user_id():
     factory = _RecordingCacheFactory()
-    service = HandlerStateService(factory, identity_resolver=_PrefixResolver())
+    service = HandlerStateService(
+        factory, inbox_ref=INBOX, identity_resolver=_PrefixResolver()
+    )
 
     await service.set_handler_state(
         recipient="573168227670", handler_value="flow_a", ttl_seconds=60
@@ -201,7 +216,7 @@ async def test_handler_state_delete_uses_resolved_user_id():
 @pytest.mark.asyncio
 async def test_template_state_default_passthrough_uses_recipient():
     factory = _RecordingCacheFactory()
-    service = TemplateStateService(factory)  # default resolver
+    service = TemplateStateService(factory, inbox_ref=INBOX)  # default resolver
 
     cfg = TemplateStateConfig(state_value="human_takeover", ttl_seconds=120)
     ok = await service.set_template_state(
@@ -218,7 +233,9 @@ async def test_template_state_default_passthrough_uses_recipient():
 @pytest.mark.asyncio
 async def test_template_state_custom_resolver_keys_under_canonical_id():
     factory = _RecordingCacheFactory()
-    service = TemplateStateService(factory, identity_resolver=_PrefixResolver())
+    service = TemplateStateService(
+        factory, inbox_ref=INBOX, identity_resolver=_PrefixResolver()
+    )
 
     cfg = TemplateStateConfig(state_value="human_takeover", ttl_seconds=120)
     await service.set_template_state(
@@ -244,7 +261,7 @@ async def test_resolve_event_user_id_explicit_wins():
         recipient="573168227670",
         explicit_user_id="CO.EXPLICIT",
         fastapi_request=None,
-        inbox_id="inbox-1",
+        inbox_ref=INBOX,
     )
     assert user_id == "CO.EXPLICIT"
 
@@ -263,7 +280,7 @@ async def test_resolve_event_user_id_uses_app_state_resolver():
         recipient="573168227670",
         explicit_user_id=None,
         fastapi_request=fake_request,
-        inbox_id="inbox-1",
+        inbox_ref=INBOX,
     )
     assert user_id == "CO.573168227670"
 
@@ -280,22 +297,9 @@ async def test_resolve_event_user_id_default_is_recipient():
         recipient="573168227670",
         explicit_user_id=None,
         fastapi_request=fake_request,
-        inbox_id="inbox-1",
+        inbox_ref=INBOX,
     )
     assert user_id == "573168227670"
-
-
-@pytest.mark.asyncio
-async def test_resolve_event_user_id_rejects_empty_inbox():
-    from wappa.api.utils.event_decorators import resolve_event_user_id
-
-    with pytest.raises(ValueError, match="non-empty inbox_id"):
-        await resolve_event_user_id(
-            recipient="573168227670",
-            explicit_user_id=None,
-            fastapi_request=None,
-            inbox_id="",
-        )
 
 
 # ---------------------------------------------------------------------------

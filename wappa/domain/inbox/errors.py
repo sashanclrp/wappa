@@ -28,7 +28,13 @@ class InboxNotFoundError(InboxDirectoryError):
         self, inbox_ref: InboxRef, *, reason: str = "unknown or inactive"
     ) -> None:
         self.inbox_ref = inbox_ref
+        self.reason = reason
         super().__init__(f"Inbox {inbox_ref} is {reason}")
+
+    @property
+    def is_inactive(self) -> bool:
+        """The Inbox is confirmed known but deactivated, not merely unknown."""
+        return self.reason == "inactive"
 
 
 class InboxMembershipError(InboxDirectoryError):

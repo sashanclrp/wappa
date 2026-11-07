@@ -21,6 +21,7 @@ from pydantic import SecretStr
 from .credentials import (
     CredentialRecord,
 )
+from .errors import InboxNotFoundError
 from .identity import InboxRef, PlatformAccountRef
 
 
@@ -91,6 +92,28 @@ class IInboxCredentialResolver(ABC):
         An empty tuple means the account is confirmed to have no active
         Inboxes; unavailability raises ``InboxDirectoryUnavailableError``.
         """
+
+    async def get_inactive_inbox_account(
+        self, inbox_ref: InboxRef
+    ) -> PlatformAccountRef:
+        """Return the account of a known inactive Inbox, decrypting nothing.
+
+        Resolvers without inactive records keep this default.
+
+        Raises:
+            InboxNotFoundError: the Inbox is confirmed unknown.
+            InboxDirectoryUnavailableError: the answer could not be determined.
+        """
+        raise InboxNotFoundError(inbox_ref)
+
+    async def list_inactive_inbox_refs_for_platform_account(
+        self, account_ref: PlatformAccountRef
+    ) -> tuple[InboxRef, ...]:
+        """Return the sorted inactive members of a Platform Account.
+
+        Resolvers without inactive records keep this empty default.
+        """
+        return ()
 
     def subscribe_evictions(self, listener: EvictionListener) -> None:
         """Register a callback invoked after a record refresh or deactivation.

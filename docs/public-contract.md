@@ -234,7 +234,7 @@ Every Scheduled Task reaches `WappaEventHandler.process_scheduled_event(event: S
 
 `await Scheduling.from_app(app).dispatch(event)` is the entry point for Host schedulers. It takes ordinary values and no request, runs after startup, and returns on success. Context and handler failures propagate so the engine applies its own policy. It counts as tracked background work: shutdown drains it, and once the runtime drains it raises `RuntimeError` without running the hook.
 
-`ScheduledEvent` fields: `action`, `source`, optional `inbox_ref`, `user_id`, `identifier`, `payload`, `scheduled_for`, `execution_id`, `metadata`, and `dispatched_at`, which dispatch stamps. Timestamps must be timezone-aware and become UTC. `user_id` requires `inbox_ref`. Dispatch replaces `user_id` with the canonical User from the configured `IIdentityResolver`, asked with the task's own `inbox_id`, before any User cache exists. `execution_id` is correlation only; Wappa neither deduplicates on it nor stores it.
+`ScheduledEvent` fields: `action`, `source`, optional `inbox_ref`, `user_id`, `identifier`, `payload`, `scheduled_for`, `execution_id`, `metadata`, and `dispatched_at`, which dispatch stamps. Timestamps must be timezone-aware and become UTC. `user_id` requires `inbox_ref`. Dispatch replaces `user_id` with the canonical User from the configured `IIdentityResolver`, asked with the task's own `inbox_ref`, before any User cache exists. `execution_id` is correlation only; Wappa neither deduplicates on it nor stores it.
 
 | Scope | Set on the handler | `None` on the handler |
 | --- | --- | --- |
@@ -257,11 +257,11 @@ The Host owns scheduling, datastores and migrations, job registration, recurrenc
 
 ## Inbox-aware identity resolution
 
-Host applications may register `IIdentityResolver` through `WappaBuilder.with_identity_resolver(resolver)` or `Wappa.set_identity_resolver(resolver)`. Its public contract is `resolve(recipient, *, inbox_id) -> str`.
+Host applications may register `IIdentityResolver` through `WappaBuilder.with_identity_resolver(resolver)` or `Wappa.set_identity_resolver(resolver)`. Its public contract is `resolve(recipient, *, inbox_ref) -> str`.
 
-`inbox_id` is required for every resolution. A resolver must scope its lookup by both the transport recipient and the Inbox, so the same recipient can resolve to different canonical Users in different Inboxes. `PassthroughIdentityResolver` accepts the same contract and returns the recipient unchanged.
+`inbox_ref` is required for every resolution and is always the qualified Inbox, never a bare ID or cache namespace. It is runtime scope, not authority and not a storage format. A resolver must scope its lookup by both the native recipient and the whole `InboxRef`, so the same recipient can resolve to different canonical Users in different Inboxes, including two Platforms that share a raw ID. `recipient` can be numeric on any Platform, so its shape is no evidence of the Platform. `PassthroughIdentityResolver` accepts the same contract and returns the recipient unchanged.
 
-Wappa passes the active Inbox to identity resolution from the Inbox-scoped cache factory or the current outbound API context. API event construction fails when the runtime has no Inbox context; it does not create an event with an `"unknown"` Inbox.
+Wappa calls the resolver on scheduled dispatch and `self.scope`, API events, API handler state and state-configured Templates, before any User cache exists. An explicit `user_id` bypasses it, and resolver failures propagate, except in `TemplateStateService.set_template_state`, which reports them as `False`. `OutboundRuntime.messenger` and `.templates` build capabilities and resolve nothing. **Platform webhook intake does not call the resolver:** it keys the handler by `webhook.user.user_id`, so a Host that wants a canonical User on webhooks maps it in its handler. API event construction fails when the runtime has no Inbox context; it does not create an event with an `"unknown"` Inbox.
 
 ## Universal Webhooks
 
@@ -272,7 +272,7 @@ The canonical and only Meta WhatsApp callback is `GET + POST /webhook/inboxes/wh
 
 1. Wappa reads the exact body bytes once and requires `X-Hub-Signature-256: sha256=<hex HMAC-SHA256>` computed with `META_APP_SECRET`. A missing, malformed, or mismatched signature answers the same generic `401` before any JSON decoding, directory read, payload logging, or work scheduling. `MetaCallbackAuthenticator(app_secret).sign(body)` (`from wappa.core.inbound import ...`) produces the header for tests and local tools.
 2. Only then is JSON decoded; a non-object root is `400`.
-3. Each `entry[].changes[]` is routed: `value.metadata.phone_number_id` (or a flat `value.phone_number_id`) becomes `InboxRef.whatsapp(...)`, whose active record must belong to `PlatformAccountRef.whatsapp(entry[].id)` — a mismatch rejects the whole callback with `400`. A change without a phone number fans out to every validated active member of that WABA, sorted and duplicate-free. `entry[].id` is never an Inbox; a flat `value.waba_id` must match it.
+3. Each `entry[].changes[]` is routed: `value.metadata.phone_number_id` (or a flat `value.phone_number_id`) becomes `InboxRef.whatsapp(...)`, whose active record must belong to `PlatformAccountRef.whatsapp(entry[].id)` — a mismatch rejects the whole callback with `400`. A change without a phone number fans out to every validated active member of that WABA, sorted and duplicate-free. `entry[].id` is never an Inbox; a flat `value.waba_id` must match it. `account_reconnected` alone also reaches known inactive Inboxes of that WABA, see below.
 4. Every Dispatch Context in the batch is built before any delivery is scheduled. A failure at item N schedules none of items 1..N-1.
 
 | Condition | Status |
@@ -304,11 +304,19 @@ One Platform event can reach a handler more than once through three independent 
 
 1. Meta retries a callback it considers unacknowledged or failed.
 2. Batch splitting turns one HTTP request into one delivery per entry/change pair.
-3. WABA fan-out turns one account-scoped change into one delivery per active Inbox under that Platform Account.
+3. WABA fan-out turns one account-scoped change into one delivery per active Inbox under that Platform Account (for `account_reconnected`, per known Inbox, active or inactive).
 
 The third multiplier is the one that changes host obligations. A WABA carrying `N` active Inboxes multiplies every account-level change by `N`, so an account-event handler that mutates shared, Inbox-independent state — a WABA-level counter, a shared billing record, an operator notification — performs that work `N` times per change.
 
-Wappa guarantees that each delivery carries exactly one Platform change, is scoped to exactly one Inbox whose active record and WABA membership were proven, and is emitted in a deterministic Inbox order, so replaying the same payload behaves identically.
+Wappa guarantees that each delivery carries exactly one Platform change, is scoped to exactly one Inbox whose active record (or, for `account_reconnected`, inactive record) and WABA membership were proven, and is emitted in a deterministic Inbox order, so replaying the same payload behaves identically.
+
+### Reconnect after a full offboard
+
+A correctly signed `account_reconnected` reaches `process_inbox_connection` when its Inbox is known and inactive, so a Host can restore an account after every Inbox was deactivated ([ADR-0032](adr/0032-inactive-inbox-reconnect.md)). A phone-addressed event needs an inactive record under the `entry[].id` WABA; an account-only event also fans out to the WABA's inactive members, read from `IInboxDirectorySource.list_inboxes_for_platform_account`.
+
+On an inactive delivery `self.messenger`, `self.whatsapp` and `self.instagram` are `None` and no token is read. `self.cache_factory`, `self.db` and `self.inbox_ref` are available. The Host decides, commits the active record, calls `refresh_inbox`, and opens `self.scope()` if it needs a Messenger in the same handler.
+
+An unknown Inbox or account, a member of another account or Platform, an ordinary message and `account_offboarded` to an inactive Inbox all stay `400`, and one refused item rejects the whole callback. A source outage stays `503`. Recovery must be idempotent: a duplicate reconnect is delivered again, with a Messenger if the Inbox was already restored.
 
 Host applications must make account-scoped handlers idempotent, key side effects on a Platform-supplied identifier rather than on arrival, and never assume one handler invocation equals one Platform event. Wappa does not supply a delivery fingerprint; deduplication is the host's responsibility.
 
@@ -1163,5 +1171,5 @@ See [`docs/migration/v0.27.0-multi-inbox.md`](migration/v0.27.0-multi-inbox.md) 
 
 ### Migration Notes (v0.13.0)
 
-- `from wappa.core.expiry.listener import get_fastapi_app` is removed. Use `from wappa.core.expiry import get_app_context` then `get_app_context().get_app()`.
+- `from wappa.core.expiry.listener import get_fastapi_app` is removed. Keep your own app reference (`get_app_context`, its 0.13 replacement, was removed in 0.34).
 - Deep paths under `wappa.schemas.whatsapp`, `wappa.schemas.factory`, and `wappa.schemas.core.base_*` are removed. Use `wappa.webhooks` instead.

@@ -3,7 +3,10 @@ and the Inbox Directory cache is cleared at startup."""
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -113,3 +116,65 @@ async def test_directory_clear_drops_rows_and_account_index(fresh_memory_store):
     assert await cache.get("wappa_inbox_directory_extra", "k") is not None
     assert await cache.get("wappa_sent_messages", "m1") is not None
     assert await host_table.get(PRIMARY_TABLE, "k") is not None
+
+
+# ── CLI: conflicts fail the command and the report is complete ──────────────
+
+
+def _json_cache_with_conflicts(root: Path, count: int) -> None:
+    users = root / "users"
+    users.mkdir(parents=True)
+    for n in range(count):
+        (users / f"{PNID}_u{n}.json").write_text("{}")
+        (users / f"whatsapp__{PNID}_u{n}.json").write_text("{}")
+    (users / f"{PNID}_free.json").write_text("{}")
+
+
+def _run_cli(root: Path, *extra: str) -> Any:
+    from typer.testing import CliRunner
+
+    from wappa.cli.main import app
+
+    return CliRunner().invoke(
+        app,
+        ["migrate", "cache-namespaces", "-i", PNID, "--json-root", str(root), *extra],
+        env={"REDIS_URL": ""},
+    )
+
+
+def test_cli_conflicts_exit_nonzero_on_dry_run_and_apply(tmp_path: Path) -> None:
+    _json_cache_with_conflicts(tmp_path, 1)
+
+    assert _run_cli(tmp_path).exit_code == 1
+    assert _run_cli(tmp_path, "--apply").exit_code == 1
+    # The free key still moved and the conflicting source was not overwritten.
+    assert (tmp_path / "users" / f"whatsapp__{PNID}_free.json").exists()
+    assert (tmp_path / "users" / f"{PNID}_u0.json").exists()
+
+
+def test_cli_without_conflicts_exits_zero(tmp_path: Path) -> None:
+    (tmp_path / "users").mkdir()
+    (tmp_path / "users" / f"{PNID}_u.json").write_text("{}")
+
+    assert _run_cli(tmp_path).exit_code == 0
+
+
+def test_cli_json_report_is_complete_past_the_display_limit(tmp_path: Path) -> None:
+    _json_cache_with_conflicts(tmp_path, 25)
+
+    result = _run_cli(tmp_path, "--json")
+
+    assert result.exit_code == 1
+    report = json.loads(result.stdout)
+    assert report["applied"] is False
+    assert report["has_conflicts"] is True
+    assert len(report["backends"]["JSON"]["conflicts"]) == 25
+    assert len(report["backends"]["JSON"]["renamed"]) == 1
+
+
+def test_cli_text_output_says_how_many_conflicts_it_hid(tmp_path: Path) -> None:
+    _json_cache_with_conflicts(tmp_path, 25)
+
+    result = _run_cli(tmp_path)
+
+    assert "and 5 more" in result.stdout

@@ -18,6 +18,8 @@ to inject canonical-id lookups without modifying framework code.
 
 from abc import ABC, abstractmethod
 
+from wappa.domain.inbox.identity import InboxRef
+
 
 class IIdentityResolver(ABC):
     """
@@ -29,16 +31,17 @@ class IIdentityResolver(ABC):
     """
 
     @abstractmethod
-    async def resolve(self, recipient: str, *, inbox_id: str) -> str:
+    async def resolve(self, recipient: str, *, inbox_ref: InboxRef) -> str:
         """
         Map ``recipient`` to the canonical user id used for cache scoping.
 
         Args:
-            recipient: Transport identifier from the webhook or API request
-                (typically the WhatsApp phone number).
-            inbox_id: Inbox in which Wappa observed or will address the
-                recipient. Host resolvers must treat it as part of the lookup
-                scope.
+            recipient: Native delivery identifier from the API request or
+                scheduled task. It can be numeric on any Platform, so its
+                shape is no evidence of the Platform.
+            inbox_ref: Qualified Inbox in which Wappa will address the
+                recipient. It is runtime scope, not authority and not a cache
+                namespace; two Platforms can share a raw ``inbox_id``.
 
         Returns:
             The canonical user id to use as ``user_id`` when scoping caches,
@@ -50,5 +53,5 @@ class IIdentityResolver(ABC):
 class PassthroughIdentityResolver(IIdentityResolver):
     """Default resolver: returns the recipient unchanged."""
 
-    async def resolve(self, recipient: str, *, inbox_id: str) -> str:
+    async def resolve(self, recipient: str, *, inbox_ref: InboxRef) -> str:
         return recipient

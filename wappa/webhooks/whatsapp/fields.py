@@ -5,6 +5,9 @@ from __future__ import annotations
 ACCOUNT_EVENT_FIELDS: frozenset[str] = frozenset(
     {"account_offboarded", "account_reconnected"}
 )
+# The only fields routed to a known inactive Inbox (ADR-0032): a Host cannot
+# restore an offboarded account if the event announcing its return is refused.
+INACTIVE_INBOX_FIELDS: frozenset[str] = frozenset({"account_reconnected"})
 BUSINESS_USERNAME_EVENT_FIELDS: frozenset[str] = frozenset(
     {"business_username_updates"}
 )

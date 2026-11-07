@@ -5,6 +5,28 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.1] - 2026-11-06
+
+One identity contract for every resolver call, and a way back for a WhatsApp account whose Inboxes were all deactivated. **This patch contains one breaking signature change** for Hosts with a custom identity resolver, so it is a real upgrade step despite the patch number. Upgrade notes: [docs/migration/v0.34.1-from-0.34.0.md](docs/migration/v0.34.1-from-0.34.0.md).
+
+### Breaking changes
+
+- **`IIdentityResolver.resolve(recipient, *, inbox_ref)` replaces `inbox_id`.** Update every custom resolver and test fake. The same resolver used to receive a raw ID on scheduled dispatch and API events and a qualified cache namespace on API state and Template state, so it could not tell Platforms apart; it now always gets the original `InboxRef`.
+- **`HandlerStateService` and `TemplateStateService` require `inbox_ref=`, and `resolve_event_user_id` takes `inbox_ref=` instead of `inbox_id=`.** The prebuilt dependencies pass it for you.
+- **`wappa migrate cache-namespaces` exits with status 1 while any destination conflict remains**, on a dry run too. A script that ignored conflicts now sees a failure.
+
+### Added
+
+- **A signed `account_reconnected` reaches `process_inbox_connection` for a known inactive Inbox** ([ADR-0032](docs/adr/0032-inactive-inbox-reconnect.md)). It was refused with 400, so an account with every Inbox deactivated could not recover from the callback. On that delivery `self.messenger`, `self.whatsapp` and `self.instagram` are `None` and no token is read. The Host commits the active record, calls `refresh_inbox`, and opens `self.scope()` if it needs a Messenger. Unknown accounts, other accounts or Platforms, ordinary messages and `account_offboarded` to an inactive Inbox stay refused. The live payload is not captured yet, so a real reconnect remains an open live check.
+- **`wappa migrate cache-namespaces --json`** prints the complete report. Text output now says how many conflicts it hid past the first 20.
+
+### Fixed (documentation)
+
+- The contract now states that Platform webhook intake does not call the identity resolver: it keys handlers by `webhook.user.user_id`.
+- Instagram media: the 0.34 migration guide said unsupported audio and video URLs become link text. They raise `ValueError`; only unsupported document URLs become links.
+- Armed triggers: `wappa migrate cache-namespaces` keeps still-live Expiry Keys and their TTLs, so they fire into the new hook; missed notifications are not replayed. The 0.34 notes and scheduled-tasks skill said nothing migrates them.
+- Removed the public-contract instruction to use `get_app_context`, which 0.34 removed.
+
 ## [0.34.0] - 2026-11-06
 
 Instagram conversations join WhatsApp on one Messenger contract, and Wappa's contracts are split by responsibility so it can host more messaging Platforms. Every action that exists on more than one Platform has exactly one `IMessenger` method. Each adapter maps that method onto its native API, so Host code never branches on Platform name ([ADR-0025](docs/adr/0025-messenger-contract.md)). Platform-only families are capabilities a Host asks for: Templates for WhatsApp; comment controls and content reads for Instagram; the Media Library for both. Connecting an account so it becomes an Inbox is a separate contract, `IInboxConnector`, implemented for both Instagram and WhatsApp ([ADR-0026](docs/adr/0026-inbox-connection.md)).

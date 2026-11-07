@@ -342,8 +342,12 @@ class InboundRuntime:
                 "before processing webhooks"
             )
         try:
-            messenger = await builder.messenger(
-                delivery.inbox_ref, credentials=delivery.credentials
+            messenger = (
+                None
+                if delivery.credentials is None
+                else await builder.messenger(
+                    delivery.inbox_ref, credentials=delivery.credentials
+                )
             )
             cache_factory = builder.cache_factory(delivery.inbox_ref, user_id)
         except InboxDirectoryError:

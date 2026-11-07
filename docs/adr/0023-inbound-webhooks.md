@@ -28,7 +28,7 @@ Meta configures one callback URL per App and per product, while one WABA holds s
 | --- | ---: |
 | Missing, malformed or invalid POST signature | 401 |
 | Invalid GET verify token | 403 |
-| Uninstalled Platform (GET or POST), malformed JSON, non-object root, invalid Inbox ID format, unknown or inactive Inbox, Inbox/account mismatch, confirmed empty account, other unroutable payload | 400 |
+| Uninstalled Platform (GET or POST), malformed JSON, non-object root, invalid Inbox ID format, unknown or inactive Inbox (except `account_reconnected`, [ADR-0032](0032-inactive-inbox-reconnect.md)), Inbox/account mismatch, confirmed empty account, other unroutable payload | 400 |
 | Authenticated routable payload with unmodelled fields or field | 200 plus `META_SCHEMA_DRIFT` |
 | Directory, cache, source, decrypt or runtime dependency unavailable | 503 |
 | Unexpected Wappa defect | 500 |

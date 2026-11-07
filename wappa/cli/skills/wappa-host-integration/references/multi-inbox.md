@@ -61,6 +61,8 @@ revoked = svc.create_inactive_record(previous)                                  
 
 To remove one, commit the inactive record, then `await directory.deactivate_inbox(inbox_ref)` (it raises `InboxMutationConflictError` if your source still says active). Calls already in flight finish with the old credential. In explicit mode, the directory cache is cleared at startup, so a restart always reads the source.
 
+A reconnect still reaches you after that. A signed WhatsApp `account_reconnected` for a known inactive Inbox arrives on `process_inbox_connection` with `self.messenger` set to `None`; see `wappa-apps`' `connecting-accounts.md`. Your source's `list_inboxes_for_platform_account` must include inactive records for account-only events to find them. Ordinary messages to an inactive Inbox stay refused.
+
 ## Callbacks and HTTP selection
 
 - Meta callbacks: `GET`/`POST /webhook/inboxes/whatsapp` and `/webhook/inboxes/instagram`, one Meta app. `META_APP_SECRET` checks every POST body before parsing (bad signature 401), `WP_WEBHOOK_VERIFY_TOKEN` answers only the GET challenge, an unknown or inactive Inbox answers 400, and a directory outage answers 503 (Meta retries).
@@ -93,4 +95,6 @@ Use it only for trusted adapters Wappa doesn't cover (publishing, insights). Aut
 
 ## Identity resolution
 
-`app.set_identity_resolver(resolver)` plugs an `IIdentityResolver` (`async resolve(recipient, *, inbox_id) -> str`) that maps a Delivery Address to your canonical User for cache scoping, for example when one person's phone and BSUID must share state. The default `PassthroughIdentityResolver` keys by the address Meta sent.
+`app.set_identity_resolver(resolver)` plugs an `IIdentityResolver` (`async resolve(recipient, *, inbox_ref) -> str`) that maps a Delivery Address to your canonical User within one Inbox, for example when one person's phone and BSUID must share state. The default `PassthroughIdentityResolver` keys by the address Meta sent. Key the lookup on the whole `inbox_ref`, and read the Platform from `inbox_ref.platform`: a numeric `recipient` proves nothing, and two Platforms can share a raw ID. Matching customers across Platforms is your business logic, not the resolver's.
+
+The resolver runs on scheduled dispatch, `self.scope`, API events, API handler state and Template state. Webhook intake doesn't call it: handlers are keyed by `webhook.user.user_id`, so if you want a canonical User there, map it in your handler.

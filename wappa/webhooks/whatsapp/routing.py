@@ -5,6 +5,7 @@ to Wappa references. It runs only after the callback body has been
 authenticated. It resolves every Inbox through the internal credential
 resolver, proves that each phone-scoped change belongs to the WABA in
 ``entry[].id``, and fans WABA-only changes out to every validated member.
+Only ``INACTIVE_INBOX_FIELDS`` may reach a known inactive Inbox (ADR-0032).
 """
 
 from __future__ import annotations
@@ -22,6 +23,8 @@ from wappa.domain.inbox.errors import InboxMembershipError, InboxNotFoundError
 from wappa.domain.inbox.identity import InboxRef, PlatformAccountRef
 from wappa.domain.inbox.ports import IInboxCredentialResolver, ResolvedInboxCredentials
 
+from .fields import INACTIVE_INBOX_FIELDS
+
 
 async def route_whatsapp_payload(
     payload: dict[str, Any],
@@ -32,7 +35,8 @@ async def route_whatsapp_payload(
     Phone-scoped changes use ``value.metadata.phone_number_id`` or a flat
     ``value.phone_number_id`` and must belong to the ``entry[].id`` WABA. A
     change without either identifier fans out to every active Inbox under
-    that WABA. The WABA ID is never used as an Inbox ID.
+    that WABA. The WABA ID is never used as an Inbox ID. A reconnect event also
+    reaches the WABA's known inactive Inboxes, without credentials.
 
     Raises:
         PayloadRoutingError: structurally unroutable payload (400).
@@ -91,7 +95,10 @@ async def route_whatsapp_payload(
             unit_entry = {**entry, "changes": [change]}
             unit_payload = {**payload, "entry": [unit_entry]}
             for inbox_ref, credentials in await _resolve_change_inboxes(
-                value=value, account_ref=account_ref, resolver=resolver
+                value=value,
+                account_ref=account_ref,
+                resolver=resolver,
+                allow_inactive=change.get("field") in INACTIVE_INBOX_FIELDS,
             ):
                 deliveries.append(
                     RoutedWebhookDelivery(
@@ -141,7 +148,8 @@ async def _resolve_change_inboxes(
     value: dict[str, Any],
     account_ref: PlatformAccountRef,
     resolver: IInboxCredentialResolver,
-) -> tuple[tuple[InboxRef, ResolvedInboxCredentials], ...]:
+    allow_inactive: bool,
+) -> tuple[tuple[InboxRef, ResolvedInboxCredentials | None], ...]:
     phone_number_id = _phone_number_id(value)
     if phone_number_id is not None:
         try:
@@ -150,16 +158,29 @@ async def _resolve_change_inboxes(
             raise PayloadRoutingError(
                 "WhatsApp phone_number_id is not a valid Inbox identifier"
             ) from exc
-        credentials = await resolver.resolve_credentials(inbox_ref)
+        try:
+            credentials = await resolver.resolve_credentials(inbox_ref)
+        except InboxNotFoundError as exc:
+            if not (allow_inactive and exc.is_inactive):
+                raise
+            known_account = await resolver.get_inactive_inbox_account(inbox_ref)
+            if known_account != account_ref:
+                raise InboxMembershipError(inbox_ref, account_ref) from exc
+            return ((inbox_ref, None),)
         if credentials.account_ref != account_ref:
             raise InboxMembershipError(inbox_ref, account_ref)
         return ((inbox_ref, credentials),)
 
     members = await resolver.list_inbox_refs_for_platform_account(account_ref)
     ordered = tuple(sorted(set(members)))
-    if not ordered:
+    inactive = (
+        await resolver.list_inactive_inbox_refs_for_platform_account(account_ref)
+        if allow_inactive
+        else ()
+    )
+    if not ordered and not inactive:
         raise PlatformAccountNotRegisteredError(account_ref)
-    resolved: list[tuple[InboxRef, ResolvedInboxCredentials]] = []
+    resolved: list[tuple[InboxRef, ResolvedInboxCredentials | None]] = []
     for inbox_ref in ordered:
         if inbox_ref.platform is not account_ref.platform:
             raise InboxMembershipError(inbox_ref, account_ref)
@@ -170,7 +191,12 @@ async def _resolve_change_inboxes(
         if credentials.account_ref != account_ref:
             raise InboxMembershipError(inbox_ref, account_ref)
         resolved.append((inbox_ref, credentials))
-    return tuple(resolved)
+    for inbox_ref in inactive:
+        if inbox_ref.platform is not account_ref.platform:
+            raise InboxMembershipError(inbox_ref, account_ref)
+        if inbox_ref not in ordered:
+            resolved.append((inbox_ref, None))
+    return tuple(sorted(resolved, key=lambda item: item[0]))
 
 
 __all__ = [

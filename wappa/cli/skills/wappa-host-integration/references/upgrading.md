@@ -1,7 +1,7 @@
 ---
 checked_on: 2026-11-06
-checked_against: Wappa CHANGELOG.md (0.34.0) and docs/migration/v0.34.0-from-0.33.md
-revision: 2
+checked_against: Wappa CHANGELOG.md (0.34.1) and docs/migration/v0.34.0-from-0.33.md, v0.34.1-from-0.34.0.md
+revision: 3
 ---
 
 # Upgrading a Host to a new Wappa version
@@ -9,6 +9,7 @@ revision: 2
 ## Contents
 
 - Method
+- 0.34.0 → 0.34.1 checklist
 - 0.33 → 0.34 checklist
 - After the upgrade
 
@@ -23,6 +24,15 @@ Wappa releases are clean cuts: a renamed or removed API has no alias, and every 
 5. Refresh this skill set: `wappa init` never overwrites an existing skill, so copy the new version's `wappa/cli/skills/` over the old folders (or delete them and re-run `wappa init` in a scratch folder and copy).
 
 Upgrade one minor version at a time when several are pending.
+
+## 0.34.0 → 0.34.1 checklist
+
+This patch breaks one signature; see `docs/migration/v0.34.1-from-0.34.0.md`.
+
+1. **Resolver.** `IIdentityResolver.resolve(recipient, *, inbox_ref)` replaces `inbox_id`. Key the lookup on the whole `InboxRef` and drop any prefix stripping or Platform guessing. Update fakes too.
+2. **Direct constructions.** `HandlerStateService` and `TemplateStateService` require `inbox_ref=`, and `resolve_event_user_id` takes `inbox_ref=`.
+3. **Reconnect.** `process_inbox_connection` can now run with `self.messenger` set to `None` on `account_reconnected`. Guard handlers on that lane.
+4. **Scripts.** `wappa migrate cache-namespaces` exits 1 while conflicts remain. `--json` gives the full report.
 
 ## 0.33 → 0.34 checklist
 

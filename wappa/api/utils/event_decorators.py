@@ -23,6 +23,7 @@ from fastapi import Request as FastAPIRequest
 from wappa.core.events.api_event_dispatcher import APIEventDispatcher
 from wappa.core.logging.context import require_inbox_context
 from wappa.domain.events.api_message_event import APIMessageEvent
+from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.identity_resolver import IIdentityResolver
 from wappa.domain.results import MessageResult
 from wappa.messaging.classification import classify_outbound_payload
@@ -36,7 +37,7 @@ async def resolve_event_user_id(
     explicit_user_id: str | None,
     fastapi_request: "FastAPIRequest | Request | None",
     *,
-    inbox_id: str,
+    inbox_ref: InboxRef,
 ) -> str:
     """
     Resolve the canonical ``user_id`` for an APIMessageEvent.
@@ -44,9 +45,6 @@ async def resolve_event_user_id(
     Precedence: caller-provided ``explicit_user_id`` > registered
     ``IIdentityResolver`` on ``app.state`` > raw ``recipient``.
     """
-    if not inbox_id:
-        raise ValueError("Identity resolution requires a non-empty inbox_id")
-
     if explicit_user_id:
         return explicit_user_id
 
@@ -55,7 +53,7 @@ async def resolve_event_user_id(
         resolver = getattr(fastapi_request.app.state, "identity_resolver", None)
 
     if resolver is not None:
-        return await resolver.resolve(recipient, inbox_id=inbox_id)
+        return await resolver.resolve(recipient, inbox_ref=inbox_ref)
     return recipient
 
 
@@ -161,7 +159,9 @@ def dispatch_message_event(
                 recipient=recipient,
                 explicit_user_id=getattr(request_obj, "user_id", None),
                 fastapi_request=fastapi_request,
-                inbox_id=inbox_id,
+                inbox_ref=InboxRef(
+                    platform=PlatformType(message_result.platform), inbox_id=inbox_id
+                ),
             )
 
             # Create and dispatch event asynchronously (fire-and-forget)
@@ -251,7 +251,9 @@ def fire_api_event(
             recipient=recipient,
             explicit_user_id=user_id,
             fastapi_request=fastapi_request,
-            inbox_id=inbox_id,
+            inbox_ref=InboxRef(
+                platform=PlatformType(result.platform), inbox_id=inbox_id
+            ),
         )
         event = APIMessageEvent(
             message_type=message_type,

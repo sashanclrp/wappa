@@ -39,11 +39,15 @@ class PlatformAccountNotRegisteredError(PayloadRoutingError):
 
 @dataclass(frozen=True, slots=True)
 class RoutedWebhookDelivery:
-    """One Platform change bound to one validated Inbox."""
+    """One Platform change bound to one validated Inbox.
+
+    ``credentials`` is ``None`` only for a lifecycle event routed to a known
+    inactive Inbox (ADR-0032); that delivery gets no Messenger.
+    """
 
     inbox_ref: InboxRef
     account_ref: PlatformAccountRef
-    credentials: ResolvedInboxCredentials
+    credentials: ResolvedInboxCredentials | None
     payload: dict[str, Any]
 
     @property

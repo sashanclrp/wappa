@@ -99,6 +99,8 @@ forms under `wappa/schemas`.
   `ACCOUNT_EVENT_FIELDS` set: `account_offboarded`, `account_reconnected`) carry a flat,
   WABA-scoped value with no `metadata`, so they use the strict `AccountWebhookValue` model
   instead. Built-in fields never fall through to the permissive path.
+- **Inactive Inboxes**: routing refuses them, except `INACTIVE_INBOX_FIELDS` (`account_reconnected`),
+  which routes to a known inactive Inbox with `credentials=None` and no Messenger (ADR-0032).
 - **Meta input tolerant and reported, Wappa output strict**: Models that parse
   data from Meta (webhook payloads; Graph API responses) use `extra="allow"` so an
   additive Meta change cannot turn into a 400 and a dropped delivery. The

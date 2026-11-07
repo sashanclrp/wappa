@@ -88,10 +88,10 @@ class _Credentials(IInboxCredentialResolver):
 class _CanonicalResolver(IIdentityResolver):
     def __init__(self, mapping: dict[str, str] | None = None) -> None:
         self.mapping = mapping or {}
-        self.calls: list[tuple[str, str]] = []
+        self.calls: list[tuple[str, InboxRef]] = []
 
-    async def resolve(self, recipient: str, *, inbox_id: str) -> str:
-        self.calls.append((recipient, inbox_id))
+    async def resolve(self, recipient: str, *, inbox_ref: InboxRef) -> str:
+        self.calls.append((recipient, inbox_ref))
         return self.mapping.get(recipient, recipient)
 
 
@@ -267,7 +267,7 @@ async def test_canonical_user_reaches_event_handler_and_cache_scope() -> None:
     await _dispatch(_app(handler, resolver=resolver), inbox_ref=WA, user_id="5730")
 
     seen = handler.seen[0]
-    assert resolver.calls == [("5730", "111")]
+    assert resolver.calls == [("5730", WA)]
     assert seen.event.user_id == "CO.abc"
     assert seen.handler.user_id == "CO.abc"
     assert seen.handler.cache_factory.user_id == "CO.abc"
@@ -280,7 +280,7 @@ async def test_the_resolver_is_asked_within_the_tasks_own_inbox() -> None:
     app = _app(resolver=resolver)
     await _dispatch(app, inbox_ref=WA, user_id="same")
     await _dispatch(app, inbox_ref=WA_OTHER, user_id="same")
-    assert resolver.calls == [("same", "111"), ("same", "222")]
+    assert resolver.calls == [("same", WA), ("same", WA_OTHER)]
 
 
 async def test_inbox_and_system_work_never_consult_the_resolver() -> None:
@@ -331,7 +331,7 @@ async def test_unavailable_user_cache_fails_before_the_host_hook() -> None:
 
 async def test_a_resolver_failure_never_falls_back_to_the_armed_identifier() -> None:
     class _Broken(IIdentityResolver):
-        async def resolve(self, recipient: str, *, inbox_id: str) -> str:
+        async def resolve(self, recipient: str, *, inbox_ref: InboxRef) -> str:
             raise ConnectionError("identity store down")
 
     handler = _Handler()

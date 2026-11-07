@@ -49,4 +49,4 @@ Keep Host guards where they matter: admission checks, leases, send fences and ge
 
 ## Already-armed triggers
 
-The key format and pool don't change, so a trigger armed by the old version fires into the new hook when it expires. Nothing migrates it. Before deploying, make sure your binding and hook recognize every action that might still be armed. For a retired one, return `None` from the binding and add a no-op `case`; a raised binding error also drops the trigger, but logs an error.
+`wappa migrate cache-namespaces` renames still-live Expiry Keys and keeps their TTLs, so a trigger armed by the old version fires into the new hook when it expires. An expiry missed while no listener ran is not replayed. Before deploying, make sure your binding and hook recognize every action that might still be armed. For a retired one, return `None` from the binding and add a no-op `case`; a raised binding error also drops the trigger, but logs an error.

@@ -111,13 +111,18 @@ def migrate_cache_namespaces(
     apply: bool = typer.Option(
         False, "--apply", help="Rename for real (default: dry run, change nothing)"
     ),
+    json_report: bool = typer.Option(
+        False, "--json", help="Print the complete report as JSON on stdout"
+    ),
 ) -> None:
     """Rename WhatsApp cache keys from <pnid> to whatsapp__<pnid> (0.33 -> 0.34).
 
     Stop every 0.33 worker first. Keys keep their TTL; existing qualified
-    keys are never overwritten (reported as conflicts).
+    keys are never overwritten (reported as conflicts). Exits with status 1
+    when any conflict remains, on a dry run too; resolve them before cutover.
     """
     import asyncio
+    import json
 
     from wappa.persistence.namespace_migration import (
         migrate_json_namespaces,
@@ -141,6 +146,26 @@ def migrate_cache_namespaces(
         reports.append(
             ("JSON", migrate_json_namespaces(json_root, whatsapp_inbox, apply=apply))
         )
+    has_conflicts = any(report.conflicts for _, report in reports)
+    if json_report:
+        typer.echo(
+            json.dumps(
+                {
+                    "applied": apply,
+                    "has_conflicts": has_conflicts,
+                    "backends": {
+                        backend: {
+                            "renamed": [list(pair) for pair in report.renamed],
+                            "conflicts": report.conflicts,
+                        }
+                        for backend, report in reports
+                    },
+                }
+            )
+        )
+        if has_conflicts:
+            raise typer.Exit(1)
+        return
     verb = "Renamed" if apply else "Would rename"
     for backend, report in reports:
         console.print(f"[bold]{backend}[/bold]: {verb} {len(report.renamed)} keys")
@@ -155,8 +180,14 @@ def migrate_cache_namespaces(
             )
             for key in report.conflicts[:20]:
                 console.print(f"  {key}")
+            if len(report.conflicts) > 20:
+                console.print(
+                    f"  ... and {len(report.conflicts) - 20} more (--json lists all)"
+                )
     if not apply:
         console.print("Dry run only. Re-run with --apply to rename.")
+    if has_conflicts:
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

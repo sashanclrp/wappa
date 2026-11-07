@@ -1,7 +1,7 @@
 ---
 checked_on: 2026-11-06
 checked_against: Meta Instagram API with Unified Login and WhatsApp Embedded Signup pages (Graph v26.0), wappa/connections/ (whatsapp.py, instagram.py, contract.py) and Wappa's tests/test_instagram_connection.py
-revision: 3
+revision: 4
 ---
 
 # Connecting accounts: one flow for WhatsApp and Instagram
@@ -80,6 +80,22 @@ await runtime.directory.refresh_inbox(inbox.inbox_ref)        # 2. then refresh 
 Refuse to silently reactivate an inactive (revoked) record. On Instagram, Wappa mounts no deauthorize route: that callback fires only for Instagram Login grants, which Unified Login never creates. A Host data-deletion callback posts a `signed_request`; verify it with `parse_signed_request(value, app_secret)`. To revoke: first resolve the token (`credential = await InboxCredentialAccess.from_app(app).resolve(inbox_ref)`, below), call `connector.disconnect(record.inbox_ref, record.account_ref, credential.access_token)` to stop webhooks (on WhatsApp only when no other active Inbox shares the WABA), then commit `credential_service.create_inactive_record(record)` and call `await runtime.directory.deactivate_inbox(inbox_ref)`. After rotation or deactivation, the next resolution sees the change; in-flight calls are not cancelled.
 
 Revoke an Instagram Inbox through the business portfolio's system user or your connector: deactivate the record, then `connector.disconnect`. On WhatsApp, also deactivate the record when `process_inbox_connection` reports `account_offboarded`.
+
+## Recovering a reconnected WhatsApp account
+
+`account_reconnected` reaches `process_inbox_connection` even when every Inbox of that WABA is inactive, once Wappa has checked the signature and that the Inbox belongs to the account. On an inactive Inbox there is no token in play: `self.messenger` and `self.whatsapp` are `None`, while `self.cache_factory` and `self.db` work. You decide whether to restore it:
+
+```python
+async def process_inbox_connection(self, webhook):
+    if webhook.state is not InboxConnectionState.RECONNECTED:
+        return
+    host_store.put(active_record)                                    # 1. Host commit
+    await app.state.inbox_runtime.directory.refresh_inbox(self.inbox_ref)  # 2. then refresh
+    async with self.scope() as ready:                                # 3. only to send now
+        ...
+```
+
+An account-only event fans out once per known Inbox, and Meta can repeat it, so make this idempotent. An already restored Inbox receives it with a Messenger. Ordinary messages and `account_offboarded` to an inactive Inbox stay refused with 400. If your handler fails after Wappa accepted the callback, nothing retries it, so keep a Host recovery path. Only this event is routed this way, and its live payload has not been captured yet: log the first real one.
 
 ## Trusted credential access
 

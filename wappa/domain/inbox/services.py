@@ -238,6 +238,19 @@ class InboxDirectory(IInboxCredentialResolver):
         )
         return await self._rebuild_index(account_ref)
 
+    async def get_inactive_inbox_account(
+        self, inbox_ref: InboxRef
+    ) -> PlatformAccountRef:
+        record = await self.get_record(inbox_ref)
+        return record.account_ref
+
+    async def list_inactive_inbox_refs_for_platform_account(
+        self, account_ref: PlatformAccountRef
+    ) -> tuple[InboxRef, ...]:
+        # Read from the source: the account index holds active members only.
+        records = await self._source_list(account_ref)
+        return tuple(sorted({r.inbox_ref for r in records if not r.is_active}))
+
     # ── commands ──────────────────────────────────────────────────────
 
     async def refresh_inbox(self, inbox_ref: InboxRef) -> CredentialRecord | None:

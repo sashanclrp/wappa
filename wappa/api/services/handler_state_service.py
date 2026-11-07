@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from wappa.core.logging.logger import get_logger
+from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.cache_factory import ICacheFactory
 from wappa.domain.interfaces.identity_resolver import (
     IIdentityResolver,
@@ -30,6 +31,8 @@ class HandlerStateService:
     def __init__(
         self,
         cache_factory: ICacheFactory,
+        *,
+        inbox_ref: InboxRef,
         identity_resolver: IIdentityResolver | None = None,
     ):
         """
@@ -37,11 +40,14 @@ class HandlerStateService:
 
         Args:
             cache_factory: Cache factory for creating user-scoped caches.
+            inbox_ref: The Inbox this service runs for; identity resolution
+                gets it, never the factory's cache namespace.
             identity_resolver: Maps transport recipients to canonical user
                 ids for cache scoping. Defaults to passthrough (recipient
                 used as-is), preserving pre-0.7.0 behavior.
         """
         self.cache_factory = cache_factory
+        self.inbox_ref = inbox_ref
         self.identity_resolver = identity_resolver or PassthroughIdentityResolver()
         self.logger = get_logger(__name__)
 
@@ -53,7 +59,7 @@ class HandlerStateService:
         """Return explicit ``user_id`` when provided, else resolver output."""
         return user_id or await self.identity_resolver.resolve(
             recipient,
-            inbox_id=self.cache_factory.inbox_id,
+            inbox_ref=self.inbox_ref,
         )
 
     async def set_handler_state(

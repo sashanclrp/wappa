@@ -46,5 +46,7 @@ async def get_handler_state_service(
 ) -> HandlerStateService:
     cache_factory = build_cache_factory(request, context, recipient="handler-api")
     return HandlerStateService(
-        cache_factory, identity_resolver=get_identity_resolver(request)
+        cache_factory,
+        inbox_ref=context.inbox_ref,
+        identity_resolver=get_identity_resolver(request),
     )
