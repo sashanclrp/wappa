@@ -19,6 +19,8 @@ import pytest
 
 from wappa.platforms import PLATFORMS
 
+pytestmark = pytest.mark.architecture
+
 WAPPA = Path(__file__).resolve().parents[1] / "wappa"
 INSTALLED = sorted(platform.value for platform in PLATFORMS)
 

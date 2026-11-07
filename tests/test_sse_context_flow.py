@@ -5,13 +5,12 @@ These tests exercise:
 - ``update_metadata`` / ``update_identity`` mutate the active context.
 - ``publish_sse_event`` reads identity + metadata from the active scope,
   so envelopes always carry ``bsuid`` / ``phone_number`` / ``metadata``.
-- ``SSEMessageHandler`` defers emission until ``post_process_message``,
-  picking up metadata the app set during ``process_message``.
+- ``SSEMessageHandler`` defers emission until enrichment or the
+  ``post_process_message`` fallback, preserving the app's metadata.
 """
 
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
@@ -19,6 +18,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from wappa.core.lifecycle import BackgroundWorkTracker
 from wappa.core.sse import (
     SUPPORTED_SSE_EVENT_TYPES,
     SSEEventHub,
@@ -34,16 +34,12 @@ from wappa.core.sse.context import (
 )
 
 
-async def _drain(subscription, timeout: float = 0.5) -> list[dict]:
-    """Collect every queued event within ``timeout`` seconds."""
+def _drain(subscription) -> list[dict]:
+    """Read events after the awaited publisher has completed queue insertion."""
     events: list[dict] = []
-    while True:
-        try:
-            events.append(
-                await asyncio.wait_for(subscription.queue.get(), timeout=timeout)
-            )
-        except TimeoutError:
-            return events
+    while not subscription.queue.empty():
+        events.append(subscription.queue.get_nowait())
+    return events
 
 
 @pytest.fixture
@@ -117,7 +113,7 @@ async def test_publish_sse_event_reads_identity_from_context():
             payload={"foo": "bar"},
         )
 
-    events = await _drain(sub, timeout=0.1)
+    events = _drain(sub)
     assert len(events) == 1
     env = events[0]
     assert env["inbox_id"] == "t-1"
@@ -144,7 +140,7 @@ async def test_publish_sse_event_without_scope_yields_defaults():
         payload={"ok": True},
     )
 
-    events = await _drain(sub, timeout=0.1)
+    events = _drain(sub)
     assert len(events) == 1
     env = events[0]
     assert env["inbox_id"] == "unknown"
@@ -167,7 +163,7 @@ async def test_publish_sse_event_rejects_unknown_event_type() -> None:
     )
 
     assert delivered == 0
-    assert await _drain(sub, timeout=0.05) == []
+    assert _drain(sub) == []
 
 
 @pytest.mark.asyncio
@@ -188,7 +184,7 @@ async def test_publish_sse_event_delivers_registered_custom_event_type(
             payload={"value": 42},
         )
 
-    events = await _drain(sub, timeout=0.1)
+    events = _drain(sub)
     assert delivered == 1
     assert len(events) == 1
     assert events[0]["event_type"] == custom_sse_event_type
@@ -252,11 +248,12 @@ class _FakeWebhook:
 
 
 @pytest.mark.asyncio
-async def test_incoming_message_defers_until_post_process_and_picks_up_metadata():
+async def test_incoming_message_defers_until_enrichment_and_keeps_metadata():
     hub = SSEEventHub()
     sub = await hub.subscribe()
     handler = SSEMessageHandler(event_hub=hub)
     webhook = _FakeWebhook()
+    tracker = BackgroundWorkTracker()
 
     async with sse_event_scope(
         platform="whatsapp",
@@ -264,11 +261,13 @@ async def test_incoming_message_defers_until_post_process_and_picks_up_metadata(
         user_id="US.canonical",
         bsuid="US.canonical",
         phone_number="15551234567",
+        tracker=tracker,
     ):
         await handler.log_incoming_message(webhook)
 
         # No event should have been published yet — emission is deferred.
-        immediate = await _drain(sub, timeout=0.05)
+        assert tracker.active_count == 0
+        immediate = _drain(sub)
         assert immediate == []
 
         # Simulate the app pipeline enriching the envelope mid-request.
@@ -276,7 +275,10 @@ async def test_incoming_message_defers_until_post_process_and_picks_up_metadata(
 
         await handler.post_process_message(webhook)
 
-    events = await _drain(sub, timeout=0.1)
+    drained = await tracker.drain(timeout=1)
+    assert drained.completed == 1
+    assert not drained.timed_out
+    events = _drain(sub)
     assert len(events) == 1
     env = events[0]
     assert env["event_type"] == "incoming_message"
@@ -292,11 +294,15 @@ async def test_post_process_without_staged_payload_is_noop():
     sub = await hub.subscribe()
     handler = SSEMessageHandler(event_hub=hub)
     webhook = _FakeWebhook()
+    tracker = BackgroundWorkTracker()
 
     async with sse_event_scope(
-        platform="whatsapp", inbox_id="t-1", user_id="US.canonical"
+        platform="whatsapp", inbox_id="t-1", user_id="US.canonical", tracker=tracker
     ):
         await handler.post_process_message(webhook)
 
-    events = await _drain(sub, timeout=0.05)
+    drained = await tracker.drain(timeout=1)
+    assert drained.completed == 0
+    assert not drained.timed_out
+    events = _drain(sub)
     assert events == []

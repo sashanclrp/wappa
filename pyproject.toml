@@ -176,3 +176,7 @@ python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
 addopts = "-v --tb=short"
+markers = [
+    "architecture: source-layout and layering policies (ADR-0031 and Platform boundaries)",
+    "documentation: documented imports, examples, paths and shipped-skill metadata",
+]

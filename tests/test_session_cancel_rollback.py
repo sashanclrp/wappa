@@ -199,15 +199,42 @@ async def _cancel_mid_query(manager: PostgresSessionManager) -> None:
     mid-flight — exactly the shape a BaseHTTPMiddleware cancel scope produces.
     """
 
+    backend_ready = anyio.Event()
+    backend_pid: int | None = None
+
     async def worker() -> None:
+        nonlocal backend_pid
         async with manager.get_session() as session:
-            # Long enough that we reliably cancel while BEGIN is open on the server.
+            backend_pid = await session.scalar(text("SELECT pg_backend_pid()"))
+            backend_ready.set()
             await session.execute(text("SELECT pg_sleep(30)"))
 
-    with anyio.move_on_after(0.5):  # scope cancels the worker after 0.5s
-        async with anyio.create_task_group() as tg:
-            tg.start_soon(worker)
-            await anyio.sleep(30)  # kept alive until the outer scope cancels us
+    # Observe the server actually executing the query before cancelling. A
+    # fixed delay can either waste time or cancel too early on a loaded runner.
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(worker)
+        with anyio.fail_after(5):
+            await backend_ready.wait()
+            while True:
+                async with manager.get_read_session() as observer:
+                    sleeping = await observer.scalar(
+                        text(
+                            "SELECT count(*) FROM pg_stat_activity "
+                            "WHERE pid = :pid AND state = 'active' "
+                            "AND wait_event = 'PgSleep'"
+                        ),
+                        {"pid": backend_pid},
+                    )
+                if sleeping:
+                    break
+                await anyio.sleep(0.01)
+        tasks.cancel_scope.cancel()
+
+
+async def _assert_no_idle_transaction(manager: PostgresSessionManager) -> None:
+    with anyio.fail_after(5):
+        while await _idle_in_transaction_count(manager):
+            await anyio.sleep(0.01)
 
 
 @requires_postgres
@@ -218,10 +245,7 @@ async def test_cancel_mid_query_leaves_no_idle_in_transaction(pg_dsn: str) -> No
     try:
         await _cancel_mid_query(manager)
 
-        # Give the server a beat to register the rolled-back backend as idle/gone.
-        await anyio.sleep(0.5)
-
-        assert await _idle_in_transaction_count(manager) == 0
+        await _assert_no_idle_transaction(manager)
 
         status = manager.get_health_status()
         assert status["pool_checked_out"] == 0
@@ -238,10 +262,8 @@ async def test_repeated_cancellation_does_not_degrade_pool(pg_dsn: str) -> None:
         for _ in range(8):
             await _cancel_mid_query(manager)
 
-        await anyio.sleep(0.5)
-
         # No orphaned transactions accumulated across repeated aborts.
-        assert await _idle_in_transaction_count(manager) == 0
+        await _assert_no_idle_transaction(manager)
 
         # A normal query still succeeds immediately — pool is not degraded.
         start = time.monotonic()

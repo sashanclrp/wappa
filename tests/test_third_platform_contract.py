@@ -16,6 +16,7 @@ import ast
 import json
 import re
 from datetime import UTC, datetime
+from functools import cache
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -598,12 +599,25 @@ _COMPARISON = re.compile(
 )
 
 
+@cache
+def _shared_source_paths() -> tuple[Path, ...]:
+    return tuple(
+        path
+        for path in sorted(WAPPA.rglob("*.py"))
+        if not _ADAPTER_PATHS.match(path.relative_to(WAPPA).as_posix())
+    )
+
+
+@cache
+def _source_tree(path: Path) -> ast.Module:
+    return ast.parse(path.read_text())
+
+
+@pytest.mark.architecture
 def test_shared_code_does_not_branch_on_a_platform() -> None:
     found: dict[str, list[str]] = {}
-    for path in sorted(WAPPA.rglob("*.py")):
+    for path in _shared_source_paths():
         rel = path.relative_to(WAPPA).as_posix()
-        if _ADAPTER_PATHS.match(rel):
-            continue
         for number, line in enumerate(path.read_text().splitlines(), start=1):
             if _COMPARISON.search(line):
                 found.setdefault(rel, []).append(f"{number}: {line.strip()}")
@@ -636,7 +650,7 @@ _ADAPTER_MODULE = re.compile(
 
 
 def _imported_modules(path: Path) -> list[tuple[int, str]]:
-    tree = ast.parse(path.read_text())
+    tree = _source_tree(path)
     package = ".".join(("wappa", *path.relative_to(WAPPA).parent.parts))
     found: list[tuple[int, str]] = []
     for node in ast.walk(tree):
@@ -651,12 +665,11 @@ def _imported_modules(path: Path) -> list[tuple[int, str]]:
     return found
 
 
+@pytest.mark.architecture
 def test_shared_code_does_not_import_an_adapter_package() -> None:
     found: dict[str, list[str]] = {}
-    for path in sorted(WAPPA.rglob("*.py")):
+    for path in _shared_source_paths():
         rel = path.relative_to(WAPPA).as_posix()
-        if _ADAPTER_PATHS.match(rel):
-            continue
         for number, module in _imported_modules(path):
             if _ADAPTER_MODULE.match(module):
                 found.setdefault(rel, []).append(f"{number}: {module}")
@@ -700,7 +713,7 @@ def _platform_defaults(path: Path) -> list[int]:
     or the Platform's string value.
     """
     lines: list[int] = []
-    for node in ast.walk(ast.parse(path.read_text())):
+    for node in ast.walk(_source_tree(path)):
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             defaults = [*node.args.defaults, *node.args.kw_defaults]
             lines += [d.lineno for d in defaults if _names_a_platform(d)]
@@ -730,13 +743,12 @@ def _platform_defaults(path: Path) -> list[int]:
     return sorted(lines)
 
 
+@pytest.mark.architecture
 def test_shared_code_has_no_platform_defaults() -> None:
     """ADR-0028 rule 6: a shared API takes the Platform, never defaults it."""
     found: dict[str, list[int]] = {}
-    for path in sorted(WAPPA.rglob("*.py")):
+    for path in _shared_source_paths():
         rel = path.relative_to(WAPPA).as_posix()
-        if _ADAPTER_PATHS.match(rel):
-            continue
         if lines := _platform_defaults(path):
             found[rel] = lines
     assert found == {}, (
@@ -745,6 +757,7 @@ def test_shared_code_has_no_platform_defaults() -> None:
     )
 
 
+@pytest.mark.architecture
 def test_the_default_guard_sees_parameters_fields_and_field_defaults(
     tmp_path: Path,
 ) -> None:

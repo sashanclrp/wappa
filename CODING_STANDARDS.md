@@ -38,6 +38,10 @@ Write Markdown prose one line per paragraph; hard line breaks only for list item
 - Tests run offline on fakes and fixtures.
 - A contract several backends implement gets one parameterized suite over all of them; `tests/test_table_cache_transitions.py` and `tests/test_inbox_directory.py` show the pattern.
 - Name tests after the behaviour they pin, not the function they call.
+- Keep one owner per documentation check: `tests/test_doc_claims.py` owns repository and maintainer docs; `tests/test_shipped_skills.py` owns shipped Host skill Markdown. Both use `tests/doc_contract.py` for fenced Python, imports, retired send keywords and paths. Check each document once and report its path and line when it fails.
+- Signature and argument-forwarding checks share one wrapper/operation matrix in `tests/test_messenger_parity.py`. Keep adapter-to-wire tests separate: matching a signature does not prove the Platform receives its parameters.
+- Architecture policies remain mandatory under `architecture`; documented examples and skill metadata use `documentation`. `uv run pytest -m 'architecture or documentation' -q` selects those checks while iterating; the full gate still runs every marker. Folder and line-limit rules implement ADR-0031, not runtime coverage.
+- Await observable readiness or tracked work instead of a fixed startup delay. Real expiry/renewal tests still use real Redis TTLs. Reuse only immutable, deterministic snapshots (such as a route table); do not share mutable apps, sessions or handlers across tests.
 
 ## Documentation in the same change
 

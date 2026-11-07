@@ -12,6 +12,8 @@ just the ones that send a message. See ADR-0024.
 
 from __future__ import annotations
 
+from functools import cache
+
 import pytest
 from fastapi import FastAPI
 
@@ -115,7 +117,8 @@ EVERY_MUTATION = (
 )
 
 
-def routes_of(**options: object) -> set[tuple[str, str]]:
+@cache
+def routes_of(**options: object) -> frozenset[tuple[str, str]]:
     """Mount a composed router and read back every (path, method) it exposes.
 
     Read from the generated schema rather than ``app.routes``: FastAPI wraps
@@ -124,11 +127,11 @@ def routes_of(**options: object) -> set[tuple[str, str]]:
     """
     app = FastAPI()
     app.include_router(create_messaging_router(**options))  # type: ignore[arg-type]
-    return {
+    return frozenset(
         (path, method.upper())
         for path, operations in app.openapi()["paths"].items()
         for method in operations
-    }
+    )
 
 
 # ── standalone: nothing changed ─────────────────────────────────────────────

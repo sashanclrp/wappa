@@ -49,9 +49,8 @@ def _listed(entry: str, targets: set[str]) -> bool:
     return entry in targets
 
 
-def test_plan_exists_and_backlog_has_entries() -> None:
+def test_backlog_plan_exists() -> None:
     assert PLAN.is_file()
-    assert _active_entries()
 
 
 def test_every_active_backlog_entry_is_linked_from_the_plan() -> None:

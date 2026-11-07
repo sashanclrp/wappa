@@ -23,6 +23,7 @@ from wappa.core.dispatch.context_builder import (
 )
 from wappa.core.events.event_handler import WappaEventHandler
 from wappa.core.expiry import ExpiryDispatcher, run_expiry_listener
+from wappa.core.expiry.connection import RedisConnectionManager
 from wappa.core.lifecycle import BackgroundWorkTracker
 from wappa.domain.inbox import (
     IInboxCredentialResolver,
@@ -98,7 +99,9 @@ def inbox() -> InboxRef:
 
 
 @pytest.fixture
-async def lane(redis_ready: None) -> AsyncIterator[SimpleNamespace]:
+async def lane(
+    redis_ready: None, monkeypatch: pytest.MonkeyPatch
+) -> AsyncIterator[SimpleNamespace]:
     handler = _Handler()
     tracker = BackgroundWorkTracker()
     builder = DispatchContextBuilder(
@@ -115,6 +118,23 @@ async def lane(redis_ready: None) -> AsyncIterator[SimpleNamespace]:
     was_initialized = RedisManager._initialized
     RedisManager._initialized = True
     scheduling = Scheduling(context_builder=builder, event_handler=handler)
+    ready = asyncio.Event()
+    original_connect = RedisConnectionManager.connect
+
+    async def connect(manager):
+        connection = await original_connect(manager)
+        # A pong confirms Redis processed SUBSCRIBE, not just that the client
+        # wrote it to the socket. No expiry is armed before this handshake.
+        await connection.pubsub.ping()
+        async with asyncio.timeout(5):
+            while True:
+                message = await connection.pubsub.get_message(timeout=1)
+                if message is not None and message["type"] == "pong":
+                    break
+        ready.set()
+        return connection
+
+    monkeypatch.setattr(RedisConnectionManager, "connect", connect)
     listener = asyncio.create_task(
         run_expiry_listener(
             dispatcher=ExpiryDispatcher(
@@ -123,8 +143,8 @@ async def lane(redis_ready: None) -> AsyncIterator[SimpleNamespace]:
             reconnect_delay=1,
         )
     )
-    await asyncio.sleep(0.2)  # Let the subscription land before keys expire.
     try:
+        await asyncio.wait_for(ready.wait(), timeout=5)
         yield SimpleNamespace(handler=handler, tracker=tracker)
     finally:
         listener.cancel()
@@ -145,25 +165,32 @@ async def _fired(lane: SimpleNamespace, inbox: InboxRef) -> SimpleNamespace:
             return fired
 
 
-@pytest.mark.parametrize("action", sorted(USER_ACTIONS))
-async def test_a_real_expired_user_trigger_reaches_the_hook_with_user_context(
-    lane: SimpleNamespace, inbox: InboxRef, action: str
+async def test_real_expired_user_triggers_reach_the_hook_with_user_context(
+    lane: SimpleNamespace,
+    inbox: InboxRef,
 ) -> None:
+    # Independent keys can expire together; exercise every action without
+    # repeating the listener startup and one-second TTL wait for each one.
     expiry = _expiry(inbox)
-    assert await expiry.set(action, "USER1", 1)
-    assert await expiry.get_ttl(action, "USER1") > 0
+    pending = {action: f"USER-{action}" for action in sorted(USER_ACTIONS)}
+    for action, identifier in pending.items():
+        assert await expiry.set(action, identifier, 1)
+        assert await expiry.get_ttl(action, identifier) > 0
 
-    fired = await _fired(lane, inbox)
-
-    assert fired.event.source == "redis_expiry"
-    assert fired.event.action == action
-    assert fired.event.identifier == "USER1"
-    assert fired.event.user_id == "USER1"
-    assert fired.handler.cache_factory.user_id == "USER1"
-    assert fired.handler.whatsapp is not None
-    # The key disappears on expiry, as it always has: no shadow or retained state.
-    assert not await expiry.exists(action, "USER1")
-    assert await expiry.get_ttl(action, "USER1") < 0
+    handlers = []
+    while pending:
+        fired = await _fired(lane, inbox)
+        handlers.append(fired.handler)
+        identifier = pending.pop(fired.event.action)
+        assert fired.event.source == "redis_expiry"
+        assert fired.event.identifier == identifier
+        assert fired.event.user_id == identifier
+        assert fired.handler.cache_factory.user_id == identifier
+        assert fired.handler.whatsapp is not None
+        # The key disappears on expiry: no shadow or retained state.
+        assert not await expiry.exists(fired.event.action, identifier)
+        assert await expiry.get_ttl(fired.event.action, identifier) < 0
+    assert len({id(handler) for handler in handlers}) == len(USER_ACTIONS)
 
 
 async def test_a_real_message_keyed_trigger_stays_inbox_only(

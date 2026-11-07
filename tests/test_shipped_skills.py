@@ -1,10 +1,10 @@
 """Shipped Host skills: what they teach exists, their structure holds, emission is safe."""
 
-import importlib
 import re
 from pathlib import Path
 
 import pytest
+from doc_contract import path_contract_errors, python_contract_errors
 
 from wappa.cli.scaffold import SKILLS_SOURCE, _emit_skills
 
@@ -15,9 +15,6 @@ SKILLS = (
     "wappa-host-integration",
     "wappa-scheduled-tasks",
 )
-IMPORT = re.compile(r"^\s*from (wappa[\w.]*) import ([\w, ()]+)$", re.MULTILINE)
-
-
 MESSENGER_CALL = re.compile(r"self\.(messenger|whatsapp|instagram)\.(\w+)\(")
 SIBLING = re.compile(r"`(wappa-[a-z-]+)`")
 REFERENCE = re.compile(r"`references/([\w-]+\.md)`")
@@ -27,29 +24,13 @@ def _markdown_files() -> list[Path]:
     return [p for s in SKILLS for p in (SKILLS_SOURCE / s).rglob("*.md")]
 
 
+@pytest.mark.documentation
 def test_collection_is_complete():
     for name in SKILLS:
         root = SKILLS_SOURCE / name
         assert (root / "SKILL.md").is_file()
         assert (root / "agents" / "openai.yaml").is_file()
         assert (root / "evals" / "evals.json").is_file()
-
-
-@pytest.mark.parametrize("path", _markdown_files(), ids=lambda p: p.name)
-def test_every_taught_wappa_import_exists(path: Path):
-    text = path.read_text()
-    for module, names in IMPORT.findall(text):
-        mod = importlib.import_module(module)
-        for name in names.replace("(", "").replace(")", "").split(","):
-            name = name.strip()
-            if name:
-                assert hasattr(mod, name), f"{path.name}: {module}.{name} missing"
-
-
-@pytest.mark.parametrize("path", _markdown_files(), ids=lambda p: p.name)
-def test_no_legacy_recipient_keyword_is_taught(path: Path):
-    blocks = path.read_text().split("```")[1::2]
-    assert all("recipient=" not in block for block in blocks)
 
 
 def test_scheduled_testing_reference_example_runs():
@@ -83,11 +64,13 @@ def test_emit_skills_creates_both_lanes_and_never_overwrites(tmp_path: Path):
     assert all("kept existing" in n for n in again)
 
 
+@pytest.mark.documentation
 def test_skill_folders_match_the_shipped_set():
     shipped = {p.name for p in SKILLS_SOURCE.iterdir() if (p / "SKILL.md").is_file()}
     assert shipped == set(SKILLS)
 
 
+@pytest.mark.documentation
 @pytest.mark.parametrize("name", SKILLS)
 def test_frontmatter_and_references_are_consistent(name: str):
     root = SKILLS_SOURCE / name
@@ -103,24 +86,27 @@ def test_frontmatter_and_references_are_consistent(name: str):
     assert on_disk <= linked, f"{name}: orphaned references {on_disk - linked}"
 
 
-@pytest.mark.parametrize("path", _markdown_files(), ids=lambda p: p.name)
-def test_every_named_sibling_skill_ships(path: Path):
-    for sibling in SIBLING.findall(path.read_text()):
-        assert sibling in SKILLS, f"{path.name}: names unknown skill {sibling}"
-
-
-@pytest.mark.parametrize("path", _markdown_files(), ids=lambda p: p.name)
-def test_every_taught_messenger_method_exists(path: Path):
+@pytest.mark.documentation
+@pytest.mark.parametrize(
+    "path", _markdown_files(), ids=lambda p: p.relative_to(SKILLS_SOURCE).as_posix()
+)
+def test_skill_document_matches_the_runtime(path: Path):
     from wappa.domain.interfaces.messaging_interface import IMessenger
     from wappa.messaging.instagram import InstagramMessenger
     from wappa.messaging.whatsapp import WhatsAppMessenger
 
+    errors = list(python_contract_errors(path))
+    text = path.read_text()
+    for sibling in SIBLING.findall(text):
+        if sibling not in SKILLS:
+            errors.append(f"{path}: names unknown skill {sibling}")
     owners = {
-        "messenger": (IMessenger,),
-        "whatsapp": (WhatsAppMessenger,),
-        "instagram": (InstagramMessenger,),
+        "messenger": IMessenger,
+        "whatsapp": WhatsAppMessenger,
+        "instagram": InstagramMessenger,
     }
-    for owner, method in MESSENGER_CALL.findall(path.read_text()):
-        assert any(hasattr(cls, method) for cls in owners[owner]), (
-            f"{path.name}: self.{owner}.{method}() does not exist"
-        )
+    for owner, method in MESSENGER_CALL.findall(text):
+        if not hasattr(owners[owner], method):
+            errors.append(f"{path}: self.{owner}.{method}() does not exist")
+    errors.extend(path_contract_errors(path))
+    assert not errors, "\n".join(errors)

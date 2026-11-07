@@ -95,16 +95,6 @@ def test_operations_list_is_the_contract():
     }
 
 
-@pytest.mark.parametrize("name", OPERATIONS)
-def test_pipeline_signature_matches_imessenger(name: str):
-    assert _shape(getattr(MessengerPipeline, name)) == _shape(getattr(IMessenger, name))
-
-
-@pytest.mark.parametrize("name", OPERATIONS)
-def test_platform_messenger_signature_matches_imessenger(name: str):
-    assert _shape(getattr(PlatformMessenger, name)) == _shape(getattr(IMessenger, name))
-
-
 @pytest.mark.parametrize("name", TEMPLATE_OPERATIONS)
 def test_pipeline_templates_signature_matches_itemplatemessaging(name: str):
     assert _shape(getattr(_PipelineTemplates, name)) == _shape(
@@ -243,22 +233,6 @@ def _sentinel_call(func: Any) -> tuple[list[Any], dict[str, Any], dict[str, Any]
     return args, kwargs, expected
 
 
-@pytest.mark.parametrize("name", OPERATIONS)
-async def test_pipeline_forwards_each_argument_under_its_own_name(name: str):
-    raw = _Recorder()
-    args, kwargs, expected = _sentinel_call(getattr(IMessenger, name))
-    await getattr(MessengerPipeline(raw), name)(*args, **kwargs)
-    assert raw.calls == [(name, expected)]
-
-
-@pytest.mark.parametrize("name", OPERATIONS)
-async def test_platform_messenger_forwards_each_argument_to_its_messenger(name: str):
-    raw = _Recorder()
-    args, kwargs, expected = _sentinel_call(getattr(IMessenger, name))
-    await getattr(PlatformMessenger(MessengerPipeline(raw)), name)(*args, **kwargs)
-    assert raw.calls == [(name, expected)]
-
-
 @pytest.mark.parametrize("name", TEMPLATE_OPERATIONS)
 async def test_pipeline_templates_forward_each_argument_under_its_own_name(name: str):
     raw = _Recorder()
@@ -289,11 +263,6 @@ def test_capability_resolves_the_interface_only_on_both():
     assert ig.capability(ITemplateMessaging) is None
 
 
-@pytest.mark.parametrize("name", OPERATIONS)
-def test_deferred_messenger_signature_matches_imessenger(name: str):
-    assert _shape(getattr(DeferredMessenger, name)) == _shape(getattr(IMessenger, name))
-
-
 @pytest.mark.parametrize("adapter", [_whatsapp, _instagram])
 def test_credential_free_platform_discovery_matches_the_adapter(adapter):
     from wappa.platforms import PLATFORMS
@@ -302,27 +271,6 @@ def test_credential_free_platform_discovery_matches_the_adapter(adapter):
     entry = PLATFORMS[raw.platform]
     assert entry.messenger_operations == raw.supported_operations
     assert entry.messenger_capabilities == frozenset(raw._capabilities)
-
-
-@pytest.mark.parametrize("name", OPERATIONS)
-async def test_deferred_messenger_forwards_every_argument(name):
-    raw = _Recorder()
-    calls = []
-
-    async def resolve():
-        calls.append("resolve")
-        return MessengerPipeline(raw)
-
-    deferred = DeferredMessenger(
-        InboxRef.whatsapp("pnid"),
-        resolve,
-        supported_operations=raw.supported_operations,
-        capability_types=frozenset({ITemplateMessaging}),
-    )
-    args, kwargs, expected = _sentinel_call(getattr(IMessenger, name))
-    await getattr(deferred, name)(*args, **kwargs)
-    assert raw.calls == [(name, expected)]
-    assert calls == ["resolve"]
 
 
 @pytest.mark.parametrize("name", TEMPLATE_OPERATIONS)
@@ -356,3 +304,37 @@ async def test_deferred_template_calls_run_the_existing_middleware_once(name):
     assert middleware_calls == [name] * 2
     assert resolutions == ["resolve"]
     assert deferred.capability(IUserDataRequests) is None
+
+
+@pytest.mark.parametrize(
+    "wrapper",
+    [MessengerPipeline, PlatformMessenger, DeferredMessenger],
+    ids=lambda wrapper: wrapper.__name__,
+)
+@pytest.mark.parametrize("name", OPERATIONS)
+async def test_messenger_wrappers_preserve_signatures_and_forward_arguments(
+    wrapper, name
+):
+    assert _shape(getattr(wrapper, name)) == _shape(getattr(IMessenger, name))
+    raw = _Recorder()
+    resolutions = []
+
+    async def resolve():
+        resolutions.append("resolve")
+        return MessengerPipeline(raw)
+
+    if wrapper is DeferredMessenger:
+        messenger = wrapper(
+            InboxRef.whatsapp("pnid"),
+            resolve,
+            supported_operations=raw.supported_operations,
+            capability_types=frozenset({ITemplateMessaging}),
+        )
+    elif wrapper is PlatformMessenger:
+        messenger = wrapper(MessengerPipeline(raw))
+    else:
+        messenger = wrapper(raw)
+    args, kwargs, expected = _sentinel_call(getattr(IMessenger, name))
+    await getattr(messenger, name)(*args, **kwargs)
+    assert raw.calls == [(name, expected)]
+    assert resolutions == (["resolve"] if wrapper is DeferredMessenger else [])
