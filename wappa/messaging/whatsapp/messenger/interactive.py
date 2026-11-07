@@ -175,12 +175,11 @@ class _InteractiveMixin(_DeliveryMixin):
             )
 
             self.logger.debug(
-                f"Sending interactive button menu to {recipient} with {len(buttons)} buttons"
+                f"Sending interactive button menu with {len(buttons)} buttons"
             )
             result = await self._post_payload(payload, recipient)
             self.logger.info(
-                f"Interactive button menu sent successfully to {result.recipient}, "
-                f"id: {result.message_id}"
+                f"Interactive button menu sent successfully, id: {result.message_id}"
             )
             return result
 
@@ -213,12 +212,11 @@ class _InteractiveMixin(_DeliveryMixin):
                 reply_to_message_id=reply_to_message_id,
             )
             self.logger.debug(
-                f"Sending list menu message to {recipient} with {len(sections)} sections"
+                f"Sending list menu message with {len(sections)} sections"
             )
             result = await self._post_payload(payload, recipient)
             self.logger.info(
-                f"List menu message sent successfully to {result.recipient}, "
-                f"id: {result.message_id}"
+                f"List menu message sent successfully, id: {result.message_id}"
             )
             return result
 
@@ -255,13 +253,10 @@ class _InteractiveMixin(_DeliveryMixin):
             if footer_text:
                 payload["interactive"]["footer"] = {"text": footer_text}
 
-            self.logger.debug(
-                f"Sending CTA button message to {recipient} with URL: {button_url}"
-            )
+            self.logger.debug(f"Sending CTA button message with URL: {button_url}")
             result = await self._post_payload(payload, recipient)
             self.logger.info(
-                f"CTA button message sent successfully to {result.recipient}, "
-                f"id: {result.message_id}"
+                f"CTA button message sent successfully, id: {result.message_id}"
             )
             return result
 

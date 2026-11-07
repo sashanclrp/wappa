@@ -16,6 +16,7 @@ from wappa.connections import IInboxConnector
 from wappa.connections.instagram import InstagramConnector
 from wappa.connections.whatsapp import WhatsAppConnector
 from wappa.core.inbound.platform_webhooks import PlatformWebhooks
+from wappa.core.messaging.deferred import DeferredMessenger
 from wappa.core.messaging.pipeline import MessengerPipeline
 from wappa.core.messaging.pipeline.capabilities import (
     _PipelineTemplates,
@@ -286,3 +287,72 @@ def test_capability_resolves_the_interface_only_on_both():
     assert isinstance(ig_library, InstagramMediaLibrary)
     assert ig.capability(InstagramMediaLibrary) is None
     assert ig.capability(ITemplateMessaging) is None
+
+
+@pytest.mark.parametrize("name", OPERATIONS)
+def test_deferred_messenger_signature_matches_imessenger(name: str):
+    assert _shape(getattr(DeferredMessenger, name)) == _shape(getattr(IMessenger, name))
+
+
+@pytest.mark.parametrize("adapter", [_whatsapp, _instagram])
+def test_credential_free_platform_discovery_matches_the_adapter(adapter):
+    from wappa.platforms import PLATFORMS
+
+    raw = adapter()
+    entry = PLATFORMS[raw.platform]
+    assert entry.messenger_operations == raw.supported_operations
+    assert entry.messenger_capabilities == frozenset(raw._capabilities)
+
+
+@pytest.mark.parametrize("name", OPERATIONS)
+async def test_deferred_messenger_forwards_every_argument(name):
+    raw = _Recorder()
+    calls = []
+
+    async def resolve():
+        calls.append("resolve")
+        return MessengerPipeline(raw)
+
+    deferred = DeferredMessenger(
+        InboxRef.whatsapp("pnid"),
+        resolve,
+        supported_operations=raw.supported_operations,
+        capability_types=frozenset({ITemplateMessaging}),
+    )
+    args, kwargs, expected = _sentinel_call(getattr(IMessenger, name))
+    await getattr(deferred, name)(*args, **kwargs)
+    assert raw.calls == [(name, expected)]
+    assert calls == ["resolve"]
+
+
+@pytest.mark.parametrize("name", TEMPLATE_OPERATIONS)
+async def test_deferred_template_calls_run_the_existing_middleware_once(name):
+    from types import SimpleNamespace
+
+    raw = _Recorder()
+    middleware_calls = []
+    resolutions = []
+
+    async def handle(invocation, call_next):
+        middleware_calls.append(invocation.method_name)
+        return await call_next(invocation)
+
+    async def resolve():
+        resolutions.append("resolve")
+        return MessengerPipeline(raw, [(SimpleNamespace(handle=handle), 0)])
+
+    deferred = DeferredMessenger(
+        InboxRef.whatsapp("pnid"),
+        resolve,
+        supported_operations=raw.supported_operations,
+        capability_types=frozenset({ITemplateMessaging}),
+    )
+    capability = deferred.require_capability(ITemplateMessaging)
+    assert resolutions == []
+    args, kwargs, expected = _sentinel_call(getattr(ITemplateMessaging, name))
+    await getattr(capability, name)(*args, **kwargs)
+    await getattr(capability, name)(*args, **kwargs)
+    assert raw.calls == [(name, expected)] * 2
+    assert middleware_calls == [name] * 2
+    assert resolutions == ["resolve"]
+    assert deferred.capability(IUserDataRequests) is None

@@ -130,7 +130,23 @@ def meta_code_head(code: str | None) -> str | None:
     return code.split("/", 1)[0] if code else None
 
 
-def _log_failure(operation: str, status: int, body: Mapping[str, Any]) -> None:
+def _redact_address(value: Any, address: str) -> Any:
+    """Keep structured diagnostics while removing echoed Delivery Addresses."""
+    if isinstance(value, str):
+        return value.replace(address, "[redacted]")
+    if isinstance(value, Mapping):
+        return {key: _redact_address(item, address) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_address(item, address) for item in value]
+    return value
+
+
+def _log_failure(
+    operation: str,
+    status: int,
+    body: Mapping[str, Any],
+    request_payload: Mapping[str, Any] | None = None,
+) -> None:
     """Log Meta's error fields: rejections at ERROR, 5xx at WARNING."""
     error = body.get("error")
     summary = (
@@ -138,10 +154,18 @@ def _log_failure(operation: str, status: int, body: Mapping[str, Any]) -> None:
         if isinstance(error, Mapping)
         else {}
     )
+    # Meta's diagnostic strings may echo an outbound Delivery Address.
+    safe_summary = summary
+    for key in ("to", "recipient"):
+        address = (request_payload or {}).get(key)
+        if isinstance(address, Mapping):
+            address = address.get("id")
+        if isinstance(address, str) and address:
+            safe_summary = _redact_address(safe_summary, address)
     if status >= 500:  # Meta's side failed: the outcome is unknown
-        logger.warning("Meta failed %s (HTTP %s): %s", operation, status, summary)
+        logger.warning("Meta failed %s (HTTP %s): %s", operation, status, safe_summary)
     else:
-        logger.error("Meta rejected %s (HTTP %s): %s", operation, status, summary)
+        logger.error("Meta rejected %s (HTTP %s): %s", operation, status, safe_summary)
     if status == 401 or meta_code_head(meta_error_code(body)) == "190":
         logger.error(
             "Meta access token invalid or expired for %s: update the Inbox's token",
@@ -210,7 +234,7 @@ async def graph_request(
         )
     if response.is_success or response.status_code >= 500:
         if response.status_code >= 500:
-            _log_failure(operation, response.status_code, body)
+            _log_failure(operation, response.status_code, body, json)
         return GraphResponse(
             outcome=OperationOutcome.INDETERMINATE,
             status_code=response.status_code,
@@ -221,7 +245,7 @@ async def graph_request(
             usage=usage,
         )
     code = meta_error_code(body) or str(response.status_code)
-    _log_failure(operation, response.status_code, body)
+    _log_failure(operation, response.status_code, body, json)
     return GraphResponse(
         outcome=OperationOutcome.REJECTED,
         status_code=response.status_code,

@@ -5,6 +5,19 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.2] - 2026-11-07
+
+Scheduled Event handlers run without send credentials; credential failures surface on the first Messenger operation. Delivery logs no longer expose raw Delivery Addresses.
+
+### Fixed
+
+- **Scheduled scopes defer credential resolution.** Inbox-bound handlers still receive `self.messenger` and `self.whatsapp` or `self.instagram`, with identity and capability discovery available without credentials. Non-sending work can use its database and scoped caches during a Directory outage or while credentials are inactive. The first Messenger operation raises the original typed Directory error; a failed resolution is retried on the next use. Concurrent first uses share one successful pipeline, and middleware runs once per send. Cross-scope Messenger caching, eviction, webhook/API admission, SSE and log identity retain their existing behavior.
+- **Delivery logs omit raw phone numbers and BSUIDs.** WhatsApp fallback, send-success and error logs no longer include Delivery Addresses, request payload logging is removed, and Meta diagnostics redact an outbound address when the provider echoes it. `attempted_recipients` and other result evidence are unchanged.
+
+### Documentation
+
+- Updated the scheduled-task contract, architecture, ADR and shipped Host skills for first-use credentials. Optional UP-6 cache-override validation is deferred; Hosts must continue passing qualified namespaces such as `whatsapp__<id>` when overriding an Inbox cache scope.
+
 ## [0.34.1] - 2026-11-06
 
 One identity contract for every resolver call, and a way back for a WhatsApp account whose Inboxes were all deactivated. **This patch contains one breaking signature change** for Hosts with a custom identity resolver, so it is a real upgrade step despite the patch number. Upgrade notes: [docs/migration/v0.34.1-from-0.34.0.md](docs/migration/v0.34.1-from-0.34.0.md).

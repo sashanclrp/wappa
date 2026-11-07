@@ -36,7 +36,6 @@ from wappa.core.logging.context import (
     get_current_user_context,
     reset_inbox_context,
 )
-from wappa.core.messaging.pipeline import MessengerPipeline
 from wappa.core.scheduling.static_cron import StaticCron, register_static_cron
 from wappa.core.sse.context import get_sse_context, sse_event_scope
 from wappa.domain.inbox import (
@@ -46,6 +45,7 @@ from wappa.domain.inbox import (
     ResolvedInboxCredentials,
 )
 from wappa.domain.interfaces.identity_resolver import IIdentityResolver
+from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.messaging.instagram.platform_messenger import InstagramMessenger
 from wappa.messaging.whatsapp.platform_messenger import WhatsAppMessenger
 from wappa.schemas.core.types import PlatformType
@@ -209,7 +209,7 @@ async def test_user_scope_prepares_every_capability() -> None:
     await _dispatch(_app(handler, db=True), inbox_ref=WA, user_id="u1")
 
     bound = handler.seen[0].handler
-    assert isinstance(bound.messenger, MessengerPipeline)
+    assert isinstance(bound.messenger, IMessenger)
     assert isinstance(bound.whatsapp, WhatsAppMessenger)
     assert bound.instagram is None
     assert (bound.inbox_ref, bound.inbox_id, bound.user_id) == (WA, "111", "u1")
@@ -225,7 +225,7 @@ async def test_inbox_scope_has_its_messenger_and_no_invented_user() -> None:
     await _dispatch(_app(handler), inbox_ref=IG)
 
     bound = handler.seen[0].handler
-    assert isinstance(bound.messenger, MessengerPipeline)
+    assert isinstance(bound.messenger, IMessenger)
     assert isinstance(bound.instagram, InstagramMessenger)
     assert bound.whatsapp is None
     assert bound.user_id is None
@@ -311,15 +311,13 @@ async def test_a_handler_exception_reaches_the_awaiting_caller() -> None:
         await _dispatch(_app(handler), inbox_ref=WA, user_id="u")
 
 
-async def test_unavailable_inbox_fails_typed_before_the_host_hook() -> None:
+async def test_unavailable_inbox_still_reaches_the_host_hook() -> None:
     credentials = _Credentials()
     credentials.unavailable = True
     handler = _Handler()
-    with pytest.raises(InboxDirectoryUnavailableError):
-        await _dispatch(
-            _app(handler, credentials=credentials), inbox_ref=WA, user_id="u"
-        )
-    assert handler.seen == []
+    await _dispatch(_app(handler, credentials=credentials), inbox_ref=WA, user_id="u")
+    assert len(handler.seen) == 1
+    assert credentials.resolved == []
 
 
 async def test_unavailable_user_cache_fails_before_the_host_hook() -> None:
@@ -497,7 +495,7 @@ async def test_scope_reaches_another_inbox_through_the_same_credentials() -> Non
 
     assert isinstance(captured["other"].instagram, InstagramMessenger)
     assert captured["other"].whatsapp is None
-    assert credentials.resolved == [WA, IG]
+    assert credentials.resolved == []
 
 
 async def test_scope_does_not_carry_host_state_to_another_subject() -> None:
@@ -706,7 +704,7 @@ async def test_a_message_keyed_action_stays_inbox_only() -> None:
     assert seen.event.identifier == "wamid.HBgM"
     assert seen.handler.user_id is None
     assert seen.handler.cache_factory is None
-    assert isinstance(seen.handler.messenger, MessengerPipeline)
+    assert isinstance(seen.handler.messenger, IMessenger)
     assert seen.sse == ("111", "unknown", None, None)
     assert resolver.calls == []
 
@@ -1074,3 +1072,180 @@ async def test_an_episode_style_task_keeps_host_identifiers_opaque() -> None:
     assert event.metadata == {"retry_attempt": 1}
     assert event.execution_id == "job-1:2026-11-06T14:00:00Z"
     assert event.dispatched_at >= event.scheduled_for
+
+
+@pytest.mark.parametrize("ref", [WA, IG])
+@pytest.mark.parametrize("user", [None, "u"])
+@pytest.mark.parametrize("missing", [False, True])
+async def test_credential_failures_cannot_block_non_sending_tasks(
+    ref, user, missing, monkeypatch
+):
+    from unittest.mock import AsyncMock
+
+    from wappa.domain.inbox import InboxNotFoundError
+    from wappa.platforms import platform_messenger
+
+    credentials = _Credentials()
+    error = (
+        InboxNotFoundError(ref) if missing else InboxDirectoryUnavailableError("down")
+    )
+    lookup = AsyncMock(side_effect=error)
+    monkeypatch.setattr(credentials, "resolve_credentials", lookup)
+    handler = _Handler()
+
+    async def body(bound, event):
+        assert (bound.messenger.platform, bound.messenger.inbox_id) == (
+            ref.platform,
+            ref.inbox_id,
+        )
+        assert platform_messenger(bound.messenger) is not None
+        assert "send_text" in bound.messenger.supported_operations
+        # Ready focused capabilities also stay credential-independent.
+        assert bound.messenger.media is not None
+        if bound.whatsapp is not None:
+            assert bound.whatsapp.templates is not None
+        else:
+            assert bound.instagram.comments is not None
+            assert bound.instagram.content is not None
+            assert bound.instagram.history is not None
+        async with bound.db() as session:
+            assert session == "primary-session"
+        if user is not None:
+            assert bound.cache_factory.create_state_cache() is not None
+        else:
+            assert bound.cache_factory is None
+        assert get_current_inbox_context() == ref.inbox_id
+        assert get_current_user_context() == user
+
+    handler.body = body
+    before_log = (get_current_inbox_context(), get_current_user_context())
+    before_sse = get_sse_context()
+    await _dispatch(
+        _app(handler, credentials=credentials, db=True), inbox_ref=ref, user_id=user
+    )
+    lookup.assert_not_awaited()
+    assert len(handler.seen) == 1
+    assert handler.seen[0].sse[:2] == (ref.inbox_id, user or "unknown")
+    assert (get_current_inbox_context(), get_current_user_context()) == before_log
+    assert get_sse_context() is before_sse
+
+
+@pytest.mark.parametrize("missing", [False, True])
+async def test_first_send_raises_the_directory_error_and_expiry_logs_it(
+    missing, monkeypatch, caplog
+):
+    from unittest.mock import AsyncMock
+
+    from wappa.domain.inbox import InboxNotFoundError
+    from wappa.messaging import DeliveryAddresses, DirectMessage
+
+    credentials = _Credentials()
+    error = (
+        InboxNotFoundError(WA) if missing else InboxDirectoryUnavailableError("down")
+    )
+    monkeypatch.setattr(
+        credentials, "resolve_credentials", AsyncMock(side_effect=error)
+    )
+    handler = _Handler()
+
+    async def body(bound, event):
+        await bound.messenger.send_text(
+            "hi",
+            DirectMessage(inbox_ref=WA, addresses=DeliveryAddresses.of("573000000001")),
+        )
+
+    handler.body = body
+    app = _app(handler, credentials=credentials)
+    with caplog.at_level(logging.ERROR):
+        task = _expiry(app).dispatch(_notification("agent_trigger", "u"))
+        with pytest.raises(type(error)) as caught:
+            await task
+        await asyncio.sleep(0)
+    assert caught.value is error
+    assert len(handler.seen) == 1
+    assert "Expiry action failed" in caplog.text
+
+
+@pytest.mark.parametrize("ref", [WA, IG])
+async def test_first_use_retries_then_concurrent_sends_share_one_pipeline(
+    ref, monkeypatch
+):
+    from dataclasses import replace
+    from unittest.mock import AsyncMock
+
+    from wappa.domain.results import MessageResult
+    from wappa.messaging import DeliveryAddresses, DirectMessage
+    from wappa.platforms import PLATFORMS
+
+    credentials = _Credentials()
+    real_lookup = credentials.resolve_credentials
+    lookup = AsyncMock(side_effect=InboxDirectoryUnavailableError("down"))
+    monkeypatch.setattr(credentials, "resolve_credentials", lookup)
+    handler = _Handler()
+    app = _app(handler, credentials=credentials)
+    entry = PLATFORMS[ref.platform]
+    builds = []
+    sends = AsyncMock(
+        return_value=MessageResult(
+            success=True, platform=ref.platform, inbox_id=ref.inbox_id
+        )
+    )
+
+    def build(resolved, deps):
+        raw = entry.build_messenger(resolved, deps)
+        raw.send_text = sends
+        builds.append(raw)
+        return raw
+
+    app.state.platforms = {
+        **PLATFORMS,
+        ref.platform: replace(entry, build_messenger=build),
+    }
+    middleware_calls = []
+
+    async def middleware(invocation, call_next):
+        middleware_calls.append(invocation.method_name)
+        assert get_current_inbox_context() == ref.inbox_id
+        assert get_sse_context().inbox_id == ref.inbox_id
+        return await call_next(invocation)
+
+    app.state.messenger_middleware = [(SimpleNamespace(handle=middleware), 0)]
+    target = DirectMessage(
+        inbox_ref=ref,
+        addresses=DeliveryAddresses.of("573000000001" if ref == WA else "igsid"),
+    )
+
+    async def body(bound, event):
+        with pytest.raises(InboxDirectoryUnavailableError):
+            await bound.messenger.send_text("first", target)
+
+        async def healthy_lookup(inbox_ref):
+            await asyncio.sleep(0)
+            return await real_lookup(inbox_ref)
+
+        lookup.side_effect = healthy_lookup
+        platform = bound.whatsapp if ref == WA else bound.instagram
+        await asyncio.gather(
+            bound.messenger.send_text("one", target),
+            platform.send_text("two", target),
+            platform.send_text("three", target),
+        )
+        assert len(builds) == 1
+        assert lookup.await_count == 2
+        assert middleware_calls == ["send_text"] * 3
+        assert sends.await_count == 3
+
+    handler.body = body
+    await _dispatch(app, inbox_ref=ref, user_id="u")
+    # A new scope uses the factory's cached raw Messenger; eviction still rebuilds it.
+    handler.body = None
+    builder = DispatchContextBuilder.from_app(app)
+    async with builder.scope(handler, inbox_ref=ref, user_id="u") as bound:
+        await bound.messenger.send_text("cached", target)
+    assert lookup.await_count == 2
+    assert len(builds) == 1
+    builder.messenger_factory.evict(ref)
+    async with builder.scope(handler, inbox_ref=ref, user_id="u") as bound:
+        await bound.messenger.send_text("fresh", target)
+    assert lookup.await_count == 3
+    assert len(builds) == 2

@@ -63,6 +63,17 @@
       "assertions": [
         "does not add SchedulingPlugin or a scheduler"
       ]
+    },
+    {
+      "id": "credential-outage-non-sending-timer",
+      "prompt": "My template rollback timer never sends. Does an Inbox credential outage stop process_scheduled_event? What if the hook later sends?",
+      "expected_output": "In 0.34.2 Inbox-bound scheduled scopes defer credentials until the first Messenger operation. Non-sending work runs with cache and DB capabilities as its scope allows. Identity and Platform Messenger binding need no credentials. The first send raises the typed Directory error; failed resolution retries on the next use. Redis expiry logs failures and does not replay the spent key.",
+      "assertions": [
+        "non-sending work runs during credential outages",
+        "first Messenger operation raises typed Directory errors",
+        "failed resolution is not cached",
+        "no Wappa retry of a spent expiry trigger"
+      ]
     }
   ]
 }

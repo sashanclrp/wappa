@@ -142,7 +142,7 @@ class WhatsAppClient:
         Raises ``MetaGraphError`` or ``RateLimitedError``.
         """
         url = custom_url or self.url_builder.get_messages_url()
-        self.logger.debug("POST %s for inbox %s: %s", url, self.inbox_id, payload)
+        self.logger.debug("POST %s for inbox %s", url, self.inbox_id)
         if files:
             form_data, form_files = self.form_builder.build_form_data(payload, files)
             return await self.graph.call(

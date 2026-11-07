@@ -6,6 +6,8 @@ next one only when Meta rejects the address itself.
 
 from __future__ import annotations
 
+import logging
+
 import pytest
 
 from wappa.core.messaging.middleware.pubsub_notification import _destination_user
@@ -178,3 +180,13 @@ async def test_error_text_mentioning_131062_is_not_an_address_rejection():
     result = await _wa(client).send_text("hi", _both())
     assert not result.success and result.error_code != "BSUID_RECIPIENT_NOT_SUPPORTED"
     assert len(client.posted) == 1  # no fallback on a non-Meta error
+
+
+async def test_fallback_logs_neither_delivery_address(caplog):
+    client = _Client(reject={PHONE: 131030})
+    with caplog.at_level(logging.DEBUG):
+        result = await _wa(client).send_text("hi", _both())
+    assert result.attempted_recipients == (PHONE, BSUID)
+    assert "trying the next known address" in caplog.text
+    assert PHONE not in caplog.text
+    assert BSUID not in caplog.text

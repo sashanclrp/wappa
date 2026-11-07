@@ -41,16 +41,14 @@ class _TextMixin(_DeliveryMixin):
                 disable_preview=disable_preview,
             )
 
-            self.logger.debug(f"Sending text message to {recipient}: {text[:50]}...")
+            self.logger.debug("Sending text message")
             response = await self.client.post_request(payload)
             result = message_result_from_payload(
                 response,
                 inbox_id=self._inbox_id,
                 fallback_recipient=recipient,
             )
-            self.logger.info(
-                f"Text message sent successfully to {result.recipient}, id: {result.message_id}"
-            )
+            self.logger.info(f"Text message sent successfully, id: {result.message_id}")
             return result
 
         except Exception as e:

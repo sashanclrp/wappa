@@ -47,3 +47,30 @@ async def test_post_request_logs_meta_error_details_and_never_the_token(caplog) 
     assert "Unexpected key" in caplog.text and "A1B2C3" in caplog.text
     assert TOKEN not in caplog.text
     assert TOKEN[:20] not in caplog.text
+
+
+async def test_provider_echo_and_request_payload_do_not_log_the_address(caplog):
+    phone = "573168227670"
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                400,
+                json={
+                    "error": {
+                        "code": 131030,
+                        "message": f"Rejected {phone}",
+                        "error_data": {"details": f"Address {phone} is not allowed"},
+                    }
+                },
+            )
+        )
+    ) as session:
+        client = WhatsAppClient(
+            session=session, access_token=TOKEN, phone_number_id="test-inbox"
+        )
+        with caplog.at_level(logging.DEBUG), pytest.raises(MetaGraphError):
+            await client.post_request(
+                {"type": "text", "to": phone, "text": {"body": "hi"}}
+            )
+    assert phone not in caplog.text
+    assert "[redacted]" in caplog.text

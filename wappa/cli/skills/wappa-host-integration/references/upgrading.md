@@ -1,7 +1,7 @@
 ---
-checked_on: 2026-11-06
-checked_against: Wappa CHANGELOG.md (0.34.1) and docs/migration/v0.34.0-from-0.33.md, v0.34.1-from-0.34.0.md
-revision: 3
+checked_on: 2026-11-07
+checked_against: Wappa CHANGELOG.md (0.34.2) and docs/migration/v0.34.0-from-0.33.md, v0.34.1-from-0.34.0.md
+revision: 4
 ---
 
 # Upgrading a Host to a new Wappa version
@@ -9,6 +9,7 @@ revision: 3
 ## Contents
 
 - Method
+- 0.34.1 → 0.34.2 checklist
 - 0.34.0 → 0.34.1 checklist
 - 0.33 → 0.34 checklist
 - After the upgrade
@@ -24,6 +25,10 @@ Wappa releases are clean cuts: a renamed or removed API has no alias, and every 
 5. Refresh this skill set: `wappa init` never overwrites an existing skill, so copy the new version's `wappa/cli/skills/` over the old folders (or delete them and re-run `wappa init` in a scratch folder and copy).
 
 Upgrade one minor version at a time when several are pending.
+
+## 0.34.1 → 0.34.2 checklist
+
+No signature or data migration is required. Pin 0.34.2 and re-run timer tests with unavailable and inactive Inbox credentials: non-sending Scheduled Event handlers now run, and a send raises the original typed Directory error on first use. Failed resolution is not cached; the next use retries. Delivery logs omit raw Delivery Addresses while results retain them. Cache overrides still require the Host to supply a qualified namespace; validation of raw overrides was deferred.
 
 ## 0.34.0 → 0.34.1 checklist
 

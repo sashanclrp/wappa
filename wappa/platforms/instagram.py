@@ -41,9 +41,13 @@ def build_platform_messenger(messenger: IMessenger) -> IMessenger:
 
 
 def entry(field_registry: FieldHandlerRegistry) -> PlatformEntry:
+    from wappa.messaging.instagram.messenger import InstagramMessengerAdapter
+
     return PlatformEntry(
         webhooks=InstagramWebhookProcessor(field_registry),
         build_messenger=build_messenger,
+        messenger_operations=InstagramMessengerAdapter._OPERATIONS,
+        messenger_capabilities=InstagramMessengerAdapter.CAPABILITY_TYPES,
         display_name="Instagram",
         build_platform_messenger=build_platform_messenger,
     )

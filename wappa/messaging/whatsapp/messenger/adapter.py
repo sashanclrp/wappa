@@ -54,26 +54,30 @@ class WhatsAppMessengerAdapter(
             IMediaLibrary: WhatsAppMediaLibrary(self.media_transport, self._inbox_id),
         }
 
+    OPERATIONS = frozenset(
+        {
+            "send_text",
+            "mark_as_read",
+            "send_image",
+            "send_video",
+            "send_audio",
+            "send_document",
+            "send_sticker",
+            "send_button_message",
+            "send_list_message",
+            "send_cta_message",
+            "send_carousel",
+            "send_contact",
+            "send_location",
+            "resolve_platform_user_profile",
+        }
+    )
+
+    CAPABILITY_TYPES = frozenset({ITemplateMessaging, IUserDataRequests, IMediaLibrary})
+
     @property
     def supported_operations(self) -> frozenset[str]:
-        return frozenset(
-            [
-                "send_text",
-                "mark_as_read",
-                "send_image",
-                "send_video",
-                "send_audio",
-                "send_document",
-                "send_sticker",
-                "send_button_message",
-                "send_list_message",
-                "send_cta_message",
-                "send_carousel",
-                "send_contact",
-                "send_location",
-                "resolve_platform_user_profile",
-            ]
-        )
+        return self.OPERATIONS
 
     @property
     def platform(self) -> PlatformType:

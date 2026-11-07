@@ -21,6 +21,7 @@ from wappa.core.logging.context import (
     reset_inbox_context,
     reset_user_context,
 )
+from wappa.core.messaging.deferred import DeferredMessenger
 from wappa.core.messaging.pipeline import MessengerPipeline
 from wappa.core.messaging.sent_message_registry import TableSentMessageRegistry
 from wappa.core.sse.context import sse_event_scope, sse_identity_cleared
@@ -250,12 +251,15 @@ class DispatchContextBuilder:
         """Yield a fresh handler bound to one explicit scope.
 
         +----------------+--------------------------------------------------+
-        | Inbox and User | canonical User, Messenger, Cache Factory, db     |
-        | Inbox only     | Messenger, db; no invented User or Cache Factory |
+        | Inbox and User | canonical User, deferred Messenger, caches, db   |
+        | Inbox only     | deferred Messenger, db; no User or Cache Factory |
         | System         | db; no invented Inbox, Messenger or User         |
         +----------------+--------------------------------------------------+
 
-        A required capability that cannot be built raises before the body runs.
+        Inbox-bound scopes offer a Messenger without resolving credentials.
+        Credential failures surface on its first operation; failed resolution
+        is retried on the next use. Other required capabilities that cannot be
+        built raise before the body runs.
         SSE and log identity hold for the body and are restored on exit, so a
         nested scope never leaks into its parent or into concurrent work.
         """
@@ -279,7 +283,15 @@ class DispatchContextBuilder:
             else None
         )
         with _log_identity(inbox_ref.inbox_id, canonical):
-            messenger = await self.messenger(inbox_ref)
+            entry = self.capabilities.platforms.get(inbox_ref.platform)
+            if entry is None:
+                raise ValueError(f"Unsupported platform: {inbox_ref.platform.value}")
+            messenger = DeferredMessenger(
+                inbox_ref,
+                partial(self.messenger, inbox_ref),
+                supported_operations=entry.messenger_operations,
+                capability_types=entry.messenger_capabilities,
+            )
             cache_factory = (
                 self.cache_factory(inbox_ref, canonical)
                 if canonical is not None

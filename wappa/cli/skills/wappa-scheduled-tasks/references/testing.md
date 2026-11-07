@@ -59,6 +59,6 @@ For a System test, bind `inbox_id=None`, `user_id=None`, `messenger=None` and `c
 
 ## One real firing per source
 
-- **Scheduler:** start the app with `async with app.router.lifespan_context(app):`, then `await run_job(...)` directly. This builds real credentials and caches without waiting for a schedule. A send reaches Meta, so use a test recipient or stop it with Messenger middleware.
+- **Scheduler:** start the app with `async with app.router.lifespan_context(app):`, then `await run_job(...)` directly. This builds the scope and caches without waiting for a schedule; credentials resolve only if the hook uses the Messenger. A send reaches Meta, so use a test recipient or stop it with Messenger middleware.
 - **Redis expiry:** start the app with `cache="redis"`, `await expiry.set(action, identifier, 1)`, and wait for the side effect. `uv run python <wappa>/scripts/redis_inspect.py` from a source checkout shows the keys.
 - **Failure:** force one exception and confirm it reaches your engine, or for expiry the `Expiry action failed` log line.

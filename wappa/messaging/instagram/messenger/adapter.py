@@ -105,6 +105,15 @@ class InstagramMessengerAdapter(
         }
     )
 
+    CAPABILITY_TYPES = frozenset(
+        {
+            ICommentControls,
+            IConversationContentReader,
+            IMediaLibrary,
+            IConversationHistoryReader,
+        }
+    )
+
     def __init__(
         self,
         *,

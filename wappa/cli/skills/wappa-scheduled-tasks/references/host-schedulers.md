@@ -52,7 +52,7 @@ async def run_job(
 ```
 
 - `dispatch` returns on success and raises on failure. Let it raise: catching it reports success and defeats the engine's retries.
-- A failed Inbox lookup or an unusable cache raises its typed error before the hook runs.
+- Send credentials resolve on the first Messenger operation, where Directory errors propagate. A hook that never uses messaging needs no send credentials. An unusable required cache still fails before the hook runs.
 - If you serve several Platforms, store the Platform with the job and build `InboxRef(platform=PlatformType(platform), inbox_id=inbox_id)` (`from wappa.schemas.core.types import PlatformType`).
 - Timestamps must be timezone-aware and become UTC. A naive `scheduled_for` is refused.
 - `execution_id` is for your correlation and idempotency. Wappa doesn't deduplicate on it.

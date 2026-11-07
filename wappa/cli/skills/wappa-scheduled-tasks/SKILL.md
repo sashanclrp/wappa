@@ -56,7 +56,7 @@ A Host scheduler calls `Scheduling.dispatch` directly and needs no `SchedulingPl
 | `inbox_ref` only | `self.messenger`, `self.whatsapp` or `self.instagram` | `self.user_id`, `self.cache_factory` |
 | neither | Nothing Inbox-related | `self.inbox_ref`, `self.user_id`, every Messenger, `self.cache_factory` |
 
-`self.db` and `self.db_read` are set in every scope when the database plugin is configured, and `None` otherwise.
+`self.db` and `self.db_read` are set in every scope when the database plugin is configured, and `None` otherwise. Since 0.34.2 Inbox-bound scopes defer send credentials until the first Messenger operation: non-sending tasks run during credential outages. Identity and Platform Messenger binding need no credentials. A send raises the original typed Directory error; a failed resolution is not cached, so the next use retries. Concurrent first uses share one successful pipeline and middleware runs once per send.
 
 **3–4. Build.** These rules hold for every source:
 

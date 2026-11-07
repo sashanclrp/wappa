@@ -1,6 +1,6 @@
 # Backlog execution plan
 
-Reviewed 2026-11-06 against the current code, recorded live evidence and the user's scope decisions. This file lists every active top-level backlog item. Individual PRDs own requirements and exit criteria; [README.md](./README.md) defines completion and consolidation rules.
+Reviewed 2026-11-07 against the current code, recorded live evidence and the user's scope decisions. This file lists every active top-level backlog item. Individual PRDs own requirements and exit criteria; [README.md](./README.md) defines completion and consolidation rules.
 
 ## In progress
 
@@ -29,7 +29,7 @@ Each retained draft contains scope that has not been fully absorbed by an active
 
 ## Scope decisions (2026-11-06)
 
-- Scheduled-task dispatch is a prerequisite for Gate C, with actual Symphonai adoption in a separate Host PRD. The final clarified scope is shared Wappa context/handler dispatch, existing Redis TTL integration and external scheduler callback mechanisms. The proposed durable scheduler, native recovery/leases/history, backend parity, admin routes and declaration registry were rejected. Keep Redis TTL behavior and Host scheduler ownership. The user approved the final responsibility split; the PRD is now pending. No implementation slice exists yet.
+- Scheduled-task dispatch is a prerequisite for Gate C, with actual Symphonai adoption in a separate Host PRD. The final clarified scope is shared Wappa context/handler dispatch, existing Redis TTL integration and external scheduler callback mechanisms. The proposed durable scheduler, native recovery/leases/history, backend parity, admin routes and declaration registry were rejected. Keep Redis TTL behavior and Host scheduler ownership. The approved responsibility split shipped in 0.34.0. Version 0.34.2 defers scheduled Messenger credentials until first use; Symphonai adoption and live Gate C remain Host-owned.
 
 - Deleted the completed v0.27 series at the user's request after confirmation of the published-package gate. Git history retains the series and release reports.
 - Deleted the Template management draft from Wappa. Symphonai owns catalog create/delete and lifecycle extension handling in `backend/symphonai/services/wappa/template_catalog/application.py` and `backend/symphonai/engine/system/meta_template_status_webhook.py`. Full generic update coverage was not asserted; further catalog product scope remains Host-owned.

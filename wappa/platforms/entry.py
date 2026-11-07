@@ -46,3 +46,7 @@ class PlatformEntry:
     build_messenger: MessengerBuilder
     display_name: str
     build_platform_messenger: PlatformMessengerBuilder | None = None
+    messenger_operations: frozenset[str] = frozenset(
+        {"send_text", "resolve_platform_user_profile"}
+    )
+    messenger_capabilities: frozenset[type] = frozenset()

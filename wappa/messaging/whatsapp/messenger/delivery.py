@@ -76,8 +76,7 @@ class _DeliveryMixin(_WhatsAppMessengerBase):
                 break
             if address != addresses[-1]:
                 self.logger.warning(
-                    "Delivery Address %s rejected (%s); trying the next known address",
-                    address,
+                    "Delivery Address rejected (%s); trying the next known address",
                     result.error_code,
                 )
         assert result is not None

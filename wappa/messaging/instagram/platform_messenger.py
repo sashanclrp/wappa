@@ -11,6 +11,7 @@ delete, enable or disable comments), ``content`` (post and comment reads) and
 from __future__ import annotations
 
 from functools import cached_property
+from typing import cast
 
 from wappa.core.messaging.platform_messenger import PlatformMessenger
 from wappa.domain.interfaces.conversation_capabilities import (
@@ -40,11 +41,9 @@ class InstagramMessenger(PlatformMessenger):
         ``list_comments``, ``list_replies``, and the mention reads
         ``get_mentioned_post`` / ``get_mentioned_comment``."""
         reader = self.messenger.require_capability(IConversationContentReader)
-        if not isinstance(reader, InstagramContentReader):
-            raise TypeError(
-                "Instagram's content capability must be an InstagramContentReader"
-            )
-        return reader
+        # Scheduled scopes may return a deferred wrapper with the same async
+        # surface, so discovery must not require the concrete reader instance.
+        return cast(InstagramContentReader, reader)
 
     @cached_property
     def history(self) -> IConversationHistoryReader:

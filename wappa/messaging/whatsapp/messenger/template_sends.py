@@ -89,13 +89,11 @@ class _TemplateSendsMixin(_DeliveryMixin):
                 recipient, template_data, include_recipient_type=False
             )
 
-            self.logger.debug(f"Sending text template '{template_name}' to {recipient}")
+            self.logger.debug(f"Sending text template '{template_name}'")
             result = await self._send_template_payload(
                 payload, recipient, template_type, routing_policy
             )
-            self.logger.info(
-                f"Text template '{template_name}' sent successfully to {result.recipient}"
-            )
+            self.logger.info(f"Text template '{template_name}' sent successfully")
             return result
 
         except Exception as e:
@@ -132,14 +130,12 @@ class _TemplateSendsMixin(_DeliveryMixin):
             payload = build_template_payload(recipient, template_data)
 
             self.logger.debug(
-                f"Sending media template '{template_name}' ({media_type.value}) to {recipient}"
+                f"Sending media template '{template_name}' ({media_type.value})"
             )
             result = await self._send_template_payload(
                 payload, recipient, template_type, routing_policy
             )
-            self.logger.info(
-                f"Media template '{template_name}' sent successfully to {result.recipient}"
-            )
+            self.logger.info(f"Media template '{template_name}' sent successfully")
             return result
 
         except Exception as e:
@@ -178,15 +174,11 @@ class _TemplateSendsMixin(_DeliveryMixin):
             )
             payload = build_template_payload(recipient, template_data)
 
-            self.logger.debug(
-                f"Sending location template '{template_name}' to {recipient}"
-            )
+            self.logger.debug(f"Sending location template '{template_name}'")
             result = await self._send_template_payload(
                 payload, recipient, template_type, routing_policy
             )
-            self.logger.info(
-                f"Location template '{template_name}' sent successfully to {result.recipient}"
-            )
+            self.logger.info(f"Location template '{template_name}' sent successfully")
             return result
 
         except Exception as e:

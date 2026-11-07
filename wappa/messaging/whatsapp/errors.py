@@ -74,17 +74,16 @@ def handle_whatsapp_error(
     error_code, safe_error = _classify_transport_error(error)
     if is_bsuid_unsupported_error(error):
         logger.warning(
-            f"BSUID Recipient Error: Message type does not support BSUID recipients. "
-            f"Use a phone number transport for recipient {recipient}"
+            "BSUID Recipient Error: Message type does not support BSUID recipients. "
+            "Use a phone number transport for this recipient"
         )
         error_code = BSUID_ERROR_TAG
         safe_error = "The recipient identity is not supported for this message type."
 
-    error_message = f"Failed to {operation} to {recipient}: {error}"
-    if extra_context:
-        error_message = f"{error_message} - {extra_context}"
-
-    logger.error(error_message, exc_info=include_traceback)
+    # Provider messages, extra context and tracebacks can echo the address.
+    logger.error(
+        "Failed to %s (code=%s, type=%s)", operation, error_code, type(error).__name__
+    )
 
     return MessageResult(
         success=False,

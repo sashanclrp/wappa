@@ -104,9 +104,9 @@ class _SpecializedMixin(_DeliveryMixin):
                 include_recipient_type=False,
             )
 
-            self.logger.debug(f"Sending {len(contacts)} contact card(s) to {recipient}")
+            self.logger.debug(f"Sending {len(contacts)} contact card(s)")
             result = await self._post_payload(payload, recipient)
-            self.logger.info(f"Contact card sent successfully to {result.recipient}")
+            self.logger.info("Contact card sent successfully")
             return result
 
         except Exception as e:
@@ -144,13 +144,9 @@ class _SpecializedMixin(_DeliveryMixin):
                 reply_to_message_id=reply_to_message_id,
             )
 
-            self.logger.debug(
-                f"Sending location ({latitude}, {longitude}) to {recipient}"
-            )
+            self.logger.debug(f"Sending location ({latitude}, {longitude})")
             result = await self._post_payload(payload, recipient)
-            self.logger.info(
-                f"Location message sent successfully to {result.recipient}"
-            )
+            self.logger.info("Location message sent successfully")
             return result
 
         except Exception as e:
@@ -178,11 +174,9 @@ class _SpecializedMixin(_DeliveryMixin):
                 reply_to_message_id=reply_to_message_id,
             )
 
-            self.logger.debug(f"Sending location request to {recipient}")
+            self.logger.debug("Sending location request")
             result = await self._post_payload(payload, recipient)
-            self.logger.info(
-                f"Location request sent successfully to {result.recipient}"
-            )
+            self.logger.info("Location request sent successfully")
             return result
 
         except Exception as e:

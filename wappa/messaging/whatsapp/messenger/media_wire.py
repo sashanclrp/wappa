@@ -147,7 +147,7 @@ class _MediaWireMixin(_DeliveryMixin):
             if media_type is MediaType.AUDIO and is_voice:
                 payload[media_type.value]["voice"] = True
 
-            self.logger.debug(f"Sending {media_type.value} message to {recipient}")
+            self.logger.debug(f"Sending {media_type.value} message")
             response = await self.client.post_request(payload)
             result = message_result_from_payload(
                 response,
@@ -155,8 +155,7 @@ class _MediaWireMixin(_DeliveryMixin):
                 fallback_recipient=recipient,
             )
             self.logger.info(
-                f"{media_type.value.title()} message sent successfully to "
-                f"{result.recipient}, id: {result.message_id}"
+                f"{media_type.value.title()} message sent successfully, id: {result.message_id}"
             )
             return result
 
