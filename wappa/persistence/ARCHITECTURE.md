@@ -275,3 +275,8 @@ For WhatsApp, the first key segment contains the Inbox's Meta
 ## Recoverable Redis expiry (0.34.6)
 
 RedisExpiry delegates arm/renew, cancel and rebind to RedisExpiryIndex. Lua writes the TTL key and pending metadata atomically in the existing expiry pool. KeyFactory owns __system__:expiry:due (sorted set) and __system__:expiry:records (hash). Members/fields are full Inbox-qualified trigger keys; records retain occurrence generation and original Redis-clock due time. The sorted score is eligibility time (initial due time, then a short claim deadline). Due reads use ZRANGEBYSCORE LIMIT; generation-fenced acknowledgment removes only a successfully dispatched occurrence. Cancel-by-identifier includes vanished-key pending records via HSCAN and legacy live keys via SCAN, never KEYS. Core expiry owns dispatch and periodic recovery, persistence owns these atomic transitions. No new backend or cache namespace encoding is introduced; old armed keys are unindexed until re-armed or a live key is rebound.
+
+
+## Live expiry migration and retention
+
+`redis/expiry_migration.py` scans only trigger-shaped keys, validates qualified Inbox namespaces, and calls the atomic `RedisExpiryIndex.index_existing` transition. Dry runs make no writes; apply preserves the trigger bytes and PTTL, does not overwrite existing records/claims and reports partial/malformed index conflicts. `redis/expiry_keys.py` owns the reserved key names and the protection policy used by generic cache deletion, expiration and rename. Pool cleanup only disconnects. Migration CLI and retention/Host guidance are documented in `docs/migration/0.34.7.md`.

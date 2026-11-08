@@ -5,6 +5,23 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.7] - 2026-11-08
+
+Migrate live legacy expiry timers without re-arming them; preserve Wappa's recovery index during ordinary cache maintenance.
+
+### Added
+
+- `wappa migrate expiry-index --redis-url URL [--database 3] [--apply] [--json]` indexes valid, live legacy Expiry Keys with their existing values and remaining millisecond TTLs. It defaults to a read-only dry run, requires an explicit connection URL, uses bounded SCAN batches and returns counts without identifiers, values or connection secrets. Existing occurrence generations/due times/claims remain unchanged. Partial or malformed index records are conflicts (exit 1); connection/storage failures exit 2. Repeat runs are safe, including when keys expire or are renewed during scanning. Already vanished unindexed timers cannot be reconstructed.
+
+### Fixed
+
+- Generic Wappa cache deletion preserves `__system__:expiry:due` and `__system__:expiry:records`; applying a TTL to either returns false and renaming either reserved key raises ValueError. Intended timer cancellation still uses the expiry adapter's atomic operations. Pool shutdown retains all timer data.
+
+### Documentation
+
+- Migration guides now ship in the PyPI source distribution.
+- Added [the 0.34.7 migration guide](docs/migration/0.34.7.md), covering cutover, explicit expiry database selection, retention/persistence/eviction requirements and optional Host idempotency/outbox guidance. Updated architecture, ADRs, public contract and shipped Host skills. Wappa changes no server persistence or eviction configuration and makes no exactly-once business-effect promise.
+
 ## [0.34.6] - 2026-11-08
 
 ### Changed

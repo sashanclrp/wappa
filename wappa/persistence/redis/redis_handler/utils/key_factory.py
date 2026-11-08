@@ -4,6 +4,8 @@ import logging
 
 from pydantic import BaseModel, Field
 
+from ...expiry_keys import EXPIRY_DUE_KEY, EXPIRY_RECORDS_KEY
+
 logger = logging.getLogger("RedisKeyFactory")
 
 
@@ -219,12 +221,12 @@ class KeyFactory(BaseModel):
     @staticmethod
     def expiry_due() -> str:
         """Durable, database-wide due index; members are Inbox-qualified keys."""
-        return "__system__:expiry:due"
+        return EXPIRY_DUE_KEY
 
     @staticmethod
     def expiry_records() -> str:
         """Occurrence generations and original due times for the due index."""
-        return "__system__:expiry:records"
+        return EXPIRY_RECORDS_KEY
 
     # ---- parsers ----------------------------------------------------------
     def parse_trigger(self, key: str) -> tuple[str, str, str] | None:

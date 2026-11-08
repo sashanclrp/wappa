@@ -8,6 +8,7 @@ import typer
 from rich.console import Console
 
 from .examples_catalog import _show_examples_menu
+from .expiry_migration import migrate_expiry_timers
 from .scaffold import _initialize_project
 from .serve import _run_server
 
@@ -89,6 +90,7 @@ def examples(
 
 migrate_app = typer.Typer(help="One-off data migrations between Wappa releases")
 app.add_typer(migrate_app, name="migrate")
+migrate_app.command("expiry-index")(migrate_expiry_timers)
 
 
 @migrate_app.command("cache-namespaces")

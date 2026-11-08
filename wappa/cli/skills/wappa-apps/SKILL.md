@@ -17,7 +17,7 @@ Progress:
 - [ ] 4. Verify offline, then live; report evidence and limits
 ```
 
-**1. Inspect.** Run `uv run python -c "import wappa; print(wappa.__version__)"`, and read the installed `CHANGELOG.md` when the version is older than these files assume (0.34.6). A repo importing `symphonai` is a Symphonai Host: Symphonai's own skills (`develop-symphonai`, `develop-wappa`) own its Score engine and adapters. Use this skill for the Wappa calls underneath, never to rebuild what Symphonai already has.
+**1. Inspect.** Run `uv run python -c "import wappa; print(wappa.__version__)"`, and read the installed `CHANGELOG.md` when the version is older than these files assume (0.34.7). A repo importing `symphonai` is a Symphonai Host: Symphonai's own skills (`develop-symphonai`, `develop-wappa`) own its Score engine and adapters. Use this skill for the Wappa calls underneath, never to rebuild what Symphonai already has.
 
 **2. Route.**
 

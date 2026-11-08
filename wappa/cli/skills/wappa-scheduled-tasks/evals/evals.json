@@ -87,6 +87,16 @@
         "does not suggest KEYS scans",
         "retains idempotent side-effect fences"
       ]
+    },
+    {
+      "id": "legacy-timer-index-migration",
+      "prompt": "I have live timers armed before 0.34.6. Index them without resetting their countdowns and explain what happens during cleanup or duplicate execution.",
+      "expected_output": "Uses explicit wappa migrate expiry-index --redis-url with dry run then --apply and correct expiry database. Preserves values/PTTL and existing occurrence records, cannot recover vanished keys, reports conflicts. Retains expiry indexes during generic cleanup. Optional Host generation execution_id transaction fence/outbox guidance does not promise exactly-once sends.",
+      "assertions": [
+        "no timer re-arming or raw index manipulation",
+        "explicit URL and dry run first",
+        "explains data retention and duplicate execution"
+      ]
     }
   ]
 }

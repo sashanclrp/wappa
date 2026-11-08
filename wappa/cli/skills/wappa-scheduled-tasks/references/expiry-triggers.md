@@ -4,6 +4,8 @@ A timer is a Redis key with a TTL. When it expires, Wappa delivers the action to
 
 ## Contents
 
+- Upgrade live timers and retain pending work
+
 - Setup and the subject binding
 - Arm, renew, cancel, read
 - Rebinding after an identity change
@@ -99,3 +101,12 @@ Redis expiry delivery is at least once across Wappa process restarts while Redis
 Record a Host idempotency fence within the action before side effects. Include the task's business generation; an indexed event's execution_id supplies occurrence correlation, not permission to ignore current business state. Old unindexed notifications require your existing generation policy. If you claim before a side effect, release or otherwise repair the claim after failure so recovery can do useful work.
 
 The full project is `wappa examples` → `wappa_expiry_example`.
+
+
+## Upgrade live timers and retain pending work
+
+For pre-0.34.6 keys that are still alive, run `wappa migrate expiry-index --redis-url "$REDIS_URL" --json` as a dry run, then add `--apply`. Stop old timer writers during cutover. The explicit URL is required; expiry database 3 is selected even if the URL names another database, unless `--database` overrides it. Qualified keys keep their values and remaining TTLs; existing records/claims are never overwritten. Reports contain counts only; conflicts exit 1, storage failures exit 2. A key already vanished without an index cannot be reconstructed. See `docs/migration/0.34.7.md` in Wappa's repository for the full runbook.
+
+Retain the TTL keys and `__system__:expiry:due` / `__system__:expiry:records` together. Generic Wappa delete/expire/rename operations preserve these index keys; ordinary shutdown only closes connections. Raw Redis eviction/flush/data loss remains outside this guarantee. Redis logical DB separation does not isolate server-wide memory or eviction.
+
+Optional Host policy: use the indexed event's `execution_id`, qualified by Inbox and action, as a durable duplicate fence. Commit the claim, database effects and completion atomically; failures must roll back and raise. Renewals have a new execution ID, retries retain it. Use a transactional outbox and provider deduplication where available for external effects; uncertain provider outcomes need reconciliation. The 30-second Wappa claim is not a business lock or an exactly-once guarantee.

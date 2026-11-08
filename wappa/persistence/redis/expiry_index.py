@@ -41,6 +41,35 @@ redis.call('ZADD', KEYS[2], due, KEYS[1])
 return 1
 """
 )
+_INDEX_EXISTING = (
+    _CHECK
+    + _CLOCK
+    + """
+check_index(KEYS[2], KEYS[3])
+local kind = redis.call('TYPE', KEYS[1]).ok
+if kind == 'none' then return 'expired' end
+if kind ~= 'string' then return 'invalid' end
+local ttl = redis.call('PTTL', KEYS[1])
+if ttl == -1 then return 'persistent' end
+if ttl <= 0 then return 'expired' end
+local record = redis.call('HGET', KEYS[3], KEYS[1])
+local score = redis.call('ZSCORE', KEYS[2], KEYS[1])
+if record and score then
+    local ok, occurrence = pcall(cjson.decode, record)
+    if not ok or type(occurrence) ~= 'table'
+       or type(occurrence.generation) ~= 'string' or occurrence.generation == ''
+       or type(occurrence.due_at_ms) ~= 'number' then return 'conflict' end
+    return 'already_indexed'
+end
+if record or score then return 'conflict' end
+if ARGV[1] == '0' then return 'eligible' end
+local occurrence = cjson.encode({generation=ARGV[2], due_at_ms=now+ttl})
+redis.call('HSET', KEYS[3], KEYS[1], occurrence)
+redis.call('ZADD', KEYS[2], now+ttl, KEYS[1])
+return 'indexed'
+"""
+)
+
 _CANCEL = (
     _CHECK
     + """
@@ -135,6 +164,20 @@ class RedisExpiryIndex:
         return bool(
             await _await_command(
                 self.redis.eval(_ARM, 3, *self._keys(key), ttl_seconds, uuid4().hex)
+            )
+        )
+
+    async def index_existing(self, key: str, *, apply: bool = False) -> str:
+        """Index one live legacy TTL atomically, without changing its value/deadline."""
+        return _text(
+            await _await_command(
+                self.redis.eval(
+                    _INDEX_EXISTING,
+                    3,
+                    *self._keys(key),
+                    "1" if apply else "0",
+                    uuid4().hex,
+                )
             )
         )
 

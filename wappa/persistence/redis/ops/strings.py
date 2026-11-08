@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..expiry_keys import is_expiry_index_key
 from ..redis_client import PoolAlias, RedisClient
 from ._shared import _await_command, logger
 
@@ -69,6 +70,7 @@ async def delete(*keys: str, alias: PoolAlias = "users") -> int:
     Returns:
         The number of keys deleted. Returns 0 on error.
     """
+    keys = tuple(key for key in keys if not is_expiry_index_key(key))
     if not keys:
         return 0
     async with RedisClient.connection(alias=alias) as redis:

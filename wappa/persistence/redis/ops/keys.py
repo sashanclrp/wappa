@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from redis.exceptions import ResponseError
 
+from ..expiry_keys import is_expiry_index_key
 from ..redis_client import PoolAlias, RedisClient
 from ._shared import _await_command, logger
 
@@ -82,6 +83,8 @@ async def rename_if_absent(
         True when renamed, False when the destination exists (nothing changed),
         None when ``key`` does not exist.
     """
+    if is_expiry_index_key(key) or is_expiry_index_key(new_key):
+        raise ValueError("Reserved expiry indexes cannot be renamed")
     async with RedisClient.connection(alias=alias) as redis:
         try:
             return bool(await _await_command(redis.renamenx(key, new_key)))
@@ -125,6 +128,8 @@ async def expire(key: str, ttl: int, *, alias: PoolAlias = "users") -> bool:
     Returns:
         True if the timeout was set, False if key does not exist or timeout could not be set (or on error).
     """
+    if is_expiry_index_key(key):
+        return False
     async with RedisClient.connection(alias=alias) as redis:
         try:
             # EXPIRE returns 1 if timeout was set, 0 if key doesn't exist or timeout wasn't set

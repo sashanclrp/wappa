@@ -65,3 +65,6 @@ Add `--json-root PATH` for the JSON backend. Conflicts are reported, never overw
 ## Expiry pending index (0.34.6)
 
 The existing expiry pool also holds Wappa-owned __system__:expiry:due and __system__:expiry:records keys. They retain pending occurrence generations/due times for startup and bounded periodic recovery. Keep them with the expiry database; do not treat them as ordinary disposable Host cache rows. Arm/renew/cancel/rebind through create_expiry_cache(), never by editing those indexes. For the at-least-once guarantee, recovered context and old-key migration, use the wappa-scheduled-tasks skill's expiry reference.
+
+
+For durable expiry work, retain the whole expiry database, configure persistence for your Redis restart requirements and use adequate capacity with a non-evicting deployment. Logical DBs share server-wide eviction. Wappa never automatically changes AOF/RDB or eviction settings. Generic Wappa deletion, expiration and rename protect the reserved expiry index keys; pool shutdown only closes connections. Raw Redis flush/eviction/manual deletion can still destroy pending work. The `wappa-scheduled-tasks` expiry reference documents the live legacy timer migration and optional duplicate-safe Host effects.
