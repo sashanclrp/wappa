@@ -258,14 +258,15 @@ async def test_routing_rejects_wrong_platform_and_conflicting_recipient():
 
 
 @pytest.mark.asyncio
-async def test_bad_later_account_admits_no_tasks():
+async def test_unknown_later_account_keeps_the_registered_delivery():
     resolver = Resolver()
     batch = payload(event())
     batch["entry"].append(
         {"id": "unregistered", "messaging": [event(user="unregistered")]}
     )
-    with pytest.raises(InboxNotFoundError):
-        await route_instagram_payload(batch, resolver)
+    deliveries = await route_instagram_payload(batch, resolver)
+    assert len(deliveries) == 1
+    assert deliveries[0].inbox_ref.inbox_id == ACCOUNT
 
 
 @pytest.mark.asyncio

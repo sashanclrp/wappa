@@ -38,7 +38,7 @@ class MySource(IInboxDirectorySource):
         ...  # every record of one WABA or Instagram account
 ```
 
-Store each record with `dump_record_for_storage(record)` (the only dump that keeps the ciphertext) and rebuild it with `parse_inbox_credential_record(stored)`, both from `wappa.domain.inbox`. Wappa caches what the source returns, encrypts and decrypts it, and evicts Messengers when a record changes. The source never decrypts anything. Webhooks for an Inbox the source doesn't know answer 400; Wappa never auto-registers accounts.
+Store each record with `dump_record_for_storage(record)` (the only dump that keeps the ciphertext) and rebuild it with `parse_inbox_credential_record(stored)`, both from `wappa.domain.inbox`. Wappa caches what the source returns, encrypts and decrypts it, and evicts Messengers when a record changes. The source never decrypts anything. After signature authentication and envelope/account validation, Instagram entries whose healthy credential lookup confirms an unknown Inbox are acknowledged with 200 and dropped. Known-account entries in the same batch still dispatch; a batch containing only unknown accounts schedules nothing. Wappa emits `INSTAGRAM_UNKNOWN_ACCOUNT` at WARNING once per unknown account per process, without account IDs or payload values. It still checks the directory on later deliveries, so a subsequently registered account can dispatch. Known inactive Inboxes remain 400, directory/integrity failures 503, and malformed or mismatched envelopes 400; WhatsApp admission is unchanged. Wappa never auto-registers accounts.
 
 ## Records and credentials
 
@@ -65,7 +65,7 @@ A reconnect still reaches you after that. A signed WhatsApp `account_reconnected
 
 ## Callbacks and HTTP selection
 
-- Meta callbacks: `GET`/`POST /webhook/inboxes/whatsapp` and `/webhook/inboxes/instagram`, one Meta app. `META_APP_SECRET` checks every POST body before parsing (bad signature 401), `META_WEBHOOK_VERIFY_TOKEN` answers only the GET challenge, an unknown or inactive Inbox answers 400, and a directory outage answers 503 (Meta retries).
+- Meta callbacks: `GET`/`POST /webhook/inboxes/whatsapp` and `/webhook/inboxes/instagram`, one Meta app. `META_APP_SECRET` checks every POST body before parsing (bad signature 401), `META_WEBHOOK_VERIFY_TOKEN` answers only the GET challenge, unknown Instagram accounts are acknowledged and dropped (one value-free warning per account per process), unknown WhatsApp or inactive Inboxes answer 400, and a directory outage answers 503 (Meta retries).
 - Wappa's HTTP API (`/api/{platform}/...`) selects the Inbox from the `X-Wappa-Inbox-ID` header (the phone number ID or Instagram account ID): missing with no default 400, unknown 404. Selecting grants nothing: authenticate and authorize first.
 - In your own routes, depend on `get_inbox_execution_context` (`from wappa.api.dependencies import get_inbox_execution_context`; the route path must declare `{platform}`) instead of reading the header yourself.
 

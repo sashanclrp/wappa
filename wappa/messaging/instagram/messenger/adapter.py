@@ -32,7 +32,8 @@ Contract mappings (ADR-0025: one Messenger method per action):
   ``send_sticker`` → image
 - ``IUserDataRequests`` (location / phone-number requests) → not provided
   (``self.whatsapp`` is ``None`` here; a text prompt would not return the data)
-- reply: top-level ``reply_to: {"mid"}``
+- reply: top-level ``reply_to: {"mid"}``; HTTP 400 ``100/2534002`` retries
+  that refused part once unquoted, recording ``wappa_reply_to`` in the result
 
 Known local constraints are rejected before I/O; provider refusals and
 unknown outcomes are returned, never retried.

@@ -1,7 +1,7 @@
 ---
-checked_on: 2026-11-06
+checked_on: 2026-11-08
 checked_against: Meta Instagram quick-replies, button-template, generic-template, private-replies and comment-moderation pages (Graph v26.0) and Wappa's tests/test_instagram_conversations.py and ADR-0025
-revision: 4
+revision: 5
 ---
 
 # Instagram-only features
@@ -44,6 +44,8 @@ Wappa filters nothing; your handler decides.
 `process_mention(webhook: MentionWebhook)`: `subject` is `media` (a caption mention, with no Comment) or `comment` (has `comment_ref`). Story mentions sent as DMs arrive in `process_message` instead.
 
 ## Replies: public versus private
+
+For direct-message quote fallback and `wappa_reply_to` result evidence, see [Send](messaging.md). Hosts keep using `reply_to_message_id` without a Platform branch; the fallback can deliver a message without its quote.
 
 `self.instagram` is the Instagram Platform Messenger, ready in every Instagram dispatch (`None` on other Platforms): the same Messenger as `self.messenger` plus `comments`, `content` and `history`.
 

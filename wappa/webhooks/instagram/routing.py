@@ -1,6 +1,7 @@
 """Authenticated Instagram batch admission by professional account Inbox.
 
-Every entry is validated and its Inbox credentials resolved before any
+Every entry is validated; unknown accounts are dropped, and registered Inbox
+credentials are resolved before any
 delivery is returned; messaging events and ``changes`` items (comments,
 Live comments, mentions, registered extension fields) become one delivery
 each. Comment/mention authors never register or select an Inbox.
@@ -14,10 +15,15 @@ from wappa.core.inbound.platform_webhooks import (
     PayloadRoutingError,
     RoutedWebhookDelivery,
 )
+from wappa.core.logging.logger import get_logger
+from wappa.domain.inbox.errors import InboxNotFoundError
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.inbox.ports import IInboxCredentialResolver
 from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.instagram.models import InstagramWebhook
+
+logger = get_logger(__name__)
+_warned_unknown_accounts: set[InboxRef] = set()
 
 
 async def route_instagram_payload(
@@ -46,7 +52,18 @@ async def route_instagram_payload(
                 raise PayloadRoutingError(
                     "Instagram read event must address the receiving Inbox"
                 )
-        credentials = await resolver.resolve_credentials(ref)
+        try:
+            credentials = await resolver.resolve_credentials(ref)
+        except InboxNotFoundError as exc:
+            if exc.is_inactive:
+                raise
+            if ref not in _warned_unknown_accounts:
+                _warned_unknown_accounts.add(ref)
+                logger.warning(
+                    "INSTAGRAM_UNKNOWN_ACCOUNT: dropping authenticated webhook "
+                    "entry with no Inbox; check the Meta app subscriptions"
+                )
+            continue
         if (
             credentials.inbox_ref != ref
             or credentials.account_ref.platform is not ref.platform

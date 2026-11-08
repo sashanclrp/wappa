@@ -11,12 +11,13 @@ from wappa.domain.messaging_targets import (
     UnsupportedOperationError,
     require_direct_message,
 )
-from wappa.domain.results import MessageResult
+from wappa.domain.results import MessageResult, OperationOutcome
 from wappa.messaging.meta.graph import GraphResponse
 
 from ._base import _InstagramBase
 
 PARTS_KEY = "wappa_parts"
+REPLY_TO_KEY = "wappa_reply_to"
 
 
 class _Parts:
@@ -32,11 +33,16 @@ class _Parts:
 
     def __init__(self) -> None:
         self.ids: list[str] = []
+        self.reply_to: dict[str, Any] | None = None
 
     def add(self, result: MessageResult) -> bool:
+        response = result.platform_response or {}
+        reply_to = response.get(REPLY_TO_KEY)
+        if reply_to is not None:
+            self.reply_to = reply_to
         if not result.success:
             return False
-        nested = (result.platform_response or {}).get(PARTS_KEY)
+        nested = response.get(PARTS_KEY)
         if nested:
             self.ids.extend(nested["message_ids"])
         elif result.message_id:
@@ -56,6 +62,8 @@ class _Parts:
             last = last.model_copy(update={"message_id": primary.message_id})
         delivered = len(self.ids)
         response = dict(last.platform_response or {})
+        if self.reply_to is not None:
+            response[REPLY_TO_KEY] = self.reply_to
         response[PARTS_KEY] = {"message_ids": list(self.ids), "delivered": delivered}
         update: dict[str, Any] = {"platform_response": response}
         if not last.success and delivered:
@@ -129,7 +137,24 @@ class _DeliveryMixin(_InstagramBase):
         response = await self._graph.request(
             "POST", self._graph.messages_path, json=body, operation=operation
         )
+        quote_dropped = (
+            "reply_to" in body
+            and response.outcome is OperationOutcome.REJECTED
+            and response.status_code == 400
+            and response.error_code == "100/2534002"
+        )
+        if quote_dropped:
+            # This precise rejection proves the quoted send was not accepted.
+            # Retry only that part, once; ambiguous outcomes are never retried.
+            unquoted = {key: value for key, value in body.items() if key != "reply_to"}
+            response = await self._graph.request(
+                "POST", self._graph.messages_path, json=unquoted, operation=operation
+            )
         result = self._result(response, address, operation)
+        if quote_dropped:
+            evidence = dict(result.platform_response or {})
+            evidence[REPLY_TO_KEY] = {"dropped": True, "error_code": "100/2534002"}
+            result = result.model_copy(update={"platform_response": evidence})
         if result.success and result.message_id and self._sent_registry is not None:
             await self._sent_registry.record(self._inbox_ref, result.message_id)
         return result

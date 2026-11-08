@@ -1,7 +1,7 @@
 ---
-checked_on: 2026-11-06
+checked_on: 2026-11-08
 checked_against: Meta WhatsApp Cloud API and Instagram messaging-api, sender-actions, quick-replies, button- and generic-template pages (Graph v26.0), Wappa's tests/test_instagram_conversations.py and the live format matrix of 2026-11-06
-revision: 4
+revision: 5
 ---
 
 # Sending and receiving messages
@@ -22,6 +22,10 @@ revision: 4
 Every Platform's conversation message arrives in `process_message(webhook)`: `webhook.message` (`message_type`, `message_id`, text, `media_id` for media, `get_interactive_selection()` for a tapped option) and `webhook.user` (read its fields directly; `webhook.user.delivery_addresses()` builds the reply target). Platform-specific message classes and fields are in `whatsapp.md` and `instagram.md`. Download inbound media with `self.messenger.media.download(webhook.message.media_id)` on every Platform.
 
 ## Send
+
+For an incoming DM, pass `webhook.message.message_id`: Instagram preserves the webhook's original `message.mid`, while WhatsApp preserves its native message ID. The adapter handles the wire shape. Meta's [Send a reply](https://developers.facebook.com/documentation/business-messaging/instagram-messaging/features/send-message#send-a-reply) documents top-level `reply_to.mid` on the Facebook Graph/Page-token path.
+
+Instagram first sends `reply_to_message_id` as top-level `reply_to: {"mid": ...}`. If that call is rejected with HTTP 400 and Meta code `100/2534002`, it retries only that refused part once without `reply_to`, preserving the message and recipient. The returned result is the retry result, with `platform_response["wappa_reply_to"] = {"dropped": True, "error_code": "100/2534002"}` on success or failure. This evidence survives split text, media-caption and other multipart emulations alongside `wappa_parts`. Other errors and indeterminate outcomes never trigger quote fallback; accepted parts are never resent. Hosts use the same parameter on both Platforms without branching.
 
 ```python
 from pathlib import Path

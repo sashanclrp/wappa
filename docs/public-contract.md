@@ -94,13 +94,16 @@ Responsibilities other than sending conversation messages, and actions with no r
 
 ## Instagram text adapter and explicit send targets
 
+Instagram first sends `reply_to_message_id` as top-level `reply_to: {"mid": ...}`. If that call is rejected with HTTP 400 and Meta code `100/2534002`, it retries only that refused part once without `reply_to`, preserving the message and recipient. The returned result is the retry result, with `platform_response["wappa_reply_to"] = {"dropped": True, "error_code": "100/2534002"}` on success or failure. This evidence survives split text, media-caption and other multipart emulations alongside `wappa_parts`. Other errors and indeterminate outcomes never trigger quote fallback; accepted parts are never resent. Hosts use the same parameter on both Platforms without branching.
+
 Instagram uses the existing GET/POST `/webhook/inboxes/instagram` callback,
 separate from `/webhook/inboxes/whatsapp`. Both use the same application Meta
 trust configuration, including the existing `META_WEBHOOK_VERIFY_TOKEN` name.
 There is no signature bypass. GET verification needs no Inbox registration.
-POST admission requires registered active credentials in explicit mode; unknown
-or inactive Inboxes return 400, directory/integrity outages return 503, invalid
-signatures return 401, and malformed or mismatched payloads return 400.
+POST dispatch requires registered active credentials in explicit mode. Invalid
+signatures return 401.
+
+After signature authentication and envelope/account validation, Instagram entries whose healthy credential lookup confirms an unknown Inbox are acknowledged with 200 and dropped. Known-account entries in the same batch still dispatch; a batch containing only unknown accounts schedules nothing. Wappa emits `INSTAGRAM_UNKNOWN_ACCOUNT` at WARNING once per unknown account per process, without account IDs or payload values. It still checks the directory on later deliveries, so a subsequently registered account can dispatch. Known inactive Inboxes remain 400, directory/integrity failures 503, and malformed or mismatched envelopes 400; WhatsApp admission is unchanged.
 
 InstagramActiveInboxCredentialRecord and InstagramInactiveInboxCredentialRecord
 are available from `wappa.domain.inbox`. They use `platform=instagram`, with

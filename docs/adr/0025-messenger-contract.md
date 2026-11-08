@@ -36,6 +36,8 @@ Wappa's value is that a Host writes a conversation once and runs it on any conne
 
 Known gap: `send_reaction(message_id, emoji, target)` belongs on `IMessenger` (WhatsApp, Instagram and Telegram all have reactions) but is unimplemented; the user deprioritized it on 2026-11-06.
 
+Instagram quote degradation stays inside the adapter: Instagram first sends `reply_to_message_id` as top-level `reply_to: {"mid": ...}`. If that call is rejected with HTTP 400 and Meta code `100/2534002`, it retries only that refused part once without `reply_to`, preserving the message and recipient. The returned result is the retry result, with `platform_response["wappa_reply_to"] = {"dropped": True, "error_code": "100/2534002"}` on success or failure. This evidence survives split text, media-caption and other multipart emulations alongside `wappa_parts`. Other errors and indeterminate outcomes never trigger quote fallback; accepted parts are never resent. Hosts use the same parameter on both Platforms without branching.
+
 ## Consequences
 
 - Host code, Scores and Agents use one vocabulary on every Platform; a conversation built for Instagram runs on WhatsApp and the reverse, except for the Platform-only extras on `self.whatsapp` / `self.instagram`.

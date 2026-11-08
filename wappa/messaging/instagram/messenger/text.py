@@ -29,7 +29,7 @@ class _TextMixin(_InstagramBase):
         an over-limit private reply raises ``ValueError``. For a split text
         the reply context goes on the first message, and the last result
         returns unless one is refused; that refusal returns and later chunks
-        are not sent (nothing retries).
+        are not sent. Only an invalid quote rejection gets one unquoted retry.
         """
         _ = disable_preview
         if not isinstance(target, DirectMessage | PrivateReply):

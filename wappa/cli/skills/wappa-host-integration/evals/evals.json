@@ -59,6 +59,16 @@
         "uses new clustered names",
         "keeps provider configuration Host-owned"
       ]
+    },
+    {
+      "id": "instagram-unknown-account-callback",
+      "prompt": "A second Instagram account subscribed to our Meta app has no Inbox. Does it block known-account entries or need registration to stop retries?",
+      "expected_output": "Authenticate signatures first. Valid unknown-account entries are dropped and acknowledged 200 with one value-free WARNING per account per process, while known-account entries dispatch. No automatic registration; inactive, malformed or mismatched entries stay 400 and outages 503. WhatsApp behavior unchanged.",
+      "assertions": [
+        "does not weaken authentication",
+        "mixed batches retain registered deliveries",
+        "does not hide directory failures or mismatches"
+      ]
     }
   ]
 }

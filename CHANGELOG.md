@@ -5,6 +5,19 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.4] - 2026-11-08
+
+Instagram sends recover from rejected reply quotes; authenticated callbacks for unknown Instagram accounts are acknowledged and dropped.
+
+### Fixed
+
+- Instagram sends carrying `reply_to` retry only the refused part once without the quote after HTTP 400, code `100/2534002`. The retry's result records `platform_response["wappa_reply_to"] = {"dropped": True, "error_code": "100/2534002"}`, including failures and multipart text/media-caption sends. Accepted parts are never resent; other failures and indeterminate outcomes do not trigger quote fallback. Sent-message tracking records only accepted messages. The original cause of Meta rejecting a fresh quoted Message ID remains unconfirmed; no general restriction on Instagram quotes is asserted.
+- After signature authentication and envelope/account validation, unknown-account Instagram entries are dropped with HTTP 200 and one value-free `INSTAGRAM_UNKNOWN_ACCOUNT` WARNING per account per process. Known entries in mixed batches still dispatch. Known inactive Inboxes and malformed/mismatched envelopes remain 400; directory/integrity failures remain 503. WhatsApp behavior is unchanged. Later registration still permits dispatch.
+
+### Documentation
+
+- Updated the public contract, architecture, ADRs and shipped Host skills. Recorded Symphonai's reported Graph v25.0 quote failure and the pending post-fix live checks separately from offline regression evidence.
+
 ## [0.34.3] - 2026-11-08
 
 Deployment configuration uses clustered environment names; retired names fail startup with migration instructions.

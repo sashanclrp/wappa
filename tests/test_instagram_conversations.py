@@ -5,6 +5,7 @@ Fixtures follow Meta's Instagram webhook examples (Graph v26.0, fetched
 """
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -579,7 +580,7 @@ async def test_signed_mixed_batch_dispatches_every_lane_exactly_once():
     )
 
 
-async def test_unsigned_or_unknown_account_batches_schedule_nothing():
+async def test_unsigned_batches_are_rejected_and_unknown_accounts_do_not_block_known_entries():
     handler = Recorder()
     resolver = Resolver()
     batch = changes({"field": "comments", "value": {"id": "c1"}})
@@ -595,8 +596,9 @@ async def test_unsigned_or_unknown_account_batches_schedule_nothing():
             },
         ],
     }
-    rejected = await _post(_app(handler, resolver), mixed)
-    assert rejected.status_code == 400 and handler.events == []
+    accepted = await _post(_app(handler, resolver), mixed)
+    assert accepted.status_code == 200
+    assert handler.events == [("message", USER, ACCOUNT)]
 
 
 async def test_extension_parse_failure_rejects_whole_batch():
@@ -1273,3 +1275,122 @@ async def test_location_contact_and_sticker_are_adapted_requests_are_not():
         messenger.supported_operations
     )
     assert not hasattr(messenger, "send_location_request")
+
+
+async def test_unknown_accounts_are_acknowledged_and_warned_once_without_values(
+    monkeypatch, caplog
+):
+    from wappa.webhooks.instagram import routing
+
+    monkeypatch.setattr(routing, "_warned_unknown_accounts", set())
+    handler = Recorder()
+    resolver = Resolver(accounts=())
+    app = _app(handler, resolver)
+    for account in (ACCOUNT, ACCOUNT, OTHER_REF.inbox_id):
+        response = await _post(
+            app,
+            changes(
+                {"field": "comments", "value": {"id": "comment-secret-value"}},
+                account=account,
+            ),
+        )
+        assert response.status_code == 200
+    assert handler.events == []
+    warnings = [
+        record
+        for record in caplog.records
+        if "INSTAGRAM_UNKNOWN_ACCOUNT" in record.getMessage()
+    ]
+    assert len(warnings) == 2
+    assert all(record.levelname == "WARNING" for record in warnings)
+    for record in warnings:
+        assert not any(
+            value in record.getMessage()
+            for value in (ACCOUNT, OTHER_REF.inbox_id, "comment-secret-value", "token-")
+        )
+    resolver.accounts.add(ACCOUNT)
+    response = await _post(
+        _app(handler, resolver),
+        messaging(msg(message={"mid": "registered-mid", "text": "hi"})),
+    )
+    assert response.status_code == 200
+    assert handler.events == [("message", USER, ACCOUNT)]
+    assert (
+        sum(
+            "INSTAGRAM_UNKNOWN_ACCOUNT" in record.getMessage()
+            for record in caplog.records
+        )
+        == 2
+    )
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        {"object": "instagram", "entry": [{"id": ACCOUNT}]},
+        messaging(
+            {
+                "sender": {"id": "someone"},
+                "recipient": {"id": "elsewhere"},
+                "message": {"mid": "m1", "text": "hi"},
+            }
+        ),
+    ],
+)
+async def test_unknown_accounts_do_not_hide_malformed_or_mismatched_envelopes(
+    malformed,
+):
+    handler = Recorder()
+    resolver = Resolver(accounts=())
+    response = await _post(_app(handler, resolver), malformed)
+    assert response.status_code == 400
+    assert resolver.calls == [] and handler.events == []
+
+
+@pytest.mark.parametrize(
+    "failure,status",
+    [
+        ("inactive", 400),
+        ("directory", 503),
+        ("integrity", 503),
+        ("membership", 400),
+    ],
+)
+async def test_account_admission_failures_are_never_acknowledged_as_unknown(
+    failure, status
+):
+    from wappa.domain.inbox.errors import (
+        InboxCredentialIntegrityError,
+        InboxDirectoryUnavailableError,
+    )
+
+    class FailingResolver(Resolver):
+        async def resolve_credentials(self, ref):
+            if ref.inbox_id != OTHER_REF.inbox_id:
+                return await super().resolve_credentials(ref)
+            if failure == "inactive":
+                raise InboxNotFoundError(ref, reason="inactive")
+            if failure == "directory":
+                raise InboxDirectoryUnavailableError("unavailable")
+            if failure == "integrity":
+                raise InboxCredentialIntegrityError("invalid envelope")
+            credentials = await super().resolve_credentials(ref)
+            return replace(
+                credentials,
+                account_ref=PlatformAccountRef(
+                    platform=ref.platform, platform_account_id="different-account"
+                ),
+            )
+
+    handler = Recorder()
+    batch = messaging(msg(message={"mid": "known-mid", "text": "hi"}))
+    batch["entry"].append(
+        changes(
+            {"field": "comments", "value": {"id": "c1"}}, account=OTHER_REF.inbox_id
+        )["entry"][0]
+    )
+    response = await _post(
+        _app(handler, FailingResolver(accounts=(ACCOUNT, OTHER_REF.inbox_id))), batch
+    )
+    assert response.status_code == status
+    assert handler.events == []
