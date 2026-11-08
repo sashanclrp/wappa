@@ -272,8 +272,6 @@ def test_user_data_request_routes_reach_the_capability() -> None:
 
 
 _WHATSAPP_EXTENSION_ROUTES = [
-    ("GET", "/messages/limits"),
-    ("GET", "/media/limits"),
     ("POST", "/specialized/validate-contact"),
     ("POST", "/specialized/validate-coordinates"),
     ("GET", "/templates/limits"),

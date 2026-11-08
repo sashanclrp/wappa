@@ -12,11 +12,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import suppress
+from typing import cast
+
+from wappa.persistence.redis.expiry_index import RedisExpiryIndex
+from wappa.persistence.redis.redis_client import PoolAlias, RedisClient
 
 from .connection import ConnectionConfig, RedisConnectionManager
 from .dispatcher import ExpiryDispatcher
 from .parser import parse_expiry_notification
 from .reconnection import ReconnectionConfig, ReconnectionStrategy
+from .recovery import ExpiryRecovery
 
 logger = logging.getLogger(__name__)
 
@@ -60,36 +66,49 @@ async def run_expiry_listener(
 
     logger.info("Starting Redis expiry listener (alias=%s)", alias)
 
-    while reconnection.should_retry():
-        try:
-            await _run_listener_loop(
-                connection_manager=connection_manager,
-                dispatcher=dispatcher,
-            )
-            reconnection.reset()
-
-        except asyncio.CancelledError:
-            logger.info("Expiry listener cancelled, shutting down")
-            await connection_manager.disconnect()
-            break
-
-        except Exception as e:
-            reconnection.record_failure()
-            logger.error(
-                "Expiry listener error (attempt %d): %s",
-                reconnection.attempt_count,
-                e,
-                exc_info=True,
-            )
-
-            if not reconnection.should_retry():
-                logger.critical(
-                    "Max reconnection attempts reached (%d), exiting listener",
-                    reconnection.config.max_attempts,
+    recovery = ExpiryRecovery(
+        RedisExpiryIndex(await RedisClient.get(cast(PoolAlias, alias))), dispatcher
+    )
+    recovery_task = asyncio.create_task(recovery.run(), name="expiry_recovery")
+    try:
+        while reconnection.should_retry():
+            try:
+                await _run_listener_loop(
+                    connection_manager=connection_manager,
+                    recovery=recovery,
                 )
+                reconnection.reset()
+
+            except asyncio.CancelledError:
+                logger.info("Expiry listener cancelled, shutting down")
+                await connection_manager.disconnect()
                 break
 
-            await reconnection.wait()
+            except Exception as e:
+                await connection_manager.disconnect()
+                reconnection.record_failure()
+                logger.error(
+                    "Expiry listener error (attempt %d): %s",
+                    reconnection.attempt_count,
+                    e,
+                    exc_info=True,
+                )
+
+                if not reconnection.should_retry():
+                    logger.critical(
+                        "Max Pub/Sub reconnection attempts reached (%d); recovery remains active",
+                        reconnection.config.max_attempts,
+                    )
+                    break
+
+                await reconnection.wait()
+        if not reconnection.should_retry():
+            await recovery_task
+    finally:
+        recovery_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await recovery_task
+        await connection_manager.disconnect()
 
     logger.info("Expiry listener terminated")
 
@@ -97,7 +116,7 @@ async def run_expiry_listener(
 async def _run_listener_loop(
     *,
     connection_manager: RedisConnectionManager,
-    dispatcher: ExpiryDispatcher,
+    recovery: ExpiryRecovery,
 ) -> None:
     """
     Main event processing loop.
@@ -115,7 +134,7 @@ async def _run_listener_loop(
     async for msg in connection.pubsub.listen():
         notification = parse_expiry_notification(msg)
         if notification is not None:
-            dispatcher.dispatch(notification)
+            await recovery.deliver(notification.expired_key, recovered=False)
 
 
 __all__ = [

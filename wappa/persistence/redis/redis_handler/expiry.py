@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
 
 from pydantic import Field
 
@@ -9,10 +8,10 @@ from ....domain.interfaces.cache_interfaces import (
     ExpiryKeyConflictError,
     IExpiryCache,
 )
-from ..ops import delete, exists, get_ttl, rename_if_absent, setex
-from ..redis_client import PoolAlias
+from ..expiry_index import RedisExpiryIndex
+from ..ops import exists, get_ttl
+from ..redis_client import PoolAlias, RedisClient
 from .utils.inbox_cache import InboxCache
-from .utils.serde import dumps
 
 logger = logging.getLogger("RedisExpiry")
 
@@ -56,8 +55,8 @@ class RedisExpiry(InboxCache, IExpiryCache):
         """
         Create expiry trigger with TTL.
 
-        Uses SETEX for atomic key creation with TTL. Value stores creation
-        timestamp for debugging/auditing but is not used functionally.
+        Atomically creates the TTL key and a durable due-index occurrence.
+        Redis time sets the deadline; renewal replaces the occurrence generation.
 
         Args:
             action: Action name (e.g., "payment_reminder")
@@ -72,21 +71,8 @@ class RedisExpiry(InboxCache, IExpiryCache):
             success = await expiry.set("payment_reminder", "TXN_123", 1500)
         """
         key = self._key(action, identifier)
-        value = f"trigger:{datetime.now(UTC).isoformat()}"
-        serialized_value = dumps(value)
-
-        logger.debug(
-            f"Creating expiry trigger: action='{action}', identifier='{identifier}', "
-            f"ttl={ttl_seconds}s, key='{key}'"
-        )
-
-        # SETEX: Set key with expiry in single atomic operation
-        result = await setex(
-            key=key,
-            seconds=ttl_seconds,
-            value=serialized_value,
-            alias=self.redis_alias,
-        )
+        index = RedisExpiryIndex(await RedisClient.get(self.redis_alias))
+        result = await index.arm(key, ttl_seconds)
 
         if result:
             logger.info(
@@ -123,7 +109,9 @@ class RedisExpiry(InboxCache, IExpiryCache):
             f"key='{key}'"
         )
 
-        count = await delete(key, alias=self.redis_alias)
+        count = await RedisExpiryIndex(await RedisClient.get(self.redis_alias)).cancel(
+            key
+        )
 
         if count > 0:
             logger.info(
@@ -162,7 +150,9 @@ class RedisExpiry(InboxCache, IExpiryCache):
             f"(pattern: '{pattern}')"
         )
 
-        count = await self._delete_by_pattern(pattern)
+        count = await RedisExpiryIndex(
+            await RedisClient.get(self.redis_alias)
+        ).cancel_matching(pattern)
 
         if count > 0:
             logger.info(
@@ -222,7 +212,7 @@ class RedisExpiry(InboxCache, IExpiryCache):
 
         For Host identity changes: the Host supplies the authoritative old and
         new identifiers and calls this once per action it arms. The trigger fires
-        on time, under the new identifier. Atomic (RENAMENX).
+        on time, under the new identifier. Atomic, including the durable due-index occurrence.
 
         Args:
             action: Action name
@@ -243,10 +233,12 @@ class RedisExpiry(InboxCache, IExpiryCache):
         if old_key == new_key:
             return await exists(old_key, alias=self.redis_alias) > 0
 
-        renamed = await rename_if_absent(old_key, new_key, alias=self.redis_alias)
-        if renamed is False:
+        renamed = await RedisExpiryIndex(
+            await RedisClient.get(self.redis_alias)
+        ).rebind(old_key, new_key)
+        if renamed == -1:
             raise ExpiryKeyConflictError(
                 f"Expiry trigger already exists for action '{action}' under "
                 f"identifier '{new_identifier}'"
             )
-        return renamed is True
+        return renamed == 1

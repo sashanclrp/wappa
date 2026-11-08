@@ -35,4 +35,6 @@ class InstagramTextMessage(InstagramMessageBase, BaseTextMessage):
         return self.context.reply_to_message_id, None
 
     def to_universal_dict(self) -> UniversalMessageData:
-        return self._universal(text=self.text)
+        from wappa.webhooks.core.base_message.projections import text_projection
+
+        return text_projection(self)

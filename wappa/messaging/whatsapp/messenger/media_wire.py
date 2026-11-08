@@ -8,7 +8,6 @@ from typing import Any
 from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.errors import handle_whatsapp_error
 from wappa.messaging.whatsapp.messenger.delivery import _DeliveryMixin
-from wappa.messaging.whatsapp.models.basic_models import message_result_from_payload
 from wappa.messaging.whatsapp.models.media_models import MediaType
 
 
@@ -148,12 +147,7 @@ class _MediaWireMixin(_DeliveryMixin):
                 payload[media_type.value]["voice"] = True
 
             self.logger.debug(f"Sending {media_type.value} message")
-            response = await self.client.post_request(payload)
-            result = message_result_from_payload(
-                response,
-                inbox_id=self._inbox_id,
-                fallback_recipient=recipient,
-            )
+            result = await self._post_payload(payload, recipient)
             self.logger.info(
                 f"{media_type.value.title()} message sent successfully, id: {result.message_id}"
             )

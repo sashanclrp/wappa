@@ -6,6 +6,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from wappa.domain.inbox.identity import InboxRef
+from wappa.domain.messenger_discovery import MessengerDiscovery
+from wappa.domain.user_identity import UserIdentity, opaque_identity
+
 if TYPE_CHECKING:
     import httpx
 
@@ -50,3 +54,7 @@ class PlatformEntry:
         {"send_text", "resolve_platform_user_profile"}
     )
     messenger_capabilities: frozenset[type] = frozenset()
+    discovery: MessengerDiscovery = MessengerDiscovery()
+    project_identity: Callable[[InboxRef, str, tuple[str, ...]], UserIdentity] = (
+        opaque_identity
+    )

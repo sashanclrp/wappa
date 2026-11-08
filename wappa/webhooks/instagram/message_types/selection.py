@@ -52,7 +52,9 @@ class InstagramButtonReplyMessage(InstagramMessageBase, BaseInteractiveMessage):
         return False
 
     def to_universal_dict(self) -> UniversalMessageData:
-        return self._universal(text=self.title, selection=self.payload)
+        from wappa.webhooks.core.base_message.projections import selection_projection
+
+        return selection_projection(self)
 
 
 class InstagramQuickReplyMessage(InstagramMessageBase, BaseInteractiveMessage):
@@ -99,4 +101,6 @@ class InstagramQuickReplyMessage(InstagramMessageBase, BaseInteractiveMessage):
         return True
 
     def to_universal_dict(self) -> UniversalMessageData:
-        return self._universal(text=self.text, selection=self.payload)
+        from wappa.webhooks.core.base_message.projections import selection_projection
+
+        return selection_projection(self)

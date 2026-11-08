@@ -23,7 +23,9 @@ from wappa.persistence.redis.redis_handler.user import RedisUser
 from wappa.persistence.redis.redis_handler.utils import inbox_cache
 from wappa.persistence.redis.redis_handler.utils.serde import dumps, dumps_hash
 
-REDIS_URL = os.getenv("WAPPA_TEST_REDIS_URL", "redis://localhost:6379")
+REDIS_URL = os.getenv(
+    "WAPPA_TEST_REDIS_URL", "redis://127.0.0.1:1"
+)  # never a live default
 
 INBOX = "660404413518908"
 LOCK_KEY = f"{INBOX}:user:CO.2186878922080769:symphonai:mutation"

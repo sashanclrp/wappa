@@ -53,13 +53,17 @@ def build_platform_messenger(messenger: IMessenger) -> IMessenger:
 
 
 def entry(field_registry: FieldHandlerRegistry) -> PlatformEntry:
+    from wappa.messaging.whatsapp.discovery import discovery
+    from wappa.messaging.whatsapp.identity import whatsapp_identity
     from wappa.messaging.whatsapp.messenger import WhatsAppMessengerAdapter
 
     return PlatformEntry(
         webhooks=WhatsAppWebhookProcessor(field_registry),
         build_messenger=build_messenger,
         messenger_operations=WhatsAppMessengerAdapter.OPERATIONS,
+        discovery=discovery(WhatsAppMessengerAdapter.OPERATIONS),
         messenger_capabilities=WhatsAppMessengerAdapter.CAPABILITY_TYPES,
         display_name="WhatsApp",
+        project_identity=whatsapp_identity,
         build_platform_messenger=build_platform_messenger,
     )

@@ -1,5 +1,7 @@
 # SSE / PubSub — Architecture
 
+The envelope preserves its existing keys and adds nullable UserIdentity evidence. API dispatch/publishing uses the event Platform registry projection, never a numeric-ID-to-phone guess. Inbound Users supply the same qualified projection; the existing evidence slots remain Platform-optional. Built-in incoming message payloads use shared typed family serialization; outgoing results include serializable normalized parts and aggregate outcome.
+
 Covers `wappa/core/sse/` and `wappa/core/pubsub/` as one bounded context, plus
 the two Messenger Pipeline middleware files in `wappa/core/messaging/middleware/`
 that belong to it.

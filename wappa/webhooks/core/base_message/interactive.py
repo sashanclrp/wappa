@@ -43,7 +43,7 @@ class BaseInteractiveMessage(BaseMessage):
 
     @property
     @abstractmethod
-    def original_message_id(self) -> str:
+    def original_message_id(self) -> str | None:
         """Get the ID of the original interactive message."""
         pass
 

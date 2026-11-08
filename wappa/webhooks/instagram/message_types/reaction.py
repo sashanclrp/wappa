@@ -33,8 +33,6 @@ class InstagramReactionMessage(InstagramMessageBase, BaseReactionMessage):
         return self.action == "unreact"
 
     def to_universal_dict(self) -> UniversalMessageData:
-        return self._universal(
-            target_message_id=self.target_mid,
-            emoji=self.emoji,
-            is_removal=self.is_removal,
-        )
+        from wappa.webhooks.core.base_message.projections import reaction_projection
+
+        return reaction_projection(self)

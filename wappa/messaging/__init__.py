@@ -29,6 +29,7 @@ from wappa.domain.contacts import (
     ContactPhone,
     ContactUrl,
 )
+from wappa.domain.error_evidence import ErrorCategory, ErrorEvidence
 from wappa.domain.interactive import (
     CardButton,
     CardMedia,
@@ -75,14 +76,36 @@ from wappa.domain.messaging_targets import (
     TargetInboxMismatchError,
     UnsupportedOperationError,
 )
+from wappa.domain.messenger_discovery import (
+    MediaLimit,
+    MessageLimits,
+    MessengerDiscovery,
+)
+from wappa.domain.part_content import (
+    PartButton,
+    PartContent,
+    PartElement,
+    PartHeader,
+    PartLocation,
+    PartMedia,
+    PartQuickReply,
+    PartRow,
+    PartSection,
+    PartTemplate,
+    PartTemplateComponent,
+)
 from wappa.domain.results import (
+    AggregateOutcome,
     CommentControlOperation,
     CommentResult,
     ControlResult,
+    MessagePart,
     MessageResult,
     OperationOutcome,
+    aggregate_message_outcome,
     message_outcome,
 )
+from wappa.domain.user_identity import UserIdentity
 from wappa.domain.user_profile import PlatformUserProfile
 
 from .classification import (
@@ -146,6 +169,26 @@ __all__ = [
     "ListRow",
     # Results
     "MessageResult",
+    "MessagePart",
+    "PartContent",
+    "PartMedia",
+    "PartButton",
+    "PartQuickReply",
+    "PartElement",
+    "PartHeader",
+    "PartSection",
+    "PartRow",
+    "PartLocation",
+    "PartTemplate",
+    "PartTemplateComponent",
+    "AggregateOutcome",
+    "aggregate_message_outcome",
+    "UserIdentity",
+    "MessengerDiscovery",
+    "MediaLimit",
+    "MessageLimits",
+    "ErrorEvidence",
+    "ErrorCategory",
     "CommentResult",
     "ControlResult",
     "CommentControlOperation",

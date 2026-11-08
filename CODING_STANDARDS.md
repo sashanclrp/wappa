@@ -14,7 +14,7 @@ uv run pytest -q
 git diff --check
 ```
 
-CI (`.github/workflows/ci.yml`) runs the same gates, and `uv run pre-commit install` enables the local hook (`.pre-commit-config.yaml`). Tests need no `.env`: `tests/conftest.py` sets dummy credentials, and no test calls Meta. Redis-backed tests skip when no server answers; `docker run -d -p 6379:6379 redis:7-alpine` runs them.
+CI (`.github/workflows/ci.yml`) runs the same gates, and `uv run pre-commit install` enables the local hook (`.pre-commit-config.yaml`). Tests need no `.env`: `tests/conftest.py` sets dummy credentials, and no test calls Meta. Redis-backed tests run only against the server named by `WAPPA_TEST_REDIS_URL` and skip without it; they never fall back to `localhost:6379`, because a developer's live Host Redis usually listens there. Run them with a throwaway server, for example `docker run -d -p 6399:6379 redis:7-alpine` and `WAPPA_TEST_REDIS_URL=redis://localhost:6399`.
 
 CI also scans all of git history with gitleaks. Add a false positive to `.gitleaksignore` by its exact fingerprint, never by file or rule, and only after confirming the value isn't a real secret.
 

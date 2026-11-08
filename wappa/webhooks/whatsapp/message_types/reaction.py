@@ -158,29 +158,9 @@ class WhatsAppReactionMessage(WhatsAppMessageBase, BaseReactionMessage):
         return WhatsAppMessageContext(self.context) if self.context else None
 
     def to_universal_dict(self) -> UniversalMessageData:
-        return {
-            "platform": self.platform.value,
-            "message_type": self.message_type.value,
-            "message_id": self.message_id,
-            "sender_id": self.sender_id,
-            "conversation_id": self.conversation_id,
-            "conversation_type": self.conversation_type.value,
-            "timestamp": self.timestamp,
-            "processed_at": self.processed_at.isoformat(),
-            "has_context": self.has_context(),
-            "target_message_id": self.target_message_id,
-            "emoji": self.emoji,
-            "is_adding_reaction": self.is_adding_reaction,
-            "is_removing_reaction": self.is_removing_reaction,
-            "whatsapp_data": {
-                "whatsapp_id": self.id,
-                "from": self.from_,
-                "timestamp_str": self.timestamp_str,
-                "type": self.type,
-                "reaction_content": self.reaction.model_dump(),
-                "context": self.context.model_dump() if self.context else None,
-            },
-        }
+        from wappa.webhooks.core.base_message.projections import reaction_projection
+
+        return reaction_projection(self)
 
     def get_platform_data(self) -> dict[str, Any]:
         return {

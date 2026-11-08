@@ -20,6 +20,7 @@ from wappa.domain.interfaces.identity_resolver import (
     IIdentityResolver,
     PassthroughIdentityResolver,
 )
+from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.models.template_models import TemplateStateConfig
 from wappa.schemas.core.types import PlatformType
 
@@ -118,7 +119,7 @@ async def test_api_event_path_passes_the_ref_of_the_sending_platform(
         fire_api_event(
             _Dispatcher(),
             message_type="text",
-            result=SimpleNamespace(
+            result=MessageResult(
                 message_id="m1",
                 success=True,
                 error=None,
@@ -147,7 +148,7 @@ async def test_awaited_api_event_dependency_passes_the_same_ref(ref: InboxRef) -
         await dispatch_api_message_event(
             dispatcher=dispatcher,
             message_type="text",
-            result=SimpleNamespace(
+            result=MessageResult(
                 message_id="m1", success=True, error=None, platform=ref.platform
             ),
             request_payload={},

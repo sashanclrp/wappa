@@ -9,7 +9,7 @@ Follows Single Responsibility Principle:
 from typing import TYPE_CHECKING
 
 from wappa.core.logging.logger import get_logger
-from wappa.core.sse.context import classify_meta_identifier, sse_event_scope
+from wappa.core.sse.context import api_identity, sse_event_scope
 from wappa.domain.events.api_message_event import APIMessageEvent
 
 if TYPE_CHECKING:
@@ -82,13 +82,10 @@ class APIEventDispatcher:
             # Create context-bound handler clone with dependencies injected
             request_handler = self._create_api_request_handler(event, request)
 
-            # Resolve SSE identity from the event: if `user_id` is a BSUID
-            # shape, surface it; otherwise treat `recipient` as the wa_id and
-            # fall back to `user_id` for the canonical envelope slot.
-            canonical_user_id = event.user_id or event.recipient
-            bsuid, phone = classify_meta_identifier(event.recipient)
-            if bsuid is None:
-                bsuid, _ = classify_meta_identifier(canonical_user_id)
+            # The selected adapter interprets addresses; Host-resolved IDs stay opaque.
+            identity = api_identity(event)
+            canonical_user_id = identity.user_id
+            bsuid, phone = identity.bsuid, identity.phone_number
 
             _tracker = getattr(request.app.state, "background_work_tracker", None)
             async with sse_event_scope(
@@ -97,6 +94,7 @@ class APIEventDispatcher:
                 bsuid=bsuid,
                 phone_number=phone,
                 platform=event.platform,
+                identity=identity,
                 tracker=_tracker,
             ):
                 await request_handler.handle_api_message(event)

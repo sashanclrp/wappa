@@ -1,7 +1,7 @@
 ---
 checked_on: 2026-11-08
 checked_against: Meta WhatsApp Cloud API and Instagram messaging-api, sender-actions, quick-replies, button- and generic-template pages (Graph v26.0), Wappa's tests/test_instagram_conversations.py and the live format matrix of 2026-11-06
-revision: 6
+revision: 8
 ---
 
 # Sending and receiving messages
@@ -64,7 +64,9 @@ Location and phone-number requests are WhatsApp-only (`self.whatsapp.send_locati
 
 ## One result per send
 
-Every call returns one `MessageResult`, even when Instagram needs several messages (a split text, a caption follow-up, a carousel body, a numbered menu). `success` is `True` only when every part was accepted; `message_id` is the final part's ID (the interactive message a User taps), or the media's for a media-plus-caption send; `platform_response["wappa_parts"]` is `{"message_ids": [...every part...], "delivered": n}`, present only for a multi-part send, so read it with `(result.platform_response or {}).get("wappa_parts")`. On a partial failure the error says how many parts were already delivered: never resend the whole call blindly, or the User sees the delivered parts twice. Store `message_id` and the part IDs with your own record to match later `process_status` webhooks: a `StatusWebhook` (`from wappa.webhooks import StatusWebhook`) has `message_id`, `status` (`MessageStatus`: `sent`, `delivered`, `read`, `played`, `failed`, `deleted`, `pending`), `user_id` and `timestamp`. On Instagram only `read` arrives, carrying the last message the User has seen, so treat it as "everything up to this message is read". Classify a failure with `message_outcome(result)` (`ACCEPTED`, `REJECTED`, `INDETERMINATE`, `RATE_LIMITED`); `MessageResult` itself has `success`, `error`, `error_code` and `retry_after`, not an outcome field. Instagram reports no `failed` status: an accepted send comes back as read or not at all.
+Every call returns one `MessageResult`, even when the adapter produces multiple messages. `success` means every part was accepted, not delivered or read. Use typed `result.parts` and `result.aggregate_outcome` (or `aggregate_message_outcome(result)` from `wappa.messaging`). The aggregate distinguishes `partially_accepted` from `rejected`, `rate_limited` and `indeterminate`; never resend an entire partially accepted or indeterminate call. Each part keeps its exact text where available, Message ID, outcome, error evidence and retry delay; skipped parts are `not_attempted`. These fields survive JSON serialization. Historical `message_outcome()` retains its four values and cannot decide whole-call retries for multipart sends. `platform_response` remains excluded native evidence. Record accepted IDs under the Host's history policy and match later `StatusWebhook` events. Instagram currently emits message-addressed `read` evidence, not failed-send webhooks.
+
+`result.error_evidence` and webhook error evidence separate native `platform_code`/`platform_subcode` from the neutral `category`: authentication, permission, messaging window, address rejection, rate limit, unknown outcome or other. Historical `error_code` strings remain unchanged. Do not infer retry safety from `temporary`; nullable `retry_safe` is separate, and an unknown outcome must never trigger blind retries.
 
 ## Interactive Messages
 
@@ -147,11 +149,24 @@ Instagram DM webhooks carry only the User's scoped ID, so `webhook.user.get_disp
 
 ## Record accepted parts
 
-Every Platform's send result exposes `result.platform_response["wappa_parts"]`, including one-part native sends on WhatsApp. `parts` is flattened in send order, with zero-based `index`, `role`, exact `text` (or `None` for pure media/structured content), `message_id` and `outcome`. Roles include `text_chunk`, `caption`, `media`, `buttons`, `quick_replies`, `carousel_intro`, `carousel` and native operations such as `contact`, `location` and `template`. A refused part has `error_code` when known; skipped planned parts have `outcome="not_attempted"` and no ID. Existing `message_ids` and `delivered` count accepted messages. A native WhatsApp caption is in its media part; Instagram caption chunks have their own parts. Use the original Host send values for structured content that has no text body; rendered Template text is not invented.
+Every Platform's send result exposes typed `result.parts`, including one-part native sends on WhatsApp. Parts are flattened in send order, with zero-based `index`, `role`, exact `text` (or `None` for pure media/structured content), `message_id`, `outcome`, optional error evidence/code, retry delay and `reply_to_dropped`. A refused or unknown part is distinct from a skipped `not_attempted` part. Native captions stay with their media part; emulated caption chunks get their own parts. Rendered Template text is not invented.
 
 ```python
-parts = (result.platform_response or {}).get("wappa_parts", {}).get("parts", [])
-accepted = [part for part in parts if part["outcome"] == "accepted"]
+accepted = [part for part in result.parts if part.outcome == "accepted"]
 ```
 
-No Platform branch is needed. Accepted means provider acceptance, not delivery or a read receipt. `indeterminate` is unknown, and `rate_limited` is a refused rate budget; neither belongs in accepted history. Keep the Host's own policy for reconciliation. Quote fallback is one part marked `reply_to_dropped=True`, alongside unchanged top-level `wappa_reply_to`. Select evidence explicitly for persistence because `platform_response` is excluded from `model_dump()` and JSON. Do not resend the whole call after partial success. Single native sends, text chunks, media-caption follow-ups, header/button emulations and carousels share this structure.
+No Platform branch is needed. Accepted means provider acceptance, not delivery/read. Use `result.aggregate_outcome` to detect partial acceptance and never resend that whole call. Native `platform_response["wappa_parts"]` remains available, but normalized parts and aggregate outcomes now serialize without selecting native evidence.
+
+## Structured content in accepted history
+
+Every part also has typed part.content (PartContent from wappa.messaging), serialized in normal result.parts and historical wappa_parts. Plain text is null; structures include buttons, quick_replies, elements, media, headers/footers, list sections, contacts, location, data requests and native Template references/parameters. Media records its actual selected ID or URL after upload; carousel elements record the rendered media/default action, not the original whole-call intent. A skipped plan may retain content but remains not_attempted; failed uploads invent no reference.
+
+Persist only accepted parts' own text and content. If Instagram accepts a CTA media header and rejects its buttons part, history records the accepted media, not the original request's buttons. WhatsApp's one native part contains its complete native structure. This adds no send parameter and changes no outcome or retry rules.
+
+## Shared representations and discovery
+
+Use `webhook.user.identity(self.inbox_ref)` or `profile.identity(self.inbox_ref)` for `UserIdentity`: the existing recommended User ID, Inbox-qualified addresses and optional evidence. Send results expose `result.identity()` when Inbox and recipient evidence exist; SSE envelopes add nullable `identity`. Generic Inbox/Platform Account constructors are canonical; matching `.whatsapp(...)` and `.instagram(account_id)` factories remain supported. Durable identity reconciliation is Host-owned. Pass `webhook.user.delivery_addresses()` to targets: it retains raw candidates and carries regular/Parent BSUID evidence; the adapter excludes proven digit echoes before sending. Hosts enrich known aliases but never reproduce transport ordering or sanitation.
+
+Shared HTTP `recipient`/`addresses` accept nonblank opaque strings. WhatsApp normalization belongs to its adapter; Instagram IDs never become phone evidence. Universal text/media/selection/reaction/context serialization uses the same typed keys on both Platforms: `content`, `selected_option_id`/`selected_option_title`, `media_id`/`media_family`/`caption`, and reply `original_message_id`/`original_sender_id`. Native payloads are read with `message.get_platform_data()`. Media `mime_type` is nullable evidence; Instagram webhook MIME is unknown. Do not use historical nominal `media_type` to infer the real MIME; use downloaded `MediaBytes.content_type` when resolved.
+
+`messenger.discovery` describes operations, `media_operations`, `typing`, message/thread `read_scope`, `target_kinds`, message limits and media formats/sizes, including separate URL/upload extensions and codec constraints. `send_text:private_reply` qualifies the text operation; it does not enable private replies on other methods. The same facts are local HTTP reads at `/api/{platform}/capabilities`, `/messages/limits`, `/media/limits` without Inbox lookup. Existing WhatsApp paths remain. Instagram media has upload/download; WhatsApp also has info/delete. Wappa does not convert media.

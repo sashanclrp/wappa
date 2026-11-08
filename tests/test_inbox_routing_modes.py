@@ -320,9 +320,7 @@ def test_environment_meta_configuration_is_built_when_mounted(
 
     assert config is not None
     assert config.app_secret.get_secret_value() == "app-secret-value"
-    assert (
-        config.whatsapp_webhook_verify_token.get_secret_value() == "verify-token-value"
-    )
+    assert config.webhook_verify_token.get_secret_value() == "verify-token-value"
     assert config.graph_api_version == settings.api_version
     assert "app-secret-value" not in repr(config)
     assert "verify-token-value" not in repr(config)
@@ -338,7 +336,7 @@ def test_explicit_and_environment_meta_configuration_cannot_coexist(
     callback_env: None,
 ) -> None:
     explicit = MetaApplicationConfig(
-        app_secret=SecretStr("x"), whatsapp_webhook_verify_token=SecretStr("y")
+        app_secret=SecretStr("x"), webhook_verify_token=SecretStr("y")
     )
 
     with pytest.raises(InboxConfigurationError, match="exactly one"):
@@ -351,7 +349,7 @@ def test_explicit_meta_configuration_alone_is_accepted(
     monkeypatch.setattr(settings, "meta_app_secret", None)
     monkeypatch.setattr(settings, "wp_webhook_verify_token", None)
     explicit = MetaApplicationConfig(
-        app_secret=SecretStr("x"), whatsapp_webhook_verify_token=SecretStr("y")
+        app_secret=SecretStr("x"), webhook_verify_token=SecretStr("y")
     )
 
     assert (
@@ -435,7 +433,7 @@ def _health_app(legacy: bool) -> FastAPI:
         )
     app.state.meta_application_config = MetaApplicationConfig(
         app_secret=SecretStr("app-secret"),
-        whatsapp_webhook_verify_token=SecretStr("verify"),
+        webhook_verify_token=SecretStr("verify"),
     )
     app.include_router(health_router)
     return app

@@ -2,19 +2,31 @@
 
 from typing import Any
 
-from .results import MessageResult, message_outcome
+from .part_content import PartContent
+from .results import MessagePart, MessageResult, message_outcome
 
 
 def message_part(
-    role: str, text: str | None, result: MessageResult | None = None
+    role: str,
+    text: str | None,
+    result: MessageResult | None = None,
+    *,
+    content: PartContent | None = None,
 ) -> dict[str, Any]:
     part: dict[str, Any] = {
         "index": 0,
         "role": role,
         "text": text,
+        "content": content.model_dump(mode="json", exclude_none=True)
+        if content
+        else None,
         "message_id": result.message_id if result else None,
         "outcome": message_outcome(result).value if result else "not_attempted",
     }
+    if result and result.retry_after is not None:
+        part["retry_after"] = result.retry_after
+    if result and result.error_evidence:
+        part["error_evidence"] = result.error_evidence.model_dump(mode="json")
     if result and result.error_code:
         part["error_code"] = result.error_code
     return part
@@ -35,4 +47,17 @@ def with_message_parts(
         "delivered": len(message_ids),
         "parts": ordered,
     }
-    return result.model_copy(update={"platform_response": response})
+    evidence = result.error_evidence
+    if (
+        evidence
+        and not result.success
+        and any(part["outcome"] == "accepted" for part in ordered)
+    ):
+        evidence = evidence.model_copy(update={"retry_safe": False})
+    return result.model_copy(
+        update={
+            "error_evidence": evidence,
+            "platform_response": response,
+            "parts": tuple(MessagePart.model_validate(part) for part in ordered),
+        }
+    )

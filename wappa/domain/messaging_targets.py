@@ -37,8 +37,9 @@ class DeliveryAddresses(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
     values: tuple[str, ...] = Field(min_length=1)
+    evidence: tuple[str, ...] = ()
 
-    @field_validator("values", mode="before")
+    @field_validator("values", "evidence", mode="before")
     @classmethod
     def _coerce(cls, values: object) -> object:
         # A serialized target (JSON lists) must validate back unchanged.

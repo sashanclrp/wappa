@@ -20,6 +20,8 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from wappa.core.events.field_registry import FieldHandlerRegistry
+from wappa.domain.inbox.identity import InboxRef
+from wappa.domain.user_identity import UserIdentity
 from wappa.schemas.core.types import PlatformType
 
 from . import instagram, whatsapp
@@ -58,6 +60,13 @@ PLATFORMS: Mapping[PlatformType, PlatformEntry] = build_platforms(
 Each built app holds its own table, ``build_platforms(builder.field_registry)``,
 on ``app.state.platforms``; the keys are always the same installed set.
 """
+
+
+def project_identity(
+    inbox_ref: InboxRef, user_id: str, addresses: tuple[str, ...]
+) -> UserIdentity:
+    """Interpret transport evidence only through the selected Platform adapter."""
+    return PLATFORMS[inbox_ref.platform].project_identity(inbox_ref, user_id, addresses)
 
 
 def platform_messenger(

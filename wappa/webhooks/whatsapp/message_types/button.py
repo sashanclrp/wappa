@@ -14,7 +14,7 @@ from wappa.schemas.core.types import (
     MessageType,
     UniversalMessageData,
 )
-from wappa.webhooks.core.base_message import BaseMessage, BaseMessageContext
+from wappa.webhooks.core.base_message import BaseInteractiveMessage, BaseMessageContext
 from wappa.webhooks.whatsapp.models.base import MessageContext
 
 from ._base import WhatsAppMessageBase
@@ -39,7 +39,7 @@ class ButtonContent(BaseModel):
         return v.strip()
 
 
-class WhatsAppButtonMessage(WhatsAppMessageBase, BaseMessage):
+class WhatsAppButtonMessage(WhatsAppMessageBase, BaseInteractiveMessage):
     """
     WhatsApp button message model.
 
@@ -156,29 +156,30 @@ class WhatsAppButtonMessage(WhatsAppMessageBase, BaseMessage):
 
         return WhatsAppMessageContext(self.context)
 
+    @property
+    def selected_option_id(self) -> str:
+        return self.button_payload
+
+    @property
+    def selected_option_title(self) -> str:
+        return self.button_text
+
+    @property
+    def is_button_reply(self) -> bool:
+        return False
+
+    @property
+    def is_list_reply(self) -> bool:
+        return False
+
+    @property
+    def is_quick_reply(self) -> bool:
+        return True
+
     def to_universal_dict(self) -> UniversalMessageData:
-        return {
-            "platform": self.platform.value,
-            "message_type": self.message_type.value,
-            "message_id": self.message_id,
-            "sender_id": self.sender_id,
-            "conversation_id": self.conversation_id,
-            "conversation_type": self.conversation_type.value,
-            "timestamp": self.timestamp,
-            "processed_at": self.processed_at.isoformat(),
-            "has_context": self.has_context(),
-            "button_text": self.button_text,
-            "button_payload": self.button_payload,
-            "original_message_id": self.original_message_id,
-            "whatsapp_data": {
-                "whatsapp_id": self.id,
-                "from": self.from_,
-                "timestamp_str": self.timestamp_str,
-                "type": self.type,
-                "button_content": self.button.model_dump(),
-                "context": self.context.model_dump() if self.context else None,
-            },
-        }
+        from wappa.webhooks.core.base_message.projections import selection_projection
+
+        return selection_projection(self)
 
     def get_platform_data(self) -> dict[str, Any]:
         return {

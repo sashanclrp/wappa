@@ -1,5 +1,7 @@
 # Webhooks Context — Architecture
 
+Shared typed family projections in `core/base_message/projections.py` own universal text, selection, media, reaction and context serialization. Adapters expose native evidence only through get_platform_data for these families. Evidenced mime_type is nullable and independent of historical nominal media_type. Users and profiles project the same Inbox-qualified UserIdentity. Error translators retain native code/subcode and attach neutral ErrorEvidence; temporary and retry-safe remain separate.
+
 ## Responsibilities
 
 - Parse and validate raw HTTP payloads from messaging platforms into typed Pydantic models.

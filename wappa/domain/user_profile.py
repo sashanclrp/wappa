@@ -11,7 +11,10 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.conversation_capabilities import ReadOutcome
+from wappa.domain.messaging_targets import DeliveryAddresses
+from wappa.domain.user_identity import UserIdentity
 from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
@@ -55,6 +58,34 @@ class PlatformUserProfile(BaseModel):
             username=user.username,
             country_code=user.country_code,
             profile_name=user.profile_name,
+        )
+
+    @property
+    def user_id(self) -> str:
+        return self.platform_user_id or self.bsuid or self.phone_number or ""
+
+    def delivery_addresses(self) -> DeliveryAddresses:
+        return DeliveryAddresses.of(
+            self.platform_user_id, self.bsuid, self.phone_number
+        ).model_copy(
+            update={
+                "evidence": tuple(
+                    value for value in (self.bsuid, self.parent_bsuid) if value
+                )
+            }
+        )
+
+    def identity(self, inbox_ref: InboxRef) -> UserIdentity:
+        """Project known evidence within the Inbox that supplied it."""
+        return UserIdentity(
+            inbox_ref=inbox_ref,
+            user_id=self.user_id,
+            addresses=self.delivery_addresses(),
+            platform_user_id=self.platform_user_id,
+            phone_number=self.phone_number or None,
+            bsuid=self.bsuid,
+            parent_bsuid=self.parent_bsuid,
+            username=self.username,
         )
 
     @property

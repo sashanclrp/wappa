@@ -78,7 +78,7 @@ class ScheduledEvent(BaseModel):
     execution_id: str | None = Field(
         default=None,
         description="The engine's job or occurrence ID, for correlation only. "
-        "Wappa neither deduplicates on it nor stores it.",
+        "Indexed Redis expiry retains the pending generation here; this is not an exactly-once guarantee.",
     )
     metadata: dict[str, Any] = Field(
         default_factory=dict,

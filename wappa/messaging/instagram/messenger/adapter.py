@@ -55,6 +55,7 @@ from wappa.domain.interfaces.history_reader import IConversationHistoryReader
 from wappa.domain.interfaces.media_library import IMediaLibrary
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.interfaces.sent_message_registry import ISentMessageRegistry
+from wappa.domain.messenger_discovery import MessengerDiscovery
 from wappa.schemas.core.types import PlatformType
 
 from ..capabilities.comments import InstagramCommentControls
@@ -166,6 +167,12 @@ class InstagramMessengerAdapter(
     @property
     def inbox_ref(self) -> InboxRef:
         return self._inbox_ref
+
+    @property
+    def discovery(self) -> MessengerDiscovery:
+        from wappa.messaging.instagram.discovery import discovery
+
+        return discovery(self.supported_operations)
 
     @property
     def supported_operations(self) -> frozenset[str]:

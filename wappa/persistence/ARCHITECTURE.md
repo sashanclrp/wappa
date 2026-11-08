@@ -271,3 +271,7 @@ For WhatsApp, the first key segment contains the Inbox's Meta
 - **New cache backend**: implement `ICacheFactory` and the five `I*Cache` interfaces; register it in `cache_factory.py`.
 - **New data domain**: add a cache handler inheriting `InboxCache`, implement a new `I*Cache` interface, and add a `create_*_cache()` method to `ICacheFactory` and each backend factory.
 - **New key type**: add a builder method to `KeyFactory`; do not build key strings anywhere else.
+
+## Recoverable Redis expiry (0.34.6)
+
+RedisExpiry delegates arm/renew, cancel and rebind to RedisExpiryIndex. Lua writes the TTL key and pending metadata atomically in the existing expiry pool. KeyFactory owns __system__:expiry:due (sorted set) and __system__:expiry:records (hash). Members/fields are full Inbox-qualified trigger keys; records retain occurrence generation and original Redis-clock due time. The sorted score is eligibility time (initial due time, then a short claim deadline). Due reads use ZRANGEBYSCORE LIMIT; generation-fenced acknowledgment removes only a successfully dispatched occurrence. Cancel-by-identifier includes vanished-key pending records via HSCAN and legacy live keys via SCAN, never KEYS. Core expiry owns dispatch and periodic recovery, persistence owns these atomic transitions. No new backend or cache namespace encoding is introduced; old armed keys are unindexed until re-armed or a live key is rebound.

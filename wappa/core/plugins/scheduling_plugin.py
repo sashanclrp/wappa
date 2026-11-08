@@ -129,10 +129,10 @@ class SchedulingPlugin:
         return self
 
     def configure(self, builder: WappaBuilder) -> None:
-        """Register hooks: the listener before crons, as both ran before."""
+        """Start recovery after ordinary capability startup hooks are ready."""
         builder.add_startup_hook(self._publish_handler, priority=20)
         if self.redis_expiry:
-            builder.add_startup_hook(self._start_expiry_listener, priority=25)
+            builder.add_startup_hook(self._start_expiry_listener, priority=95)
             builder.add_shutdown_hook(self._stop_expiry_listener, priority=80)
         if self._crons_declared:
             if self.include_cron_router:

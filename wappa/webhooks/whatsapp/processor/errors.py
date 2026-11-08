@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from wappa.core.inbound.errors import ProcessorError
+from wappa.domain.error_evidence import meta_error_evidence
 from wappa.schemas.core.types import ErrorCode, PlatformType
 from wappa.webhooks.whatsapp.processor._base import _ProcessorBase
 
@@ -51,6 +52,11 @@ class _ErrorsMixin(_ProcessorBase):
             )
             error_detail = ErrorDetailBase(
                 error_code=int(error.get("code", 0)),
+                error_evidence=meta_error_evidence(
+                    f"{error.get('code', 0)}/{error['error_subcode']}"
+                    if error.get("error_subcode") is not None
+                    else error.get("code")
+                ),
                 error_title=str(error.get("title", "Unknown error")),
                 error_message=str(error.get("message", "")),
                 error_details=error_details_text,

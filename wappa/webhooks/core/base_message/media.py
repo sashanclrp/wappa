@@ -32,6 +32,15 @@ class BaseMediaMessage(BaseMessage):
         pass
 
     @property
+    def mime_type(self) -> str | None:
+        """Actual webhook MIME evidence; None when the Platform supplies none.
+
+        Once downloaded, MediaBytes.content_type describes the resolved bytes.
+        media_type retains its historical nominal value.
+        """
+        return None
+
+    @property
     @abstractmethod
     def file_size(self) -> int | None:
         """Get the file size in bytes if available."""

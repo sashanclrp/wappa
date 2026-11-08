@@ -7,6 +7,7 @@ from wappa.domain.interfaces.media_library import IMediaLibrary
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.interfaces.template_messaging import ITemplateMessaging
 from wappa.domain.interfaces.user_data_requests import IUserDataRequests
+from wappa.domain.messenger_discovery import MessengerDiscovery
 from wappa.messaging.whatsapp.client import WhatsAppClient
 from wappa.messaging.whatsapp.media.library import WhatsAppMediaLibrary
 from wappa.messaging.whatsapp.media.transport import WhatsAppMediaTransport
@@ -74,6 +75,12 @@ class WhatsAppMessengerAdapter(
     )
 
     CAPABILITY_TYPES = frozenset({ITemplateMessaging, IUserDataRequests, IMediaLibrary})
+
+    @property
+    def discovery(self) -> MessengerDiscovery:
+        from wappa.messaging.whatsapp.discovery import discovery
+
+        return discovery(self.supported_operations)
 
     @property
     def supported_operations(self) -> frozenset[str]:

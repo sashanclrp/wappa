@@ -50,31 +50,31 @@ def test_apply_recipient_to_payload_replaces_conflicting_fields() -> None:
     }
 
 
-def test_basic_text_message_canonicalizes_recipient() -> None:
+def test_basic_text_message_preserves_recipient() -> None:
     message = BasicTextMessage(text="hola", recipient="+57 300 123 4567")
 
-    assert message.recipient == "+573001234567"
+    assert message.recipient == "+57 300 123 4567"
 
 
-def test_image_message_canonicalizes_bsuid_recipient() -> None:
+def test_image_message_preserves_bsuid_recipient() -> None:
     message = ImageMessage(
         recipient="co.13491208655302741918",
         media_source="https://example.com/image.png",
     )
 
-    assert message.recipient == "CO.13491208655302741918"
+    assert message.recipient == "co.13491208655302741918"
 
 
-def test_handler_request_canonicalizes_recipient() -> None:
+def test_handler_request_preserves_recipient() -> None:
     request = SetHandlerStateRequest(
         recipient="co.13491208655302741918",
         handler_config={"handler_value": "flow", "ttl_seconds": 300},
     )
 
-    assert request.recipient == "CO.13491208655302741918"
+    assert request.recipient == "co.13491208655302741918"
 
 
-def test_specialized_route_request_canonicalizes_recipient() -> None:
+def test_specialized_route_request_preserves_recipient() -> None:
     request = ContactRequest(
         recipient="co.13491208655302741918",
         contacts=[
@@ -85,7 +85,7 @@ def test_specialized_route_request_canonicalizes_recipient() -> None:
         ],
     )
 
-    assert request.recipient == "CO.13491208655302741918"
+    assert request.recipient == "co.13491208655302741918"
 
 
 def test_invalid_recipient_is_rejected() -> None:

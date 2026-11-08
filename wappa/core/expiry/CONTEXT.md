@@ -13,3 +13,7 @@ Terms specific to the `wappa.core.expiry` bounded context. Shared Wappa kernel t
 | **Expiry Subject Binding** | The Host's mapping from an action and identifier to the subject User, or to `None` for Inbox-only work. Raising marks the action unknown: the failure is logged and the hook does not run. |
 | **Keyspace Notification** | A Redis pub/sub message on `__keyevent@{db}__:expired` that fires when any key in that database expires. The expiry listener subscribes to this channel. |
 | **Expiry Listener** | The long-running async task (`run_expiry_listener`) that subscribes to Redis keyspace notifications and orchestrates the parse → dispatch pipeline. |
+
+| **Expiry Occurrence** | One arming generation and its intended due time; renewal creates a replacement occurrence. |
+| **Recovered Expiry** | An overdue indexed occurrence admitted after its Expiry Key is gone, possibly late or repeated. The Host keeps business effects idempotent. |
+| **Expiry Due Index** | Pending occurrences discoverable by due/eligibility time without enumerating all Expiry Keys. |

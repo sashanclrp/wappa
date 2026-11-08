@@ -56,6 +56,6 @@ class InstagramAttachmentMessage(InstagramMessageBase):
         }
 
     def to_universal_dict(self) -> UniversalMessageData:
-        return self._universal(
-            attachment_type=self.attachment_type, url=self.url, text=self.text
-        )
+        from wappa.webhooks.core.base_message.projections import media_projection
+
+        return media_projection(self)

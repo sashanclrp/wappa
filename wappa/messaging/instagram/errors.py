@@ -66,4 +66,5 @@ def read_failure[T](response: GraphResponse) -> ReadResult[T]:
         error=response.error,
         error_code=response.error_code,
         retry_after=response.retry_after,
+        error_evidence=response.error_evidence,
     )

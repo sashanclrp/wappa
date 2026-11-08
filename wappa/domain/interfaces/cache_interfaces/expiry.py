@@ -20,8 +20,8 @@ class IExpiryCache(ABC):
     - action: Type of trigger (e.g., "payment_reminder")
     - identifier: Unique ID (e.g., "TXN_12345")
 
-    Triggers are fire-and-forget - no data retrieval needed. When a trigger
-    expires, a registered handler is called with the identifier.
+    Redis triggers also retain a pending occurrence for at-least-once recovery
+    after process restart. The Host handler must keep side effects idempotent.
 
     Example:
         expiry = RedisExpiry(inbox="myapp", user_id="user123")

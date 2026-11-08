@@ -43,7 +43,7 @@ WABA_1 = "1111111111"
 WABA_2 = "2222222222"
 APP_SECRET = SecretStr("meta-app-secret")
 META_CONFIG = MetaApplicationConfig(
-    app_secret=APP_SECRET, whatsapp_webhook_verify_token=SecretStr("verify")
+    app_secret=APP_SECRET, webhook_verify_token=SecretStr("verify")
 )
 
 

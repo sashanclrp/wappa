@@ -25,7 +25,9 @@ from wappa.persistence.namespace_migration import (
 )
 
 PNID = "999000111222333"  # fictional, never a real Inbox
-REDIS_URL = os.getenv("WAPPA_TEST_REDIS_URL", "redis://localhost:6379")
+REDIS_URL = os.getenv(
+    "WAPPA_TEST_REDIS_URL", "redis://127.0.0.1:1"
+)  # never a live default
 TEST_DB = 15
 
 

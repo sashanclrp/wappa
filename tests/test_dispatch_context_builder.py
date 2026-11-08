@@ -185,7 +185,7 @@ async def test_messenger_factory_subscribes_to_evictions_and_recreates() -> None
 async def test_explicit_meta_transport_configuration_reaches_messenger_client() -> None:
     config = MetaApplicationConfig(
         app_secret=SecretStr("app-secret"),
-        whatsapp_webhook_verify_token=SecretStr("verify-token"),
+        webhook_verify_token=SecretStr("verify-token"),
         graph_api_version="v99.1",
         graph_base_url="https://graph.example.test/",
     )

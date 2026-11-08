@@ -223,34 +223,9 @@ class WhatsAppTextMessage(WhatsAppMessageBase, BaseTextMessage):
         return WhatsAppMessageContext(self.context) if self.context else None
 
     def to_universal_dict(self) -> UniversalMessageData:
-        """Convert to platform-agnostic dictionary representation."""
-        context = self.get_context()
-        return {
-            "platform": self.platform.value,
-            "message_type": self.message_type.value,
-            "message_id": self.message_id,
-            "sender_id": self.sender_id,
-            "conversation_id": self.conversation_id,
-            "conversation_type": self.conversation_type.value,
-            "timestamp": self.timestamp,
-            "processed_at": self.processed_at.isoformat(),
-            "has_context": self.has_context(),
-            "content": self.text_content,
-            "text_length": len(self.text_content),
-            "is_reply": self.is_reply,
-            "is_forwarded": self.is_forwarded,
-            "is_frequently_forwarded": self.is_frequently_forwarded,
-            "context": context.to_universal_dict() if context else None,
-            "whatsapp_data": {
-                "whatsapp_id": self.id,
-                "from": self.from_,
-                "timestamp_str": self.timestamp_str,
-                "type": self.type,
-                "is_business_button_reply": self.is_business_button_reply,
-                "is_ad_message": self.is_ad_message,
-                "referral": self.referral.model_dump() if self.referral else None,
-            },
-        }
+        from wappa.webhooks.core.base_message.projections import text_projection
+
+        return text_projection(self)
 
     def get_platform_data(self) -> dict[str, Any]:
         """Get platform-specific data for advanced processing."""

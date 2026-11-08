@@ -61,3 +61,7 @@ wappa migrate cache-namespaces -i <pnid> --redis-url "$REDIS_URL" --apply       
 ```
 
 Add `--json-root PATH` for the JSON backend. Conflicts are reported, never overwritten, and the command exits 1 while any remain, so don't cut over on that status. `--json` prints the complete report. Pub/Sub subscribers move to `wappa:notify:whatsapp__<pnid>:*`.
+
+## Expiry pending index (0.34.6)
+
+The existing expiry pool also holds Wappa-owned __system__:expiry:due and __system__:expiry:records keys. They retain pending occurrence generations/due times for startup and bounded periodic recovery. Keep them with the expiry database; do not treat them as ordinary disposable Host cache rows. Arm/renew/cancel/rebind through create_expiry_cache(), never by editing those indexes. For the at-least-once guarantee, recovered context and old-key migration, use the wappa-scheduled-tasks skill's expiry reference.

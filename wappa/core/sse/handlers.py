@@ -17,7 +17,7 @@ from ..events.default_handlers import (
     StatusLogStrategy,
 )
 from .context import (
-    classify_meta_identifier,
+    api_identity,
     flush_incoming_sse,
     get_sse_context,
     update_identity,
@@ -119,13 +119,16 @@ async def publish_api_sse_event(
     onto the active SSE context before publishing, so envelope fields align
     with the outgoing message without the caller plumbing identity.
     """
-    bsuid, phone = classify_meta_identifier(event.recipient)
-    user_id = event.user_id or event.recipient
-    # Prefer BSUID-shaped user_id as canonical identity for the envelope's
-    # bsuid slot even if the transport recipient is a phone number.
-    if bsuid is None:
-        bsuid, _ = classify_meta_identifier(user_id)
-    update_identity(user_id=user_id, bsuid=bsuid, phone_number=phone)
+    identity = api_identity(event)
+    update_identity(
+        user_id=identity.user_id,
+        bsuid=identity.bsuid,
+        phone_number=identity.phone_number,
+    )
+    ctx = get_sse_context()
+    if ctx is not None:
+        ctx.bsuid, ctx.phone_number = identity.bsuid, identity.phone_number
+        ctx.identity = identity
 
     return await publish_sse_event(
         event_hub,

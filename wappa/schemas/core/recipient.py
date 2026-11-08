@@ -152,8 +152,24 @@ def resolve_recipient(value: str) -> ResolvedRecipient:
     )
 
 
+def is_bsuid_digit_echo(phone: str, *identifiers: str | None) -> bool:
+    """Exclude only a numeric suffix corroborated by a valid BSUID."""
+    normalized = PHONE_SANITIZE_PATTERN.sub("", phone.strip()).removeprefix("+")
+    return any(
+        identifier
+        and looks_like_bsuid(identifier)
+        and (suffix := identifier.strip().rsplit(".", 1)[-1]).isascii()
+        and suffix.isdigit()
+        and normalized == suffix
+        for identifier in identifiers
+    )
+
+
 def whatsapp_delivery_order(
-    addresses: tuple[str, ...], *, phone_only: bool = False
+    addresses: tuple[str, ...],
+    *,
+    phone_only: bool = False,
+    evidence: tuple[str, ...] = (),
 ) -> tuple[str, ...]:
     """Order a User's WhatsApp Delivery Addresses: phones first, then BSUIDs.
 
@@ -162,15 +178,18 @@ def whatsapp_delivery_order(
     sent. Authentication Templates need a phone (``phone_only``). Unrecognised
     values keep their place after both so the Platform reports them.
     """
+    identifiers = (*addresses, *evidence)
     phones: list[str] = []
     seen: set[str] = set()
     for a in addresses:
-        if looks_like_phone_number(a):
+        if looks_like_phone_number(a) and not is_bsuid_digit_echo(a, *identifiers):
             key = "".join(ch for ch in a if ch.isdigit())
             if key not in seen:  # "573…" and "+57 3…" are one phone
                 seen.add(key)
-                phones.append(a)
-    bsuids = tuple(a for a in addresses if looks_like_bsuid(a))
+                phones.append(normalize_recipient_identifier(a))
+    bsuids = tuple(
+        normalize_recipient_identifier(a) for a in addresses if looks_like_bsuid(a)
+    )
     if phone_only:
         return tuple(phones)
     others = tuple(
@@ -199,11 +218,21 @@ def apply_recipient_to_payload(
 RecipientIdentifier = Annotated[str, AfterValidator(normalize_recipient_identifier)]
 
 
+def opaque_address(value: str) -> str:
+    """Preserve address content; only the selected adapter interprets it."""
+    if not value.strip():
+        raise ValueError("Delivery Address must not be blank")
+    return value
+
+
+OpaqueAddress = Annotated[str, AfterValidator(opaque_address)]
+
+
 class RecipientRequest(BaseModel):
     """Shared request boundary for models that accept a recipient identifier."""
 
-    recipient: RecipientIdentifier = Field(
-        ..., min_length=1, description="Recipient phone number or BSUID"
+    recipient: OpaqueAddress = Field(
+        ..., min_length=1, description="Opaque Platform Delivery Address"
     )
     user_id: str | None = Field(
         default=None,
@@ -218,7 +247,7 @@ class RecipientRequest(BaseModel):
 class DeliveryRequest(RecipientRequest):
     """A send request: ``recipient`` plus the User's other known addresses."""
 
-    addresses: list[RecipientIdentifier] = Field(
+    addresses: list[OpaqueAddress] = Field(
         default_factory=list,
         description=(
             "Other addresses of the same User, tried after `recipient` when the "

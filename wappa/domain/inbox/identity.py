@@ -76,6 +76,11 @@ class InboxRef(BaseModel):
         """Build the WhatsApp reference for a Meta ``phone_number_id``."""
         return cls(platform=PlatformType.WHATSAPP, inbox_id=phone_number_id)
 
+    @classmethod
+    def instagram(cls, account_id: str) -> InboxRef:
+        """Build the Instagram reference for a professional account."""
+        return cls(platform=PlatformType.INSTAGRAM, inbox_id=account_id)
+
     @property
     def cache_namespace(self) -> str:
         """The Wappa-owned first key segment for this Inbox's cache data.
@@ -146,6 +151,11 @@ class PlatformAccountRef(BaseModel):
     def whatsapp(cls, waba_id: str) -> PlatformAccountRef:
         """Build the WhatsApp reference for a Meta WABA ID."""
         return cls(platform=PlatformType.WHATSAPP, platform_account_id=waba_id)
+
+    @classmethod
+    def instagram(cls, account_id: str) -> PlatformAccountRef:
+        """Build the Instagram Platform Account reference."""
+        return cls(platform=PlatformType.INSTAGRAM, platform_account_id=account_id)
 
     @property
     def cache_namespace(self) -> str:

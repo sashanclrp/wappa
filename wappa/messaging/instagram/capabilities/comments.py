@@ -12,6 +12,8 @@ matching webhook will arrive. Host policy decides whether to call any of this.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from wappa.domain.interfaces.conversation_capabilities import ICommentControls
 from wappa.domain.messaging_targets import CommentRef, PostRef
 from wappa.domain.results import (
@@ -66,6 +68,7 @@ class InstagramCommentControls(ICommentControls):
             else response.error or "Instagram comment reply outcome is unknown",
             error_code=None if accepted else response.error_code or "INDETERMINATE",
             retry_after=response.retry_after,
+            error_evidence=replace(response, outcome=outcome).error_evidence,
             platform_response=response.body or None,
         )
 
@@ -92,6 +95,7 @@ class InstagramCommentControls(ICommentControls):
             if outcome is not OperationOutcome.ACCEPTED
             else None,
             retry_after=response.retry_after,
+            error_evidence=replace(response, outcome=outcome).error_evidence,
             platform_response=response.body or None,
         )
 

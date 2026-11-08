@@ -16,13 +16,13 @@
     {
       "id": "mixed-expiry-identifiers",
       "prompt": "I have two Redis timers: agent_trigger is keyed by the user's id and template_rollback is keyed by the wamid of a sent message. Handle both when they expire.",
-      "expected_output": "SchedulingPlugin(redis_expiry=True, expiry_subjects=binding); the binding returns the identifier for agent_trigger, None for template_rollback, and raises for an unknown action; the hook routes by event.action and reads the wamid from event.identifier; the rollback branch has no self.user_id or self.cache_factory; no classification by identifier shape; idempotency across workers does not rely on event.execution_id, which is None here.",
+      "expected_output": "SchedulingPlugin(redis_expiry=True, expiry_subjects=binding); the binding returns the identifier for agent_trigger, None for template_rollback, and raises for an unknown action; the hook routes by event.action and reads the wamid from event.identifier; the rollback branch has no self.user_id or self.cache_factory; no classification by identifier shape; indexed expiry carries its generation as event.execution_id; pre-upgrade unindexed notifications leave it None. Host idempotent fences remain required.",
       "assertions": [
         "returns None from the binding for the wamid-keyed action",
         "does not decide by the identifier's shape",
         "reads the message id from event.identifier",
         "does not use self.cache_factory in the Inbox-only branch",
-        "does not key idempotency on event.execution_id for a Redis timer"
+        "does not promise exactly-once delivery from event.execution_id"
       ]
     },
     {
@@ -67,12 +67,25 @@
     {
       "id": "credential-outage-non-sending-timer",
       "prompt": "My template rollback timer never sends. Does an Inbox credential outage stop process_scheduled_event? What if the hook later sends?",
-      "expected_output": "In 0.34.2 Inbox-bound scheduled scopes defer credentials until the first Messenger operation. Non-sending work runs with cache and DB capabilities as its scope allows. Identity and Platform Messenger binding need no credentials. The first send raises the typed Directory error; failed resolution retries on the next use. Redis expiry logs failures and does not replay the spent key.",
+      "expected_output": "In 0.34.2 Inbox-bound scheduled scopes defer credentials until the first Messenger operation. Non-sending work runs with cache and DB capabilities as its scope allows. Identity and Platform Messenger binding need no credentials. The first send raises the typed Directory error; failed resolution retries on the next use. Indexed Redis expiry logs failures and retains the due occurrence for at-least-once recovery; old unindexed keys cannot recover missed delivery.",
       "assertions": [
         "non-sending work runs during credential outages",
         "first Messenger operation raises typed Directory errors",
         "failed resolution is not cached",
-        "no Wappa retry of a spent expiry trigger"
+        "explains indexed Redis recovery while preserving Host idempotency"
+      ]
+    },
+    {
+      "id": "restart-safe-expiry-0346",
+      "prompt": "Our agent_trigger expired while the Wappa process was down. Should I write a sweep for each action? What happens to timers armed before upgrading?",
+      "expected_output": "Uses SchedulingPlugin(redis_expiry=True) and the same process_scheduled_event. Wappa atomically indexes arm/renew in Redis and recovers overdue missing keys at startup and every two seconds with bounded sorted-set reads, no KEYS scans. Recovered metadata, original scheduled_for and generation execution_id are available. Failed deliveries remain pending and long handlers may repeat. Existing unindexed keys must be re-armed; keep Host idempotency and business fences.",
+      "assertions": [
+        "does not add a Host sweep per action",
+        "states at-least-once delivery and no exactly-once promise",
+        "uses event.metadata[\"recovered\"] for the admission path",
+        "states pre-upgrade keys have no due entry",
+        "does not suggest KEYS scans",
+        "retains idempotent side-effect fences"
       ]
     }
   ]

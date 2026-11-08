@@ -5,12 +5,15 @@ from __future__ import annotations
 from logging import Logger
 
 from wappa.core.logging.logger import ContextLogger
+from wappa.domain.error_evidence import meta_error_evidence
+from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.interfaces.session_provider import (
     HTTPSessionClosedError,
     RuntimeDrainingError,
 )
 from wappa.domain.results import MessageResult
 from wappa.messaging.meta.graph import MetaGraphError
+from wappa.messaging.whatsapp.identity import whatsapp_identity
 from wappa.resilience.rate_limits import RateLimitedError
 from wappa.schemas.core.recipient import BSUID_ERROR_TAG
 from wappa.schemas.core.types import PlatformType
@@ -56,6 +59,7 @@ def handle_whatsapp_error(
     extra_context: str | None = None,
     include_traceback: bool = False,
 ) -> MessageResult:
+    identity = whatsapp_identity(InboxRef.whatsapp(inbox_id), recipient, (recipient,))
     if isinstance(error, RateLimitedError):
         # Nothing was delivered; the client already logged the limit.
         return MessageResult(
@@ -63,7 +67,13 @@ def handle_whatsapp_error(
             error=f"Could not {operation}: {error}",
             error_code=error.code,
             retry_after=error.retry_after,
+            error_evidence=meta_error_evidence(
+                error.code, rate_limited=True, retry_safe=True
+            ),
             recipient=recipient,
+            recipient_bsuid=identity.bsuid,
+            recipient_phone=identity.phone_number,
+            recipient_parent_bsuid=identity.parent_bsuid,
             platform=PlatformType.WHATSAPP,
             inbox_id=inbox_id,
         )
@@ -88,10 +98,21 @@ def handle_whatsapp_error(
     return MessageResult(
         success=False,
         error=safe_error,
+        error_evidence=meta_error_evidence(
+            error.response.error_code if isinstance(error, MetaGraphError) else None,
+            indeterminate=error_code == INDETERMINATE,
+            http_status=error.status_code
+            if isinstance(error, MetaGraphError)
+            else None,
+            retry_safe=True
+            if isinstance(error, MetaGraphError) and not error.indeterminate
+            else None,
+        ),
         error_code=error_code,
         recipient=recipient,
-        recipient_bsuid=None,
-        recipient_phone=None,
+        recipient_bsuid=identity.bsuid,
+        recipient_phone=identity.phone_number,
+        recipient_parent_bsuid=identity.parent_bsuid,
         platform=PlatformType.WHATSAPP,
         inbox_id=inbox_id,
     )

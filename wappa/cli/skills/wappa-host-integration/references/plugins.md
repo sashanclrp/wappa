@@ -27,7 +27,7 @@ Every plugin import is `from wappa.core.plugins import ...` (`SchedulingPlugin` 
 
 ## Startup order
 
-Startup hooks run from low to high priority, shutdown in reverse, and a failing startup hook stops the app. Built-in priorities: core 10, Redis 20, Redis Pub/Sub 22, SSE 24, Postgres and Expiry 25, Webhook, Cron and RateLimit 30, Host hooks 50 by default. A Host hook that needs Redis or the database registers at 50 or later. Don't add `RedisPlugin` yourself when `cache="redis"`: it is already there, and a second one runs twice.
+Startup hooks run from low to high priority, shutdown in reverse, and a failing startup hook stops the app. Built-in priorities: core 10, Redis 20, Redis Pub/Sub 22, SSE 24, Postgres 25, Webhook, Cron and RateLimit 30, Host hooks 50 by default, Redis expiry/recovery 95. A Host hook that needs Redis or the database registers at 50 or later. Don't add `RedisPlugin` yourself when `cache="redis"`: it is already there, and a second one runs twice.
 
 ## Auth
 

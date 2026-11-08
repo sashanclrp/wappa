@@ -42,7 +42,7 @@ wappa/core/plugins/
 │
 │   ── Infrastructure listeners ──
 ├── scheduling_plugin.py         # SchedulingPlugin: lifecycle of Wappa's own scheduled-work
-│                                #   sources. Redis expiry listener (priority 25, requires
+│                                #   sources. Redis expiry/recovery (priority 95, requires
 │                                #   RedisPlugin) and static crons on fastapi-crons (priority 30).
 ├── redis_pubsub_plugin.py       # RedisPubSubPlugin: wraps inbound handlers and outbound
 │                                #   messenger calls to publish to Redis PubSub channels.

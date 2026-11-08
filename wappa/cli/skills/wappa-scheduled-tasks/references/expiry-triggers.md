@@ -51,10 +51,10 @@ The binding is the only place that decides whether an identifier is a User, beca
 | --- | --- |
 | A User | Your resolver canonicalizes it, then the hook runs in User scope |
 | `None` | The hook runs in Inbox scope |
-| Raises | Logged with the action and identifier; the hook doesn't run and the trigger is gone |
+| Raises | Logged with the action and identifier; the hook does not run; an indexed occurrence remains pending for retry |
 | No binding configured | Every expiry is Inbox scope, so `self.user_id` is `None` |
 
-Every valid trigger reaches the hook, so make unknown actions loud in the binding or the hook's `case _`. `event.source` is `"redis_expiry"`, while `event.payload` is always empty and `event.execution_id` is always `None`.
+Every valid trigger reaches the hook, so make unknown actions loud in the binding or the hook's `case _`. `event.source` is `"redis_expiry"`, while `event.payload` remains empty. Indexed occurrences carry the generation as event.execution_id and original UTC due time as event.scheduled_for. Unindexed pre-upgrade notifications have neither.
 
 Inbox-scope work has no `self.cache_factory`. To reach a User's cache or re-arm a timer from there, open `self.scope(user_id=...)` once you know the User.
 
@@ -87,24 +87,15 @@ The trigger keeps its remaining TTL and fires under the new identifier. Call it 
 
 ## Delivery
 
-These are Redis Pub/Sub messages, the same as before 0.34:
+Redis expiry delivery is at least once across Wappa process restarts while Redis retains its data. set/renew atomically writes the TTL key and a durable pending due index in the existing expiry pool (logical DB 3). Pub/Sub gives prompt notification; startup recovery and two-second ticks find indexed overdue entries whose key is gone, at most 100 admissions/in-flight indexed handlers per process with bounded sorted-set reads. No KEYS scans are needed, and a Host sweep per action is unnecessary.
 
-- A key that expires while no Wappa process listens is never seen.
-- Every listening process receives each one. With several workers, let one win, using a key that includes a generation you bump each time you arm a re-armable timer:
+- Indexed events use the same subject binding and scheduled hook. event.metadata["recovered"] is true for index recovery and false for Pub/Sub; expired_key remains available. The flag describes the path, not an exactly-once guarantee.
+- A success acknowledges only its original generation. Raised handler/binding failures, process interruption and acknowledgment failure leave the occurrence pending. A 30-second claim deadline allows recovery; long handlers may be delivered concurrently in another worker. Keep Host business and side-effect fences, and let unknown-action errors stay loud until fixed or explicitly cancelled.
+- Store business data in your own cache/database. The pending index is Wappa-owned, not an execution-history store. Do not delete its __system__:expiry:due or __system__:expiry:records keys as ordinary cache cleanup.
+- Cancel removes pending work even if the TTL key is already gone. Its return value still counts removed TTL keys. Rebind moves a live key plus its due entry, retaining due time/generation, and refuses a live or pending overdue destination. Cancellation cannot undo already admitted work.
+- Startup enables notify-keyspace-events Ex. If a managed Redis forbids CONFIG SET, configure that for prompt notifications; index recovery itself does not depend on notifications or a healthy Pub/Sub connection. The source starts after ordinary capability/Host startup hooks, at priority 95.
+- Pre-upgrade armed keys have no index entry. Their live notifications still dispatch, but missed expirations cannot be reconstructed. Re-arm keys needing recovery; rebinding a still-live legacy key also indexes its remaining TTL. The guarantee assumes Redis data is retained.
 
-  ```python
-  from wappa.persistence import TableRowTransition
-
-  claim = await scoped.cache_factory.create_table_cache().create_if_absent(
-      "expiry_claims", f"{event.action}:{event.identifier}:{generation}", {"at": event.dispatched_at.isoformat()}, ttl=3600
-  )
-  if claim.transition is not TableRowTransition.CREATED:
-      return                                     # another worker has it
-  ```
-
-  Inbox-scope work has no cache factory, so use `self.scope(...)` as above or a unique row in your database.
-- The key is gone when the hook runs, so `exists` returns `False` for the trigger that fired.
-- Startup enables `notify-keyspace-events Ex`. A managed Redis that forbids `CONFIG SET` needs that applied by hand.
-- Triggers live in the existing expiry pool, logical DB 3 by default.
+Record a Host idempotency fence within the action before side effects. Include the task's business generation; an indexed event's execution_id supplies occurrence correlation, not permission to ignore current business state. Old unindexed notifications require your existing generation policy. If you claim before a side effect, release or otherwise repair the claim after failure so recovery can do useful work.
 
 The full project is `wappa examples` → `wappa_expiry_example`.

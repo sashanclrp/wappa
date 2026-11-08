@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from wappa.domain.error_evidence import meta_error_evidence
 from wappa.domain.message_parts import message_part, with_message_parts
 from wappa.domain.messaging_targets import (
     DirectMessage,
@@ -16,6 +17,7 @@ from wappa.domain.messaging_targets import (
 from wappa.domain.results import MessageResult, OperationOutcome
 from wappa.messaging.meta.graph import GraphResponse
 
+from ..part_content import message_content
 from ..payloads.text import split_text
 from ._base import _InstagramBase
 
@@ -40,7 +42,7 @@ def _part(
         role, text = "carousel", None
     elif attachment:
         role, text = "media", None
-    part = message_part(role, text, result)
+    part = message_part(role, text, result, content=message_content(message))
     if result and (result.platform_response or {}).get(REPLY_TO_KEY, {}).get("dropped"):
         part["reply_to_dropped"] = True
     return part
@@ -106,6 +108,9 @@ class _DeliveryMixin(_InstagramBase):
                 success=True,
                 platform=self.platform,
                 inbox_id=self.inbox_id,
+                recipient_platform_id=(native_recipient or recipient)
+                if not recipient.startswith("comment:")
+                else None,
                 recipient=native_recipient
                 if isinstance(native_recipient, str) and native_recipient
                 else recipient,
@@ -119,18 +124,26 @@ class _DeliveryMixin(_InstagramBase):
                 platform=self.platform,
                 inbox_id=self.inbox_id,
                 recipient=recipient,
+                recipient_platform_id=recipient
+                if not recipient.startswith("comment:")
+                else None,
                 error=f"{operation} outcome is unknown (no message_id); "
                 "do not automatically resend",
                 error_code="INDETERMINATE",
+                error_evidence=meta_error_evidence(None, indeterminate=True),
             )
         return MessageResult(
             success=False,
             platform=self.platform,
             inbox_id=self.inbox_id,
             recipient=recipient,
+            recipient_platform_id=recipient
+            if not recipient.startswith("comment:")
+            else None,
             error=response.error,
             error_code=response.error_code,
             retry_after=response.retry_after,
+            error_evidence=response.error_evidence,
         )
 
     async def _send(

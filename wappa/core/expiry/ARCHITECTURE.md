@@ -2,77 +2,37 @@
 
 ## Responsibilities
 
-This context owns:
-- Subscribing to Redis keyspace notifications (`__keyevent@{db}__:expired`)
-- Parsing expired Expiry Keys into `ExpiryNotification` objects
-- Asking the Host's `ExpirySubjectBinding` whether the identifier is a User
-- Running the resulting `ScheduledEvent` as tracked background work, with failures logged
-- Reconnecting to Redis on connection loss with exponential backoff
+This context runs Redis expiry work through the shared scheduled lane. Pub/Sub provides prompt notification; a durable due-time index in the same expiry database recovers occurrences missed during Wappa restarts, deploys, crashes or notification outages. Every indexed occurrence whose TTL key is gone remains pending until the Host handler succeeds. Delivery is at least once while Redis retains its data; Hosts retain idempotent fences.
 
-## Explicit Boundaries
+It parses qualified Expiry Keys, asks the Host's `ExpirySubjectBinding` for a User or Inbox-only subject, and schedules tracked work through `Scheduling.run`. It owns bounded recovery and Pub/Sub reconnection, not business logic, general recurrence, external scheduler storage or execution history. Memory and JSON remain without timer engines.
 
-This context does **not** own:
-- Business logic when a key expires (the Host's `process_scheduled_event`)
-- Context construction: Messengers, caches, database factories and SSE scope (delegated to `DispatchContextBuilder.scope`, through `wappa.core.scheduling`)
-- Writing or TTL-setting of Expiry Keys (the Host uses `cache_factory.create_expiry_cache()`)
-- Redis pool management or connection pooling (delegated to `RedisClient` / `PoolAlias`)
-- Plugin lifecycle (delegated to `SchedulingPlugin`)
-- Delivery guarantees beyond Redis Pub/Sub: no replay, claims, leases, due indexes or history. Every listening process receives each notification, and a key that expires while none listens is missed. Stronger coordination belongs to the Host.
+## Modules
 
-## Module Structure
+| Module | Responsibility |
+| --- | --- |
+| `listener.py` | Run independent Pub/Sub reconnect and recovery tasks; cancel source tasks on shutdown while tracked handlers drain. |
+| `parser.py` | Parse `{inbox_namespace}:EXPTRIGGER:{action}:{identifier}`; invalid namespaces never acquire a fabricated scope. |
+| `recovery.py` | Admit Pub/Sub and index work through one path, with at most 100 in-flight indexed deliveries per process; query at most the remaining capacity per tick. |
+| `dispatcher.py` | Build `ScheduledEvent`, run the subject binding and handler, and acknowledge only after successful completion. Failed/cancelled/draining work stays pending. |
+| `connection.py`, `reconnection.py` | Pub/Sub subscription, configuration and bounded reconnect backoff; exhausted Pub/Sub reconnect attempts do not disable index recovery. |
+| `wappa/persistence/redis/expiry_index.py` | Redis Lua operations for atomic arm/renew, cancel, rebind, due reads, short claims and generation-fenced acknowledgments. |
 
-```
-wappa/core/expiry/
-├── __init__.py          # Public surface of this context
-├── listener.py          # Orchestrator: run_expiry_listener(), _run_listener_loop()
-├── parser.py            # parse_expiry_notification() + ExpiryNotification dataclass
-├── dispatcher.py        # ExpiryDispatcher: notification → ScheduledEvent on tracked work;
-│                        #   ExpirySubjectBinding protocol
-├── connection.py        # RedisConnectionManager, RedisConnection, ConnectionConfig
-└── reconnection.py      # ReconnectionStrategy, ReconnectionConfig (exponential backoff)
-```
+## Durable pending occurrences
 
-## Key Classes and Their Roles
+`RedisExpiry.set` atomically writes the TTL key, a sorted-set member in `__system__:expiry:due`, and a record in `__system__:expiry:records`. Members are complete Inbox-qualified Expiry Keys, so action/identifier and Platform/Inbox scope remain explicit. Records retain an opaque generation and original due time; both deadline and eligibility use Redis TIME. These keys have no TTL. The sorted set is shared by this expiry database so workers discover due work without listing Inboxes or scanning keys. It is pending work, not a Run/history archive.
 
-| Class / Symbol | Role |
-|---|---|
-| `run_expiry_listener` | Entry point. Drives the reconnect loop and hands each parsed notification to the dispatcher. |
-| `parse_expiry_notification` | Decodes raw pub/sub messages. Ignores keys that are not triggers; logs and drops a trigger with an invalid Inbox namespace. |
-| `ExpiryNotification` | Immutable data container: `expired_key`, `inbox_ref`, `action`, `identifier`. |
-| `ExpirySubjectBinding` | Host-supplied async mapping to the subject User or `None`. Absent, every expiry is Inbox-only work. |
-| `ExpiryDispatcher` | Tracks one task per notification, builds the `ScheduledEvent` and logs a failure from a done-callback, since no caller awaits it. |
-| `RedisConnectionManager` | Obtains a Redis client from the pool, enables `notify-keyspace-events=Ex`, creates and manages a PubSub subscription. |
-| `ReconnectionStrategy` | Tracks failure count, computes `base_delay × 2^(n-1)` (capped at `max_delay`), exposes `should_retry()` and `async wait()`. |
+The first recovery tick runs immediately at listener startup, then every two seconds. Each tick reads at most 100 due members, reduced by that process's in-flight count, using ZRANGEBYSCORE LIMIT. Claim Lua checks that the key is absent and the occurrence is eligible, then defers its index score by a 30-second claim deadline. Multiple workers can race safely at admission; a crashed worker's claim becomes eligible again. Long handlers can outlive the claim and be invoked concurrently in another worker. Exactly-once delivery is not promised.
 
-## Data Flow
+Successful handler completion removes the index member and record only if the original record still matches and no renewed TTL key exists. An old delivery therefore cannot delete a replacement generation, even if its key has already expired. Handler, binding or acknowledgment failures retain pending work for another claim. Failed work's deferred score lets other due members progress. The index does not require keyspace notifications to be enabled or the Pub/Sub connection to be healthy.
 
-```
-Redis TTL expires
-        │
-        ▼
-__keyevent@{db}__:expired  (pub/sub channel)
-        │
-        ▼
-RedisConnectionManager.pubsub.listen()          [connection.py]
-        │  raw message dict
-        ▼
-parse_expiry_notification(message)              [parser.py]
-        │  not a trigger or invalid namespace → None → listener ignores
-        │  ExpiryNotification(expired_key, inbox_ref, action, identifier)
-        ▼
-ExpiryDispatcher.dispatch(notification)         [dispatcher.py]
-        │  BackgroundWorkTracker.track(...)
-        ▼
-ExpirySubjectBinding(inbox_ref, action, identifier) → User or None   [Host]
-        │  ScheduledEvent(source="redis_expiry", ...)
-        ▼
-Scheduling.run(event)                           [wappa/core/scheduling]
-        │  DispatchContextBuilder.scope: canonical User, Messenger, caches, SSE
-        ▼
-handler.handle_scheduled_event(event) → process_scheduled_event   [Host]
-        │
-        ▼
-done-callback: failure logged with action and identifier
-```
+Cancel atomically removes the TTL key and pending occurrence, including when the key is already gone. Cancel-by-identifier uses bounded HSCAN batches for pending records and SCAN for old unindexed keys, never KEYS. Rebind atomically moves a live TTL key and its record/index member, retaining the due time and generation; a live or pending destination is a conflict. It returns false after the source TTL key is gone. Cancellation/renewal cannot undo a handler already admitted: the Host's fences remain authoritative.
 
-On connection loss, `run_expiry_listener` calls `reconnection.record_failure()` and `await reconnection.wait()` before restarting `_run_listener_loop`, up to `max_attempts` (default: infinite).
+## Dispatch and lifecycle
+
+Both paths use `ExpiryDispatcher` → `ScheduledEvent(source="redis_expiry")` → `Scheduling.run` → `DispatchContextBuilder.scope` → `handle_scheduled_event` → `process_scheduled_event`. Indexed events carry their original UTC `scheduled_for`, the occurrence generation as correlation `execution_id`, and metadata `expired_key` plus `recovered`. Index/tick deliveries set `recovered=true`; direct Pub/Sub deliveries set false. Payload remains empty. The flag describes the admission path; it is not an exactly-once or timing assertion. Subject resolution is unchanged and never infers a User from an identifier.
+
+SchedulingPlugin starts the expiry source at priority 95, after ordinary Redis/database/Host startup hooks, so startup recovery does not capture incomplete dispatch capabilities. Shutdown stops trigger admission before draining tracked handlers and closing pools. No source task owns a detached handler task.
+
+## Upgrade boundary
+
+Keys armed before this upgrade have no durable index entry. Their live Pub/Sub notifications still dispatch, but missed pre-upgrade expirations cannot be reconstructed. Re-arm timers that need the recovery guarantee. An explicit rebind of a live legacy key indexes its remaining TTL. Unindexed notifications have no known due time or occurrence generation. Retaining Redis data and an active SchedulingPlugin(redis_expiry=True) are prerequisites for recovery; Redis data loss is outside this guarantee.

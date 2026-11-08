@@ -7,7 +7,9 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.results import MessageResult
+from wappa.messaging.whatsapp.identity import whatsapp_identity
 from wappa.schemas.core.types import PlatformType
 
 
@@ -139,4 +141,11 @@ def message_result_from_payload(
     )
     if result.recipient is None:
         result.recipient = fallback_recipient
+        if fallback_recipient and inbox_id:
+            identity = whatsapp_identity(
+                InboxRef.whatsapp(inbox_id), fallback_recipient, (fallback_recipient,)
+            )
+            result.recipient_phone = identity.phone_number
+            result.recipient_bsuid = identity.bsuid
+            result.recipient_parent_bsuid = identity.parent_bsuid
     return result

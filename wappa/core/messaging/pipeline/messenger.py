@@ -6,6 +6,8 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from wappa.domain.messenger_discovery import MessengerDiscovery
+
 from ....domain.contacts import ContactCard
 from ....domain.inbox.identity import InboxRef
 from ....domain.interfaces.messaging_interface import IMessenger
@@ -81,6 +83,11 @@ class MessengerPipeline(IMessenger):
     # ------------------------------------------------------------------ #
     # IMessenger identity props — delegated to raw.
     # ------------------------------------------------------------------ #
+
+    @property
+    def discovery(self) -> MessengerDiscovery:
+        """Supported suboperations, receipt semantics, target kinds and limits."""
+        return self._raw.discovery
 
     @property
     def supported_operations(self) -> frozenset[str]:

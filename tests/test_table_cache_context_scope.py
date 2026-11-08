@@ -23,7 +23,9 @@ from wappa.persistence.redis.redis_handler.table import RedisTable
 from wappa.persistence.redis.redis_handler.utils.key_factory import KeyFactory
 from wappa.schemas.core.types import PlatformType
 
-REDIS_URL = os.getenv("WAPPA_TEST_REDIS_URL", "redis://localhost:6379")
+REDIS_URL = os.getenv(
+    "WAPPA_TEST_REDIS_URL", "redis://127.0.0.1:1"
+)  # never a live default
 TABLE_CLASSES = [MemoryTable, JSONTable, RedisTable]
 
 

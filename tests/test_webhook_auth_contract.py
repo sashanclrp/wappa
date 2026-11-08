@@ -58,7 +58,7 @@ def _build_app(inbox_id: str = "123") -> FastAPI:
         default_inbox_ref=resolver.inbox_ref,
     )
     app.state.meta_application_config = MetaApplicationConfig(
-        app_secret=APP_SECRET, whatsapp_webhook_verify_token=SecretStr(VERIFY_TOKEN)
+        app_secret=APP_SECRET, webhook_verify_token=SecretStr(VERIFY_TOKEN)
     )
     app.state.messenger_middleware = []
     app.state.wappa_cache_type = "memory"

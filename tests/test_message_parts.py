@@ -136,6 +136,7 @@ async def test_single_message_uses_the_same_contract_on_every_platform(platform)
             "index": 0,
             "role": "text_chunk",
             "text": "one",
+            "content": None,
             "message_id": result.message_id,
             "outcome": "accepted",
         }
@@ -203,7 +204,10 @@ def test_rate_limited_outcome_and_root_fields_are_preserved():
     result = with_message_parts(
         original, [message_part("text_chunk", "hello", original)]
     )
-    assert result.model_dump() == original.model_dump()
+    assert result.model_dump(exclude={"parts"}) == original.model_dump(
+        exclude={"parts"}
+    )
+    assert result.parts[0].retry_after == original.retry_after
     assert (
         result.platform_response["wappa_parts"]["parts"][0]["outcome"] == "rate_limited"
     )

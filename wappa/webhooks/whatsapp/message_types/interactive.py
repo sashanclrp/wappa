@@ -352,34 +352,9 @@ class WhatsAppInteractiveMessage(WhatsAppMessageBase, BaseInteractiveMessage):
         return WhatsAppMessageContext(self.context)
 
     def to_universal_dict(self) -> UniversalMessageData:
-        """Convert to platform-agnostic dictionary representation."""
-        context = self.get_context()
-        return {
-            "platform": self.platform.value,
-            "message_type": self.message_type.value,
-            "message_id": self.message_id,
-            "sender_id": self.sender_id,
-            "conversation_id": self.conversation_id,
-            "conversation_type": self.conversation_type.value,
-            "timestamp": self.timestamp,
-            "processed_at": self.processed_at.isoformat(),
-            "has_context": self.has_context(),
-            "interactive_type": self.interactive_type.value,
-            "selected_option_id": self.selected_option_id,
-            "selected_option_title": self.selected_option_title,
-            "original_message_id": self.original_message_id,
-            "is_button_reply": self.is_button_reply,
-            "is_list_reply": self.is_list_reply,
-            "context": context.to_universal_dict() if context else None,
-            "whatsapp_data": {
-                "whatsapp_id": self.id,
-                "from": self.from_,
-                "timestamp_str": self.timestamp_str,
-                "type": self.type,
-                "interactive_content": self.interactive.model_dump(),
-                "context": self.context.model_dump(),
-            },
-        }
+        from wappa.webhooks.core.base_message.projections import selection_projection
+
+        return selection_projection(self)
 
     def get_platform_data(self) -> dict[str, Any]:
         """Get platform-specific data for advanced processing."""

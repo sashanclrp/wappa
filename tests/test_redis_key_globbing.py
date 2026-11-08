@@ -24,7 +24,9 @@ from wappa.persistence.redis.redis_handler.utils.key_factory import (
     default_key_factory,
 )
 
-REDIS_URL = os.getenv("WAPPA_TEST_REDIS_URL", "redis://localhost:6379")
+REDIS_URL = os.getenv(
+    "WAPPA_TEST_REDIS_URL", "redis://127.0.0.1:1"
+)  # never a live default
 
 # Values a real deployment can produce: Meta ids are digits, but a Host
 # Application may scope a cache space or a table name however it likes.

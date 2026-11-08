@@ -28,7 +28,9 @@ Deployment variables use Wappa-owned `SYSTEM_`, `META_` and `REDIS_` clusters; o
 ### Addressing
 
 10. **One way to address: an explicit target on every send.** `DirectMessage(inbox_ref, addresses=DeliveryAddresses)` names the recipient; the Messenger knows only its Platform, Inbox and credentials. `DeliveryAddresses.of(*addresses)` states every known address of one User, never a strategy; `webhook.user.delivery_addresses()` builds it (WhatsApp BSUID and phone, Instagram scoped ID). The Parent BSUID is identity evidence, not a fallback.
-11. **The Platform adapter orders and falls back.** WhatsApp sends to the phone first, then the BSUID (Meta: `to` takes precedence), and falls back only after a synchronous rejection of the address itself (`131030`, `131062`); window, rate, content, undeliverable, timeout and 5xx errors return as-is. Authentication Templates go to phones only. `MessageResult.attempted_recipients` lists every address tried. Instagram has one address per User.
+11. **The Platform adapter normalizes, excludes, orders and falls back.** WhatsApp removes phones proven to echo a numeric regular/Parent BSUID suffix, retains raw evidence and then sends to the phone first, then the BSUID (Meta: `to` takes precedence), and falls back only after a synchronous rejection of the address itself (`131030`, `131062`); window, rate, content, undeliverable, timeout and 5xx errors return as-is. Authentication Templates go to phones only. `MessageResult.attempted_recipients` lists every address tried. Instagram has one address per User.
+
+Generic reference constructors are canonical, with matching WhatsApp and Instagram factories. UserIdentity qualifies the existing recommended User ID, Delivery Addresses and optional evidence by Inbox. DeliveryAddresses.evidence carries corroboration without making Parent evidence a fallback. Durable identity reconciliation remains Host-owned.
 
 ## Consequences
 

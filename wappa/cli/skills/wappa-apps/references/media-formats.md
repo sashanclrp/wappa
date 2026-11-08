@@ -96,3 +96,7 @@ Neither Platform: an extension-less URL or a Media ID is not checked (no fetch);
 - Never catch and ignore the `ValueError`: it means Meta would accept the file and the User would get nothing (WhatsApp 131053) or something unplayable (Instagram). Fix the asset or pick another rendition.
 - An extension-less URL or a Media ID is not checked; Instagram has no `failed` status, so an unplayable file there is silent. Prefer URLs with a real suffix.
 - Re-check this file when its `checked_on` is about six months old, or when Meta's media pages change; trust the live Platform over this copy and say which rows look stale.
+
+## Inbound MIME evidence
+
+Inbound `message.mime_type` is evidenced MIME or `None`; Instagram supplies no webhook MIME. `message.to_universal_dict()` includes `media_family`, `media_id`, nullable `mime_type` and common media metadata on every Platform. The historical nominal `media_type` remains available but does not prove MIME. Download with `messenger.media.download(message.media_id)` and use resolved `MediaBytes.content_type`. For outbound support, `messenger.discovery.media_limits` describes formats, separate URL/upload extensions, sizes and content constraints without converting anything.

@@ -7,7 +7,7 @@ text into several messages (ADR-0028 rule 3).
 from pydantic import BaseModel, Field
 
 from wappa.domain.interactive import TEXT_MAX
-from wappa.schemas.core.recipient import DeliveryRequest
+from wappa.schemas.core.recipient import DeliveryRequest, OpaqueAddress
 
 
 class BasicTextMessage(DeliveryRequest):
@@ -27,7 +27,7 @@ class BasicTextMessage(DeliveryRequest):
 
 class ReadStatusMessage(BaseModel):
     message_id: str = Field(..., min_length=1, description="Message ID to mark as read")
-    recipient: str = Field(
+    recipient: OpaqueAddress = Field(
         ...,
         min_length=1,
         description=(

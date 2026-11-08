@@ -10,6 +10,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from wappa.domain.user_identity import UserIdentity
+
 
 class APIMessageEvent(BaseModel):
     """
@@ -86,5 +88,7 @@ class APIMessageEvent(BaseModel):
         ...,
         description="Platform that sent the message",
     )
+
+    identity_evidence: UserIdentity | None = None
 
     model_config = {"extra": "forbid"}

@@ -213,6 +213,7 @@ class InboundRuntime:
             )
             return
 
+        user = getattr(echo, "user", None)
         try:
             async with sse_event_scope(
                 inbox_id=dispatch_context.inbox_id,
@@ -221,6 +222,15 @@ class InboundRuntime:
                 phone_number=dispatch_context.sse_phone_number,
                 platform=dispatch_context.sse_platform,
                 tracker=dispatch_context.background_work_tracker,
+                identity=(
+                    user.identity(
+                        InboxRef(
+                            platform=echo.platform, inbox_id=dispatch_context.inbox_id
+                        )
+                    )
+                    if user is not None
+                    else None
+                ),
             ):
                 dispatch_result = (
                     await self.event_dispatcher.dispatch_universal_webhook(

@@ -60,8 +60,10 @@ class _ReceiptsMixin(_InstagramBase):
             inbox_id=self.inbox_id,
             message_id=message_id,
             recipient=direct.recipient_id,
+            recipient_platform_id=direct.recipient_id,
             error=failed.error if failed else None,
             error_code=error_code,
+            error_evidence=failed.error_evidence if failed else None,
             retry_after=failed.retry_after if failed else None,
             platform_response={
                 "mark_seen": seen.outcome.value,

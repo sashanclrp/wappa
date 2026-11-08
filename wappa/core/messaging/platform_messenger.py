@@ -23,6 +23,7 @@ from wappa.domain.contacts import ContactCard
 from wappa.domain.interfaces.messaging_interface import IMessenger
 from wappa.domain.media_renditions import MediaRenditions
 from wappa.domain.messaging_targets import DirectMessage, MessageTarget
+from wappa.domain.messenger_discovery import MessengerDiscovery
 from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
@@ -57,6 +58,11 @@ class PlatformMessenger(IMessenger):
     @property
     def inbox_id(self) -> str:
         return self._messenger.inbox_id
+
+    @property
+    def discovery(self) -> MessengerDiscovery:
+        """Supported suboperations, receipt semantics, target kinds and limits."""
+        return self._messenger.discovery
 
     @property
     def supported_operations(self) -> frozenset[str]:

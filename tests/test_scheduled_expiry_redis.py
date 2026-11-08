@@ -35,7 +35,9 @@ from wappa.persistence.redis.redis_client import RedisClient
 from wappa.persistence.redis.redis_handler.expiry import RedisExpiry
 from wappa.persistence.redis.redis_manager import RedisManager
 
-REDIS_URL = os.getenv("WAPPA_TEST_REDIS_URL", "redis://localhost:6379")
+REDIS_URL = os.getenv(
+    "WAPPA_TEST_REDIS_URL", "redis://127.0.0.1:1"
+)  # never a live default
 USER_ACTIONS = {"agent_trigger", "message_sync", "conversation_window"}
 
 
@@ -372,3 +374,160 @@ def test_a_real_wappa_app_routes_expiry_and_host_dispatch_to_one_hook(
     assert reminder.handler.user_id == "u"
     assert expired.handler is not reminder.handler
     assert not hasattr(app.state, "expiry_listener_task")
+
+
+async def _wait_until_gone(expiry, action, identifier):
+    async with asyncio.timeout(5):
+        while await expiry.exists(action, identifier):
+            await asyncio.sleep(0.02)
+
+
+async def test_due_index_survives_no_listener_and_acknowledges_only_the_delivered_generation(
+    redis_ready, inbox
+):
+    from wappa.persistence.redis.expiry_index import RedisExpiryIndex
+
+    expiry = _expiry(inbox)
+    key = expiry._key("restart", "id")
+    index = RedisExpiryIndex(await RedisClient.get("expiry"))
+    await expiry.set("restart", "id", 1)
+    try:
+        await _wait_until_gone(expiry, "restart", "id")
+        assert key in await index.due(10000)
+        claim = await index.claim(key)
+        assert claim and claim.record and claim.generation and claim.due_at
+        assert await index.claim(key) is None
+        await expiry.set("restart", "id", 30)
+        assert not await index.acknowledge(claim)
+        assert await expiry.exists("restart", "id")
+    finally:
+        await expiry.delete("restart", "id")
+
+
+async def test_expired_indexed_trigger_is_cancelled_even_after_its_key_is_gone(
+    redis_ready, inbox
+):
+    from wappa.persistence.redis.expiry_index import RedisExpiryIndex
+
+    expiry = _expiry(inbox)
+    index = RedisExpiryIndex(await RedisClient.get("expiry"))
+    await expiry.set("cancel_overdue", "id", 1)
+    await _wait_until_gone(expiry, "cancel_overdue", "id")
+    await expiry.delete("cancel_overdue", "id")
+    key = expiry._key("cancel_overdue", "id")
+    assert key not in await index.due(10000)
+    assert await index.redis.hget(index.records_key, key) is None
+
+
+async def test_cancel_by_identifier_removes_overdue_occurrences_without_keys_scans(
+    redis_ready, inbox
+):
+    from wappa.persistence.redis.expiry_index import RedisExpiryIndex
+
+    expiry = _expiry(inbox)
+    index = RedisExpiryIndex(await RedisClient.get("expiry"))
+    await expiry.set("first", "cancel_me", 1)
+    await expiry.set("second", "cancel_me", 30)
+    await _wait_until_gone(expiry, "first", "cancel_me")
+    await expiry.delete_all_by_identifier("cancel_me")
+    for action in ("first", "second"):
+        key = expiry._key(action, "cancel_me")
+        assert await index.redis.hget(index.records_key, key) is None
+        assert await index.redis.zscore(index.due_key, key) is None
+        assert not await expiry.exists(action, "cancel_me")
+
+
+async def test_renewal_defers_recovery_and_rebind_moves_the_due_occurrence(
+    redis_ready, inbox
+):
+    from wappa.persistence.redis.expiry_index import RedisExpiryIndex
+
+    expiry = _expiry(inbox)
+    index = RedisExpiryIndex(await RedisClient.get("expiry"))
+    await expiry.set("renew", "old", 1)
+    await _wait_until_gone(expiry, "renew", "old")
+    await expiry.set("renew", "old", 30)
+    assert await index.claim(expiry._key("renew", "old")) is None
+    before = await index.redis.hget(index.records_key, expiry._key("renew", "old"))
+    try:
+        assert await expiry.rebind("renew", "old", "new")
+        assert (
+            await index.redis.hget(index.records_key, expiry._key("renew", "old"))
+            is None
+        )
+        assert (
+            await index.redis.hget(index.records_key, expiry._key("renew", "new"))
+            == before
+        )
+        assert 0 < await expiry.get_ttl("renew", "new") <= 30
+    finally:
+        await expiry.delete("renew", "old")
+        await expiry.delete("renew", "new")
+
+
+async def test_failed_claim_can_be_recovered_after_its_lease_expires(
+    redis_ready, inbox
+):
+    from wappa.persistence.redis.expiry_index import RedisExpiryIndex
+
+    expiry = _expiry(inbox)
+    index = RedisExpiryIndex(await RedisClient.get("expiry"))
+    await expiry.set("retry", "id", 1)
+    try:
+        await _wait_until_gone(expiry, "retry", "id")
+        key = expiry._key("retry", "id")
+        first = await index.claim(key, lease_ms=1)
+        async with asyncio.timeout(5):
+            retry = None
+            while retry is None:
+                retry = await index.claim(key, lease_ms=1)
+                if retry is None:
+                    await asyncio.sleep(0.001)
+        assert first.record == retry.record and first.generation == retry.generation
+        assert await index.acknowledge(retry)
+        assert not await index.acknowledge(first)
+    finally:
+        await expiry.delete("retry", "id")
+
+
+async def test_listener_startup_recovers_a_real_ttl_that_expired_without_a_process(
+    redis_ready, inbox
+):
+    expiry = _expiry(inbox)
+    await expiry.set("offline", "late-message", 1)
+    await _wait_until_gone(expiry, "offline", "late-message")
+    fired = asyncio.Queue()
+    tracker = BackgroundWorkTracker()
+
+    async def handler(event):
+        await fired.put(event)
+
+    listener = asyncio.create_task(
+        run_expiry_listener(
+            dispatcher=ExpiryDispatcher(run_event=handler, tracker=tracker),
+            reconnect_delay=1,
+        )
+    )
+    try:
+        async with asyncio.timeout(5):
+            while True:
+                event = await fired.get()
+                if event.inbox_ref == inbox:
+                    break
+        assert event.action == "offline" and event.identifier == "late-message"
+        assert event.metadata["recovered"] is True
+        assert event.execution_id and event.scheduled_for < event.dispatched_at
+        await tracker.drain(timeout=2)
+        from wappa.persistence.redis.expiry_index import RedisExpiryIndex
+
+        index = RedisExpiryIndex(await RedisClient.get("expiry"))
+        assert (
+            await index.redis.hget(
+                index.records_key, expiry._key("offline", "late-message")
+            )
+            is None
+        )
+    finally:
+        listener.cancel()
+        await asyncio.gather(listener, return_exceptions=True)
+        await expiry.delete("offline", "late-message")

@@ -420,6 +420,7 @@ async def test_instagram_single_message_send_carries_one_part() -> None:
             "index": 0,
             "role": "text_chunk",
             "text": "hola",
+            "content": None,
             "message_id": "mid.1",
             "outcome": "accepted",
         }

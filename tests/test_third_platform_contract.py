@@ -401,7 +401,7 @@ class FakePlatform:
         app.state.platforms = MappingProxyType(platforms)
         app.state.meta_application_config = MetaApplicationConfig(
             app_secret=APP_SECRET,
-            whatsapp_webhook_verify_token=SecretStr(VERIFY_TOKEN),
+            webhook_verify_token=SecretStr(VERIFY_TOKEN),
         )
         app.state.session_lifecycle = SessionLifecycle(provider)
         app.state.inbox_runtime = InboxRuntimeConfiguration(
@@ -527,7 +527,7 @@ async def test_a_capability_the_platform_lacks_is_none_and_its_routes_501(
 
     assert templates.status_code == 501
     assert "ITemplateMessaging" in templates.json()["detail"]
-    assert extension.status_code == 501, "WhatsApp extension routes stay WhatsApp-only"
+    assert extension.status_code == 200, "Limits are local discovery on every Platform"
     assert sent.status_code == 200, sent.text
     messenger = platform.messengers[INBOX_REF]
     assert messenger.capability(ITemplateMessaging) is None

@@ -26,7 +26,9 @@ from wappa.persistence.memory.handlers.table_handler import MemoryTable
 from wappa.persistence.redis.redis_client import RedisClient
 from wappa.persistence.redis.redis_handler.table import RedisTable
 
-REDIS_URL = os.getenv("WAPPA_TEST_REDIS_URL", "redis://localhost:6379")
+REDIS_URL = os.getenv(
+    "WAPPA_TEST_REDIS_URL", "redis://127.0.0.1:1"
+)  # never a live default
 
 
 class Status(StrEnum):

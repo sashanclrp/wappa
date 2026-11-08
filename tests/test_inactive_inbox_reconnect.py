@@ -46,7 +46,7 @@ PHONE_1 = "111111111111111"
 FOREIGN_PHONE = "333333333333333"
 APP_SECRET = SecretStr("meta-app-secret")
 META_CONFIG = MetaApplicationConfig(
-    app_secret=APP_SECRET, whatsapp_webhook_verify_token=SecretStr("verify")
+    app_secret=APP_SECRET, webhook_verify_token=SecretStr("verify")
 )
 WABA = PlatformAccountRef.whatsapp(WABA_ID)
 OTHER_WABA = PlatformAccountRef.whatsapp("9000000002")

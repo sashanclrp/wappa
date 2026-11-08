@@ -16,12 +16,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from collections.abc import AsyncIterator, Callable, Coroutine, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any
+
+from wappa.domain.user_identity import UserIdentity
 
 __all__ = [
     "SSEEventContext",
@@ -35,8 +36,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-_BSUID_PATTERN = re.compile(r"^[A-Z]{2}\.[A-Za-z0-9]{1,128}$")
 
 
 @dataclass
@@ -54,6 +53,7 @@ class SSEEventContext:
     bsuid: str | None = None
     phone_number: str | None = None
     platform: str | None = None
+    identity: UserIdentity | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     _pending_incoming: dict[str, Any] | None = None
     _pending_flush: Callable[[dict[str, Any]], Coroutine[Any, Any, None]] | None = None
@@ -129,23 +129,54 @@ def update_identity(
         ctx.bsuid = bsuid
     if phone_number is not None:
         ctx.phone_number = phone_number
+    if ctx.identity is not None:
+        changed = {
+            key: value
+            for key, value in {
+                "user_id": user_id,
+                "bsuid": bsuid,
+                "phone_number": phone_number,
+            }.items()
+            if value is not None
+        }
+        ctx.identity = ctx.identity.model_copy(update=changed)
     flush_incoming_sse()
 
 
-def classify_meta_identifier(value: str | None) -> tuple[str | None, str | None]:
-    """Split a Meta identifier into ``(bsuid, phone_number)`` by shape.
+def classify_meta_identifier(
+    value: str | None, *, platform: str | None = None
+) -> tuple[str | None, str | None]:
+    """Parse phone/BSUID evidence, including Parent BSUIDs; opaque IDs are unknown.
 
-    BSUIDs match ``<CC>.<alnum>{1,128}``; anything else is treated as a
-    phone/wa_id. Empty values yield ``(None, None)``.
+    For a known Platform use its qualified projection rather than guessing
+    numeric native IDs are phone evidence.
     """
     if not value:
         return None, None
-    normalized = value.strip()
-    if not normalized:
+    from wappa.domain.inbox.identity import InboxRef
+    from wappa.platforms import project_identity
+    from wappa.schemas.core.types import PlatformType
+
+    if not value.strip():
         return None, None
-    if _BSUID_PATTERN.fullmatch(normalized):
-        return normalized, None
-    return None, normalized
+    if platform is None:
+        from wappa.schemas.core.recipient import RecipientKind, resolve_recipient
+
+        try:
+            resolved = resolve_recipient(value)
+        except ValueError:
+            return None, None
+        return (
+            (resolved.bsuid, None)
+            if resolved.kind is RecipientKind.BSUID
+            else (None, resolved.phone_number)
+        )
+    identity = project_identity(
+        InboxRef(platform=PlatformType(platform), inbox_id="projection"),
+        value,
+        (value,),
+    )
+    return identity.bsuid or identity.parent_bsuid, identity.phone_number
 
 
 def derive_identifiers(user_obj: Any) -> tuple[str | None, str | None]:
@@ -159,6 +190,12 @@ def derive_identifiers(user_obj: Any) -> tuple[str | None, str | None]:
         return None, None
     bsuid = getattr(user_obj, "bsuid", None) or None
     phone_number = getattr(user_obj, "phone_number", None) or None
+    from wappa.schemas.core.recipient import is_bsuid_digit_echo
+
+    if phone_number and is_bsuid_digit_echo(
+        phone_number, bsuid, getattr(user_obj, "parent_bsuid", None)
+    ):
+        phone_number = None
     return bsuid, phone_number
 
 
@@ -171,6 +208,7 @@ async def sse_event_scope(
     phone_number: str | None = None,
     platform: str,
     metadata: dict[str, Any] | None = None,
+    identity: UserIdentity | None = None,
     tracker: Any = None,
 ) -> AsyncIterator[SSEEventContext]:
     """Install an ``SSEEventContext`` for the duration of the ``async with``.
@@ -186,6 +224,7 @@ async def sse_event_scope(
         bsuid=bsuid,
         phone_number=phone_number,
         platform=platform,
+        identity=identity,
         metadata=dict(metadata) if metadata else {},
         _tracker=tracker,
     )
@@ -208,3 +247,16 @@ def sse_identity_cleared() -> Iterator[None]:
         yield
     finally:
         _sse_event_context.reset(token)
+
+
+def api_identity(event: Any) -> UserIdentity:
+    """Project API address evidence through its selected Platform at runtime."""
+    from wappa.domain.inbox.identity import InboxRef
+    from wappa.platforms import project_identity
+    from wappa.schemas.core.types import PlatformType
+
+    return event.identity_evidence or project_identity(
+        InboxRef(platform=PlatformType(event.platform), inbox_id=event.inbox_id),
+        event.user_id or event.recipient,
+        (event.recipient, *event.request_payload.get("addresses", ())),
+    )

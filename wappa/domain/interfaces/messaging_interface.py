@@ -15,6 +15,7 @@ from wappa.domain.messaging_targets import (
     MessageTarget,
     UnsupportedOperationError,
 )
+from wappa.domain.messenger_discovery import MessengerDiscovery
 from wappa.schemas.core.types import PlatformType
 
 if TYPE_CHECKING:
@@ -59,6 +60,11 @@ class IMessenger(ABC):
     # Platform-only capabilities by interface, filled once in each adapter's
     # constructor. The one lookup below reads it; adapters never override it.
     _capabilities: Mapping[type, object] = MappingProxyType({})
+
+    @property
+    def discovery(self) -> MessengerDiscovery:
+        """Supported suboperations, receipt semantics, target kinds and limits."""
+        return MessengerDiscovery(operations=self.supported_operations)
 
     @property
     def supported_operations(self) -> frozenset[str]:

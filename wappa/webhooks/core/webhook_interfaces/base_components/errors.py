@@ -6,6 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from wappa.domain.error_evidence import ErrorEvidence
+
 
 class ErrorDetailBase(BaseModel):
     """
@@ -18,6 +20,8 @@ class ErrorDetailBase(BaseModel):
     model_config = ConfigDict(
         extra="forbid", str_strip_whitespace=True, validate_assignment=True
     )
+
+    error_evidence: ErrorEvidence | None = None
 
     # Core error identification
     error_code: int = Field(description="Numeric error code")
@@ -47,8 +51,7 @@ class ErrorDetailBase(BaseModel):
 
     def is_temporary_error(self) -> bool:
         """Check if this is likely a temporary error that could be retried."""
-        temporary_codes = [429, 500, 502, 503, 504]  # Rate limits and server errors
-        return self.error_code in temporary_codes or self.is_retryable is True
+        return bool(self.error_evidence and self.error_evidence.temporary)
 
     def get_error_summary(self) -> str:
         """Get a concise error summary for logging."""

@@ -28,6 +28,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 | `phone_number` | The raw E.164 phone number of the user. May change; not stable for identity. Retained for marketing and PII use cases. |
 | **Direct Message Target** | An immutable Inbox-qualified destination for ordinary private delivery, represented by `DirectMessage(inbox_ref, addresses)`. It carries every known Delivery Address of one User; the target is always explicit on a send, and the Messenger never holds a recipient. |
 | **Delivery Addresses** | Every known Delivery Address of one User (`DeliveryAddresses`): WhatsApp phone and/or BSUID, Instagram scoped ID. It states what is known, never a strategy: the Platform adapter orders the addresses and moves to the next one only when the Platform rejects the address itself. Webhooks build it with `user.delivery_addresses()`. |
+| **User Identity Evidence** | An Inbox-qualified projection of the existing recommended User ID, Delivery Addresses and optional native, phone, BSUID, Parent BSUID and username evidence. It does not reconcile durable identities. |
 | **IGSID** | Instagram-scoped User identifier interpreted within the receiving professional account. |
 | **Delivery Address** | The one normalized platform address selected for an outbound call. A phone number and a BSUID are alternative Delivery Addresses; neither is Wappa's canonical User identity. A username is identity evidence, not a Delivery Address. |
 | **Messaging HTTP API** | Wappa's optional HTTP routes at `/api/{platform}` (ADR-0024). The path names the Platform and `X-Wappa-Inbox-ID` the Inbox; send routes call that Inbox's own Messenger. Routes gate on the Inbox's capabilities; any Platform gap answers 501. |
@@ -198,6 +199,7 @@ This is the ubiquitous language shared across all Wappa bounded contexts. Terms 
 |------|-----------|
 | **Expiry Action** | The action name on an Expiry Key. When the key expires, Wappa delivers it to `process_scheduled_event` as `ScheduledEvent.action`. |
 | **Expiry Key** | Redis key with TTL. Format: `{inbox_namespace}:EXPTRIGGER:{action}:{identifier}`, where the namespace is Wappa-derived from `InboxRef`. Parsed on expiration to recover the qualified Inbox Reference; invalid keys have no fabricated fallback scope. It carries no User dimension — a trigger belongs to an action and an identifier, which may or may not be a `user_id`. |
+| **Expiry Occurrence** | One arming generation and its intended due time, distinct from a replacement created by renewing the same Expiry Key. |
 
 ## HTTP Client Lifecycle
 

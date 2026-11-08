@@ -14,7 +14,6 @@ from wappa.messaging.template_transport import (
 from wappa.messaging.template_transport.values import TemplateMediaType
 from wappa.messaging.whatsapp.errors import handle_whatsapp_error
 from wappa.messaging.whatsapp.messenger.delivery import _DeliveryMixin
-from wappa.messaging.whatsapp.models.basic_models import message_result_from_payload
 from wappa.messaging.whatsapp.models.template_models import (
     TemplateParameter,
     WhatsAppTemplateType,
@@ -50,14 +49,10 @@ class _TemplateSendsMixin(_DeliveryMixin):
         template_type: WhatsAppTemplateType,
         routing_policy: str,
     ) -> MessageResult:
-        response = await self.client.post_request(
+        return await self._post_payload(
             payload,
+            recipient,
             custom_url=self._resolve_template_send_url(template_type, routing_policy),
-        )
-        return message_result_from_payload(
-            response,
-            inbox_id=self._inbox_id,
-            fallback_recipient=recipient,
         )
 
     async def _send_text_template_to(

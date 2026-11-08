@@ -33,6 +33,7 @@ import httpx
 from pydantic import SecretStr
 
 from wappa.core.logging.logger import get_logger
+from wappa.domain.error_evidence import ErrorEvidence, meta_error_evidence
 from wappa.domain.inbox.identity import InboxRef
 from wappa.domain.results import OperationOutcome
 from wappa.resilience.rate_limits import (
@@ -81,6 +82,19 @@ class GraphResponse:
     meta_called: bool = True
     # Meta's usage headers (x-app-usage, x-business-use-case-usage) only.
     usage: Mapping[str, str] = field(default_factory=dict)
+
+    @property
+    def error_evidence(self) -> ErrorEvidence | None:
+        if self.ok:
+            return None
+        return meta_error_evidence(
+            self.error_code,
+            indeterminate=self.outcome is OperationOutcome.INDETERMINATE,
+            rate_limited=self.outcome is OperationOutcome.RATE_LIMITED,
+            http_status=self.status_code,
+            retry_safe=self.outcome
+            in {OperationOutcome.REJECTED, OperationOutcome.RATE_LIMITED},
+        )
 
     @property
     def ok(self) -> bool:

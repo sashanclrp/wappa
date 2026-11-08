@@ -159,7 +159,7 @@ def _app(provider: httpx.AsyncClient, handler: Recorder) -> FastAPI:
     app = FastAPI()
     app.include_router(create_webhook_router(WappaEventDispatcher(handler)))
     app.state.meta_application_config = MetaApplicationConfig(
-        app_secret=APP_SECRET, whatsapp_webhook_verify_token=SecretStr("verify")
+        app_secret=APP_SECRET, webhook_verify_token=SecretStr("verify")
     )
     app.state.session_lifecycle = SessionLifecycle(provider)
     app.state.inbox_runtime = InboxRuntimeConfiguration(

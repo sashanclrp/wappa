@@ -21,7 +21,6 @@ from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.errors import handle_whatsapp_error
 from wappa.messaging.whatsapp.media.rules import check_name
 from wappa.messaging.whatsapp.messenger.delivery import _DeliveryMixin
-from wappa.messaging.whatsapp.models.basic_models import message_result_from_payload
 from wappa.messaging.whatsapp.payloads.interactive import (
     build_interactive_payload,
     buttons_interactive,
@@ -150,10 +149,7 @@ class _InteractiveMixin(_DeliveryMixin):
         payload = interactive_envelope(interactive, reply_to_message_id)
         try:
             apply_recipient_to_payload(payload, recipient)
-            response = await self.client.post_request(payload)
-            return message_result_from_payload(
-                response, inbox_id=self._inbox_id, fallback_recipient=recipient
-            )
+            return await self._post_payload(payload, recipient)
         except Exception as e:
             return handle_whatsapp_error(
                 error=e,

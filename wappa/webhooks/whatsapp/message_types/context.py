@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from wappa.schemas.core.types import PlatformType
 from wappa.webhooks.core.base_message import BaseMessageContext
 from wappa.webhooks.whatsapp.models.base import MessageContext
 
@@ -52,25 +51,6 @@ class WhatsAppMessageContext(BaseMessageContext):
         return bool(self._context.forwarded or self._context.frequently_forwarded)
 
     def to_universal_dict(self) -> dict[str, Any]:
-        """Convert to platform-agnostic dictionary representation."""
-        if not self._context:
-            return {"platform": PlatformType.WHATSAPP.value, "has_context": False}
+        from wappa.webhooks.core.base_message.projections import context_projection
 
-        return {
-            "platform": PlatformType.WHATSAPP.value,
-            "has_context": True,
-            "original_message_id": self.original_message_id,
-            "original_sender_id": self.original_sender_id,
-            "is_reply": self.is_reply,
-            "is_forward": self.is_forward,
-            "whatsapp_data": {
-                "original_sender_phone": self._context.from_,
-                "original_sender_bsuid": self._context.from_bsuid,
-                "original_sender_parent_bsuid": self._context.from_parent_bsuid,
-                "forwarded": self._context.forwarded,
-                "frequently_forwarded": self._context.frequently_forwarded,
-                "referred_product": self._context.referred_product.model_dump()
-                if self._context.referred_product
-                else None,
-            },
-        }
+        return context_projection(self).model_dump(mode="json")

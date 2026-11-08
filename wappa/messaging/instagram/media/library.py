@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 from contextlib import nullcontext
+from dataclasses import replace
 from pathlib import Path
 
 from wappa.domain.interfaces.conversation_capabilities import MediaBytes, ReadResult
@@ -107,6 +108,7 @@ class InstagramMediaLibrary(IMediaLibrary):
             or f"Instagram {family.value} upload returned no attachment_id",
             error_code=response.error_code or "INDETERMINATE",
             retry_after=response.retry_after,
+            error_evidence=replace(response, outcome=outcome).error_evidence,
             platform_response=response.body or None,
         )
 

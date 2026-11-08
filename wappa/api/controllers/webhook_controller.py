@@ -73,7 +73,7 @@ class WebhookController:
 
         if hub_mode == "subscribe" and hub_challenge:
             config = self._meta_config(request)
-            expected = config.whatsapp_webhook_verify_token.get_secret_value()
+            expected = config.webhook_verify_token.get_secret_value()
             if not hub_verify_token or hub_verify_token != expected:
                 self.logger.error("Webhook verification token mismatch")
                 raise HTTPException(

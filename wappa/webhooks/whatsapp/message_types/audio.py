@@ -199,32 +199,9 @@ class WhatsAppAudioMessage(WhatsAppMessageBase, BaseAudioMessage):
         return WhatsAppMessageContext(self.context) if self.context else None
 
     def to_universal_dict(self) -> UniversalMessageData:
-        return {
-            "platform": self.platform.value,
-            "message_type": self.message_type.value,
-            "message_id": self.message_id,
-            "sender_id": self.sender_id,
-            "conversation_id": self.conversation_id,
-            "conversation_type": self.conversation_type.value,
-            "timestamp": self.timestamp,
-            "processed_at": self.processed_at.isoformat(),
-            "has_context": self.has_context(),
-            "media_id": self.media_id,
-            "media_type": self.media_type.value,
-            "file_size": self.file_size,
-            "caption": self.caption,
-            "is_voice_message": self.is_voice_message,
-            "duration": self.duration,
-            "whatsapp_data": {
-                "whatsapp_id": self.id,
-                "from": self.from_,
-                "timestamp_str": self.timestamp_str,
-                "type": self.type,
-                "audio_content": self.audio.model_dump(),
-                "context": self.context.model_dump() if self.context else None,
-                "referral": self.referral.model_dump() if self.referral else None,
-            },
-        }
+        from wappa.webhooks.core.base_message.projections import media_projection
+
+        return media_projection(self)
 
     def get_platform_data(self) -> dict[str, Any]:
         return {

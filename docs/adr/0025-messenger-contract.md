@@ -40,6 +40,12 @@ Instagram quote degradation stays inside the adapter: Instagram first sends `rep
 
 Every Platform implements one per-part result contract: `platform_response["wappa_parts"]` retains `message_ids` and `delivered` and adds ordered `parts` with role, exact text, Message ID and outcome. Single sends have one part; emulation flattens actual messages and planned parts skipped after a refusal. WhatsApp is normally one native part, including its caption; Instagram records its own caption follow-ups and split chunks. Shared formatting lives in `wappa/domain/message_parts.py`, while adapters own production and roles. Quote fallback remains one part with `reply_to_dropped`; indeterminate outcomes never become accepted or not_attempted. Future Platforms follow this contract rather than teaching Hosts to branch.
 
+## Uniform evidence and discovery (0.34.6)
+
+One shared action includes one serialized representation. Typed family projections own text/selection/media/reaction/context keys; native evidence stays behind its accessor. UserIdentity binds existing User ID policy, addresses and optional evidence to an Inbox Reference across Users, profiles, results and SSE. Adapters interpret opaque addresses and sanitize/order delivery candidates before I/O. MIME evidence is nullable, distinct from media family and historical nominal media_type.
+
+MessagePart values and aggregate_outcome serialize independently of native evidence. Partial acceptance is distinct from a refusal with nothing accepted; per-part errors and retry delay survive. ErrorEvidence separates native code/subcode from neutral category and separates temporary from retry safety. Historical result codes and message_outcome remain unchanged. Static typed MessengerDiscovery reports operation/suboperation support, receipt scope, target kinds and accepted formats/sizes from adapter rules, available through Messengers and shared local HTTP discovery.
+
 ## Consequences
 
 - Host code, Scores and Agents use one vocabulary on every Platform; a conversation built for Instagram runs on WhatsApp and the reverse, except for the Platform-only extras on `self.whatsapp` / `self.instagram`.
@@ -57,3 +63,7 @@ Every Platform implements one per-part result contract: `platform_response["wapp
 - A neutral `stream()` on `IMediaLibrary` before a caller and both adapters exist.
 - Host-facing `require_capability(kind)` (the 2026-11-06 first hardening draft): every Host had to build its capability objects and import interfaces to reach a Platform feature.
 - One `self.platform_messenger: IMessenger | None` handler attribute (untyped Platform extras) or Platform-only methods on `IMessenger` (rule 4).
+
+## Structured per-part evidence (0.34.6 addendum)
+
+Each MessagePart.content is a typed neutral snapshot of that part's actual structure, null for plain text. Adapters translate their final payload after emulation/media selection/upload into PartContent: buttons, quick replies, carousel elements, media, headers/footers, lists, contacts, locations, requests and native Template parameters. Normal JSON and historical wappa_parts carry it. Skipped plans remain not_attempted, and missing upload references are never invented. Hosts persist accepted parts' own text and content; a refused button structure cannot enter history just because an emulated header succeeded. This extends per-part evidence additively and does not change send signatures, native evidence exclusion or aggregate outcome semantics.

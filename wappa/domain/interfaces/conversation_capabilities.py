@@ -16,6 +16,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from wappa.domain.error_evidence import ErrorEvidence
 from wappa.domain.messaging_targets import CommentRef, PostRef
 from wappa.domain.results import CommentResult, ControlResult
 
@@ -36,6 +37,7 @@ class ReadResult[T](BaseModel):
     value: T | None = None
     error: str | None = None
     error_code: str | None = None
+    error_evidence: ErrorEvidence | None = None
     # A Meta rate limit made it ``unavailable``: seconds until a retry can work.
     retry_after: float | None = None
 

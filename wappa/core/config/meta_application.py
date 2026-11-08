@@ -37,11 +37,11 @@ class MetaApplicationConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     app_secret: SecretStr
-    whatsapp_webhook_verify_token: SecretStr
+    webhook_verify_token: SecretStr
     graph_api_version: str = DEFAULT_GRAPH_API_VERSION
     graph_base_url: AnyHttpUrl = AnyHttpUrl(DEFAULT_GRAPH_BASE_URL)
 
-    @field_validator("app_secret", "whatsapp_webhook_verify_token")
+    @field_validator("app_secret", "webhook_verify_token")
     @classmethod
     def _non_blank_secret(cls, value: SecretStr) -> SecretStr:
         if not value.get_secret_value().strip():
@@ -74,7 +74,7 @@ def resolve_meta_application_config(
     """Select the one Meta Application Configuration source.
 
     Returns ``None`` only for an outbound-only application that mounts no
-    WhatsApp callback and configured nothing.
+    Meta callback and configured nothing.
     """
     # Imported here: ``settings`` imports this module for the Graph defaults.
     from wappa.domain.inbox.errors import InboxConfigurationError
@@ -115,14 +115,14 @@ def resolve_meta_application_config(
             )
         return MetaApplicationConfig(
             app_secret=SecretStr(env_secret),
-            whatsapp_webhook_verify_token=SecretStr(env_verify),
+            webhook_verify_token=SecretStr(env_verify),
             graph_api_version=settings.api_version,
             graph_base_url=AnyHttpUrl(settings.base_url),
         )
 
     if callback_mounted:
         raise InboxConfigurationError(
-            "[wappa] Mounting the WhatsApp callback requires "
+            "[wappa] Mounting a Meta callback requires "
             f"{META_APP_SECRET_VARIABLE} and {VERIFY_TOKEN_VARIABLE} in every "
             "environment, or an explicit MetaApplicationConfig. There is no "
             "development bypass for Meta POST authentication."

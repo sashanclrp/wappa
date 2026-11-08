@@ -138,7 +138,7 @@ async def test_real_http_callback_routes_each_user_and_does_not_reply_to_echo_or
         app = FastAPI()
         app.include_router(create_webhook_router(WappaEventDispatcher(handler)))
         app.state.meta_application_config = MetaApplicationConfig(
-            app_secret=SECRET, whatsapp_webhook_verify_token=SecretStr("verify")
+            app_secret=SECRET, webhook_verify_token=SecretStr("verify")
         )
         app.state.session_lifecycle = SessionLifecycle(provider)
         app.state.inbox_runtime = SimpleNamespace(credential_resolver=resolver)

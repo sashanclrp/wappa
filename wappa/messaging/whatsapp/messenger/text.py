@@ -7,7 +7,6 @@ from wappa.domain.messaging_targets import MessageTarget, require_direct_message
 from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.errors import handle_whatsapp_error
 from wappa.messaging.whatsapp.messenger.delivery import _DeliveryMixin
-from wappa.messaging.whatsapp.models.basic_models import message_result_from_payload
 
 
 class _TextMixin(_DeliveryMixin):
@@ -44,12 +43,7 @@ class _TextMixin(_DeliveryMixin):
             )
 
             self.logger.debug("Sending text message")
-            response = await self.client.post_request(payload)
-            result = message_result_from_payload(
-                response,
-                inbox_id=self._inbox_id,
-                fallback_recipient=recipient,
-            )
+            result = await self._post_payload(payload, recipient)
             self.logger.info(f"Text message sent successfully, id: {result.message_id}")
             return result
 

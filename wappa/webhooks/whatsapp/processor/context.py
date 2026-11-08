@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from wappa.domain.error_evidence import meta_error_evidence
 from wappa.schemas.core.recipient import looks_like_bsuid, looks_like_phone_number
 from wappa.webhooks.whatsapp.processor._base import _ProcessorBase
 
@@ -171,6 +172,11 @@ class _ContextMixin(_ProcessorBase):
             error_details.append(
                 ErrorDetailBase(
                     error_code=getattr(error, "code", 0),
+                    error_evidence=meta_error_evidence(
+                        f"{error.code}/{error.error_subcode}"
+                        if error.error_subcode is not None
+                        else error.code
+                    ),
                     error_title=getattr(error, "title", "Unknown error"),
                     error_message=getattr(error, "message", ""),
                     error_details=getattr(error_data, "details", None)

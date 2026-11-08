@@ -46,7 +46,7 @@ Progress:
 | Fixed schedule declared in code | Static cron, or your scheduler if you already run one | `references/static-crons.md` |
 | Existing `CronPlugin`, `ExpiryPlugin` or `expiry_registry` code | Move it | `references/migrating.md` |
 
-A Host scheduler calls `Scheduling.dispatch` directly and needs no `SchedulingPlugin`; the plugin only runs Redis expiry and static crons. Use Redis for a short timer you re-arm. Redis notifications can be missed and carry no data, so anything that must survive downtime, or that has a date, belongs in a scheduler with a datastore.
+A Host scheduler calls `Scheduling.dispatch` directly and needs no `SchedulingPlugin`; the plugin only runs Redis expiry and static crons. Use Redis for a short timer you re-arm. Since 0.34.6 arming/renewal also indexes the pending occurrence in Redis; startup and short bounded ticks recover missed expirations at least once while Redis retains its data. Keep calendar/recurring jobs in your scheduler. Pre-upgrade keys need re-arming for recovery.
 
 **2. State the scope.** It decides what exists on the handler, and it's explicit on every event:
 
@@ -61,10 +61,10 @@ A Host scheduler calls `Scheduling.dispatch` directly and needs no `SchedulingPl
 **3–4. Build.** These rules hold for every source:
 
 - **Never build context by hand.** No Messenger factories, cache factories or SSE scopes in a feature. If the handler lacks something, the event's scope is wrong or the task needs `self.scope`.
-- **Don't swallow failures.** A raised exception reaches your scheduler or cron engine, and its retry policy is the only retry there is. Redis expiry has no caller: Wappa logs the failure and the trigger is gone.
-- **Every firing can repeat.** Workers receive the same expiry, engines retry, and Wappa doesn't deduplicate. Make side effects idempotent with a key you own. `event.execution_id` is whatever your scheduler passed; Redis expiry leaves it `None`, so a re-armable timer needs a generation you store when you arm it. If you claim the key before the side effect, release it when the side effect fails, or the retry finds the claim and silently does nothing.
+- **Don't swallow failures.** A raised exception reaches your scheduler or cron engine, and its retry policy is the only retry there is. Indexed Redis expiry has no caller: Wappa logs failures and retains the pending occurrence for recovery.
+- **Every firing can repeat.** Workers receive the same expiry, engines retry, and Wappa doesn't deduplicate. Make side effects idempotent with a key you own. A Host scheduler supplies event.execution_id. Indexed Redis expiry supplies its pending generation and original scheduled_for; old unindexed notifications still have neither. Correlation is not an exactly-once or business-admission guarantee. If you claim the key before the side effect, release it when the side effect fails, or the retry finds the claim and silently does nothing.
 - **Sending later isn't sending now.** A task can fire outside the Platform's 24-hour window, where free-form text is rejected. On WhatsApp, use an approved Template (`self.whatsapp.templates`, see the `wappa-apps` skill, its WhatsApp reference). Instagram has no Templates. Check `result.success`: a rejected send is a result, not an exception.
-- **The Host owns the rest:** recurrence and end dates, job storage, retries, overlap, cancellation, history, admin routes, leases and send fences. Wappa has none of these, so don't look for them.
+- **The Host owns the rest:** recurrence/end dates, external job storage, business retry policy, overlap, history, admin routes and send fences. Wappa owns its Redis expiry index, short admission claims, cancel/rebind and recovery; these do not replace business coordination.
 - **A timer's value is empty.** Keep data in your cache or database. `event.payload` carries data only when your own caller passed it.
 - **Never read a User from an identifier's shape.** A subject comes from `event.user_id`, which you supplied or your binding returned. A message ID stays in `event.identifier`.
 - **Keep Host policy in the hook.** Admission checks, business state and Agent orchestration run after the prepared context, inside your code.

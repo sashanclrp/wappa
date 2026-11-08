@@ -217,27 +217,9 @@ class WhatsAppVideoMessage(WhatsAppMessageBase, BaseVideoMessage):
         return WhatsAppMessageContext(self.context) if self.context else None
 
     def to_universal_dict(self) -> UniversalMessageData:
-        return {
-            "platform": self.platform.value,
-            "message_type": self.message_type.value,
-            "message_id": self.message_id,
-            "sender_id": self.sender_id,
-            "conversation_id": self.conversation_id,
-            "timestamp": self.timestamp,
-            "processed_at": self.processed_at.isoformat(),
-            "has_context": self.has_context(),
-            "media_id": self.media_id,
-            "media_type": self.media_type.value,
-            "caption": self.caption,
-            "duration": self.duration,
-            "dimensions": self.dimensions,
-            "whatsapp_data": {
-                "whatsapp_id": self.id,
-                "from": self.from_,
-                "type": self.type,
-                "video_content": self.video.model_dump(),
-            },
-        }
+        from wappa.webhooks.core.base_message.projections import media_projection
+
+        return media_projection(self)
 
     def get_platform_data(self) -> dict[str, Any]:
         return {

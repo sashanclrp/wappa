@@ -5,6 +5,32 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.6] - 2026-11-08
+
+### Changed
+
+- **Breaking:** uniform text/selection/media/reaction/context serialization, including incoming SSE. Instagram text/selection/media/reply keys and WhatsApp Template quick-reply/reaction keys follow one typed family projection; native WhatsApp dictionaries are removed from those projections. Unavailable facts are nullable. Every renamed/removed key is listed in `docs/migration/0.34.6.md`.
+- **Breaking:** `MetaApplicationConfig.whatsapp_webhook_verify_token` (constructor and attribute) becomes `webhook_verify_token`, without aliases. `META_WEBHOOK_VERIFY_TOKEN` is unchanged; diagnostics use Meta terminology.
+- Shared HTTP addresses are opaque and nonblank; selected adapters validate/normalize as for Python sends. WhatsApp excludes proven regular/Parent BSUID digit echoes before I/O and retains raw evidence. Instagram SSE/API IDs no longer fabricate phone evidence; Parent BSUID parsing is shared.
+- Webhook error helpers classify structured evidence rather than treating Graph codes as HTTP ranges; temporary does not imply retry safety. Historical native codes and `message_outcome()` remain unchanged.
+
+### Added
+
+- Symmetric Instagram Inbox/Platform Account factories; generic constructors remain canonical. Shared Inbox-qualified UserIdentity access across Users, profiles, results and SSE.
+- Nullable evidenced inbound `mime_type`, separate from media family and historical `media_type`; downloaded MIME comes from MediaBytes.content_type.
+- Structured native error code/subcode and neutral category on synchronous results and webhook errors. Typed serialized send parts and aggregate outcomes distinguish partial acceptance and retain per-part retry delay; single WhatsApp sends share the shape.
+- Typed Messenger discovery for media suboperations, typing/read scope, target kinds and media formats/sizes. Local `/api/{platform}/capabilities`, `/messages/limits`, `/media/limits`; existing WhatsApp routes and keys are preserved.
+
+### Addendum
+
+- Typed MessagePart.content records each actual part's buttons, quick replies, carousel elements, selected media reference and other native structure; plain text is null. Included in normal JSON and historical wappa_parts, including WhatsApp single native sends. Accepted history can retain a header without falsely retaining a refused buttons part. Additive; no renamed fields.
+- Redis expiry arm/renew now atomically records a durable due-time index in the existing expiry pool. Startup and bounded two-second ticks recover overdue vanished keys through the same scheduled hook, at least once. Short claims retain failures/interrupted work; generation-fenced acknowledgments protect renewed occurrences. Cancel/rebind update pending data too; no KEYS scans. Indexed events carry scheduled_for, generation execution_id and metadata.recovered. Host idempotency remains required. The expiry source starts after ordinary capability startup hooks (priority 95).
+- Migration: existing pre-upgrade armed keys have no index entry and cannot recover missed expirations; re-arm them for recovery. Rebinding a live legacy key also indexes its remaining TTL. Redis data retention is a prerequisite. External scheduler ownership and memory/JSON timer support are unchanged.
+
+### Documentation
+
+- Saved request 007; updated the public contract, architecture, ADR-0025, migration guide and shipped Host skills. Offline regression tests cover both Platforms; no live Meta verification was performed under the network restriction.
+
 ## [0.34.5] - 2026-11-08
 
 Every Platform reports normalized per-part send evidence so Hosts can record accepted messages without Platform branches.

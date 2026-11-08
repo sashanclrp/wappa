@@ -135,6 +135,9 @@ def create_messaging_router(
 
     # Reads and lookups: always mounted, under every profile.
     router.include_router(whatsapp_extension_router)
+    from .limits import router as limits_router
+
+    router.include_router(limits_router)
     router.include_router(media_router)
     router.include_router(interactive_info_router)
     router.include_router(conversation_reads_router)

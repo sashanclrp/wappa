@@ -38,4 +38,6 @@ class InstagramMessageContext(BaseMessageContext):
         return self.story_id is not None or self.story_url is not None
 
     def to_universal_dict(self) -> dict[str, Any]:
-        return self.model_dump(exclude_none=True)
+        from wappa.webhooks.core.base_message.projections import context_projection
+
+        return context_projection(self).model_dump(mode="json")

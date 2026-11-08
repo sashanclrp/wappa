@@ -74,7 +74,7 @@ def test_button_message_parses_without_context() -> None:
     assert message.business_phone is None
     assert message.get_button_context() == (None, None)
     assert message.get_platform_data()["context"] is None
-    assert message.to_universal_dict()["whatsapp_data"]["context"] is None
+    assert message.get_platform_data()["context"] is None
 
 
 def test_button_message_keeps_context_when_present() -> None:

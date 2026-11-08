@@ -58,8 +58,11 @@ class _MediaMixin(_InstagramBase):
                     platform=self.platform,
                     inbox_id=self.inbox_id,
                     recipient=direct.recipient_id,
+                    recipient_platform_id=direct.recipient_id,
                     error=uploaded.error,
                     error_code=uploaded.error_code or "INDETERMINATE",
+                    error_evidence=uploaded.error_evidence,
+                    retry_after=uploaded.retry_after,
                 )
                 return with_message_parts(
                     failure, [_part({"attachment": {"type": rule_type}})]

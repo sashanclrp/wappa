@@ -13,6 +13,8 @@ WhatsApp and Instagram are both Meta Platforms: they call the same Graph API (`g
 3. **Two calling styles, one classification.** `MetaGraphClient.request` returns a `GraphResponse` (Instagram's style). `MetaGraphClient.call` returns the accepted body or raises `MetaGraphError` (carrying the classified `GraphResponse`) or `RateLimitedError`, for WhatsApp, whose handlers map exceptions to results with `handle_whatsapp_error`. The decision is made once in `graph_request`; the WhatsApp handlers only read it.
 4. **The shared code for an unknown outcome is `INDETERMINATE`** on every Platform (`message_outcome` reads it), replacing WhatsApp's `platform_outcome_indeterminate`.
 
+GraphResponse.error_evidence and adapter result translators preserve native code/subcode and HTTP status separately from a neutral ErrorCategory. ErrorEvidence keeps retry safety distinct from temporary conditions; webhook errors use the same code mapping rather than HTTP-like numeric ranges. Historical error_code values remain unchanged, including WhatsApp symbolic tags.
+
 ## Consequences
 
 - A Meta-level rule (rate limits, retries, logging, a Graph version bump) changes in one module, and a third Meta Platform (Messenger) reuses it unchanged.

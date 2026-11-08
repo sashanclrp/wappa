@@ -406,6 +406,7 @@ class MessageError(BaseModel):
     model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     code: int = Field(..., description="Error code")
+    error_subcode: int | None = None
     title: str = Field(..., description="Error title")
     message: str = Field(..., description="Error message")
     error_data: ErrorData = Field(..., description="Additional error details")

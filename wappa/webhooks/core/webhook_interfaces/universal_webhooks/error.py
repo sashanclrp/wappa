@@ -61,11 +61,19 @@ class ErrorWebhook(BaseModel):
 
     def has_critical_errors(self) -> bool:
         """Check if any errors are likely critical (5xx codes)."""
-        return any(500 <= error.error_code < 600 for error in self.errors)
+        return any(
+            error.error_evidence
+            and error.error_evidence.category.value
+            in {"authentication", "permission", "unknown_outcome"}
+            for error in self.errors
+        )
 
     def has_retryable_errors(self) -> bool:
         """Check if any errors are potentially retryable."""
-        return any(error.is_temporary_error() for error in self.errors)
+        return any(
+            error.error_evidence and error.error_evidence.retry_safe is True
+            for error in self.errors
+        )
 
     def get_error_codes(self) -> list[int]:
         """Get list of all error codes in this webhook."""

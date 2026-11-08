@@ -38,7 +38,9 @@ from wappa.persistence.json.handlers.utils.file_manager import file_manager
 from wappa.persistence.redis.redis_client import RedisClient
 from wappa.schemas.core.types import PlatformType
 
-REDIS_URL = os.getenv("WAPPA_TEST_REDIS_URL", "redis://localhost:6379")
+REDIS_URL = os.getenv(
+    "WAPPA_TEST_REDIS_URL", "redis://127.0.0.1:1"
+)  # never a live default
 KEY = CredentialCodec.generate_key()
 WABA = PlatformAccountRef.whatsapp("9001")
 OTHER_WABA = PlatformAccountRef.whatsapp("9002")

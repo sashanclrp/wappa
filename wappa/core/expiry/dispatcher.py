@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from typing import TYPE_CHECKING, Protocol
 
 from wappa.domain.events.scheduled_event import SOURCE_REDIS_EXPIRY, ScheduledEvent
@@ -47,14 +48,27 @@ class ExpiryDispatcher:
         self._tracker = tracker
         self._subjects = subjects
 
-    def dispatch(self, notification: ExpiryNotification) -> asyncio.Task[None]:
-        """Run the notification as tracked work; nothing awaits or retries it."""
+    def dispatch(
+        self,
+        notification: ExpiryNotification,
+        *,
+        recovered: bool = False,
+        scheduled_for: datetime | None = None,
+        execution_id: str | None = None,
+        on_success: Callable[[], Awaitable[None]] | None = None,
+    ) -> asyncio.Task[None]:
+        """Run tracked work; acknowledge durable occurrences only after success."""
         task_name = f"expiry:{notification.action}:{notification.identifier}"
         try:
-            task = self._tracker.track(self._run(notification), name=task_name)
+            task = self._tracker.track(
+                self._run(
+                    notification, recovered, scheduled_for, execution_id, on_success
+                ),
+                name=task_name,
+            )
         except RuntimeError:
             logger.warning(
-                "Runtime draining: dropping expiry action %s for %s",
+                "Runtime draining: refusing expiry action %s for %s",
                 notification.action,
                 notification.identifier,
             )
@@ -62,7 +76,14 @@ class ExpiryDispatcher:
         task.add_done_callback(lambda done: self._on_completion(done, notification))
         return task
 
-    async def _run(self, notification: ExpiryNotification) -> None:
+    async def _run(
+        self,
+        notification: ExpiryNotification,
+        recovered: bool,
+        scheduled_for: datetime | None,
+        execution_id: str | None,
+        on_success: Callable[[], Awaitable[None]] | None,
+    ) -> None:
         await self._run_event(
             ScheduledEvent(
                 action=notification.action,
@@ -70,9 +91,17 @@ class ExpiryDispatcher:
                 inbox_ref=notification.inbox_ref,
                 user_id=await self._subject(notification),
                 identifier=notification.identifier,
-                metadata={"expired_key": notification.expired_key},
+                metadata={
+                    "expired_key": notification.expired_key,
+                    "recovered": recovered,
+                },
+                scheduled_for=scheduled_for,
+                execution_id=execution_id,
             )
         )
+
+        if on_success is not None:
+            await on_success()
 
     async def _subject(self, notification: ExpiryNotification) -> str | None:
         if self._subjects is None:

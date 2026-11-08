@@ -216,6 +216,16 @@ class KeyFactory(BaseModel):
             f":{safe_user}:{safe_event}"
         )
 
+    @staticmethod
+    def expiry_due() -> str:
+        """Durable, database-wide due index; members are Inbox-qualified keys."""
+        return "__system__:expiry:due"
+
+    @staticmethod
+    def expiry_records() -> str:
+        """Occurrence generations and original due times for the due index."""
+        return "__system__:expiry:records"
+
     # ---- parsers ----------------------------------------------------------
     def parse_trigger(self, key: str) -> tuple[str, str, str] | None:
         """

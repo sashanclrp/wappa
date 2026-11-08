@@ -1,5 +1,7 @@
 # ARCHITECTURE.md — Wappa Framework
 
+Neutral identity, error, send-part and discovery values live in `wappa/domain/`. Platform adapters supply transport interpretation and static discovery through the Platform Registry; shared SSE/API dispatch consumes qualified evidence rather than guessing identifiers. Shared inbound family projections own serialized text/selection/media/reaction/context keys. See the 0.34.6 migration for wire changes.
+
 ## What Wappa Is
 
 Wappa is a messaging runtime framework. It receives Platform webhooks, parses them into Universal Models, dispatches events to user-defined handlers, and provides outbound messaging. Messaging work is scoped by Inbox identity. External Webhook Source events are Inbox-independent unless a Host resolver associates one with an Inbox.
@@ -14,7 +16,7 @@ Recipient-based Messenger methods take an immutable `DirectMessage` target, vali
 
 Every Scheduled Task reaches one hook on a fresh handler clone: `process_scheduled_event`, wrapped by `handle_scheduled_event`. `Scheduling.from_app(app).dispatch(event)` (`wappa.scheduling`) is the entry point. It awaits the context build and the handler and propagates failures, so the engine that fired the task applies its own retry policy. `DispatchContextBuilder.scope` is the only place that prepares capabilities: canonical User through the Host identity resolver, pipeline-wrapped Messenger and Platform Messenger, User Cache Factory, optional `db`/`db_read`, and SSE and log identity restored on exit. Inbox work gets no invented User; System work gets no Inbox, Messenger or User. `self.scope(...)` opens the same path for another subject found mid-task. Inbox-bound scopes defer Messenger credential resolution until the first operation, retaining only successful construction under a per-scope lock; work that never uses messaging needs no send credentials. Webhook and API admission remain eager. See [ADR-0030](docs/adr/0030-scheduled-work-dispatch.md).
 
-Two sources are Wappa's own, composed by `SchedulingPlugin`. Redis TTL stays the Redis-only SETEX/keyspace-notification mechanism on the existing expiry pool; `wappa/core/expiry/` parses each notification, asks the Host's `ExpirySubjectBinding` whether the identifier is a User, and runs the event as tracked background work where failures are logged. The key disappears on expiry, and there is no replay, claim, lease, due index, history or memory/JSON timer. Static crons keep the fastapi-crons engine. A Host-owned scheduler (APScheduler, Celery, a custom loop) calls `dispatch` from an ordinary async callback and keeps its datastore, recurrence, retries, overlap, administration and history. Wappa stores no schedule or Run. Typed Host dependencies are initialized once in the hook; Wappa imports no Host model. `RedisExpiry.rebind` moves a pending trigger on a Host identity change with RENAMENX, keeping its TTL and refusing to overwrite a destination.
+Two sources are Wappa's own, composed by SchedulingPlugin. Redis expiry keeps its TTL keys and existing pool, and atomically records each arming generation/due time in a durable pending index. Pub/Sub and bounded startup/two-second recovery share one admission/handler path in wappa/core/expiry. Redis-time claims and generation-fenced acknowledgments retain failed/interrupted work and protect renewals; delivery is at least once, so Host fences remain required. Recovery uses bounded sorted-set reads, never KEYS; it stores pending metadata, not a general schedule/Run/history archive. Memory/JSON remain without timer engines. Static crons retain fastapi-crons. External schedulers retain their engines, recurrence, retry policies, recovery and administration. See the expiry ARCHITECTURE for the pre-upgrade armed-key boundary.
 
 ## Design Patterns
 
@@ -159,7 +161,7 @@ The API layer receives an Inbox Execution Context and knows nothing about Table 
 
 ## Message Flow — Outbound (Host sends a reply)
 
-Every Platform returns Wappa-owned `wappa_parts` evidence in `MessageResult.platform_response`, formatted by `wappa/domain/message_parts.py`: one native part for WhatsApp, actual ordered messages and skipped parts for Instagram emulations. Hosts inspect outcomes without Platform branches. Provider acceptance is separate from delivery/read confirmation.
+Every Platform returns typed structured `MessagePart.content` alongside Wappa-owned `wappa_parts` evidence in `MessageResult.platform_response`, formatted by `wappa/domain/message_parts.py`: one native part for WhatsApp, actual ordered messages and skipped parts for Instagram emulations. Hosts inspect outcomes without Platform branches. Provider acceptance is separate from delivery/read confirmation.
 
 ```
 Host's process_message():

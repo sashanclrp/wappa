@@ -174,6 +174,13 @@ def dispatch_message_event(
                 user_id=user_id,
                 request_payload=request_payload,
                 response_success=message_result.success,
+                identity_evidence=message_result.model_copy(
+                    update={"inbox_id": inbox_id}
+                )
+                .identity()
+                .model_copy(update={"user_id": user_id})
+                if message_result.recipient
+                else None,
                 response_error=message_result.error,
                 meta_response=getattr(message_result, "raw_response", None),
                 inbox_id=inbox_id,
@@ -262,6 +269,11 @@ def fire_api_event(
             user_id=resolved_user_id,
             request_payload=request_payload,
             response_success=result.success,
+            identity_evidence=result.model_copy(update={"inbox_id": inbox_id})
+            .identity()
+            .model_copy(update={"user_id": resolved_user_id})
+            if result.recipient
+            else None,
             response_error=result.error,
             meta_response=getattr(result, "raw_response", None),
             inbox_id=inbox_id,

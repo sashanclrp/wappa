@@ -495,7 +495,7 @@ def _app(handler, resolver, registry=None):
         create_webhook_router(WappaEventDispatcher(handler, field_registry=registry))
     )
     app.state.meta_application_config = MetaApplicationConfig(
-        app_secret=SECRET, whatsapp_webhook_verify_token=SecretStr("verify")
+        app_secret=SECRET, webhook_verify_token=SecretStr("verify")
     )
     app.state.inbox_runtime = SimpleNamespace(credential_resolver=resolver)
     app.state.background_work_tracker = BackgroundWorkTracker()

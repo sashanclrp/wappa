@@ -9,6 +9,8 @@ from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 from uuid import uuid4
 
+from wappa.domain.user_identity import UserIdentity
+
 from .context import SSEEventContext, get_sse_context
 
 
@@ -27,11 +29,15 @@ class SSEEventEnvelope:
     source: str
     payload: Mapping[str, Any]
     metadata: Mapping[str, Any] | None
+    identity: UserIdentity | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return the backwards-compatible JSON event envelope."""
         return {
             "event_id": self.event_id,
+            "identity": self.identity.model_dump(mode="json")
+            if self.identity
+            else None,
             "event_type": self.event_type,
             "timestamp": self.timestamp,
             "inbox_id": self.inbox_id,
@@ -316,6 +322,7 @@ class SSEEventHub:
             event_type=event_type,
             timestamp=datetime.now(UTC).isoformat(),
             inbox_id=context.inbox_id,
+            identity=context.identity,
             user_id=context.user_id,
             bsuid=context.bsuid,
             phone_number=context.phone_number,

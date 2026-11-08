@@ -600,6 +600,7 @@ def test_openapi_documents_the_header_on_every_inbox_dependent_route() -> None:
         assert path in documented, f"{path} does not document {INBOX_ID_HEADER}"
 
     assert undocumented == {
+        "/api/{platform}/capabilities",
         "/api/{platform}/messages/limits",
         "/api/{platform}/media/limits",
         "/api/{platform}/interactive/limits",
