@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wappa"
-version = "0.34.7"
+version = "0.34.8"
 description = "Open Source framework for messaging workflows, chat applications, and platform webhooks"
 authors = [
     {name = "Sasha Canal", email = "contact@mimeia.com"},
@@ -80,6 +80,7 @@ include = [
     "/LICENSE",
     "/CHANGELOG.md",
     "/docs/migration",
+    "/scripts/instagram_reply_probe.py",
 ]
 exclude = [
     # These hold symlinks to wappa/cli/skills. Hatchling's walk follows symlinks

@@ -748,7 +748,7 @@ async def test_every_dm_operation_uses_native_wire_format():
         "type": "image",
         "payload": {"url": CDN},
     }
-    assert bodies[0]["reply_to"] == {"mid": "m0"}
+    assert "reply_to" not in bodies[0]
     assert bodies[3]["message"]["attachment"]["type"] == "file"
     # Section title and row description fold in as a numbered menu.
     assert bodies[4]["message"]["text"] == (
@@ -812,10 +812,11 @@ async def test_private_reply_public_reply_and_target_rules():
         public = await controls.reply_comment(comment, "Thanks for commenting")
         with pytest.raises(UnsupportedOperationError):
             await messenger.send_image(CDN, target=PrivateReply(comment_ref=comment))
-        with pytest.raises(UnsupportedOperationError):
-            await messenger.send_text(
-                "x", target=PrivateReply(comment_ref=comment), reply_to_message_id="m"
-            )
+        unquoted = await messenger.send_text(
+            "x", target=PrivateReply(comment_ref=comment), reply_to_message_id="m"
+        )
+        assert unquoted.success
+        assert unquoted.parts[0].reply_to_dropped
         with pytest.raises(ValueError, match="different Inbox"):
             await messenger.send_text(
                 "x",
@@ -834,7 +835,7 @@ async def test_private_reply_public_reply_and_target_rules():
         public.outcome is OperationOutcome.ACCEPTED and public.comment_id == "reply-1"
     )
     assert public.parent_comment_id == "c1"
-    assert len(sent) == 2
+    assert len(sent) == 3
 
 
 async def test_private_reply_is_platform_neutral_and_rejected_at_send():

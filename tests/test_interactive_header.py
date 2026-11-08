@@ -256,7 +256,7 @@ async def test_instagram_splits_long_text_on_word_boundaries() -> None:
     assert all(len(t.encode()) <= 1000 for t in texts)
     assert all(not t.startswith(" ") and not t.endswith(" ") for t in texts)
     assert " ".join(texts) == words
-    assert sent[0]["reply_to"] == {"mid": "m0"}
+    assert "reply_to" not in sent[0]
     assert all("reply_to" not in body for body in sent[1:])
 
 
@@ -305,7 +305,7 @@ async def test_instagram_sends_media_header_first_then_full_body_buttons(
         )
     assert result.success and result.message_id == "mid.2"
     assert sent[0]["message"]["attachment"] == attachment
-    assert sent[0]["reply_to"] == {"mid": "m0"}
+    assert "reply_to" not in sent[0]
     template = sent[1]["message"]["attachment"]["payload"]
     assert template["template_type"] == "button" and template["text"] == body
     assert "reply_to" not in sent[1]

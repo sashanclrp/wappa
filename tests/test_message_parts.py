@@ -161,12 +161,12 @@ async def test_indeterminate_part_is_not_classified_as_rejected_or_retried():
     assert result.error_code == "INDETERMINATE"
 
 
-async def test_quote_fallback_is_one_part_with_dropped_quote_evidence():
-    result, sent = await instagram_send("single", fail_at=1, quote=True)
-    assert len(sent) == 2 and result.success
+async def test_suppressed_quote_is_one_part_without_an_extra_request():
+    result, sent = await instagram_send("single", fail_at=None, quote=True)
+    assert len(sent) == 1 and result.success
     part = result.platform_response["wappa_parts"]["parts"][0]
     assert part["reply_to_dropped"] is True
-    assert part["message_id"] == "mid.2"
+    assert part["message_id"] == "mid.1"
     assert result.platform_response["wappa_reply_to"]["dropped"] is True
 
 

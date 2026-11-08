@@ -73,9 +73,11 @@ class _InteractiveMixin(_InstagramBase):
         ``attachment_id`` from ``IMediaLibrary.upload``) is sent first as its
         own attachment (a document URL Instagram cannot attach is shared as a
         text naming ``filename`` with the link), then the buttons with the
-        full body. The reply context goes on the first message. The buttons
+        full body. Suppressed-quote evidence is recorded on the first message. The buttons
         result returns unless an earlier message is refused; that refusal
         returns and the buttons are not sent.
+
+        ``reply_to_message_id`` is temporarily ignored on Instagram; result evidence records the dropped quote.
         """
         check_button_message(buttons, body, footer)
         return await self._headed_button_template(
@@ -103,7 +105,7 @@ class _InteractiveMixin(_InstagramBase):
         A media header goes first as its own attachment (``url`` preferred,
         else the ``attachment_id``); a text header and the footer fold into
         the template text, with any overflow sent first as plain text. The
-        reply context goes on the first message; the first refusal returns
+        suppressed-quote evidence goes on the first message; the first refusal returns
         and nothing after it is sent.
         """
         text_header = header.text if header and header.kind == "text" else None
@@ -173,6 +175,8 @@ class _InteractiveMixin(_InstagramBase):
         the text, and a text over 1000 UTF-8 bytes is split, with the quick
         replies on the last message and one result listing every part.
         ``button_text`` (WhatsApp's list-opener label) has no Instagram slot.
+
+        ``reply_to_message_id`` is temporarily ignored on Instagram; result evidence records the dropped quote.
         """
         check_list_message(sections, body, button_text, header, footer)
         direct = self._direct(target, "send_list_message")
@@ -204,6 +208,8 @@ class _InteractiveMixin(_InstagramBase):
 
         The header is emulated as for ``send_button_message``: a text header
         and the footer fold into the text, a media header is sent first.
+
+        ``reply_to_message_id`` is temporarily ignored on Instagram; result evidence records the dropped quote.
         """
         check_cta_message(button_text, button_url, body, footer)
         button = UrlButton.model_validate({"title": button_text, "url": button_url})
@@ -227,8 +233,10 @@ class _InteractiveMixin(_InstagramBase):
         """``body`` as a text message, then the cards as a generic template.
 
         Instagram carousels carry no intro text, so ``body`` is sent first,
-        carrying the reply context; if it is not accepted, the carousel is not
+        carrying suppressed-quote evidence; if it is not accepted, the carousel is not
         sent and that result returns. Every card is checked before any call.
+
+        ``reply_to_message_id`` is temporarily ignored on Instagram; result evidence records the dropped quote.
         """
         check_carousel(cards, body)
         direct = self._direct(target, "send_carousel")

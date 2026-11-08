@@ -27,9 +27,11 @@ class _TextMixin(_InstagramBase):
         ``disable_preview`` is ignored: Instagram has no preview switch. A
         ``PrivateReply`` is one message per comment, so it cannot be split and
         an over-limit private reply raises ``ValueError``. For a split text
-        the reply context goes on the first message, and the last result
+        the suppressed-quote evidence goes on the first message, and the last result
         returns unless one is refused; that refusal returns and later chunks
-        are not sent. Only an invalid quote rejection gets one unquoted retry.
+        are not sent. Instagram quote IDs are currently ignored before I/O.
+
+        ``reply_to_message_id`` is temporarily ignored on Instagram; result evidence records the dropped quote.
         """
         _ = disable_preview
         if not isinstance(target, DirectMessage | PrivateReply):

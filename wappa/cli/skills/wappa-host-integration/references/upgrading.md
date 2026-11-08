@@ -8,6 +8,8 @@ revision: 5
 
 ## Contents
 
+- Moving to 0.34.8
+
 - Method
 - 0.34.2 → 0.34.3 checklist
 - 0.34.1 → 0.34.2 checklist
@@ -73,3 +75,8 @@ Rename the explicit MetaApplicationConfig constructor parameter and attribute to
 Use Inbox-qualified `UserIdentity` from `user.identity(inbox_ref)`, `profile.identity(inbox_ref)` and `result.identity()`, and the SSE envelope's additive identity. Instagram phone fields are now empty, Parent BSUID parsing works, and WhatsApp excludes proven digit echoes before I/O. Shared HTTP addresses remain opaque until selected adapter validation. Use `result.parts` and `result.aggregate_outcome` to avoid whole-call retries after partial acceptance; both serialize. `error_evidence` retains native code/subcode and neutral category; temporary is separate from retry safety. `messenger.discovery` and shared local capabilities/message/media limit routes describe adapter support without Platform branches. Full removed-key and constructor mapping: repository `docs/migration/0.34.6.md`.
 
 The 0.34.6 addendum adds typed MessagePart.content for actual per-part structure (persist only accepted parts), plus Redis expiry due indexing/recovery. Keep Host idempotent fences; recovered events retain the existing hook/source and add metadata.recovered, original scheduled_for and generation execution_id. Old armed keys lack due entries and must be re-armed for recovery. Cancellation/rebind update pending metadata too, without changing trigger key names. See the scheduled-tasks skill's expiry reference.
+
+
+## Moving to 0.34.8
+
+Instagram temporarily ignores reply_to_message_id on all valid sends before calling Meta. Keep the neutral parameter in Host code; WhatsApp quoting is unchanged. Requested Instagram quotes produce wappa_reply_to with dropped=true and reason=instagram_reply_quotes_disabled, plus typed parts with reply_to_dropped=true. The old fallback error_code is absent because no rejected quote attempt happened. Inbound reply context and IDs are unchanged. See repository docs/migration/0.34.8.md for manual lab research.

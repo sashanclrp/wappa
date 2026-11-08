@@ -253,3 +253,32 @@ Consumer-reported evidence, not independently replayed by Wappa: Symphonai used 
 Offline regression evidence: fake Graph responses cover text/image, split text and captions, failed/indeterminate retries, unrelated errors, and sent-message registry writes. Signed callback tests cover unknown-only and mixed batches, warning suppression, invalid signatures/envelopes, account mismatches, inactivity and directory failures.
 
 Live follow-up, not run: restart with 0.34.4; quote a fresh inbound DM with text and media; record the original refusal, unquoted acceptance/message ID, returned `wappa_reply_to` evidence, echo/status and recipient rendering separately. Deliver signed callbacks for an unsubscribed-to-Wappa account and a registered account together: confirm 200, one warning per unknown account per process without values, and dispatch only for the registered account. Confirm bad signatures still return 401 and malformed/mismatched deliveries 400.
+
+
+### Instagram quote suppression and ID research (0.34.8)
+
+The consumer reports that fresh exact webhook mids still fail with Meta 2534002 after the 0.34.4 fallback. The user requested temporary suppression to avoid that wasted request. In 0.34.8 the adapter ignores reply_to_message_id before I/O and records a suppression reason, without claiming Meta rejected a call it never made. WhatsApp quoting and inbound context are unchanged. Offline tests prove no reply_to and no extra send.
+
+Manual live follow-up, not run: from the existing Instagram conversations lab use app.reply_probe (canonical Wappa scripts/instagram_reply_probe.py) to compare the exact same-Inbox webhook mid with history IDs. Default is read-only and reports fingerprints. Explicitly test one plain control, one webhook ID, and optionally one fingerprint-fenced history candidate, matching Login path, token, host and Graph version. Record acceptance/code/subcode and recipient quote rendering separately. No ID conversion or automatic send matrix is justified by the report. See docs/migration/0.34.8.md.
+
+
+### Interactive `/reply` diagnostic (unreleased lab change)
+
+Restart `instagram_conversations_example`, send `/reply` as a fresh Instagram DM, then repeat using the app’s Reply action on an earlier message. The diagnostic compares normalized/raw webhook message IDs, optional quoted-message context, a Conversations API ID matched to the fresh command, and a successful unquoted control’s outbound ID. Each distinct candidate is sent once via raw Graph `reply_to.mid`, bypassing suppression/fallback. Record the configured Graph host/version, `REPLY_PROBE` outcomes/error codes, callback acknowledgement and visible quote rendering separately. Do not infer universal unsupported behavior from a failed candidate. Implementation is covered by offline command tests; live run remains pending the User’s DM.
+
+
+### `/reply` live result — 2026-11-08 14:02 America/Bogota
+
+User ran the existing Instagram lab with the uncommitted diagnostic and supplied a screenshot of the received control and result summary. Configured endpoint: `graph.facebook.com`, Graph `v26.0`. `REPLY_PROBE` at 14:02:03 records an accepted unquoted control, then HTTP 400 / code 100 / subcode 2534002 for both the exact inbound webhook message ID (identical across normalized message, webhook ID and raw `message.mid`) and the accepted control send’s outbound `message_id`. Both distinct tested IDs are 167 characters; raw identifiers are intentionally omitted. No quoted send was accepted, and the screenshot shows the unquoted control and diagnostic summary. The Conversations lookup returned multiple conversations, so the diagnostic skipped history IDs; quoted-message context was absent in this run. Callback HTTP acknowledgement and delivery/read status are not separately established by this probe record.
+
+Verdict: these two native message-ID sources fail quoting on this configured account/endpoint. This supports the proposed temporary adapter mitigation (ignore Instagram `reply_to_message_id`, preserve ordinary sends and expose dropped-quote evidence), but does not establish that every Instagram ID or Login mode fails. A Conversations API candidate remains untested; this is not a completed exhaustive ID investigation. No 0.34.8 publication is implied by this result.
+
+
+The interactive probe now searches multiple conversations and follows cursor pagination rather than skipping ambiguous results. It matches current-command history IDs by sender, exact text and timestamp, deduplicates ID sources, and reports errors/truncation. Offline regression coverage exercises a match in a later conversation and later message page, including an unreadable neighboring conversation; all 44 lab tests pass. A fresh live `/reply` run is required to exercise the updated handler.
+
+
+### History-ID gap closed — 2026-11-08, direct read-only live lookup
+
+Using the lab’s configured Instagram account/token and `graph.facebook.com/v26.0`, queried the conversations list and inspected message histories without sending any additional messages. Meta returned 20 conversations despite the User filter. The first conversation contained the User’s `/reply` at `2026-11-08T19:01:53+0000`; its Conversations API message `id` is 167 characters, with SHA-256 prefix `e4c774bf38c3`, exactly matching the inbound webhook candidate already rejected in the 14:02:03 probe. The remaining 19 conversation histories contained no matching `/reply` in the inspected pages. Raw IDs and credentials are omitted.
+
+This closes the current exchange’s alternate-history-ID question: webhook and Conversations API expose the same identifier, not an alternate encoding. The other tested identifier source, the fresh outbound send response, also failed quoting. These live facts support temporary quote suppression for 0.34.8 on the tested account/Graph route; they do not establish behavior for every account, Login mode or API version. The lab diagnostic now returns immediately once it matches the current command in history, avoiding unnecessary reads of unrelated conversations.

@@ -2018,7 +2018,7 @@ wheels = [
 
 [[package]]
 name = "wappa"
-version = "0.34.7"
+version = "0.34.8"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },

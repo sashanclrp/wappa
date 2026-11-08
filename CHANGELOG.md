@@ -5,6 +5,23 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.8] - 2026-11-08
+
+Keep Instagram sends working without rejected quote attempts; preserve the shared Messenger contract and expose dropped-quote evidence.
+
+### Fixed
+
+- Instagram temporarily ignores `reply_to_message_id` before Graph I/O on text, media and interactive sends, including valid PrivateReply text sends. Sends no longer make a quoted attempt or a quote fallback retry. WhatsApp native quoting and inbound message IDs/reply context remain unchanged.
+
+### Changed
+
+- **Breaking behavior:** requested Instagram quotes are suppressed even when Meta might accept a particular ID. Results record `platform_response["wappa_reply_to"] = {"dropped": true, "reason": "instagram_reply_quotes_disabled"}` and `reply_to_dropped: true` on the affected send part. The previous fallback's `wappa_reply_to.error_code` is absent because no quoted request was made. Actual send failures retain their own provider errors. No public signature or serialized message-key changes; see [the migration guide](docs/migration/0.34.8.md).
+
+### Documentation
+
+- Updated the public contract, architecture, ADR-0025 and shipped Host skills. Added a credential-safe manual ID probe to the source distribution and `/reply` diagnostics in the existing sibling Instagram lab.
+- Recorded live Graph v26.0 evidence: ordinary text was accepted; the inbound webhook ID and a fresh outbound send ID were rejected with `100/2534002`. A subsequent read-only Conversations API lookup returned exactly the same ID as the rejected inbound webhook. These findings concern the tested account and route; they do not assert that every Instagram account, Login mode or API version rejects quoting.
+
 ## [0.34.7] - 2026-11-08
 
 Migrate live legacy expiry timers without re-arming them; preserve Wappa's recovery index during ordinary cache maintenance.

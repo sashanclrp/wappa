@@ -11,10 +11,9 @@ from wappa.domain.messaging_targets import (
     DirectMessage,
     MessageTarget,
     PrivateReply,
-    UnsupportedOperationError,
     require_direct_message,
 )
-from wappa.domain.results import MessageResult, OperationOutcome
+from wappa.domain.results import MessageResult
 from wappa.messaging.meta.graph import GraphResponse
 
 from ..part_content import message_content
@@ -155,10 +154,6 @@ class _DeliveryMixin(_InstagramBase):
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
         if isinstance(target, PrivateReply):
-            if reply_to_message_id:
-                raise UnsupportedOperationError(
-                    "A PrivateReply cannot also reply to a DM message"
-                )
             comment_id = target.resolve(self._inbox_ref)
             recipient: dict[str, str] = {"comment_id": comment_id}
             address = target.address
@@ -166,28 +161,16 @@ class _DeliveryMixin(_InstagramBase):
             address = target.resolve(self._inbox_ref)
             recipient = {"id": address}
         body: dict[str, Any] = {"recipient": recipient, "message": message}
-        if reply_to_message_id:
-            body["reply_to"] = {"mid": reply_to_message_id}
         response = await self._graph.request(
             "POST", self._graph.messages_path, json=body, operation=operation
         )
-        quote_dropped = (
-            "reply_to" in body
-            and response.outcome is OperationOutcome.REJECTED
-            and response.status_code == 400
-            and response.error_code == "100/2534002"
-        )
-        if quote_dropped:
-            # This precise rejection proves the quoted send was not accepted.
-            # Retry only that part, once; ambiguous outcomes are never retried.
-            unquoted = {key: value for key, value in body.items() if key != "reply_to"}
-            response = await self._graph.request(
-                "POST", self._graph.messages_path, json=unquoted, operation=operation
-            )
         result = self._result(response, address, operation)
-        if quote_dropped:
+        if reply_to_message_id:
             evidence = dict(result.platform_response or {})
-            evidence[REPLY_TO_KEY] = {"dropped": True, "error_code": "100/2534002"}
+            evidence[REPLY_TO_KEY] = {
+                "dropped": True,
+                "reason": "instagram_reply_quotes_disabled",
+            }
             result = result.model_copy(update={"platform_response": evidence})
         if result.success and result.message_id and self._sent_registry is not None:
             await self._sent_registry.record(self._inbox_ref, result.message_id)

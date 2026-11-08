@@ -61,7 +61,7 @@ Every action that exists on more than one Platform has exactly one `IMessenger` 
 
 | Operation | WhatsApp | Instagram (emulated where possible; rejected before I/O otherwise) |
 | --- | --- | --- |
-| `send_text` | text message | DirectMessage or `PrivateReply(comment_ref=...)`; text over 1000 UTF-8 bytes is sent as several messages, cut on a word boundary when possible, with the reply context on the first; a PrivateReply is one message per comment, so it cannot be split (`ValueError` over 1000 bytes) and excludes `reply_to_message_id`; `disable_preview` is ignored |
+| `send_text` | text message | DirectMessage or `PrivateReply(comment_ref=...)`; text over 1000 UTF-8 bytes is sent as several messages, cut on a word boundary when possible, with suppressed-quote evidence on the first; a PrivateReply is one message per comment, so it cannot be split (`ValueError` over 1000 bytes) and excludes `reply_to_message_id`; `disable_preview` is ignored |
 | `send_image/audio/video/document` | media message (URL or Media ID); WhatsApp's media rules are checked first, see below | an http(s) URL (Meta documents no scheme rule), an `IMediaLibrary.upload` attachment_id, or a local `Path` (uploaded first, under `filename` for a document, with the name transliterated to ASCII); image png/jpeg/gif ≤ 8 MB, audio aac/m4a/wav/mp4, video mp4/webm by URL but only an H.264 MP4 as a local file, file pdf ≤ 25 MB; a document URL in another format (`.docx`, `.xlsx`, `.txt` …) is sent as a text with the file name (`filename`, else the URL's last path segment) and the link, while an audio or video URL Instagram cannot play (`.mp3`, `.amr`, `.ogg`, `.mov`, `.3gp` …) raises `ValueError` before any call, as WhatsApp does; a caption is sent as a follow-up text (split like `send_text`), and the media-plus-caption send returns one result; an attachable URL or attachment_id has no name slot, so `filename` shows only in a link text or an upload; a local file in a format Instagram does not take raises `ValueError` before any call (Wappa does not convert media; the Host converts first); `transcript` is middleware-only metadata on every Platform |
 | `send_sticker` | sticker: `.webp` only (512x512; 100 KB static, 500 KB animated) | sent as an image: `.png`/`.jpg`/`.jpeg`/`.gif` (8 MB) |
 | `send_location(latitude, longitude, target, name=None, address=None)` | location message | text: name, address and a `📍` Google Maps link |
@@ -107,7 +107,7 @@ Every Platform adapter returns the same Wappa-owned evidence under `MessageResul
 - `role` describes the produced message: `text_chunk`, `caption`, `media`, `buttons`, `quick_replies`, `carousel_intro`, `carousel`; native operations can also use `contact`, `location`, `template`, `location_request`, `contact_request` or `message` for a local failure without a constructed send. Adapters may add roles for other native operations without changing this structure.
 - `text` is the exact text carried by that part after splitting or folding, or `null` for pure media or structured content with no text body. A WhatsApp native media message includes its caption in that one part; Instagram's caption follow-up has its own part(s). Wappa does not invent rendered Template text from parameters.
 - `outcome` uses `OperationOutcome`: `accepted`, `rejected`, `indeterminate`, `rate_limited`; `not_attempted` marks parts skipped after a failure or a failed prerequisite upload. Only accepted parts have a `message_id`. A failed attempted part includes `error_code` when available. An indeterminate part is not assumed absent and is never blindly resent.
-- A quote fallback is one logical part, with the retry's outcome and `reply_to_dropped: true`. Top-level `wappa_reply_to` evidence remains unchanged and survives aggregation.
+- Instagram temporarily ignores requested quotes and records `reply_to_dropped: true` on the affected part, plus top-level `wappa_reply_to` with the suppression reason. It makes no failed quote attempt or retry.
 
 The root result retains its existing `success`, `message_id`, `error_code`, retry information and first-failure stopping rule. Media-plus-caption success still returns the media ID; ordinary multipart success returns the final message ID. Uploads and quote attempts are not extra customer-visible parts. `platform_response` remains excluded from `model_dump()` and JSON; persist selected evidence explicitly, and apply the Host's history policy to accepted parts. The HTTP API serializes normalized `parts` and `aggregate_outcome`; native evidence remains excluded.
 
@@ -144,7 +144,7 @@ Responsibilities other than sending conversation messages, and actions with no r
 
 ## Instagram text adapter and explicit send targets
 
-Instagram first sends `reply_to_message_id` as top-level `reply_to: {"mid": ...}`. If that call is rejected with HTTP 400 and Meta code `100/2534002`, it retries only that refused part once without `reply_to`, preserving the message and recipient. The returned result is the retry result, with `platform_response["wappa_reply_to"] = {"dropped": True, "error_code": "100/2534002"}` on success or failure. This evidence survives split text, media-caption and other multipart emulations alongside `wappa_parts`. Other errors and indeterminate outcomes never trigger quote fallback; accepted parts are never resent. Hosts use the same parameter on both Platforms without branching.
+Since 0.34.8, Instagram accepts `reply_to_message_id` for contract compatibility but temporarily ignores it on every send, including text, media, interactive emulations and valid PrivateReply text sends. No `reply_to` field is emitted and there is no quote-failure retry, avoiding the rejected extra call observed in live tests. Results record `platform_response["wappa_reply_to"] = {"dropped": True, "reason": "instagram_reply_quotes_disabled"}` and mark the affected typed part `reply_to_dropped=True`. No Meta error code is fabricated for an attempt that was never made. Multipart sends retain this evidence; sends without a quote request have no dropped-quote evidence. WhatsApp continues sending native reply context. Inbound reply context and Message IDs are unchanged. Hosts keep the same neutral Messenger calls without a Platform branch.
 
 Instagram uses the existing GET/POST `/webhook/inboxes/instagram` callback,
 separate from `/webhook/inboxes/whatsapp`. Both use the same application Meta
@@ -218,14 +218,13 @@ the native address to middleware. `supported_operations` is the implemented
 adapter operation set (Instagram's full set is listed above). Other
 operations raise UnsupportedOperationError, also exported from wappa.messaging.
 
-Instagram text over 1000 UTF-8 bytes is sent as several messages (reply_to_message_id
-on the first). disable_preview is ignored. MessageResult sets platform=instagram,
+Instagram text over 1000 UTF-8 bytes is sent as several messages. reply_to_message_id
+is temporarily ignored on Instagram; disable_preview is ignored. MessageResult sets platform=instagram,
 retains native recipient/message IDs, and leaves WA phone/BSUID evidence empty.
 Its excluded platform_response carries native response evidence. Success means
 API acceptance. Timeout/disconnect, 5xx, and a 2xx response lacking a Message ID
 are INDETERMINATE; callers must not automatically resend. No retry or provider
-error-body logging is added. Results remain in the historical WA basic-model
-module in this first slice; neutral module extraction remains follow-up.
+error-body logging is added. Results live in the shared wappa.domain.results module.
 
 See [ADR-0025](adr/0025-messenger-contract.md) and the
 [Instagram setup walkthrough](backlog/in_progress/261103-instagram-conversations/references/setup.md).

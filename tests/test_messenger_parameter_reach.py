@@ -182,6 +182,11 @@ IGNORED: dict[tuple[PlatformType, str, str], str] = {
     (IG, "send_list_message", "button_text"): "WhatsApp list-opener label",
 }
 
+for _method in OPERATIONS:
+    IGNORED[(IG, _method, "reply_to_message_id")] = (
+        "temporarily disabled Instagram quotes"
+    )
+
 # Evidence-mapping reads: the value is checked in the result, not the wire.
 USER_VALUES = {
     WA: UserBase(phone_number="573001112233", profile_name="reach-name"),

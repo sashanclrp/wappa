@@ -45,7 +45,7 @@ Wappa filters nothing; your handler decides.
 
 ## Replies: public versus private
 
-For direct-message quote fallback and `wappa_reply_to` result evidence, see [Send](messaging.md). Hosts keep using `reply_to_message_id` without a Platform branch; the fallback can deliver a message without its quote.
+For temporarily disabled Instagram quote handling and `wappa_reply_to` result evidence, see [Send](messaging.md). Hosts keep using `reply_to_message_id` without a Platform branch; requested quotes are omitted before the send, without a rejected extra request.
 
 `self.instagram` is the Instagram Platform Messenger, ready in every Instagram dispatch (`None` on other Platforms): the same Messenger as `self.messenger` plus `comments`, `content` and `history`.
 

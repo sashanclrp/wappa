@@ -148,11 +148,11 @@
     {
       "id": "instagram-invalid-reply-quote",
       "prompt": "Instagram rejects an inbound mid quoted with reply_to_message_id as 100/2534002. Should my Host branch by Platform or resend everything?",
-      "expected_output": "Keep using the neutral parameter. Wappa retries only the refused part once without reply_to on HTTP 400 100/2534002 and records dropped=True,error_code=100/2534002 under platform_response.wappa_reply_to, preserved with wappa_parts. Other and indeterminate failures do not trigger fallback; never resend delivered parts.",
+      "expected_output": "Keep the same neutral reply_to_message_id parameter. Since 0.34.8 Instagram temporarily ignores it before I/O, emits no reply_to and makes no extra quote attempt/retry. Records reason=instagram_reply_quotes_disabled under wappa_reply_to and per-part reply_to_dropped. WhatsApp is unchanged; no provider error is fabricated.",
       "assertions": [
         "no Host Platform branch",
-        "narrow one-time adapter fallback",
-        "explains result evidence and partial delivery"
+        "no Instagram quote attempt or fallback retry",
+        "explains truthful suppression evidence"
       ]
     },
     {

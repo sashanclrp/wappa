@@ -22,7 +22,9 @@ class _SpecializedMixin(_InstagramBase):
         address: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
-        """Instagram has no location message: name, address and a maps link as text."""
+        """Instagram has no location message: name, address and a maps link as text.
+        ``reply_to_message_id`` is temporarily ignored on Instagram; result evidence records the dropped quote.
+        """
         if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
             raise ValueError("latitude/longitude out of range")
         link = f"https://www.google.com/maps/search/?api=1&query={latitude},{longitude}"
@@ -42,6 +44,8 @@ class _SpecializedMixin(_InstagramBase):
         ``contacts`` are the same typed ``ContactCard`` values WhatsApp sends
         natively. The blocks are separated by a blank line, and text over 1000
         UTF-8 bytes is split into several messages as ``send_text`` does.
+
+        ``reply_to_message_id`` is temporarily ignored on Instagram; result evidence records the dropped quote.
         """
         blocks = [contact_text(card) for card in contact_cards(contacts)]
         return await self.send_text(

@@ -15,7 +15,7 @@ from wappa.schemas.core.types import PlatformType
 REF = InboxRef(platform=PlatformType.INSTAGRAM, inbox_id="17890001")
 DM = DirectMessage(inbox_ref=REF, addresses=DeliveryAddresses.of("12345"))
 MID = "new_ig_dm_" + "x" * 157
-DROPPED = {"dropped": True, "error_code": "100/2534002"}
+DROPPED = {"dropped": True, "reason": "instagram_reply_quotes_disabled"}
 
 
 def rejected(code=100, subcode=2534002, status=400):
@@ -65,82 +65,59 @@ async def send_with_responses(responses, *, family="text", reply=MID):
 
 
 @pytest.mark.parametrize("family", ["text", "image", "caption", "split"])
-async def test_invalid_quote_retries_only_the_refused_part_and_preserves_evidence(
-    family,
-):
+async def test_quoted_sends_are_sent_unquoted_without_an_extra_graph_call(family):
     result, sent, registry = await send_with_responses(
         [
-            rejected(),
             httpx.Response(200, json={"message_id": "accepted-1"}),
             httpx.Response(200, json={"message_id": "accepted-2"}),
         ],
         family=family,
     )
     assert result.success
-    assert sent[0]["reply_to"] == {"mid": MID}
-    assert sent[1] == {
-        key: value for key, value in sent[0].items() if key != "reply_to"
-    }
-    assert all("reply_to" not in body for body in sent[1:])
-    assert len(sent) == (3 if family in {"caption", "split"} else 2)
+    assert all("reply_to" not in body for body in sent)
+    assert len(sent) == (2 if family in {"caption", "split"} else 1)
     assert result.platform_response["wappa_reply_to"] == DROPPED
-    expected_ids = (
-        ["accepted-1", "accepted-2"]
-        if family in {"caption", "split"}
-        else ["accepted-1"]
-    )
-    assert [call.args[1] for call in registry.record.await_args_list] == expected_ids
-    if family in {"caption", "split"}:
-        assert result.platform_response["wappa_parts"]["message_ids"] == expected_ids
+    assert result.parts[0].reply_to_dropped
+    assert all(not part.reply_to_dropped for part in result.parts[1:])
+    assert registry.record.await_count == len(sent)
 
 
 @pytest.mark.parametrize(
-    "final",
+    "response",
     [
         rejected(),
+        rejected(subcode=33),
         httpx.Response(503, json={"error": {"code": 2}}),
         httpx.Response(200, json={"recipient_id": "12345"}),
     ],
 )
-async def test_unquoted_retry_returns_its_failure_without_a_third_send(final):
-    result, sent, registry = await send_with_responses([rejected(), final])
-    assert not result.success
-    assert len(sent) == 2
+async def test_unquoted_send_failures_return_without_retry_and_retain_quote_evidence(
+    response,
+):
+    result, sent, registry = await send_with_responses([response])
+    assert not result.success and len(sent) == 1
+    assert "reply_to" not in sent[0]
     assert result.platform_response["wappa_reply_to"] == DROPPED
-    assert result.error_code == (
-        "100/2534002" if final.status_code == 400 else "INDETERMINATE"
-    )
+    assert "error_code" not in DROPPED  # no fabricated provider rejection
+    assert result.parts[0].reply_to_dropped
     registry.record.assert_not_awaited()
 
 
-@pytest.mark.parametrize(
-    "response,reply",
-    [
-        (rejected(), None),
-        (rejected(subcode=33), MID),
-        (rejected(code=10), MID),
-        (rejected(status=503), MID),
-        (httpx.Response(200, json={"recipient_id": "12345"}), MID),
-        (httpx.Response(200, json={"message_id": "ok"}), MID),
-    ],
-)
-async def test_other_outcomes_do_not_drop_the_quote_or_add_a_retry(response, reply):
-    result, sent, _ = await send_with_responses([response], reply=reply)
-    assert len(sent) == 1
-    assert "wappa_reply_to" not in (result.platform_response or {})
-    if reply:
-        assert sent[0]["reply_to"] == {"mid": MID}
-
-
-async def test_fallback_evidence_survives_a_later_caption_failure():
+async def test_no_quote_requested_has_no_dropped_quote_evidence():
     result, sent, _ = await send_with_responses(
-        [
-            rejected(),
-            httpx.Response(200, json={"message_id": "image-1"}),
-            rejected(subcode=33),
-        ],
+        [httpx.Response(200, json={"message_id": "ok"})], reply=None
+    )
+    assert result.success and len(sent) == 1
+    assert "wappa_reply_to" not in result.platform_response
+    assert not result.parts[0].reply_to_dropped
+
+
+async def test_suppression_evidence_survives_a_later_caption_failure():
+    result, sent, _ = await send_with_responses(
+        [httpx.Response(200, json={"message_id": "image-1"}), rejected(subcode=33)],
         family="caption",
     )
-    assert not result.success and len(sent) == 3
+    assert not result.success and len(sent) == 2
     assert result.platform_response["wappa_reply_to"] == DROPPED
     assert result.platform_response["wappa_parts"]["message_ids"] == ["image-1"]
+    assert result.parts[0].reply_to_dropped

@@ -131,6 +131,7 @@ class _MediaMixin(_InstagramBase):
         caption: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> MessageResult:
+        """``reply_to_message_id`` is temporarily ignored on Instagram; result evidence records the dropped quote."""
         return await self._media_with_caption(
             "image", image_source, target, caption, reply_to_message_id
         )
@@ -143,6 +144,7 @@ class _MediaMixin(_InstagramBase):
         reply_to_message_id: str | None = None,
         transcript: str | None = None,
     ) -> MessageResult:
+        """``reply_to_message_id`` is temporarily ignored on Instagram; result evidence records the dropped quote."""
         _ = transcript  # Host metadata, never shown to the User (as on WhatsApp)
         return await self._media_with_caption(
             "video", video_source, target, caption, reply_to_message_id
@@ -163,6 +165,8 @@ class _MediaMixin(_InstagramBase):
         serves a WhatsApp voice note and Instagram from one call. When no
         rendition fits (WhatsApp's ``.mp3``, ``.amr``, ``.ogg``), ``ValueError``
         is raised before any call, as on WhatsApp.
+
+        ``reply_to_message_id`` is temporarily ignored on Instagram; result evidence records the dropped quote.
         """
         _ = transcript  # Host metadata, never shown to the User (as on WhatsApp)
         _ = is_voice
@@ -189,6 +193,8 @@ class _MediaMixin(_InstagramBase):
 
         An accepted URL or an attachment_id has no name slot on Instagram, so
         ``filename`` shows only on WhatsApp there.
+
+        ``reply_to_message_id`` is temporarily ignored on Instagram; result evidence records the dropped quote.
         """
         return await self._media_with_caption(
             "document",
@@ -212,6 +218,8 @@ class _MediaMixin(_InstagramBase):
         Pass renditions (``[sticker.webp, sticker.gif]``) and Instagram takes a
         png/jpeg/gif one when given (a GIF animates), else the WebP URL;
         WhatsApp takes the WebP.
+
+        ``reply_to_message_id`` is temporarily ignored on Instagram; result evidence records the dropped quote.
         """
         what = "Instagram sticker (sent as an image)"
         images = MEDIA_RULES["image"].extensions

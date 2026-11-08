@@ -300,7 +300,8 @@ async def test_instagram_video_card_shows_its_poster_and_opens_the_video() -> No
 
     assert result.success
     intro, carousel, _, image_carousel = _bodies(sent)
-    assert intro["message"] == {"text": "Picks"} and intro["reply_to"] == {"mid": "m1"}
+    assert intro["message"] == {"text": "Picks"} and "reply_to" not in intro
+    assert result.parts[0].reply_to_dropped
     assert "reply_to" not in carousel
     video, own = carousel["message"]["attachment"]["payload"]["elements"]
     image = image_carousel["message"]["attachment"]["payload"]["elements"][0]
@@ -374,7 +375,8 @@ async def test_instagram_cta_sends_a_media_header_first_then_the_button() -> Non
     assert result.success and text_header.success
     media, cta, folded = _bodies(sent)
     assert media["message"]["attachment"] == {"type": "video", "payload": {"url": VID}}
-    assert media["reply_to"] == {"mid": "m1"} and "reply_to" not in cta
+    assert "reply_to" not in media and "reply_to" not in cta
+    assert result.parts[0].reply_to_dropped
     template = cta["message"]["attachment"]["payload"]
     assert template["text"] == "Body\n\nFoot"
     assert template["buttons"] == [
