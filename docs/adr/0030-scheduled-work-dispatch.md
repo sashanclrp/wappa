@@ -1,6 +1,6 @@
 # Scheduled work uses Wappa context; Hosts own scheduler engines
 
-Accepted 2026-11-06, implemented in Wappa. The user approved the final responsibility table in the [grilling session](../sasha/grilling-sessions/261106-scheduling-domain.md#q26-final-question-wappa-versus-host-responsibilities). Shipped in 0.34.0.
+Accepted 2026-11-06, implemented in Wappa. The user approved the final responsibility table in the [grilling session](../design-sessions/261106-scheduling-domain.md#q26-final-question-wappa-versus-host-responsibilities). Shipped in 0.34.0.
 
 ## Context
 

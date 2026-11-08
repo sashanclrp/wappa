@@ -4,9 +4,9 @@ Status: implemented in the working tree (unreleased). The DirectMessage
 migration plus PrivateReply, public comment replies, new event lanes, Comment
 Controls, content reads, trusted credential access, Instagram extension fields
 and Unified Login primitives are shipped as code with offline tests; live
-certification per capability is tracked in the series
-[capability matrix](../platforms/instagram-capability-matrix.md).
-Upgrading from 0.33? Start with the [0.33 → 0.34 checklist](v0.34.0-from-0.33.md). See the [PRD](../platforms/instagram-scope.md).
+certification per capability is tracked in the
+[Instagram reference](../platforms/instagram.md).
+Upgrading from 0.33? Start with the [0.33 → 0.34 checklist](v0.34.0-from-0.33.md).
 
 ## Recipient-based Messenger calls
 

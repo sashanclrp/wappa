@@ -6,61 +6,13 @@ checked_against:
   - https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/
 ---
 
-# Media formats: what to send on WhatsApp and Instagram
+# Media format evidence
 
-What each Platform really accepts and renders, from Meta's docs **and** a live run of every format (Gate A, 2026-11-06), and which format a Host should prepare for each use. The skills teach the "Recommended formats" table and the "What each Platform cannot process" lists (see the skills PRD, item 15).
+Authoritative live format results from 2026-11-06, used to derive the shipped [media preparation guide](../../wappa/cli/skills/wappa-apps/references/media-formats.md). That guide owns recommended formats, per-Platform caps and preparation instructions; the [public contract](../public-contract.md#messenger-operations-one-method-per-action-adr-0025) owns validation and send behavior. Wappa does not convert media; the Host Application prepares renditions.
 
-**Wappa does not convert media.** Preparing files in a format that fits is the Host's job, usually once, when the asset is stored (a Host that keeps web masters, WebM video and WebP images, stores a messaging rendition next to each). Wappa's part is to know each Platform's rules and refuse a file that does not fit **before any Platform call**, with an error that names the problem; a Meta link it cannot use would otherwise be accepted and fail minutes later (WhatsApp) or reach the User as something unplayable (Instagram). **Wappa provides the information; the Host decides** which file to send to which Platform. `MediaRenditions` (a list of files for `send_sticker` and `send_audio`) is only a convenience: each Platform takes the first file it accepts, and a Host that branches on the Platform itself is equally supported.
+The tables distinguish Meta acceptance, status webhooks and phone rendering. They record the format tests, including raw calls that bypassed Wappa validation; accepted test formats are not necessarily recommended or permitted by Wappa. Local validation is implemented in `wappa/messaging/whatsapp/media/rules.py`, `wappa/messaging/instagram/media/rules.py` and `wappa/domain/media_probe.py`. Extension-less URLs and most Media IDs provide no format/codec evidence for validation without fetching; WhatsApp voice/sticker IDs are checked against stored MIME.
 
-## Recommended formats
-
-One format per use works on both Platforms, except voice notes, animated images and animated stickers, which need a second rendition.
-
-| Use | Universal target | WhatsApp | Instagram | Second rendition |
-| --- | --- | --- | --- | --- |
-| image (photo) | JPEG | ✅ link and upload | ✅ link and upload | — |
-| image (graphic, transparency) | PNG | ✅ (alpha kept) | ✅; alpha becomes white by link, kept by upload | flatten onto a Host background when the look must not depend on the lane |
-| image (animated) | none | ❌ images cannot animate: send an MP4 video | GIF animates in a DM (not in a card) | yes: MP4 for WhatsApp, GIF for Instagram, or send as video on both |
-| video | MP4, H.264 Main (Baseline for old Android), AAC, faststart, ≤ 16 MB | ✅ link and upload | ✅ link and upload | — |
-| audio | M4A (AAC) | ✅ | ✅ (shown as a voice bubble) | — |
-| voice note | OGG/Opus mono 48 kHz | ✅ the only format with a waveform | ❌ OGG does not play; Instagram has no voice-note type, every audio is a voice bubble | yes: M4A (AAC) for Instagram |
-| document | PDF | ✅ | ✅ (the only attachable type; other types by URL become a link text) | — |
-| sticker (static) | WebP 512×512, ≤ 100 KB | ✅ | ✅ **by URL only** (the upload endpoint answers HTTP 500) | PNG when it must be uploaded to Instagram |
-| sticker (animated) | animated WebP 512×512, ≤ 500 KB | ✅ | ❌ first frame only | yes: GIF for Instagram |
-| card image | JPEG or PNG, by public URL | ✅ | ✅ (a GIF shows as a still) | — |
-| card video | MP4 H.264, by public URL | ✅ plays in the card | ⚠️ the card shows `poster_url` (a JPEG) and a tap opens the video URL in the browser | the poster frame |
-
-In short: **video MP4 (H.264 + AAC), documents PDF, photos JPEG, graphics PNG, audio M4A (AAC), WhatsApp voice notes OGG/Opus, stickers WebP 512×512 plus PNG or GIF for Instagram.** Avoid as messaging formats: MOV, MKV, HEVC, HEIC, WAV, OGG Vorbis, animated WebP as an image, and WebM (Instagram plays it by URL, WhatsApp refuses it).
-
-## What each Platform cannot process
-
-Each list is what Wappa refuses before any call (✋) or what Meta takes but the User does not get as intended (⚠️). The Host decides what to send where.
-
-**WhatsApp cannot:**
-
-- ✋ image: GIF, HEIC, animated WebP (images never animate).
-- ✋ video: MOV, MKV, WebM (VP8 or VP9), HEVC (H.265); only MP4 or 3GP with H.264.
-- ✋ audio: WAV, WebM, OGG Vorbis; voice note: anything but OGG/Opus (⚠️ MP3, M4A or AAC as a voice note arrive with no waveform, so Wappa refuses them).
-- ✋ sticker: anything but WebP 512×512 (PNG and a 256×256 WebP fail).
-- ✋ over the size caps: image 5 MB, video and audio 16 MB, static sticker 100 KB, animated sticker 500 KB, document 100 MB.
-- ✋ a carousel with one bad card (the whole carousel fails) or mixed image and video headers.
-
-**Instagram cannot:**
-
-- ✋ image: an uploaded WebP (HTTP 500; a WebP URL works); ⚠️ animated WebP (first frame only); ⚠️ PNG transparency by link (white matte).
-- ✋ video: MOV, MKV, 3GP, OGG, AVI; an upload other than an H.264 MP4 (WebM uploads answer HTTP 500, an uploaded HEVC's send is refused 3/1545003); ⚠️ an HEVC MP4 **link** is accepted but shows an empty placeholder (Wappa cannot see a URL's codec).
-- ✋ audio: MP3, OGG (Opus or Vorbis), WebM, AMR; only AAC, M4A, WAV and MP4 audio play. There is no separate voice note.
-- ⚠️ document: only PDF attaches; another type by URL is shared as a text with the file name and link (the file opens from it); ✋ another type as a file.
-- ⚠️ cards: a GIF card image is a still; a video card is its poster, and the tap opens the video in the browser.
-- ✋ over the size caps: image 8 MB, audio, video and document 25 MB.
-
-Neither Platform: an extension-less URL or a Media ID is not checked (no fetch); Meta decides, and on Instagram there is no `failed` status to tell the Host.
-
-## What Wappa refuses before any call
-
-- **WhatsApp** (`wappa/messaging/whatsapp/media_rules.py`, content read by `wappa/domain/media_probe.py`): by suffix, image `.jpg/.jpeg/.png/.webp`, video `.mp4/.3gp`, audio `.aac/.amr/.mp3/.m4a/.ogg`, voice `.ogg`, sticker `.webp`; by content for local files and uploads, animated WebP as an image, GIF, HEIC, HEVC, MOV, WebM, OGG without Opus, WAV, a sticker not 512×512, size caps; by stored MIME type for a voice note (`audio/ogg`) or sticker (`image/webp`) sent by Media ID; every carousel card.
-- **Instagram** (`wappa/messaging/instagram/media.py`): by suffix, image png/jpeg/gif (WebP by URL only), audio aac/m4a/wav/mp4, video mp4/webm (an upload: MP4 only), document pdf as a file; by content for uploads, WebP bytes and HEVC video; size caps. An audio or video URL in another format is refused like a file (as on WhatsApp); only a document URL Instagram cannot attach is shared as a link text.
-- Not covered: an extension-less URL or a Media ID for images and video (no fetch); Meta decides those.
+Source note, 2026-11-06: the original Host guidance preferred reusable WhatsApp Media IDs, citing a 30-day Media ID lifetime and roughly 10-minute Meta URL caching. These lifetimes have no separate live confirmation in this record; unverified since 2026-11-06.
 
 ## Live results
 
@@ -80,7 +32,7 @@ API = Meta's response to the send (or Wappa's refusal before I/O); Delivery = th
 
 Findings for the spec and the engine:
 
-- A link is accepted (200) and fails later for every unsupported format: the verdict arrives as a status webhook, seconds to minutes later (a HEIC link that Meta could not fetch failed after 6 minutes with "http code 503"). Only refusal before I/O gives the Host a synchronous answer, so Wappa enforces these rules at send time (`wappa/messaging/whatsapp/media_rules.py`).
+- A link is accepted (200) and fails later for every unsupported format: the verdict arrives as a status webhook, seconds to minutes later (a HEIC link that Meta could not fetch failed after 6 minutes with "http code 503"). Only refusal before I/O gives the Host a synchronous answer, so Wappa enforces these rules at send time (`wappa/messaging/whatsapp/media/rules.py`).
 - Suffix rules alone miss three cases: animated vs static WebP, OGG Vorbis vs Opus, and sticker dimensions. Each needs the bytes (magic bytes, the WebP `ANIM` chunk, the OGG codec header, image size); `wappa/domain/media_probe.py` reads them.
 - By Media ID nothing has a suffix. Wappa now checks the stored MIME type (`GET /{media_id}`) for voice notes (`audio/ogg`) and stickers (`image/webp`) before sending (677f34a, 13cec65); other families still pass through.
 - Python maps `.3gp` to `audio/3gpp`; WhatsApp needs `video/3gpp` for a video. Fixed in the Media Library (ef05128) and in the lab's asset server.
@@ -111,11 +63,3 @@ Findings:
 - Audio: M4A (AAC) plays on both Platforms. A WhatsApp voice note needs OGG/Opus, which Instagram does not play, so voice notes on both need two files.
 - An Instagram upload that answers HTTP 500 is a format refusal in practice (WebM and MOV video, WebP image: code 1 "unknown error"), not an outage.
 - WebM is the one format where the lanes split on Instagram: it plays by URL and fails as an upload; WhatsApp refuses it in both.
-
-## What the skills teach
-
-- Prepare media once, in the recommended format, when the asset is stored; never rely on Meta or Wappa to convert.
-- Teach both "cannot process" lists as facts; the Host decides per Platform. Renditions (`send_sticker(["s.webp", "s.gif"])`, `send_audio(["v.ogg", "v.m4a"], is_voice=True)`) are one way to do it, not the required one.
-- Prefer upload + Media ID for media sent more than once on WhatsApp (Media IDs live 30 days; Meta's URL cache lasts about 10 minutes); on Instagram WebP and WebM work only by URL.
-- A Meta acceptance is not delivery: on WhatsApp watch `failed` status webhooks (131053) for links; on Instagram there is no failed status, so only the recommended formats are safe.
-- Test new formats in small runs: the Instagram development app allows about 10-20 calls per burst before code `4` (`references/rate-limits.md`).

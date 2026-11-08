@@ -93,3 +93,7 @@ This request has been implemented. The list below records the delivered scope.
 - `wappa/core/pubsub/**`
 - CLI examples importing inbound webhook models
 - tests for user/message/status/system webhook parsing
+
+## Completed execution trace
+
+Completed 2026-08-03. The implementation plan's distinct sequence was: inventory duplicate imports; move callers to `wappa.webhooks`; delete the duplicate inbound schemas and factory; refresh exports, architecture and public-contract imports; verify CLI examples and templates; then run parsing and import-boundary regressions, Ruff, mypy and pytest. The delivered scope and acceptance checklist above absorb that completed plan. Current ownership is in [Webhooks architecture](../../wappa/webhooks/ARCHITECTURE.md) and the [public contract](../public-contract.md), rather than the original proposed intermediate paths.

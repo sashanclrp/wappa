@@ -32,7 +32,7 @@ Retired deployment names fail at settings initialization, including empty values
 
 ## Instagram conversations contract
 
-Shipped in 0.34.0; see the [migration guide](migration/instagram-conversation-contracts.md), the [capability matrix](platforms/instagram-capability-matrix.md) for per-capability offline/live status, and [ADR-0025](adr/0025-messenger-contract.md) for the one-method-per-action rule. Publishing, analytics and moderation *policy* remain Host/extension responsibilities.
+Shipped in 0.34.0; see the [migration guide](migration/instagram-conversation-contracts.md), the [Instagram reference](platforms/instagram.md) for per-capability offline/live status, and [ADR-0025](adr/0025-messenger-contract.md) for the one-method-per-action rule. Publishing, analytics and moderation *policy* remain Host/extension responsibilities.
 
 ### Event lanes (`from wappa.webhooks import ...`)
 

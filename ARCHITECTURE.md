@@ -20,9 +20,9 @@ Two sources are Wappa's own, composed by SchedulingPlugin. Redis expiry keeps it
 
 ## Design Patterns
 
-Instagram scope includes planned regular/Live comment intake, public mentions, public/private replies, comment controls and explicit conversation-content/media reads. Wappa provides the Platform operations; Hosts own response, moderation, AI, takeover and workflow policy. Publishing, content calendars, scheduled publication and content/account analytics belong to Hosts or Platform Extensions.
+Instagram supports regular/Live comment intake, public mentions, public/private replies, comment controls and explicit conversation-content/media reads. Wappa provides the Platform operations; Hosts own response, moderation, AI, takeover and workflow policy. Publishing, content calendars, scheduled publication and content/account analytics belong to Hosts or Platform Extensions.
 
-The agreed extension design formalizes Symphonai's existing reuse of current credentials for its own provider clients. A planned narrow supported access capability will replace consumer dependence on the internal resolver; it does not require Wappa to own extension clients. Registered extension fields enter the same authenticated Instagram callback; extension schemas and handlers stay outside the conversation domain. Message edits/deletions use a planned distinct message-update lane rather than delivery statuses. These contracts shipped in 0.34 and passed live gates A, B and C on 2026-11-08. See the [scope](docs/platforms/instagram-scope.md), [completed session](docs/sasha/grilling-sessions/261103-instagram-scope-and-extensions.md) and [ADR-0025](docs/adr/0025-messenger-contract.md).
+Trusted extensions resolve current credentials through `InboxCredentialAccess` and own their extra clients. Registered extension fields enter the authenticated Instagram callback with extension-owned schemas and handlers. Message edits/deletions use the distinct message-update lane. These contracts shipped in 0.34; the live ledger closed checks A, B and C on 2026-11-08. See the [Instagram reference](docs/platforms/instagram.md), [completed session](docs/design-sessions/261103-instagram-scope-and-extensions.md) and [ADR-0025](docs/adr/0025-messenger-contract.md).
 
 HTTP composition uses FastAPI 0.162.x. Inspect included routes through `fastapi.routing.iter_route_contexts(app.routes)` so prefixes and inherited metadata describe each inclusion. `app.routes` contains router relationships; its length does not count endpoints. Plugins populate registered router shells with `include_router()` during startup rather than copying route lists.
 
@@ -340,7 +340,7 @@ Host policy (which comments to answer/hide, flows, AI, takeover) stays in the Ho
 
 ## Deeper Architecture Docs
 
-Each bounded context has its own `ARCHITECTURE.md` for internal details:
+The [documentation map](docs/README.md) locates reference docs and records. Each bounded context has its own `ARCHITECTURE.md` for internal details:
 
 | Context | Doc | Covers |
 |---------|-----|--------|
