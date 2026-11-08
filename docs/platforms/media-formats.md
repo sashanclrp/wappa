@@ -8,7 +8,7 @@ checked_against:
 
 # Media formats: what to send on WhatsApp and Instagram
 
-What each Platform really accepts and renders, from Meta's docs **and** a live run of every format (Gate A, 2026-11-06), and which format a Host should prepare for each use. The skills teach the "Recommended formats" table and the "What each Platform cannot process" lists (see the [skills PRD](../developer-experience/261103-mid-instagram-app-skills-and-setup.md), item 15).
+What each Platform really accepts and renders, from Meta's docs **and** a live run of every format (Gate A, 2026-11-06), and which format a Host should prepare for each use. The skills teach the "Recommended formats" table and the "What each Platform cannot process" lists (see the skills PRD, item 15).
 
 **Wappa does not convert media.** Preparing files in a format that fits is the Host's job, usually once, when the asset is stored (a Host that keeps web masters, WebM video and WebP images, stores a messaging rendition next to each). Wappa's part is to know each Platform's rules and refuse a file that does not fit **before any Platform call**, with an error that names the problem; a Meta link it cannot use would otherwise be accepted and fail minutes later (WhatsApp) or reach the User as something unplayable (Instagram). **Wappa provides the information; the Host decides** which file to send to which Platform. `MediaRenditions` (a list of files for `send_sticker` and `send_audio`) is only a convenience: each Platform takes the first file it accepts, and a Host that branches on the Platform itself is equally supported.
 

@@ -11,7 +11,7 @@ checked_against:
 
 # Rate limits: Instagram and WhatsApp
 
-What Meta caps, what each error code means, what we saw live, and what Wappa does about it today. The skills teach the Host-facing part (see the [skills PRD](../developer-experience/261103-mid-instagram-app-skills-and-setup.md), item 14). Numbers come from Meta's pages on the date in the header; when one is about six months old, re-check the live page before relying on it.
+What Meta caps, what each error code means, what we saw live, and what Wappa does about it today. The skills teach the Host-facing part (see the skills PRD, item 14). Numbers come from Meta's pages on the date in the header; when one is about six months old, re-check the live page before relying on it.
 
 ## Live evidence (Gate A, 2026-11-06)
 

@@ -4,7 +4,7 @@ Checked in per I02 ("one row per inbound variant and outbound operation"). Opera
 
 Status legend. **Impl**: implemented in the working tree. **Offline**: covered by automated tests (`tests/test_instagram_conversations.py`, `tests/test_instagram_connection.py`, `tests/test_instagram_text.py`, example `tests/`). **Live**: observed against the real account, with the date. "Pending" means no live evidence yet, not that it's known to fail.
 
-Reviewed 2026-11-06 against the November 5 [results log](../tests/live-test-plan.md). No new live tests were run for this reconciliation. Gate C remains unverified.
+Reviewed 2026-11-06 against the November 5 [results log](../verification/261103-instagram-conversations-live-tests.md). No new live tests were run for this reconciliation. Gate C remains unverified.
 
 ## Inbound
 

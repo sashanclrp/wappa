@@ -1,10 +1,10 @@
 # Live test plan: gates A, B and C
 
-Runbook for the live checks. Record results in the matrix ([capability-matrix.md](../references/capability-matrix.md)) and below, keeping the same evidence rules as [simple-text-test.md](simple-text-test.md): callback acknowledgement, provider acceptance, echo/read and what the recipient actually saw are different facts. Never paste tokens, codes or personal IDs.
+Runbook for the live checks. Record results in the matrix ([capability-matrix.md](../platforms/instagram-capability-matrix.md)) and below, keeping the same evidence rules as [simple-text-test.md](261103-instagram-simple-text-test.md): callback acknowledgement, provider acceptance, echo/read and what the recipient actually saw are different facts. Never paste tokens, codes or personal IDs.
 
-## Current status (2026-11-06)
+## Current status (2026-11-08)
 
-**Gate A passed (closed 2026-11-06)** after the hardening, on both Platforms: every command, the WhatsApp "not available" guard, the rate-limit governor live, and the full format matrix (every family by link and upload, rendering observed on the phone; results and the per-Platform "cannot process" lists in [`references/media-formats.md`](../references/media-formats.md)). See the 2026-11-06 rows in the Results log. Core Gate B passed; Creator B-08 was not run, and independent-customer access and actual revocation remain limitations. Gate C has implementation notes but no recorded live results. The deauthorize experiments below are historical; architecture hardening removed that unsupported route for Unified Login.
+**Gate A passed (closed 2026-11-06)** after the hardening, on both Platforms: every command, the WhatsApp "not available" guard, the rate-limit governor live, and the full format matrix (every family by link and upload, rendering observed on the phone; results and the per-Platform "cannot process" lists in [`references/media-formats.md`](../platforms/media-formats.md)). See the 2026-11-06 rows in the Results log. Gate B passed, B-08 included (2026-11-08); independent-customer access and actual revocation remain limitations. Gate C passed (closed 2026-11-08) on Symphonai with Wappa 0.34.8, and A-11 and B-08 passed the same day (user-run; see the 2026-11-08 results). The deauthorize experiments below are historical; architecture hardening removed that unsupported route for Unified Login.
 
 ## 0. Prepare (once)
 
@@ -49,7 +49,7 @@ Status on 2026-11-03: account access was verified and `--subscribe` was run. A r
 
 ## Parity: one method, WhatsApp and Instagram (ADR-0025)
 
-Run each command on both Platforms against the same server and code. Expect the same flow, with each Platform's native rendering. WhatsApp number setup (test number via `.env`, or Embedded Signup): [whatsapp-setup.md](../references/whatsapp-setup.md).
+Run each command on both Platforms against the same server and code. Expect the same flow, with each Platform's native rendering. WhatsApp number setup (test number via `.env`, or Embedded Signup): [whatsapp-setup.md](../platforms/whatsapp-setup.md).
 
 | ID | Command | WhatsApp renders | Instagram renders | Same handler result |
 | --- | --- | --- | --- | --- |
@@ -282,3 +282,22 @@ The interactive probe now searches multiple conversations and follows cursor pag
 Using the lab’s configured Instagram account/token and `graph.facebook.com/v26.0`, queried the conversations list and inspected message histories without sending any additional messages. Meta returned 20 conversations despite the User filter. The first conversation contained the User’s `/reply` at `2026-11-08T19:01:53+0000`; its Conversations API message `id` is 167 characters, with SHA-256 prefix `e4c774bf38c3`, exactly matching the inbound webhook candidate already rejected in the 14:02:03 probe. The remaining 19 conversation histories contained no matching `/reply` in the inspected pages. Raw IDs and credentials are omitted.
 
 This closes the current exchange’s alternate-history-ID question: webhook and Conversations API expose the same identifier, not an alternate encoding. The other tested identifier source, the fresh outbound send response, also failed quoting. These live facts support temporary quote suppression for 0.34.8 on the tested account/Graph route; they do not establish behavior for every account, Login mode or API version. The lab diagnostic now returns immediately once it matches the current command in history, avoiding unnecessary reads of unrelated conversations.
+
+### Gate C results (2026-11-08) — closed: C-01 to C-05 pass
+
+Source: the Symphonai session on branch `prd/wappa-v0341` (tip `dbd3100d2`, Wappa pinned to 0.34.8). Its ledger records events, not one UTC time per check. The user then ran C-03, C-04 and C-05 live and reported every Gate C check passed (2026-11-08); the rows below record the user's report, with no per-check time.
+
+| Date | Check | Result | Observation |
+| --- | --- | --- | --- |
+| 2026-11-08 | C-01 Owner Channel | pass (in substance) | candyfliphard connected through the demo frontend's Instagram login; credential persisted; inbound DMs resolved to that Channel by live routing. `set_active_token` and a direct `instagram:<id>` directory read were not exercised by hand |
+| 2026-11-08 | C-02 Agent reply | pass | DMs got the Agent's reply in the same thread; Conversation, messages, Episodes and system messages showed in the operator UI. Found the `reply_to` 2534002 rejection, fixed in 0.34.4 (then 0.34.8) |
+| 2026-11-08 | C-03 isolation | pass (user-run) | Two testers at once and one tester on two Instagram accounts: separate Conversations. Also offline: Symphonai's multi-Owner suite (2 Owners × IG + WA, 129 fast and 112 real tests, no cross-Owner leak) |
+| 2026-11-08 | C-04 operator takeover | pass (user-run) | Agent and delayed jobs paused, human text delivered, resumed per policy |
+| 2026-11-08 | C-05 credential lifecycle | pass (user-run) | Graph read through `resolve_runtime_credential`, rotation picked up on the next call, deactivation raised `RuntimeInboxInvalid` |
+
+### A-11 and B-08 results (2026-11-08, user-run)
+
+| Date | Check | Result | Observation |
+| --- | --- | --- | --- |
+| 2026-11-08 | A-11 form edge cases | pass (user-run) | Resume with `/form`, stale button, `cancel`, restart and double confirm ("already submitted") behaved as expected. Offline: lab `test_form_intake.py` (resume/cancel/restart, stale, concurrent Users and the same User ID in two Inboxes) |
+| 2026-11-08 | B-08 Creator account | pass (user-run) | Creator account connected through Unified Login; reported by the user |

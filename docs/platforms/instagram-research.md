@@ -1,6 +1,6 @@
 # Instagram integration research
 
-Scope update (2026-11-03): the [PRD](scope.md) records the completed grilling
+Scope update (2026-11-03): the [PRD](instagram-scope.md) records the completed grilling
 session's selections. The inventories below are research/history, not current
 exclusions or claims of implemented support. In particular Live comments,
 public mentions, comment-control primitives, supported media bytes retrieval,
@@ -8,7 +8,7 @@ trusted credential reuse and extension webhook intake are selected. Publishing,
 content/account analytics and moderation policy remain consumer-owned.
 
 
-Test record: [simple text tests and learnings](../tests/simple-text-test.md).
+Test record: [simple text tests and learnings](../verification/261103-instagram-simple-text-test.md).
 
 
 Implementation update (2026-11-03): initial Instagram text/seen/echo-system lanes,
@@ -17,16 +17,16 @@ example are implemented locally. CLI GET verification and signed offline echo
 have been tested. A real Instagram text exchange, outbound echo event, and READ
 status were verified at 11:24 America/Bogota on 2026-11-03. Self-service OAuth
 onboarding and Symphonai integration remain pending.
-See [setup.md](setup.md#local-implementation-ready-for-callback-verification) and
-[ADR-0025](../../../../adr/0025-messenger-contract.md).
+See [setup.md](instagram-setup.md#local-implementation-ready-for-callback-verification) and
+[ADR-0025](../adr/0025-messenger-contract.md).
 Capability inventories below retain the research-stage snapshot; they are not
 an assertion that every originally missing foundation remains unimplemented.
 
 Date: 2026-11-03. Provider facts, current-code findings, capability gaps, and research uncertainties. IG = Instagram; WA = WhatsApp. No live Meta account tests have been performed.
 
-Setup walkthrough: [setup.md](setup.md), documenting Unified Login dashboard configuration and pending verification.
+Setup walkthrough: [setup.md](instagram-setup.md), documenting Unified Login dashboard configuration and pending verification.
 
-Related documents: [decisions and scope](decisions.md), [proposed roadmap and verification](design-roadmap.md).
+Related documents: [decisions and scope](instagram-decisions.md), [proposed roadmap and verification](instagram-design-roadmap.md).
 
 ## 1. Research scope
 
@@ -66,7 +66,7 @@ Only WhatsApp has a complete built-in adapter today. `PlatformType` contains `in
 | Inbox Directory and credential records | Wappa-owned credential authority in explicit mode. | Add Instagram record variants and onboarding mapping; do not reuse a WA record with misleading values. |
 | `IMediaHandler` | Upload/info/download/delete and validation. | Audit carefully: current contract closely follows WA's media-ID lifecycle. Instagram post media is a different resource. |
 
-Composition direction is recorded in [decisions.md](decisions.md).
+Composition direction is recorded in [decisions.md](instagram-decisions.md).
 
 ### 3.1 Shared contracts that still assume WhatsApp
 
@@ -92,7 +92,7 @@ These are concrete limits on the current claim that another Platform can be adde
 
 WA `phone_number_id` identifies the receiving business Inbox; it is not the sender's phone number. Native sender IDs must retain their Inbox/Platform scope. Do not equate identities across accounts or assume a public comment author ID is automatically an eligible ordinary DM destination. The private-reply API addresses the comment.
 
-Candidate Comment/Post references and schemas are recorded in [decisions.md](decisions.md).
+Candidate Comment/Post references and schemas are recorded in [decisions.md](instagram-decisions.md).
 
 ## 5. Inbound webhook inventory and normalization
 
@@ -207,7 +207,7 @@ There is no public generic `send_media()` today. `WhatsAppMessenger._send_media`
 
 IG additionally documents multi-image sends, generic-template cards/carousels, quick replies, published-post sharing, reactions, and sender actions. The current shared interface has no dedicated operations for these. [Send Messages](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/), [quick replies](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api/quick-replies), [button templates](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api/button-template), [generic templates](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api/generic-template), [sender actions](https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-instagram-login/messaging-api/sender-actions).
 
-Future target rules and public-reply API alternatives are recorded in [decisions.md](decisions.md).
+Future target rules and public-reply API alternatives are recorded in [decisions.md](instagram-decisions.md).
 
 ### 6.2 API and media surfaces outside IMessenger
 
@@ -248,11 +248,11 @@ Reviewed checkout: `/home/sashanclrp/personalProjects/mimeia/products/symphonai`
 
 No Instagram post-by-ID reader was found in those backend lanes. Ads and posts can refer to one another, but an Ad ID, Creative ID, Instagram media ID, and Facebook post ID are not interchangeable. Meta's creative API exposes fields such as `effective_instagram_media_id` and `effective_object_story_id`; mapping an ad to its referenced content is a separate operation from retrieving the content. [Official creative-read example](https://www.postman.com/meta/facebook-marketing-api/request/xowugm6/retrieving-adcreative-details-l-1).
 
-The proposed ownership split and content-reader contract are recorded in [decisions.md](decisions.md).
+The proposed ownership split and content-reader contract are recorded in [decisions.md](instagram-decisions.md).
 
 ## 9. Not implemented: capability inventory
 
-This inventory records missing implementations and provider applicability. Edit scope selections in the matching ID rows in [decisions.md](decisions.md#scope-worksheet). No row here implies a commitment to implement.
+This inventory records missing implementations and provider applicability. Edit scope selections in the matching ID rows in [decisions.md](instagram-decisions.md#scope-worksheet). No row here implies a commitment to implement.
 
 ### 9.1 Instagram adapter and shared-contract foundations
 
@@ -332,7 +332,7 @@ Dashboard evidence supplied during setup: Instagram exposes its own Configure we
 
 A Meta app, an HTTPS callback URL, an object subscription, and a Wappa Platform are distinct concepts. A common callback can receive configured object subscriptions without merging their semantics: Instagram examples use `object: instagram`; Facebook Messenger Page events use `object: page`; WhatsApp uses `object: whatsapp_business_account`. Page subscriptions can also cover non-messaging activity, so `page` alone does not establish that every field is a supported Messenger event. Account-level authorization/subscriptions remain necessary even when the URL is shared.
 
-Using `/webhook/meta` for all three, or a shared Instagram/Messenger endpoint plus a WhatsApp endpoint, is an HTTP composition option, not a new `meta-messenger` Platform. Keep Instagram and Messenger identities/adapters distinct regardless of URL grouping. Authenticate the exact body before parsing the discriminator; then route supported fields through the proper adapter and resolve the qualified Inbox. Current Wappa routes are Platform-based. The selected separate-Platform callback design is recorded in [decisions.md](decisions.md#callback-url-grouping); Instagram support is not implemented yet. Sources: [Messenger Webhooks](https://developers.facebook.com/documentation/business-messaging/messenger-platform/webhooks), [Instagram examples](https://developers.facebook.com/documentation/instagram-platform/webhooks/examples).
+Using `/webhook/meta` for all three, or a shared Instagram/Messenger endpoint plus a WhatsApp endpoint, is an HTTP composition option, not a new `meta-messenger` Platform. Keep Instagram and Messenger identities/adapters distinct regardless of URL grouping. Authenticate the exact body before parsing the discriminator; then route supported fields through the proper adapter and resolve the qualified Inbox. Current Wappa routes are Platform-based. The selected separate-Platform callback design is recorded in [decisions.md](instagram-decisions.md#callback-url-grouping); Instagram support is not implemented yet. Sources: [Messenger Webhooks](https://developers.facebook.com/documentation/business-messaging/messenger-platform/webhooks), [Instagram examples](https://developers.facebook.com/documentation/instagram-platform/webhooks/examples).
 
 ### Interactive scores and intake primitives
 
@@ -346,7 +346,7 @@ An Instagram-scoped sender ID must be interpreted within its receiving professio
 
 ### Human escalation options
 
-Meta documents a single-app custom inbox and cross-app Handover Protocol. Cross-app control can serve independent automation and support products. The HUMAN_AGENT policy/tag is distinct from assignment; the guide describes a separate seven-day human-agent window. Approval and exact request fields must be verified for the selected setup. The selected approach and host ownership are in [decisions.md](decisions.md).
+Meta documents a single-app custom inbox and cross-app Handover Protocol. Cross-app control can serve independent automation and support products. The HUMAN_AGENT policy/tag is distinct from assignment; the guide describes a separate seven-day human-agent window. Approval and exact request fields must be verified for the selected setup. The selected approach and host ownership are in [decisions.md](instagram-decisions.md).
 
 ### Shares and Creator readiness
 
@@ -356,7 +356,7 @@ The user supplied a Creator prerequisite: call Conversations API before receivin
 
 ### Current registration constraints
 
-InboxCredentialService and CredentialRecord currently support WhatsApp only. Meta GET callback verification, account authorization/subscription, and POST event intake are separate operations. See [ADR-0022](../../../../adr/0022-inbox-identity-and-directory.md) for the existing source-driven Directory contract. The proposed connection flow is in [roadmap.md](design-roadmap.md).
+InboxCredentialService and CredentialRecord currently support WhatsApp only. Meta GET callback verification, account authorization/subscription, and POST event intake are separate operations. See [ADR-0022](../adr/0022-inbox-identity-and-directory.md) for the existing source-driven Directory contract. The proposed connection flow is in [roadmap.md](instagram-design-roadmap.md).
 
 ## 11. Evidence and source index
 
@@ -364,13 +364,13 @@ Repository findings are from the working tree inspected on 2026-11-03, not a tag
 
 ### Wappa sources
 
-- [Canonical glossary](../../../../../CONTEXT.md), [context map](../../../../../CONTEXT-MAP.md), [architecture](../../../../../ARCHITECTURE.md), [public contract](../../../../public-contract.md).
-- [IMessenger](../../../../../wappa/domain/interfaces/messaging_interface.py), [IMediaHandler](../../../../../wappa/domain/interfaces/media_interface.py), [identity resolver](../../../../../wappa/domain/interfaces/identity_resolver.py).
-- [MessengerFactory](../../../../../wappa/domain/factories/messenger_factory.py), [Messenger Pipeline](../../../../../wappa/core/messaging/pipeline.py), [WhatsAppMessenger](../../../../../wappa/messaging/whatsapp/messenger/whatsapp_messenger.py), [MessageResult](../../../../../wappa/messaging/whatsapp/models/basic_models.py).
-- [Universal webhooks](../../../../../wappa/webhooks/core/webhook_interfaces/universal_webhooks.py), [User/Inbox components](../../../../../wappa/webhooks/core/webhook_interfaces/base_components.py), [WA message schemas](../../../../../wappa/webhooks/whatsapp/message_types), [field registry](../../../../../wappa/core/events/field_registry.py).
-- [Handler hooks](../../../../../wappa/core/events/event_handler.py), [processor factory/detection](../../../../../wappa/processors/factory.py), [Inbound Runtime](../../../../../wappa/core/inbound/runtime.py), [WA routing](../../../../../wappa/core/inbound/webhook_routing.py).
-- [Credential records](../../../../../wappa/domain/inbox/credentials.py), [credential ports](../../../../../wappa/domain/inbox/ports.py), [callback routes](../../../../../wappa/api/routes/webhooks.py), [WA route composition](../../../../../wappa/api/routes/whatsapp_combined.py).
-- [ADR-0022: Inbox identity](../../../../adr/0022-inbox-identity-and-directory.md), [ADR-0023: runtime/processor boundary](../../../../adr/0023-inbound-webhooks.md), [ADR-0023: payload routing](../../../../adr/0023-inbound-webhooks.md), [ADR-0022: Inbox Directory](../../../../adr/0022-inbox-identity-and-directory.md).
+- [Canonical glossary](../../CONTEXT.md), [context map](../../CONTEXT-MAP.md), [architecture](../../ARCHITECTURE.md), [public contract](../public-contract.md).
+- [IMessenger](../../wappa/domain/interfaces/messaging_interface.py), [IMediaHandler](../../wappa/domain/interfaces/media_interface.py), [identity resolver](../../wappa/domain/interfaces/identity_resolver.py).
+- [MessengerFactory](../../wappa/domain/factories/messenger_factory.py), [Messenger Pipeline](../../wappa/core/messaging/pipeline.py), [WhatsAppMessenger](../../wappa/messaging/whatsapp/messenger/whatsapp_messenger.py), [MessageResult](../../wappa/messaging/whatsapp/models/basic_models.py).
+- [Universal webhooks](../../wappa/webhooks/core/webhook_interfaces/universal_webhooks.py), [User/Inbox components](../../wappa/webhooks/core/webhook_interfaces/base_components.py), [WA message schemas](../../wappa/webhooks/whatsapp/message_types), [field registry](../../wappa/core/events/field_registry.py).
+- [Handler hooks](../../wappa/core/events/event_handler.py), [processor factory/detection](../../wappa/processors/factory.py), [Inbound Runtime](../../wappa/core/inbound/runtime.py), [WA routing](../../wappa/core/inbound/webhook_routing.py).
+- [Credential records](../../wappa/domain/inbox/credentials.py), [credential ports](../../wappa/domain/inbox/ports.py), [callback routes](../../wappa/api/routes/webhooks.py), [WA route composition](../../wappa/api/routes/whatsapp_combined.py).
+- [ADR-0022: Inbox identity](../adr/0022-inbox-identity-and-directory.md), [ADR-0023: runtime/processor boundary](../adr/0023-inbound-webhooks.md), [ADR-0023: payload routing](../adr/0023-inbound-webhooks.md), [ADR-0022: Inbox Directory](../adr/0022-inbox-identity-and-directory.md).
 
 ### Primary Meta sources
 

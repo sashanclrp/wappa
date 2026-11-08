@@ -1,10 +1,8 @@
 # Instagram integration roadmap
 
-The executable [PRD series](../plan.md)
-now owns work order and completion status. This document preserves the capability
-sequence and milestone rationale from the design session.
+The implementation series closed on 2026-11-08 with gates A, B and C passed ([live evidence](../verification/261103-instagram-conversations-live-tests.md)); its plan and PRDs are in git history. This document preserves the capability sequence and milestone rationale from the design session.
 
-Current selection: [agreed PRD](scope.md). Test record: [simple text tests and learnings](../tests/simple-text-test.md).
+Current selection: [agreed PRD](instagram-scope.md). Test record: [simple text tests and learnings](../verification/261103-instagram-simple-text-test.md).
 
 
 Implementation update (2026-11-03): initial Instagram text/seen/echo-system lanes,
@@ -13,16 +11,16 @@ example are implemented locally. CLI GET verification and signed offline echo
 have been tested. A real Instagram text exchange, outbound echo event, and READ
 status were verified at 11:24 America/Bogota on 2026-11-03. Self-service OAuth
 onboarding and Symphonai integration remain pending.
-See [setup.md](setup.md#local-implementation-ready-for-callback-verification) and
-[ADR-0025](../../../../adr/0025-messenger-contract.md).
+See [setup.md](instagram-setup.md#local-implementation-ready-for-callback-verification) and
+[ADR-0025](../adr/0025-messenger-contract.md).
 Capability inventories below retain the research-stage snapshot; they are not
 an assertion that every originally missing foundation remains unimplemented.
 
 Date: 2026-11-03. Delivery order A → B → C is agreed; slice implementation details remain technical design work. No delivery dates are assigned.
 
-Setup walkthrough: [setup.md](setup.md), documenting Unified Login dashboard configuration and pending verification.
+Setup walkthrough: [setup.md](instagram-setup.md), documenting Unified Login dashboard configuration and pending verification.
 
-Related documents: [research and capability inventory](research.md), [decisions and editable scope](decisions.md). Scope rows marked TBD remain unselected; their appearance in a later stage does not approve them. The initial live text slice is verified. Sequential two-User routing has also been observed live; concurrent/stateful multi-User and multi-Inbox validation plus milestones B/C remain pending.
+Related documents: [research and capability inventory](instagram-research.md), [decisions and editable scope](instagram-decisions.md). Scope rows marked TBD remain unselected; their appearance in a later stage does not approve them. The initial live text slice is verified. Sequential two-User routing has also been observed live; concurrent/stateful multi-User and multi-Inbox validation plus milestones B/C remain pending.
 
 ## Success milestones
 
@@ -96,7 +94,7 @@ The completed scope session additionally selects edit/deletion events, seen/typi
 
 ## Proposed technical work and milestone mapping
 
-The [PRD](scope.md) is the current scope authority and adds a contract-foundation slice for trusted credential access, extension registration and event/result models. Steps 0-3 below describe the original A1 construction history. Step 2 is infrastructure shared by A and B, not proof that B is complete. Step 4 provides operational checks throughout A. Steps 5-8 complete the remaining agreed capability sequence; individual variants still need explicit scope selection. After A, B adds login UI/callback orchestration and the onboarding acceptance checks above. C then adds the real Symphonai agent and host takeover integration.
+The [PRD](instagram-scope.md) is the current scope authority and adds a contract-foundation slice for trusted credential access, extension registration and event/result models. Steps 0-3 below describe the original A1 construction history. Step 2 is infrastructure shared by A and B, not proof that B is complete. Step 4 provides operational checks throughout A. Steps 5-8 complete the remaining agreed capability sequence; individual variants still need explicit scope selection. After A, B adds login UI/callback orchestration and the onboarding acceptance checks above. C then adds the real Symphonai agent and host takeover integration.
 
 | Step | Deliverable | Evidence required before advancing |
 | --- | --- | --- |
@@ -126,7 +124,7 @@ Proposed connection flow: host starts selected Meta login/consent flow; adapter 
 
 The breaking migration touches `IMessenger`, WhatsApp implementation, new Instagram implementation, MessengerFactory, processors, credential variants, User/Inbox models, MessageResult, SendInvocation/pipeline, SSE/PubSub/API events, REST request/response models, CLI templates, generated examples, tests, and host callers such as Symphonai. Template transport, expiry and background factories must be audited as independent public paths. Do not change only the send_text signature and leave mixed contracts elsewhere.
 
-Existing [messaging architecture](../../../../../wappa/messaging/ARCHITECTURE.md) and [deferred-split decision](../../../../tech-requests/006-defer-messenger-split.md) permit revisiting the seam when a real second Platform demonstrates pressure. This research identifies that pressure, but does not resolve every split. Once the design is selected, update the canonical glossary, architecture, public contract, and any warranted ADR together with implementation.
+Existing [messaging architecture](../../wappa/messaging/ARCHITECTURE.md) and [deferred-split decision](../tech-requests/006-defer-messenger-split.md) permit revisiting the seam when a real second Platform demonstrates pressure. This research identifies that pressure, but does not resolve every split. Once the design is selected, update the canonical glossary, architecture, public contract, and any warranted ADR together with implementation.
 
 ## Candidate verification scenarios
 

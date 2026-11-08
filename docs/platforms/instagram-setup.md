@@ -1,17 +1,15 @@
 # Instagram use-case setup in an existing Meta app
 
-Test record: [simple text tests and learnings](../tests/simple-text-test.md).
+Test record: [simple text tests and learnings](../verification/261103-instagram-simple-text-test.md).
 
 WhatsApp counterpart (manual and Embedded Signup): [whatsapp-setup.md](whatsapp-setup.md).
 
-Implementation and skill-delivery tracking: [PRD execution plan](../plan.md).
-This is observed setup evidence, including later checkpoints below; the
-developer-skill PRD specifies the portable setup reference to ship with Wappa.
+This is observed setup evidence, including later checkpoints below. The implementation series closed on 2026-11-08 with gates A, B and C passed ([live evidence](../verification/261103-instagram-conversations-live-tests.md)); its plan and PRDs are in git history. The portable setup reference ships in the `wappa-apps` skill.
 
 
 Date: 2026-11-03. Living walkthrough for adding Instagram messaging and content management to a Meta app that already has WhatsApp. Current implementation target: incoming text DM and text echo. This records dashboard observations and documented next steps; it does not claim setup or Wappa Instagram support is complete.
 
-Related: [research](research.md), [decisions](decisions.md), [roadmap](design-roadmap.md).
+Related: [research](instagram-research.md), [decisions](instagram-decisions.md), [roadmap](instagram-design-roadmap.md).
 
 ## Current position
 

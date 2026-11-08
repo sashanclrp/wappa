@@ -9,7 +9,7 @@ last_reviewed: 2026-11-06
 
 This is webhook redelivery identity and deduplication, not InboxRef, IGSID, Delivery Address resolution or echo filtering. The Instagram series explicitly leaves business idempotency with the Host, and its text-test record says echo suppression is not duplicate-callback idempotency. Neither active series absorbs the ADR, provider-evidence and replay/fan-out requirements below.
 
-Evidence: the Instagram [text-test record](../in_progress/261103-instagram-conversations/tests/simple-text-test.md) distinguishes echo suppression from duplicate-callback idempotency; the [scope](../in_progress/261103-instagram-conversations/references/scope.md) leaves durable business idempotency with the consumer.
+Evidence: the Instagram [text-test record](../../verification/261103-instagram-simple-text-test.md) distinguishes echo suppression from duplicate-callback idempotency; the [scope](../../platforms/instagram-scope.md) leaves durable business idempotency with the consumer.
 
 ## Problem
 

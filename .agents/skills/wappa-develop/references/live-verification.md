@@ -33,7 +33,7 @@ Use these before reading logs, Meta state or Redis by hand:
 
 ## Running a live gate
 
-1. Write the cases first (case ID, steps, expected evidence) in the PRD's live test plan, for Instagram `docs/backlog/in_progress/261103-instagram-conversations/tests/live-test-plan.md`.
+1. Write the cases first (case ID, steps, expected evidence) in the PRD's live test plan, for Instagram `docs/verification/261103-instagram-conversations-live-tests.md`.
 2. Make sure the build under test is what the user runs: commit or note the diff, ask for a restart, then check the startup banner in `devlog.sh --restart`.
 3. The user sends; you read the log and Meta state. Record four separate facts per case: the callback 200, Meta's acceptance (a `message_id`), the status webhook, and what the User saw (the user reports it, with screenshots when rendering matters).
 4. Log each result with time and build in the plan's results log, including failures and "not run".
@@ -49,4 +49,4 @@ A media or behavior rule changes only from recorded evidence:
 1. The live result is in the plan (link or upload, format, codec, what rendered).
 2. Encode the rule before I/O in the Platform's rules module (`wappa/messaging/whatsapp/media/rules.py` and `wappa/domain/media_probe.py`, or `wappa/messaging/instagram/media/rules.py`), with an error that names the problem and says to convert first. Never add conversion.
 3. Add tests for the refusal and the accepted neighbor (`tests/test_whatsapp_media_rules.py`, `tests/test_instagram_media_emulation.py`, `tests/test_one_method_per_action.py`).
-4. Update the PRD's media-formats reference (`docs/backlog/in_progress/261103-instagram-conversations/references/media-formats.md`), the shipped copy `wappa/cli/skills/wappa-apps/references/media-formats.md` (keep the unified kit valid), `messaging.md` rows, `docs/public-contract.md`, and `CHANGELOG.md` (a new refusal is a break).
+4. Update the PRD's media-formats reference (`docs/platforms/media-formats.md`), the shipped copy `wappa/cli/skills/wappa-apps/references/media-formats.md` (keep the unified kit valid), `messaging.md` rows, `docs/public-contract.md`, and `CHANGELOG.md` (a new refusal is a break).

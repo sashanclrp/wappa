@@ -6,9 +6,9 @@ controlled Graph API checks, and offline tests. Times below are America/Bogota.
 No tokens, secrets, raw authorization callbacks, or personal account IDs belong
 in this document. Test labels A/B replace the real sender identities.
 
-Related: [setup walkthrough](../references/setup.md), [decisions](../references/decisions.md),
-[roadmap](../references/design-roadmap.md), [research](../references/research.md),
-[ADR-0025](../../../../adr/0025-messenger-contract.md).
+Related: [setup walkthrough](../platforms/instagram-setup.md), [decisions](../platforms/instagram-decisions.md),
+[roadmap](../platforms/instagram-design-roadmap.md), [research](../platforms/instagram-research.md),
+[ADR-0025](../adr/0025-messenger-contract.md).
 
 ## 1. Goals and scope
 
@@ -109,7 +109,7 @@ from this excerpt.
 
 ## 6. Offline regression coverage
 
-[test_instagram_text.py](../../../../../tests/test_instagram_text.py) covers:
+[test_instagram_text.py](../../tests/test_instagram_text.py) covers:
 
 - Signed HTTP callback → actual routing/processor/handler → mocked native
   text request, including two senders and exact text/Unicode preservation.
@@ -125,7 +125,7 @@ from this excerpt.
 - Encrypted Instagram record roundtrip, rotation, source resolution, and
   deactivation.
 
-[test_platform_event_logging.py](../../../../../tests/test_platform_event_logging.py)
+[test_platform_event_logging.py](../../tests/test_platform_event_logging.py)
 covers native Instagram identity, WA BSUID/phone fallback, account-only events,
 omission of absent identity, and native message/recipient references in status
 logs. Existing Inbox routing tests cover callback startup guidance and preserve
@@ -250,4 +250,4 @@ Instagram capability scope first, the full self-service Unified Login experience
 second, and Symphonai integration third. The initial echo is checkpoint A1
 within the broader stage A. Test evidence recorded above is unchanged; it does
 not establish completion of later message types, comments, or content retrieval.
-See the current [roadmap](../references/design-roadmap.md#success-milestones).
+See the current [roadmap](../platforms/instagram-design-roadmap.md#success-milestones).

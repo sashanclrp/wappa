@@ -1,6 +1,6 @@
 # WhatsApp setup for the conversations example
 
-Date: 2026-11-05. This is a living walkthrough for connecting a WhatsApp number to the same Meta app that already serves Instagram (`Wappa | CRM`, app `955553977072789`, business portfolio **Mimeia** `795750330207550`). It is the WhatsApp counterpart of the [Instagram setup](setup.md) and feeds the parity checks P-01..P-10 in the [live test plan](../tests/live-test-plan.md).
+Date: 2026-11-05. This is a living walkthrough for connecting a WhatsApp number to the same Meta app that already serves Instagram (`Wappa | CRM`, app `955553977072789`, business portfolio **Mimeia** `795750330207550`). It is the WhatsApp counterpart of the [Instagram setup](instagram-setup.md) and feeds the parity checks P-01..P-10 in the [live test plan](../verification/261103-instagram-conversations-live-tests.md).
 
 There are two ways to get a WhatsApp Inbox into Wappa:
 

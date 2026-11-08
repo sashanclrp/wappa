@@ -1,16 +1,16 @@
 # Instagram integration decisions
 
 Date: 2026-11-03. Scope session complete; implementation is pending beyond the
-verified text/seen/echo slice. The [PRD](scope.md) is the current selected scope.
-The [implementation series](../plan.md)
+verified text/seen/echo slice. The [PRD](instagram-scope.md) is the current selected scope.
+The implementation series
 tracks ownership, order and execution gates, including DDD and developer skills.
-The [completed grilling session](../../../../sasha/grilling-sessions/261103-instagram-scope-and-extensions.md)
+The [completed grilling session](../sasha/grilling-sessions/261103-instagram-scope-and-extensions.md)
 records the user's grouped answers and Symphonai investigation.
 
-Related documents: [research](research.md), [roadmap](design-roadmap.md),
-[setup](setup.md), [tests](../tests/simple-text-test.md),
-[ADR-0025](../../../../adr/0025-messenger-contract.md),
-[ADR-0025](../../../../adr/0025-messenger-contract.md).
+Related documents: [research](instagram-research.md), [roadmap](instagram-design-roadmap.md),
+[setup](instagram-setup.md), [tests](../verification/261103-instagram-simple-text-test.md),
+[ADR-0025](../adr/0025-messenger-contract.md),
+[ADR-0025](../adr/0025-messenger-contract.md).
 Earlier research-stage TBD worksheets and public-reply alternatives are
 superseded by the decisions below; research inventories are not implementation
 status or permission to build every provider feature.
@@ -112,7 +112,7 @@ must honor their advertised contract. Interface segregation follows actual
 responsibilities instead of forcing comment reads/controls into every Messenger.
 Migration documentation and CHANGELOG must enumerate breaking sends, middleware,
 models, handlers and consumer changes when they land. See the
-[migration guide](../../../../migration/instagram-conversation-contracts.md).
+[migration guide](../migration/instagram-conversation-contracts.md).
 
 ## Vocabulary and human takeover
 
@@ -138,4 +138,4 @@ Scope is closed. Exact schema/export names, provider constraints, account/grant
 requirements and subscription discrepancies are engineering verification items.
 In particular `message_edit` is documented in examples/dashboard but missing
 from the current Unified Login field table; verify before claiming support.
-The [PRD](scope.md) carries acceptance criteria and evidence limitations.
+The [PRD](instagram-scope.md) carries acceptance criteria and evidence limitations.

@@ -1,13 +1,9 @@
 # Instagram conversations and extensible account connection
 
-Execution authority: the [implementation PRD series](../plan.md)
-now owns implementation order, ownership, developer-skill deliverables and exit
-criteria under the backlog README rules. This file remains the detailed scope
-specification produced by grilling; it is not a second executable backlog item.
+The implementation series closed on 2026-11-08 with gates A, B and C passed ([live evidence](../verification/261103-instagram-conversations-live-tests.md)); its plan and PRDs are in git history. This file remains the detailed scope specification produced by grilling.
 
-Status: scope agreed on 2026-11-03; implementation pending beyond the verified
-text/seen/echo slice. This is the local PRD produced by the completed
-[grilling session](../../../../sasha/grilling-sessions/261103-instagram-scope-and-extensions.md).
+Status: scope agreed on 2026-11-03; implemented and verified live by 2026-11-08. This is the local PRD produced by the completed
+[grilling session](../sasha/grilling-sessions/261103-instagram-scope-and-extensions.md).
 It supersedes conflicting unselected/deferred rows in the earlier research
 worksheet. Research describes provider capabilities; this document selects work.
 
@@ -53,7 +49,7 @@ a field can be subscribed or delivered in that setup.
 
 | Native field / variant | Selection and normalized behavior | Evidence / limitation |
 | --- | --- | --- |
-| `messages`: plain text | Implement; existing live baseline -> `process_message`. | Text already verified in [test record](../tests/simple-text-test.md). |
+| `messages`: plain text | Implement; existing live baseline -> `process_message`. | Text already verified in [test record](../verification/261103-instagram-simple-text-test.md). |
 | `messages`: images, audio, video, supported files, shared posts, story replies/mentions and other selected supported attachments | Implement inbound families separately from sends; preserve native references and available content -> `process_message`. | [Messaging guide](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/) is a starting inventory; verify each family with Unified Login fixtures and live tests. |
 | Quick-reply selection inside a message | Implement structured selection evidence on the inbound message; no loss of text or action payload. | One native event must not produce two automation triggers. |
 | `messaging_postbacks` | Implement typed interaction dispatch; proposed `process_interaction`. | A standalone postback is not fabricated User text. |

@@ -463,12 +463,9 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 Wappa has an Instagram adapter for DMs, comments and mentions. Use explicit Inbox routing and an encrypted Instagram credential record through IInboxDirectorySource. The callback is `/webhook/inboxes/instagram`; Meta signature authentication remains mandatory. Recipient-based Messenger sends use Inbox-qualified DirectMessage targets, including on WhatsApp. The same Messenger methods (`send_button_message`, `send_list_message`, `send_carousel`, `send_location`, `send_contact`, `mark_as_read`, ...) work on both Platforms, and a User's choice always arrives in `process_message` via `get_interactive_selection()` ([ADR-0025](docs/adr/0025-messenger-contract.md)). Media upload and download go through the shared `IMediaLibrary` capability; comment actions (`ICommentControls`) and WhatsApp Templates (`ITemplateMessaging`) are capability-gated too.
 
-See the [setup walkthrough](docs/backlog/in_progress/261103-instagram-conversations/references/setup.md) and
+See the [setup walkthrough](docs/platforms/instagram-setup.md) and
 [public contract](docs/public-contract.md#instagram-conversations-contract)
 for startup, addressing migration, and capability boundaries. Live receipt still
 requires an authorized account, subscriptions, and appropriate Meta app access.
 
-The [Instagram implementation PRD series](docs/backlog/in_progress/261103-instagram-conversations/plan.md)
-tracks the remaining message/public-conversation capabilities, Unified Login,
-Symphonai integration, DDD updates and developer skill packages. Its planned
-capabilities and skills are not all available in the current adapter.
+The Instagram implementation series closed on 2026-11-08 with gates A, B and C passed live; the evidence is in [docs/verification](docs/verification/261103-instagram-conversations-live-tests.md).

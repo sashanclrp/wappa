@@ -1,8 +1,8 @@
 # Instagram scope and connection extensions
 
-Date: 2026-11-03. Status: completed scope session. Product decisions are recorded in the [Instagram PRD](../../backlog/in_progress/261103-instagram-conversations/references/scope.md); planned contracts are not claims of shipped support.
+Date: 2026-11-03. Status: completed scope session. Product decisions are recorded in the [Instagram PRD](../../platforms/instagram-scope.md); planned contracts are not claims of shipped support.
 
-Implementation handoff: [Instagram PRD series and execution plan](../../backlog/in_progress/261103-instagram-conversations/plan.md),
+Implementation handoff: the Instagram PRD series (closed 2026-11-08, in git history),
 including DDD improvements and developer skill/setup deliverables. The session's
 final answers remain the source decisions; the series owns execution status.
 
@@ -19,11 +19,11 @@ Read alongside the [glossary](../../../CONTEXT.md),
 [public contract](../../public-contract.md),
 [ADR-0022](../../adr/0022-inbox-identity-and-directory.md), and
 [ADR-0025](../../adr/0025-messenger-contract.md).
-The original draft separates [research](../../backlog/in_progress/261103-instagram-conversations/references/research.md),
-[decisions](../../backlog/in_progress/261103-instagram-conversations/references/decisions.md),
-[roadmap](../../backlog/in_progress/261103-instagram-conversations/references/design-roadmap.md),
-[setup](../../backlog/in_progress/261103-instagram-conversations/references/setup.md), and
-[observed tests](../../backlog/in_progress/261103-instagram-conversations/tests/simple-text-test.md).
+The original draft separates [research](../../platforms/instagram-research.md),
+[decisions](../../platforms/instagram-decisions.md),
+[roadmap](../../platforms/instagram-design-roadmap.md),
+[setup](../../platforms/instagram-setup.md), and
+[observed tests](../../verification/261103-instagram-simple-text-test.md).
 Provider claims and exact permission/endpoint requirements must be verified
 against primary documentation when each inventory row is finalized.
 
@@ -182,7 +182,7 @@ integration contracts; consumers own application policy and durable business
 state. Content reads and moderation controls fit the mechanism side. Content
 calendars, moderation rules, AI and analytics fit the consumer side.
 
-Product scope is complete. The [PRD](../../backlog/in_progress/261103-instagram-conversations/references/scope.md)
+Product scope is complete. The [PRD](../../platforms/instagram-scope.md)
 is the current selection; [ADR-0025](../../adr/0025-messenger-contract.md)
 records the boundary trade-off. Implementation must resolve endpoint-specific
 limits, exact exported types and subscription discrepancies without treating
