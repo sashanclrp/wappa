@@ -1,7 +1,8 @@
+import os
+
 from openai import AsyncOpenAI
 
 from wappa import WappaEventHandler
-from wappa.core.config import settings
 from wappa.core.logging import get_logger
 from wappa.domain.inbox import InboxRef
 from wappa.messaging import DirectMessage
@@ -45,7 +46,7 @@ class TranscriptEventHandler(WappaEventHandler):
             return
 
         audio = download.value
-        openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
+        openai_client = AsyncOpenAI(api_key=os.environ["LLM_PROVIDER_OPENAI_API_KEY"])
         audio_service = AudioProcessingService(openai_client)
         # The extension tells OpenAI the format: "audio/ogg; codecs=opus" -> ogg
         subtype = (audio.content_type or "audio/ogg").split("/")[-1].split(";")[0]

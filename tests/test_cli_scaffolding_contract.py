@@ -8,6 +8,7 @@ scaffold a real project and read back what a developer would get.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 import pytest
@@ -55,9 +56,13 @@ def test_scaffolded_env_teaches_the_meta_application_configuration(
     env = (scaffolded / ".env").read_text()
 
     assert "META_APP_SECRET=" in env
-    assert "WP_WEBHOOK_VERIFY_TOKEN=" in env
+    assert "META_WEBHOOK_VERIFY_TOKEN=" in env
     # The legacy bundle is what this template runs on, and it must be complete.
-    for variable in ("WP_ACCESS_TOKEN=", "WP_PHONE_ID=", "WP_BID="):
+    for variable in (
+        "META_WHATSAPP_ACCESS_TOKEN=",
+        "META_WHATSAPP_PHONE_NUMBER_ID=",
+        "META_WHATSAPP_BUSINESS_ACCOUNT_ID=",
+    ):
         assert variable in env, variable
 
 
@@ -77,7 +82,9 @@ def test_scaffolded_project_carries_no_removed_contract(scaffolded: Path) -> Non
             continue
         text = path.read_text()
         for stale in RENAMED_OR_REMOVED:
-            assert stale not in text, f"{path.name} still teaches {stale!r}"
+            assert not re.search(
+                rf"(?<![A-Za-z0-9_]){re.escape(stale)}(?![A-Za-z0-9_])", text
+            ), f"{path.name} still teaches {stale!r}"
 
 
 def test_scaffolded_app_uses_the_current_public_import_surface(
@@ -115,7 +122,7 @@ def test_init_banner_teaches_the_callback_secret_and_url(tmp_path: Path) -> None
 
     assert "META_APP_SECRET" in result.output
     assert "/webhook/inboxes/whatsapp" in result.output
-    assert "WP_WEBHOOK_VERIFY_TOKEN" in result.output
+    assert "META_WEBHOOK_VERIFY_TOKEN" in result.output
 
 
 def test_explicit_init_scaffolds_host_directory_boundary(tmp_path: Path) -> None:
@@ -129,6 +136,6 @@ def test_explicit_init_scaffolds_host_directory_boundary(tmp_path: Path) -> None
     source = (tmp_path / "app/inbox_directory_source.py").read_text()
     assert "SYSTEM_INBOX_ROUTING_MODE=explicit" in env
     assert "SYSTEM_TOKEN_ENC_KEY=" in env
-    assert "WP_ACCESS_TOKEN=" not in env
+    assert "META_WHATSAPP_ACCESS_TOKEN=" not in env
     assert "InboxRoutingMode.EXPLICIT" in main
     assert "IInboxDirectorySource" in source

@@ -15,7 +15,9 @@ Wappa once used `tenant_id` as its runtime identity although the value was alway
 
 ### Credential authority
 
-3. **One authority per process.** `InboxRoutingMode` is `legacy` (the `WP_*` settings bundle, one WhatsApp Inbox) or `explicit` (the Inbox Directory). They are mutually exclusive: no `auto` mode, no fallback from one to the other.
+Deployment variables use Wappa-owned `SYSTEM_`, `META_` and `REDIS_` clusters; only hosting contracts `PORT`, `DATABASE_URL`, `REDIS_URL` are unprefixed. Since 0.34.3 retired names fail at settings initialization with their replacements, even if empty; no aliases. Provider configuration is Host-owned.
+
+3. **One authority per process.** `InboxRoutingMode` is `legacy` (the `META_WHATSAPP_*` settings bundle, one WhatsApp Inbox) or `explicit` (the Inbox Directory). They are mutually exclusive: no `auto` mode, no fallback from one to the other.
 4. **Wappa owns the Inbox Directory.** `InboxDirectoryTable` and `InboxDirectory` are concrete Wappa modules over `ITableCache` under the reserved System Scope `__system__`; Hosts cannot replace the model, cache shape, TTLs, indexes or mutation behaviour. Hosts adapt their durable schema through one read-only port, `IInboxDirectorySource` (`get_inbox(inbox_ref)`, `list_inboxes_for_platform_account(account_ref)`). The internal `IInboxCredentialResolver` is not a Host extension point.
 5. **Only Wappa mutates the directory.** Hosts commit durable state, then call the idempotent `refresh_inbox(inbox_ref)` or `deactivate_inbox`. Wappa writes the primary row before derived indexes, repairs partial work on retry and evicts cached Messengers. There is no `upsert_inbox(record)`.
 6. **Freshness.** Active rows and active account indexes have a 60-minute sliding TTL; inactive, absent and empty-account rows a fixed 60-minute TTL. A miss makes one source call; source or cache failures never become negative records. In explicit mode a startup hook (priority 25) deletes only the two directory tables, so changes made while Wappa was down apply on first use without a startup stampede. Changes made while Wappa runs still need `refresh_inbox`.

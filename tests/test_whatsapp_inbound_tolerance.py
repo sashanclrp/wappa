@@ -243,7 +243,7 @@ async def test_unmodelled_interactive_type_is_unsupported_not_400(monkeypatch) -
         WhatsAppUnsupportedMessage,
     )
 
-    monkeypatch.delenv("WAPPA_STRICT_META_SCHEMA", raising=False)
+    monkeypatch.delenv("SYSTEM_STRICT_META_SCHEMA", raising=False)
     webhook = await _parse(_interactive(_UNMODELLED_REPLY))
 
     assert isinstance(webhook.message, WhatsAppUnsupportedMessage)
@@ -256,7 +256,7 @@ async def test_unmodelled_interactive_type_is_unsupported_not_400(monkeypatch) -
 async def test_unmodelled_interactive_type_fails_in_strict_mode(monkeypatch) -> None:
     from wappa.core.inbound.errors import ProcessorError
 
-    monkeypatch.setenv("WAPPA_STRICT_META_SCHEMA", "1")
+    monkeypatch.setenv("SYSTEM_STRICT_META_SCHEMA", "1")
     with pytest.raises(ProcessorError, match="InteractiveContent.type=product_reply"):
         await _parse(_interactive(_UNMODELLED_REPLY))
 
@@ -342,7 +342,7 @@ async def test_played_status_is_a_status_webhook() -> None:
 async def test_unknown_status_is_unsupported_not_400(monkeypatch) -> None:
     from wappa.webhooks.core.webhook_interfaces import SystemEventType, SystemWebhook
 
-    monkeypatch.delenv("WAPPA_STRICT_META_SCHEMA", raising=False)
+    monkeypatch.delenv("SYSTEM_STRICT_META_SCHEMA", raising=False)
     webhook = await WhatsAppWebhookProcessor().translate(
         _status_payload("archived"), inbox_id=INBOX_ID
     )

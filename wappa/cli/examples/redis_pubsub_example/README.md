@@ -202,7 +202,7 @@ async for notification in subscribe(redis, patterns=["wappa:notify:*:*:*"]):
 
 ### Requirements
 
-Every Inbox you expect to reply on must be resolvable: present in the legacy `WP_*` bundle in legacy mode, or in the Inbox Directory in explicit mode.
+Every Inbox you expect to reply on must be resolvable: present in the legacy `META_WHATSAPP_*` bundle in legacy mode, or in the Inbox Directory in explicit mode.
 
 ## Advanced: External Subscriber (No Loop Risk)
 

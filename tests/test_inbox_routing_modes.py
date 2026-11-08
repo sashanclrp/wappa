@@ -537,7 +537,7 @@ async def test_startup_callback_guidance_matches_installed_adapters_and_mode(
         "https://callback.example.com/webhook/inboxes/instagram" in output
     ) is expect_instagram
     assert "/telegram" not in output and "/teams" not in output
-    assert "WP_WEBHOOK_VERIFY_TOKEN" in output
+    assert "META_WEBHOOK_VERIFY_TOKEN" in output
     assert "Configure this one URL" not in output
 
 

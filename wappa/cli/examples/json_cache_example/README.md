@@ -61,12 +61,12 @@ META_BASE_URL=https://graph.facebook.com/
 META_API_VERSION=v26.0
 # Meta application — required whenever the WhatsApp callback is mounted (no dev bypass)
 META_APP_SECRET=your_meta_app_secret_here
-WP_WEBHOOK_VERIFY_TOKEN=your_verify_token_here
+META_WEBHOOK_VERIFY_TOKEN=your_verify_token_here
 
 # Legacy single-Inbox credential bundle
-WP_ACCESS_TOKEN=your_access_token
-WP_PHONE_ID=your_phone_number_id
-WP_BID=your_business_account_id
+META_WHATSAPP_ACCESS_TOKEN=your_access_token
+META_WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
+META_WHATSAPP_BUSINESS_ACCOUNT_ID=your_business_account_id
 
 # Application Settings
 PORT=8000

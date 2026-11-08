@@ -245,7 +245,7 @@ def _copy_example(example_key: str, target_directory: str) -> None:
             console.print("   - Redis will auto-configure keyspace notifications")
         elif example_key == "openai_transcript":
             console.print("\n🔧 OpenAI-specific setup:")
-            console.print("   - Add OPENAI_API_KEY to .env file")
+            console.print("   - Add LLM_PROVIDER_OPENAI_API_KEY to .env file")
             console.print("   - Ensure audio file handling is configured")
 
         console.print("\n📖 Check the README.md for detailed setup instructions")

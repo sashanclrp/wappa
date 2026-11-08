@@ -55,7 +55,9 @@ class HostSchedulerPlugin:
 
     async def _start(self, app: "FastAPI") -> None:
         if settings.wp_phone_id is None:
-            raise RuntimeError("Set WP_PHONE_ID to the Inbox these tasks belong to")
+            raise RuntimeError(
+                "Set META_WHATSAPP_PHONE_NUMBER_ID to the Inbox these tasks belong to"
+            )
         bind_app(app)
         self._scheduler, date_trigger, interval_trigger = self._engine()
         await self._scheduler.__aenter__()

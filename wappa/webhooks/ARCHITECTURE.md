@@ -10,7 +10,7 @@
 - Own every inbound webhook Pydantic schema, including platform payload schemas
   and Universal Model forms.
 - Gate unknown Meta `change.field` values against a runtime registry; a field that is neither built in nor registered becomes `SystemWebhook(UNSUPPORTED_EVENT)` (HTTP 200), never a 400.
-- Tolerate and report Meta schema drift: models that parse Meta input use `extra="allow"`, and `wappa/webhooks/core/schema_drift.py` (`report_schema_drift`) logs `META_SCHEMA_DRIFT platform=<p> field=<Model.field>` once per field per process, never the value. `WAPPA_STRICT_META_SCHEMA=1` raises `MetaSchemaDriftError` instead (set by Wappa's tests).
+- Tolerate and report Meta schema drift: models that parse Meta input use `extra="allow"`, and `wappa/webhooks/core/schema_drift.py` (`report_schema_drift`) logs `META_SCHEMA_DRIFT platform=<p> field=<Model.field>` once per field per process, never the value. `SYSTEM_STRICT_META_SCHEMA=1` raises `MetaSchemaDriftError` instead (set by Wappa's tests).
 - Expose platform-agnostic inspection (`is_incoming_message`, `is_status_update`, etc.)
   through the `BaseWebhook` interface.
 - Supply each Platform's inbound adapter: the `PlatformWebhooks` protocol (`wappa/core/inbound/platform_webhooks.py`) with `platform`, `builtin_fields`, `route` (may do credential I/O) and `translate` (pure), implemented by `WhatsAppWebhookProcessor` and `InstagramWebhookProcessor` and installed through `wappa/platforms/` (`PLATFORMS`).

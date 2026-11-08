@@ -1,7 +1,7 @@
 """Legacy single-Inbox credential resolver.
 
-The only component allowed to consume the legacy ``WP_ACCESS_TOKEN`` /
-``WP_PHONE_ID`` / ``WP_BID`` bundle is the assembly step that builds this
+The only component allowed to consume the legacy ``META_WHATSAPP_ACCESS_TOKEN`` /
+``META_WHATSAPP_PHONE_NUMBER_ID`` / ``META_WHATSAPP_BUSINESS_ACCOUNT_ID`` bundle is the assembly step that builds this
 resolver. After construction nothing reads those variables again.
 """
 

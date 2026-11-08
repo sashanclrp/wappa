@@ -62,7 +62,7 @@ Both `dev` and `prod` construct the import string as `<module>:<app_var>.asgi` w
 3. Create `app/` and `app/scores/` directories.
 4. Read each template from `cli/templates/` and write it to the corresponding output path.
 5. Emit the shipped developer skills (`_emit_skills`, see below) without overwriting existing skill folders.
-6. Print next-step instructions listing the required environment variables — the Meta Application Configuration (`META_APP_SECRET`, `WP_WEBHOOK_VERIFY_TOKEN`) and the legacy single-Inbox bundle (`WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID`) — plus the one canonical callback URL, `/webhook/inboxes/whatsapp`.
+6. Print next-step instructions listing the required environment variables — the Meta Application Configuration (`META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`) and the legacy single-Inbox bundle (`META_WHATSAPP_ACCESS_TOKEN`, `META_WHATSAPP_PHONE_NUMBER_ID`, `META_WHATSAPP_BUSINESS_ACCOUNT_ID`) — plus the one canonical callback URL, `/webhook/inboxes/whatsapp`.
 
 The scaffolded `app/main.py` imports `Wappa` and calls `app.set_event_handler(MasterEventHandler())`. The Host Application fills in `MasterEventHandler` with business logic.
 

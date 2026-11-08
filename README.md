@@ -8,7 +8,7 @@ Build intelligent WhatsApp bots, workflows, and chat applications with clean arc
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.162.x-green.svg)](https://fastapi.tiangolo.com)
 [![WhatsApp Business API](https://img.shields.io/badge/WhatsApp-Business%20API-25D366.svg)](https://developers.facebook.com/docs/whatsapp)
-[![Version](https://img.shields.io/badge/version-0.34.2-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.34.3-orange.svg)](CHANGELOG.md)
 
 > **v0.32.0 — FastAPI compatibility and router authentication** — Wappa uses FastAPI 0.162.x, keeps public router exemptions within their mounted prefixes, and simplifies cron route registration. See [CHANGELOG.md](CHANGELOG.md).
 
@@ -174,8 +174,8 @@ wappa init .
 2. Create a WhatsApp Business App
 3. Get your credentials:
    - **App Secret** (`META_APP_SECRET`) — Wappa verifies every webhook POST body with it; there is no development bypass
-   - A verify token you choose (`WP_WEBHOOK_VERIFY_TOKEN`) — used only for Meta's GET challenge
-   - **Access Token**, **Phone Number ID**, **Business Account ID** (`WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID`) — the legacy single-Inbox bundle
+   - A verify token you choose (`META_WEBHOOK_VERIFY_TOKEN`) — used only for Meta's GET challenge
+   - **Access Token**, **Phone Number ID**, **Business Account ID** (`META_WHATSAPP_ACCESS_TOKEN`, `META_WHATSAPP_PHONE_NUMBER_ID`, `META_WHATSAPP_BUSINESS_ACCOUNT_ID`) — the legacy single-Inbox bundle
 4. Configure the one callback URL in the Meta App: `https://<host>/webhook/inboxes/whatsapp`
 
 ### 2. Create Your Bot
@@ -205,14 +205,14 @@ Send a message to your WhatsApp Business number and watch it echo back!
 
 ### Many Inboxes under one Meta App (explicit mode)
 
-Wappa has exactly two Inbox Routing Modes and they never mix. `legacy` (the default) runs the single Inbox from the `WP_*` bundle. `explicit` runs any number of Inboxes through Wappa's encrypted Inbox Directory: you implement a read-only `IInboxDirectorySource` over your own database, Wappa owns encryption (`SYSTEM_TOKEN_ENC_KEY`), caching, the WABA reverse index, and Messenger eviction.
+Wappa has exactly two Inbox Routing Modes and they never mix. `legacy` (the default) runs the single Inbox from the `META_WHATSAPP_*` bundle. `explicit` runs any number of Inboxes through Wappa's encrypted Inbox Directory: you implement a read-only `IInboxDirectorySource` over your own database, Wappa owns encryption (`SYSTEM_TOKEN_ENC_KEY`), caching, the WABA reverse index, and Messenger eviction.
 
 Start a Host-adapter scaffold with `wappa init my-bot --inbox-routing explicit`.
 It includes the required environment configuration and an
 `IInboxDirectorySource` stub to connect to the Host's durable Inbox records.
 
 ```bash
-# Explicit mode never mixes with the legacy WP_* Inbox bundle.
+# Explicit mode never mixes with the legacy META_WHATSAPP_* Inbox bundle.
 SYSTEM_INBOX_ROUTING_MODE=explicit
 SYSTEM_TOKEN_ENC_KEY=<Fernet key from CredentialCodec.generate_key()>
 ```
@@ -227,7 +227,7 @@ app = Wappa(
 )
 ```
 
-Explicit mode rejects `WP_ACCESS_TOKEN`, `WP_PHONE_ID`, and `WP_BID` at startup, and every Inbox-dependent `/api/whatsapp/*` call sends `X-Wappa-Inbox-ID` — a selector, not a credential; your authentication decides who may use it. The ordered setup, the credential commands, and the key-rotation runbook are in [docs/migration/v0.27.0-multi-inbox.md](docs/migration/v0.27.0-multi-inbox.md).
+Explicit mode rejects `META_WHATSAPP_ACCESS_TOKEN`, `META_WHATSAPP_PHONE_NUMBER_ID`, and `META_WHATSAPP_BUSINESS_ACCOUNT_ID` at startup, and every Inbox-dependent `/api/whatsapp/*` call sends `X-Wappa-Inbox-ID` — a selector, not a credential; your authentication decides who may use it. The ordered setup, the credential commands, and the key-rotation runbook are in [docs/migration/v0.27.0-multi-inbox.md](docs/migration/v0.27.0-multi-inbox.md).
 
 ## 🎛️ Architecture Overview
 
@@ -360,10 +360,10 @@ railway up
 
 # Set environment variables (legacy single-Inbox mode)
 railway variables set META_APP_SECRET=your_meta_app_secret
-railway variables set WP_WEBHOOK_VERIFY_TOKEN=your_verify_token
-railway variables set WP_ACCESS_TOKEN=your_token
-railway variables set WP_PHONE_ID=your_phone_id
-railway variables set WP_BID=your_business_id
+railway variables set META_WEBHOOK_VERIFY_TOKEN=your_verify_token
+railway variables set META_WHATSAPP_ACCESS_TOKEN=your_token
+railway variables set META_WHATSAPP_PHONE_NUMBER_ID=your_phone_id
+railway variables set META_WHATSAPP_BUSINESS_ACCOUNT_ID=your_business_id
 ```
 
 See [complete Railway deployment guide](https://wappa.mimeia.com/docs/deployment/railway).

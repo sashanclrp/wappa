@@ -1,7 +1,7 @@
 """Inbox Routing Mode assembly.
 
-This is the only place that reads the legacy ``WP_ACCESS_TOKEN`` /
-``WP_PHONE_ID`` / ``WP_BID`` bundle or the explicit-mode encryption keys.
+This is the only place that reads the legacy ``META_WHATSAPP_ACCESS_TOKEN`` /
+``META_WHATSAPP_PHONE_NUMBER_ID`` / ``META_WHATSAPP_BUSINESS_ACCOUNT_ID`` bundle or the explicit-mode encryption keys.
 After assembly every runtime component consumes the resulting
 ``InboxRuntimeConfiguration`` and never touches those variables again.
 
@@ -32,9 +32,9 @@ if TYPE_CHECKING:
     from wappa.core.config.settings import Settings
 
 LEGACY_INBOX_VARIABLES: Final[tuple[str, ...]] = (
-    "WP_ACCESS_TOKEN",
-    "WP_PHONE_ID",
-    "WP_BID",
+    "META_WHATSAPP_ACCESS_TOKEN",
+    "META_WHATSAPP_PHONE_NUMBER_ID",
+    "META_WHATSAPP_BUSINESS_ACCOUNT_ID",
 )
 ENCRYPTION_KEY_VARIABLE: Final[str] = "SYSTEM_TOKEN_ENC_KEY"
 ROUTING_MODE_VARIABLE: Final[str] = "SYSTEM_INBOX_ROUTING_MODE"
@@ -89,9 +89,9 @@ def assemble_inbox_runtime(
 ) -> InboxRuntimeConfiguration:
     """Validate the mode's contract and build its credential authority."""
     present = {
-        "WP_ACCESS_TOKEN": bool((settings.wp_access_token or "").strip()),
-        "WP_PHONE_ID": bool((settings.wp_phone_id or "").strip()),
-        "WP_BID": bool((settings.wp_bid or "").strip()),
+        "META_WHATSAPP_ACCESS_TOKEN": bool((settings.wp_access_token or "").strip()),
+        "META_WHATSAPP_PHONE_NUMBER_ID": bool((settings.wp_phone_id or "").strip()),
+        "META_WHATSAPP_BUSINESS_ACCOUNT_ID": bool((settings.wp_bid or "").strip()),
     }
 
     if mode is InboxRoutingMode.LEGACY:

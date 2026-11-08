@@ -28,7 +28,7 @@ DEFAULT_GRAPH_BASE_URL = "https://graph.facebook.com"
 """The one home of Wappa's default Meta Graph API base URL."""
 
 META_APP_SECRET_VARIABLE = "META_APP_SECRET"
-VERIFY_TOKEN_VARIABLE = "WP_WEBHOOK_VERIFY_TOKEN"
+VERIFY_TOKEN_VARIABLE = "META_WEBHOOK_VERIFY_TOKEN"
 
 
 class MetaApplicationConfig(BaseModel):

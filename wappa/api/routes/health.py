@@ -136,7 +136,6 @@ async def detailed_health_check(request: Request) -> dict[str, Any]:
                 "meta_callback": _meta_callback_status(request),
             },
             "redis": {"configured": settings.has_redis},
-            "openai": {"configured": bool(settings.openai_api_key)},
         },
     }
 

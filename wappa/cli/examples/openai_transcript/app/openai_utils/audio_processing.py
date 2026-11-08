@@ -1,5 +1,3 @@
-# Removed direct config import
-# from config.env import OPENAI_API_KEY
 import io
 from pathlib import Path
 from typing import BinaryIO

@@ -6,7 +6,7 @@ makes Meta retry and drop the event. After parsing, :func:`report_schema_drift`
 walks the model tree and logs each unmodelled field once per process, without
 its value (it may hold personal data).
 
-Set ``WAPPA_STRICT_META_SCHEMA=1`` (the test suite does) to raise
+Set ``SYSTEM_STRICT_META_SCHEMA=1`` (the test suite does) to raise
 :class:`MetaSchemaDriftError` instead, so drift in fixtures fails CI.
 
 Wappa's own Universal Webhook contracts stay ``extra="forbid"``: they are
@@ -22,7 +22,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-STRICT_SCHEMA_ENV = "WAPPA_STRICT_META_SCHEMA"
+STRICT_SCHEMA_ENV = "SYSTEM_STRICT_META_SCHEMA"
 _reported: set[tuple[str, str]] = set()
 
 

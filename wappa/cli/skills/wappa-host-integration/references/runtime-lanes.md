@@ -17,7 +17,7 @@ from wappa import ExternalEvent, HMACSignatureVerifier, IWebhookProcessor
 from wappa.core.plugins import WebhookPlugin
 
 class CrmProcessor(IWebhookProcessor):
-    verifier = HMACSignatureVerifier(os.environ["CRM_SECRET"], header="X-Signature", prefix="sha256=")
+    verifier = HMACSignatureVerifier(os.environ["CRM_WEBHOOK_SECRET"], header="X-Signature", prefix="sha256=")
     def get_source_name(self) -> str:
         return "crm"
     async def parse_event(self, request, webhook_id: str | None) -> ExternalEvent:

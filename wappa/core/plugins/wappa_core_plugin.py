@@ -256,7 +256,7 @@ class WappaCorePlugin:
                 )
             logger.info("   • Configure each URL in its matching Meta use case")
             logger.info("   • POST bodies are authenticated with META_APP_SECRET")
-            logger.info("   • GET verification uses WP_WEBHOOK_VERIFY_TOKEN")
+            logger.info("   • GET verification uses META_WEBHOOK_VERIFY_TOKEN")
             logger.info("   • Use a public HTTPS URL in the Meta dashboard")
             logger.info("   • Handles both verification (GET) and webhooks (POST)")
             logger.info("=============================")

@@ -19,7 +19,7 @@ from wappa.core.plugins import AuthPlugin, BearerTokenStrategy, CORSPlugin
 
 app = Wappa(cache="redis")                       # adds the core plugin and, for redis, RedisPlugin
 app.set_event_handler(MasterEventHandler())
-app.add_plugin(AuthPlugin(BearerTokenStrategy(os.environ["API_TOKEN"])))
+app.add_plugin(AuthPlugin(BearerTokenStrategy(os.environ["CRM_API_TOKEN"])))
 app.add_plugin(CORSPlugin(allow_origins=["https://app.example.com"], allow_methods=["GET", "POST"]))
 ```
 

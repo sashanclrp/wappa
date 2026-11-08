@@ -18,10 +18,10 @@ In this file `app` is the FastAPI app (`app.state...`, `from_app(app)`): `reques
 | | `legacy` (default) | `explicit` |
 | --- | --- | --- |
 | Inboxes | one WhatsApp number from env | any number of WhatsApp and Instagram Inboxes |
-| Credentials | `WP_ACCESS_TOKEN`, `WP_PHONE_ID`, `WP_BID` | the Host's `IInboxDirectorySource`, encrypted with `SYSTEM_TOKEN_ENC_KEY` |
+| Credentials | `META_WHATSAPP_ACCESS_TOKEN`, `META_WHATSAPP_PHONE_NUMBER_ID`, `META_WHATSAPP_BUSINESS_ACCOUNT_ID` | the Host's `IInboxDirectorySource`, encrypted with `SYSTEM_TOKEN_ENC_KEY` |
 | Instagram | no | yes |
 
-Choose one with `Wappa(inbox_routing=InboxRoutingMode.EXPLICIT, inbox_directory_source=MySource())` or `SYSTEM_INBOX_ROUTING_MODE=explicit`. There is no fallback between modes: explicit mode refuses the `WP_*` variables at startup, and legacy mode refuses a source. `wappa init --inbox-routing explicit` scaffolds the explicit shape, including an `inbox_directory_source.py` module in the app package. Generate a key with `CredentialCodec.generate_key()` (`from wappa.core.security import CredentialCodec`) and rotate keys with `SYSTEM_TOKEN_ENC_PREVIOUS_KEYS` (comma-separated).
+Choose one with `Wappa(inbox_routing=InboxRoutingMode.EXPLICIT, inbox_directory_source=MySource())` or `SYSTEM_INBOX_ROUTING_MODE=explicit`. There is no fallback between modes: explicit mode refuses the `META_WHATSAPP_*` variables at startup, and legacy mode refuses a source. `wappa init --inbox-routing explicit` scaffolds the explicit shape, including an `inbox_directory_source.py` module in the app package. Generate a key with `CredentialCodec.generate_key()` (`from wappa.core.security import CredentialCodec`) and rotate keys with `SYSTEM_TOKEN_ENC_PREVIOUS_KEYS` (comma-separated).
 
 ## The Directory Source
 
@@ -65,7 +65,7 @@ A reconnect still reaches you after that. A signed WhatsApp `account_reconnected
 
 ## Callbacks and HTTP selection
 
-- Meta callbacks: `GET`/`POST /webhook/inboxes/whatsapp` and `/webhook/inboxes/instagram`, one Meta app. `META_APP_SECRET` checks every POST body before parsing (bad signature 401), `WP_WEBHOOK_VERIFY_TOKEN` answers only the GET challenge, an unknown or inactive Inbox answers 400, and a directory outage answers 503 (Meta retries).
+- Meta callbacks: `GET`/`POST /webhook/inboxes/whatsapp` and `/webhook/inboxes/instagram`, one Meta app. `META_APP_SECRET` checks every POST body before parsing (bad signature 401), `META_WEBHOOK_VERIFY_TOKEN` answers only the GET challenge, an unknown or inactive Inbox answers 400, and a directory outage answers 503 (Meta retries).
 - Wappa's HTTP API (`/api/{platform}/...`) selects the Inbox from the `X-Wappa-Inbox-ID` header (the phone number ID or Instagram account ID): missing with no default 400, unknown 404. Selecting grants nothing: authenticate and authorize first.
 - In your own routes, depend on `get_inbox_execution_context` (`from wappa.api.dependencies import get_inbox_execution_context`; the route path must declare `{platform}`) instead of reading the header yourself.
 

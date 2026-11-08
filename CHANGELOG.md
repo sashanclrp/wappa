@@ -5,6 +5,24 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.3] - 2026-11-08
+
+Deployment configuration uses clustered environment names; retired names fail startup with migration instructions.
+
+### Breaking
+
+- Rename `WP_WEBHOOK_VERIFY_TOKEN` to `META_WEBHOOK_VERIFY_TOKEN` for the Meta GET challenge on both Platforms.
+- Rename `WP_ACCESS_TOKEN` to `META_WHATSAPP_ACCESS_TOKEN` for the single-Inbox WhatsApp access token.
+- Rename `WP_PHONE_ID` to `META_WHATSAPP_PHONE_NUMBER_ID` for the single-Inbox WhatsApp Phone Number ID.
+- Rename `WP_BID` to `META_WHATSAPP_BUSINESS_ACCOUNT_ID` for the single-Inbox WhatsApp Business Account ID.
+- Rename `WAPPA_STRICT_META_SCHEMA` to `SYSTEM_STRICT_META_SCHEMA` so the schema-check switch follows the runtime cluster.
+- Remove `settings.openai_api_key` and `platform_configs.openai` from detailed health. Provider configuration belongs to the Host Application; the transcription example uses `LLM_PROVIDER_OPENAI_API_KEY` explicitly. Remove `OPENAI_API_KEY` from the process environment.
+- Retired names refuse settings initialization even when empty or when the replacement is also set. Errors list every configured retired name and its replacement without values; there are no aliases. Explicit Inbox routing still rejects all three new `META_WHATSAPP_*` credentials.
+
+### Documentation
+
+- Scaffolds, examples, deployment files, current contracts and shipped Host skills use the new names. Host plugin examples use `CRM_API_TOKEN` and `CRM_WEBHOOK_SECRET`. See [the migration checklist](docs/migration/v0.34.3-from-0.34.2.md); no data migration is needed. Other existing `SYSTEM_*`, `META_*`, `REDIS_*` names and hosting contracts `PORT`, `DATABASE_URL`, `REDIS_URL` remain unchanged.
+
 ## [0.34.2] - 2026-11-07
 
 Scheduled Event handlers run without send credentials; credential failures surface on the first Messenger operation. Delivery logs no longer expose raw Delivery Addresses.

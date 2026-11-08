@@ -173,12 +173,12 @@ Create a `.env` file in your project root (not in this example directory):
 # WhatsApp Business API
 # Meta application — required whenever the WhatsApp callback is mounted (no dev bypass)
 META_APP_SECRET=your_meta_app_secret_here
-WP_WEBHOOK_VERIFY_TOKEN=your_verify_token_here
+META_WEBHOOK_VERIFY_TOKEN=your_verify_token_here
 
 # Legacy single-Inbox credential bundle
-WP_ACCESS_TOKEN=your_token_here
-WP_PHONE_ID=your_phone_id_here
-WP_BID=your_business_id_here
+META_WHATSAPP_ACCESS_TOKEN=your_token_here
+META_WHATSAPP_PHONE_NUMBER_ID=your_phone_id_here
+META_WHATSAPP_BUSINESS_ACCOUNT_ID=your_business_id_here
 
 # Redis
 REDIS_URL=redis://localhost:6379

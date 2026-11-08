@@ -102,10 +102,10 @@ wappa_expiry_example/
 2. **Environment variables** in `.env`:
    ```env
    META_APP_SECRET=your_meta_app_secret
-   WP_WEBHOOK_VERIFY_TOKEN=your_verify_token
-   WP_ACCESS_TOKEN=your_whatsapp_access_token
-   WP_PHONE_ID=your_phone_id
-   WP_BID=your_business_id
+   META_WEBHOOK_VERIFY_TOKEN=your_verify_token
+   META_WHATSAPP_ACCESS_TOKEN=your_whatsapp_access_token
+   META_WHATSAPP_PHONE_NUMBER_ID=your_phone_id
+   META_WHATSAPP_BUSINESS_ACCOUNT_ID=your_business_id
    REDIS_URL=redis://localhost:6379
    ```
 

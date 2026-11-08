@@ -28,17 +28,17 @@ After deployment, configure these environment variables in Railway Dashboard:
 ```bash
 # Meta Application Configuration (required with the callback, no dev bypass)
 META_APP_SECRET=your_meta_app_secret_here
-WP_WEBHOOK_VERIFY_TOKEN=your_verify_token_here
+META_WEBHOOK_VERIFY_TOKEN=your_verify_token_here
 # Legacy single-Inbox bundle (this example runs legacy mode)
-WP_ACCESS_TOKEN=your_access_token_here
-WP_PHONE_ID=your_phone_number_id_here
-WP_BID=your_business_id_here
+META_WHATSAPP_ACCESS_TOKEN=your_access_token_here
+META_WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id_here
+META_WHATSAPP_BUSINESS_ACCOUNT_ID=your_business_id_here
 
 # Redis (if using Railway Redis plugin)
 REDIS_URL=redis://redis.railway.internal:6379
 
 # Optional: AI Integration
-OPENAI_API_KEY=your_openai_key_here
+LLM_PROVIDER_OPENAI_API_KEY=your_openai_key_here
 ```
 
 ### Railway Auto-Set Variables
@@ -120,10 +120,10 @@ railway up
 ```bash
 # Set variables via CLI
 railway variables set META_APP_SECRET=your_meta_app_secret
-railway variables set WP_WEBHOOK_VERIFY_TOKEN=your_verify_token
-railway variables set WP_ACCESS_TOKEN=your_token
-railway variables set WP_PHONE_ID=your_phone_id
-railway variables set WP_BID=your_business_id
+railway variables set META_WEBHOOK_VERIFY_TOKEN=your_verify_token
+railway variables set META_WHATSAPP_ACCESS_TOKEN=your_token
+railway variables set META_WHATSAPP_PHONE_NUMBER_ID=your_phone_id
+railway variables set META_WHATSAPP_BUSINESS_ACCOUNT_ID=your_business_id
 
 # Or use Railway Dashboard for easier management
 ```

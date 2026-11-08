@@ -11,10 +11,10 @@ This is the main initialization file following SOLID principles:
 SETUP REQUIRED:
 1. Create a .env file with your WhatsApp Business API credentials:
     META_APP_SECRET=your_meta_app_secret   # authenticates every webhook POST
-    WP_WEBHOOK_VERIFY_TOKEN=your_verify_token
-    WP_ACCESS_TOKEN=your_access_token_here  # legacy single-Inbox bundle
-    WP_PHONE_ID=your_phone_number_id_here
-    WP_BID=your_business_id_here
+    META_WEBHOOK_VERIFY_TOKEN=your_verify_token
+    META_WHATSAPP_ACCESS_TOKEN=your_access_token_here  # legacy single-Inbox bundle
+    META_WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id_here
+    META_WHATSAPP_BUSINESS_ACCOUNT_ID=your_business_id_here
 
 2. JSON Cache automatically creates cache directory:
     No external dependencies required!
@@ -57,19 +57,19 @@ def validate_configuration() -> bool:
     missing_configs = []
 
     if not settings.wp_access_token:
-        missing_configs.append("WP_ACCESS_TOKEN")
+        missing_configs.append("META_WHATSAPP_ACCESS_TOKEN")
 
     if not settings.wp_phone_id:
-        missing_configs.append("WP_PHONE_ID")
+        missing_configs.append("META_WHATSAPP_PHONE_NUMBER_ID")
 
     if not settings.wp_bid:
-        missing_configs.append("WP_BID")
+        missing_configs.append("META_WHATSAPP_BUSINESS_ACCOUNT_ID")
 
     if not settings.meta_app_secret:
         missing_configs.append("META_APP_SECRET")
 
     if not settings.wp_webhook_verify_token:
-        missing_configs.append("WP_WEBHOOK_VERIFY_TOKEN")
+        missing_configs.append("META_WEBHOOK_VERIFY_TOKEN")
 
     if missing_configs:
         logger.error(f"❌ Missing required configuration: {', '.join(missing_configs)}")

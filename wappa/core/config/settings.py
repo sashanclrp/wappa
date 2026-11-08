@@ -3,12 +3,11 @@ Settings for the Wappa WhatsApp framework.
 
 Naming policy
 ─────────────
-  Unprefixed platform contracts : PORT, DATABASE_URL, REDIS_URL
-  Framework runtime             : SYSTEM_*
-  Meta / WhatsApp transport     : META_*, WP_*
-  AI vendor services            : OPENAI_*, ANTHROPIC_*
-  Storage vendor services       : SUPABASE_*
-  App-specific namespaces       : your own prefix (e.g. MIIA_*, BELLABELLA_*)
+  Hosting contracts : PORT, DATABASE_URL, REDIS_URL
+  Runtime           : SYSTEM_*
+  Meta transport    : META_*
+  Redis             : REDIS_*
+Host Applications own provider and business configuration.
 """
 
 import os
@@ -67,6 +66,22 @@ class Settings:
     """Application settings with environment-based configuration."""
 
     def __init__(self) -> None:
+        retired = {
+            "WP_WEBHOOK_VERIFY_TOKEN": "META_WEBHOOK_VERIFY_TOKEN",
+            "WP_ACCESS_TOKEN": "META_WHATSAPP_ACCESS_TOKEN",
+            "WP_PHONE_ID": "META_WHATSAPP_PHONE_NUMBER_ID",
+            "WP_BID": "META_WHATSAPP_BUSINESS_ACCOUNT_ID",
+            "WAPPA_STRICT_META_SCHEMA": "SYSTEM_STRICT_META_SCHEMA",
+            "OPENAI_API_KEY": "LLM_PROVIDER_OPENAI_API_KEY (Host-owned; removed from Wappa settings)",
+        }
+        errors = [
+            f"{old} was renamed to {new} in 0.34.3."
+            for old, new in retired.items()
+            if old in os.environ
+        ]
+        if errors:
+            raise ValueError(" ".join(errors))
+
         # ── Version ──────────────────────────────────────────────
         self.version: str = _get_version_from_pyproject()
 
@@ -88,19 +103,21 @@ class Settings:
             "SYSTEM_CAPTURE_PAYLOADS", ""
         ).strip().lower() in {"1", "true", "yes"}
 
-        # ── Meta / WhatsApp (META_* / WP_*) ─────────────────────
+        # ── Meta / WhatsApp (META_*) ─────────────────────
         self.api_version: str = os.getenv("META_API_VERSION", DEFAULT_GRAPH_API_VERSION)
         self.base_url: str = os.getenv("META_BASE_URL", DEFAULT_GRAPH_BASE_URL)
 
         # Meta Application Configuration (one Meta App per Wappa application).
         self.meta_app_secret: str | None = os.getenv("META_APP_SECRET")
-        self.wp_webhook_verify_token: str | None = os.getenv("WP_WEBHOOK_VERIFY_TOKEN")
+        self.wp_webhook_verify_token: str | None = os.getenv(
+            "META_WEBHOOK_VERIFY_TOKEN"
+        )
 
         # Legacy single-Inbox bundle. Only the legacy settings adapter built by
         # ``wappa.core.factory.inbox_assembly`` may consume these three values.
-        self.wp_access_token: str | None = os.getenv("WP_ACCESS_TOKEN")
-        self.wp_phone_id: str | None = os.getenv("WP_PHONE_ID")
-        self.wp_bid: str | None = os.getenv("WP_BID")
+        self.wp_access_token: str | None = os.getenv("META_WHATSAPP_ACCESS_TOKEN")
+        self.wp_phone_id: str | None = os.getenv("META_WHATSAPP_PHONE_NUMBER_ID")
+        self.wp_bid: str | None = os.getenv("META_WHATSAPP_BUSINESS_ACCOUNT_ID")
 
         # Inbox Routing Mode and explicit-mode credential encryption.
         self.inbox_routing_mode: str | None = os.getenv("SYSTEM_INBOX_ROUTING_MODE")
@@ -108,9 +125,6 @@ class Settings:
         self.system_token_enc_previous_keys: str | None = os.getenv(
             "SYSTEM_TOKEN_ENC_PREVIOUS_KEYS"
         )
-
-        # ── AI (OPENAI_*) ────────────────────────────────────────
-        self.openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
 
         # ── Persistence (REDIS_*) ────────────────────────────────
         self.redis_url: str | None = os.getenv("REDIS_URL")

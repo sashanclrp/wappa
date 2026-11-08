@@ -4,6 +4,12 @@ This file tracks Wappa surfaces that host applications may import, call, configu
 
 A breaking change is a clean cut: no aliases, re-exports, or compatibility shims, and `CHANGELOG.md` lists every break.
 
+## Deployment environment (0.34.3)
+
+Wappa reads only `SYSTEM_*`, `META_*`, `REDIS_*` and the hosting contracts `PORT`, `DATABASE_URL`, `REDIS_URL` (database configuration remains Host-owned). The callback token is `META_WEBHOOK_VERIFY_TOKEN`; the single-Inbox bundle is `META_WHATSAPP_ACCESS_TOKEN`, `META_WHATSAPP_PHONE_NUMBER_ID`, `META_WHATSAPP_BUSINESS_ACCOUNT_ID`. Explicit routing rejects that bundle. `SYSTEM_STRICT_META_SCHEMA=1` enables strict Meta schema checks.
+
+Retired deployment names fail at settings initialization, including empty values and when their replacements are also set; errors list names and replacements without values. There are no aliases. Wappa no longer exposes `settings.openai_api_key` or `platform_configs.openai` in detailed health. Host provider clients receive their own configuration, such as `LLM_PROVIDER_OPENAI_API_KEY`. See [the migration checklist](migration/v0.34.3-from-0.34.2.md).
+
 ## Instagram conversations contract
 
 Shipped in 0.34.0; see the [migration guide](migration/instagram-conversation-contracts.md), the [capability matrix](backlog/in_progress/261103-instagram-conversations/references/capability-matrix.md) for per-capability offline/live status, and [ADR-0025](adr/0025-messenger-contract.md) for the one-method-per-action rule. Publishing, analytics and moderation *policy* remain Host/extension responsibilities.
@@ -90,7 +96,7 @@ Responsibilities other than sending conversation messages, and actions with no r
 
 Instagram uses the existing GET/POST `/webhook/inboxes/instagram` callback,
 separate from `/webhook/inboxes/whatsapp`. Both use the same application Meta
-trust configuration, including the existing `WP_WEBHOOK_VERIFY_TOKEN` name.
+trust configuration, including the existing `META_WEBHOOK_VERIFY_TOKEN` name.
 There is no signature bypass. GET verification needs no Inbox registration.
 POST admission requires registered active credentials in explicit mode; unknown
 or inactive Inboxes return 400, directory/integrity outages return 503, invalid
@@ -214,7 +220,7 @@ Local-only routes ignore a supplied header entirely: they do not validate it, bi
 | Host authentication or authorization failure | the Auth plugin's status |
 | Local-only route with any header | normal local response |
 
-In legacy mode the header may repeat the configured `WP_PHONE_ID`; any other value answers 404. No Inbox context leaks between sequential requests on one worker.
+In legacy mode the header may repeat the configured `META_WHATSAPP_PHONE_NUMBER_ID`; any other value answers 404. No Inbox context leaks between sequential requests on one worker.
 
 The former demonstration routes `/interactive/send-complex-buttons` and `/interactive/send-menu-list` are not part of the HTTP contract; their code lives in the full example.
 
@@ -363,7 +369,7 @@ Wappa mounts no Instagram deauthorize route. That callback fires only for grants
 `OutboundEchoWebhook` carries only messages sent outside Wappa; the filter is fixed (ADR-0023). WhatsApp Coexistence needs none. Instagram echoes carry no sender-app evidence, so Wappa drops an echo whose `message_id` is in its `ISentMessageRegistry` (IDs of messages it sent, one key per send: 10-minute TTL, cut to a 2-minute grace when its echo is claimed; Table Cache `<inbox>:df:wappa_sent_messages:pkid:<message_id>`; shared across workers only on Redis). `origin=UNKNOWN` means the registry could not answer and the echo was delivered rather than lost. Hosts store what arrives. `SystemEventDetail` payloads are typed: `contact_sync: ContactSync` (Coexistence `smb_app_state_sync`), `group_update: GroupUpdate`, `user_action: UserAction`, `entry_referral: EntryReferral`. `platform_event` is set only for `UNSUPPORTED_EVENT`. The `SystemEventType` members `SMB_MESSAGE_ECHO`, `HISTORY_SYNC`, `ACCOUNT_OFFBOARDED` and `ACCOUNT_RECONNECTED` are no longer emitted, and `coexistence_payload` is removed.
 A WhatsApp `change.field` that Wappa does not model and the Host did not register with `register_webhook_field` is answered `200` and reaches `process_system_webhook` as `SystemWebhook(UNSUPPORTED_EVENT)` with `event_detail.platform_event = {"field", "value"}`, the same as Instagram. It was HTTP 400 before 0.34.
 
-Unmodelled properties inside a modelled Meta payload (for example a new `pricing.subtype`) are accepted, the event is processed, and Wappa logs `META_SCHEMA_DRIFT platform=<p> field=<Model.field>` once per field per process, without the value. Alert on that signature and model the field when it appears. The `WHATSAPP_WEBHOOK_CONTRACT_DRIFT` critical log no longer exists. Set `WAPPA_STRICT_META_SCHEMA=1` in test suites to raise `MetaSchemaDriftError` on drift instead. Wrong types or formats in modelled fields are still errors, and Hosts never see the extra properties.
+Unmodelled properties inside a modelled Meta payload (for example a new `pricing.subtype`) are accepted, the event is processed, and Wappa logs `META_SCHEMA_DRIFT platform=<p> field=<Model.field>` once per field per process, without the value. Alert on that signature and model the field when it appears. The `WHATSAPP_WEBHOOK_CONTRACT_DRIFT` critical log no longer exists. Set `SYSTEM_STRICT_META_SCHEMA=1` in test suites to raise `MetaSchemaDriftError` on drift instead. Wrong types or formats in modelled fields are still errors, and Hosts never see the extra properties.
 
 `InboundMessageWebhook` is the only public inbound-message Universal Model name. Wappa does not provide a compatibility alias for previous inbound-message model names.
 

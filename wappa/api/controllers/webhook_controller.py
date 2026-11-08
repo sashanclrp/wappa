@@ -81,7 +81,7 @@ class WebhookController:
                     detail=(
                         f"Webhook verification token mismatch for platform "
                         f"'{platform}' — the token sent by the platform does not "
-                        "match WP_WEBHOOK_VERIFY_TOKEN."
+                        "match META_WEBHOOK_VERIFY_TOKEN."
                     ),
                 )
             self.logger.info("Webhook verification successful for %s", platform)

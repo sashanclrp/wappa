@@ -106,7 +106,7 @@ def _ig_payload(**extra) -> dict:
 async def test_lax_mode_processes_status_with_unknown_field_and_logs_once(
     monkeypatch, caplog
 ):
-    monkeypatch.setenv("WAPPA_STRICT_META_SCHEMA", "")
+    monkeypatch.setenv("SYSTEM_STRICT_META_SCHEMA", "")
     processor = WhatsAppWebhookProcessor()
 
     with caplog.at_level(logging.WARNING):
@@ -123,7 +123,7 @@ async def test_lax_mode_processes_status_with_unknown_field_and_logs_once(
 
 @pytest.mark.asyncio
 async def test_strict_mode_raises_for_the_same_status_payload(monkeypatch):
-    monkeypatch.setenv("WAPPA_STRICT_META_SCHEMA", "1")
+    monkeypatch.setenv("SYSTEM_STRICT_META_SCHEMA", "1")
 
     with pytest.raises(Exception) as excinfo:
         await WhatsAppWebhookProcessor().translate(
@@ -143,7 +143,7 @@ async def test_strict_mode_raises_for_the_same_status_payload(monkeypatch):
 async def test_unknown_whatsapp_webhook_field_becomes_unsupported_event(
     monkeypatch, caplog
 ):
-    monkeypatch.setenv("WAPPA_STRICT_META_SCHEMA", "")
+    monkeypatch.setenv("SYSTEM_STRICT_META_SCHEMA", "")
 
     with caplog.at_level(logging.WARNING):
         webhook = await WhatsAppWebhookProcessor().translate(
@@ -163,7 +163,7 @@ async def test_unknown_whatsapp_webhook_field_becomes_unsupported_event(
 async def test_instagram_unknown_messaging_key_is_processed_and_reported_in_lax_mode(
     monkeypatch, caplog
 ):
-    monkeypatch.setenv("WAPPA_STRICT_META_SCHEMA", "")
+    monkeypatch.setenv("SYSTEM_STRICT_META_SCHEMA", "")
 
     with caplog.at_level(logging.WARNING):
         webhook = await InstagramWebhookProcessor().translate(
@@ -179,7 +179,7 @@ async def test_instagram_unknown_messaging_key_is_processed_and_reported_in_lax_
 
 @pytest.mark.asyncio
 async def test_instagram_unknown_key_raises_in_strict_mode(monkeypatch):
-    monkeypatch.setenv("WAPPA_STRICT_META_SCHEMA", "1")
+    monkeypatch.setenv("SYSTEM_STRICT_META_SCHEMA", "1")
 
     with pytest.raises(Exception, match="brand_new_ig_key"):
         await InstagramWebhookProcessor().translate(

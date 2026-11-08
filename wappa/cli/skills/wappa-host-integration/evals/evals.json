@@ -49,6 +49,16 @@
       "assertions": [
         "names wappa-apps"
       ]
+    },
+    {
+      "id": "clustered-environment-upgrade",
+      "prompt": "Upgrade a 0.34.2 Host to 0.34.3; it uses WP_ACCESS_TOKEN, WP_PHONE_ID, WP_BID, WP_WEBHOOK_VERIFY_TOKEN, OPENAI_API_KEY and WAPPA_STRICT_META_SCHEMA. Can I leave old keys empty?",
+      "expected_output": "Renames callback to META_WEBHOOK_VERIFY_TOKEN, credentials to META_WHATSAPP_ACCESS_TOKEN, META_WHATSAPP_PHONE_NUMBER_ID and META_WHATSAPP_BUSINESS_ACCOUNT_ID, strict schema to SYSTEM_STRICT_META_SCHEMA. Moves provider key to Host-owned LLM_PROVIDER_OPENAI_API_KEY; removes settings.openai_api_key and detailed health platform_configs.openai. Deletes every old key, even empty ones. Explicit routing refuses the three new deployment credentials.",
+      "assertions": [
+        "no aliases or empty retired keys",
+        "uses new clustered names",
+        "keeps provider configuration Host-owned"
+      ]
     }
   ]
 }

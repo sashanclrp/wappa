@@ -194,7 +194,7 @@ class _BuilderRegistrationMixin:
         """Supply the one Meta Application Configuration explicitly.
 
         Configuring it here while ``META_APP_SECRET`` or
-        ``WP_WEBHOOK_VERIFY_TOKEN`` is also set in the environment fails at
+        ``META_WEBHOOK_VERIFY_TOKEN`` is also set in the environment fails at
         build time; there is no precedence between the two sources.
         """
         self.meta_application_config = config

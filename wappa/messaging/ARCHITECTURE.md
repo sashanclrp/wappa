@@ -27,7 +27,7 @@
 
 - Webhook parsing — owned by `wappa/webhooks/`; inbound event routing — owned by `wappa/core/events/`.
 - Cache scoping, SSE, or runtime state — owned by `persistence`.
-- Credential provisioning and Inbox resolution — owned by `wappa.domain.inbox.services.InboxDirectory` behind the internal `IInboxCredentialResolver` port (legacy settings adapter in legacy mode, Inbox Directory in explicit mode). Messaging receives already-resolved credentials; it never reads `WP_*` settings or the directory itself.
+- Credential provisioning and Inbox resolution — owned by `wappa.domain.inbox.services.InboxDirectory` behind the internal `IInboxCredentialResolver` port (legacy settings adapter in legacy mode, Inbox Directory in explicit mode). Messaging receives already-resolved credentials; it never reads `META_WHATSAPP_*` settings or the directory itself.
 - Business logic, workflow decisions, or event handler behaviour — owned by host applications.
 - Template authorization, attribution, idempotency, Campaigns, Conversation
   lifecycle, Reply State, Agent context, and Message persistence — owned by Host

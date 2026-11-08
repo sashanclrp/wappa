@@ -1,7 +1,7 @@
 ---
-checked_on: 2026-11-07
-checked_against: Wappa CHANGELOG.md (0.34.2) and docs/migration/v0.34.0-from-0.33.md, v0.34.1-from-0.34.0.md
-revision: 4
+checked_on: 2026-11-08
+checked_against: Wappa CHANGELOG.md (0.34.3) and docs/migration/v0.34.0-from-0.33.md, v0.34.1-from-0.34.0.md
+revision: 5
 ---
 
 # Upgrading a Host to a new Wappa version
@@ -9,6 +9,7 @@ revision: 4
 ## Contents
 
 - Method
+- 0.34.2 → 0.34.3 checklist
 - 0.34.1 → 0.34.2 checklist
 - 0.34.0 → 0.34.1 checklist
 - 0.33 → 0.34 checklist
@@ -20,11 +21,17 @@ Wappa releases are clean cuts: a renamed or removed API has no alias, and every 
 
 1. Pin the target version and read its whole `CHANGELOG.md` section, plus `docs/migration/v<new>-from-<old>.md` when present (both ship in Wappa's source; read them from the repository or the installed sdist).
 2. Turn every "Breaking" line into a checklist item and grep the Host for each old name.
-3. Fix the code, then run the Host's tests with `WAPPA_STRICT_META_SCHEMA=1` so payload drift fails loudly.
+3. Fix the code, then run the Host's tests with `SYSTEM_STRICT_META_SCHEMA=1` so payload drift fails loudly.
 4. Run data migrations (cache namespaces, below) with old workers stopped, then deploy.
 5. Refresh this skill set: `wappa init` never overwrites an existing skill, so copy the new version's `wappa/cli/skills/` over the old folders (or delete them and re-run `wappa init` in a scratch folder and copy).
 
 Upgrade one minor version at a time when several are pending.
+
+## 0.34.2 → 0.34.3 checklist
+
+Rename `WP_WEBHOOK_VERIFY_TOKEN` to `META_WEBHOOK_VERIFY_TOKEN`, `WP_ACCESS_TOKEN` to `META_WHATSAPP_ACCESS_TOKEN`, `WP_PHONE_ID` to `META_WHATSAPP_PHONE_NUMBER_ID`, `WP_BID` to `META_WHATSAPP_BUSINESS_ACCOUNT_ID`, and `WAPPA_STRICT_META_SCHEMA` to `SYSTEM_STRICT_META_SCHEMA`. Remove every retired key, including empty ones: settings initialization fails even when the replacement is present. Explicit routing still rejects the three deployment-wide WhatsApp credentials.
+
+Wappa removes `settings.openai_api_key` and `platform_configs.openai` from detailed health. Move provider configuration to the Host's `LLM_PROVIDER_OPENAI_API_KEY`, pass it explicitly to the provider client, and remove `OPENAI_API_KEY` from the environment. Host plugin examples use `CRM_API_TOKEN` and `CRM_WEBHOOK_SECRET`. There is no data migration. See `docs/migration/v0.34.3-from-0.34.2.md`.
 
 ## 0.34.1 → 0.34.2 checklist
 

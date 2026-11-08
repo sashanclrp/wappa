@@ -81,12 +81,12 @@ class Wappa(_WappaConfigMixin):
                 for explicit multi-Inbox routing. Wappa builds and runs the
                 Inbox Directory over it; the Host never replaces the directory.
             inbox_routing: ``legacy`` (default) uses the single settings-backed
-                Inbox from ``WP_ACCESS_TOKEN``/``WP_PHONE_ID``/``WP_BID``.
+                Inbox from ``META_WHATSAPP_ACCESS_TOKEN``/``META_WHATSAPP_PHONE_NUMBER_ID``/``META_WHATSAPP_BUSINESS_ACCOUNT_ID``.
                 ``explicit`` uses the Inbox Directory and rejects those
                 variables. The modes never fall back to one another.
             meta_application_config: Explicit Meta Application Configuration.
                 Omit it to let Wappa read ``META_APP_SECRET`` and
-                ``WP_WEBHOOK_VERIFY_TOKEN`` from the environment; configuring
+                ``META_WEBHOOK_VERIFY_TOKEN`` from the environment; configuring
                 both is a startup error.
             route_profile: Which HTTP capability groups to mount.
                 "standalone" (default) is the surface a standalone Wappa app

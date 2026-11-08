@@ -129,21 +129,21 @@ def _initialize_project(directory: str, *, inbox_routing: str = "legacy") -> Non
         typer.echo()
         typer.echo("🔧 Required environment variables (.env file):")
         typer.echo("   META_APP_SECRET=your_meta_app_secret")
-        typer.echo("   WP_WEBHOOK_VERIFY_TOKEN=your_webhook_verify_token")
+        typer.echo("   META_WEBHOOK_VERIFY_TOKEN=your_webhook_verify_token")
         if explicit:
             typer.echo("   SYSTEM_INBOX_ROUTING_MODE=explicit")
             typer.echo("   SYSTEM_TOKEN_ENC_KEY=<generated Fernet key>")
             typer.echo("   Implement app/inbox_directory_source.py for Host records")
         else:
-            typer.echo("   WP_ACCESS_TOKEN=your_access_token")
-            typer.echo("   WP_PHONE_ID=your_phone_id")
-            typer.echo("   WP_BID=your_business_id")
+            typer.echo("   META_WHATSAPP_ACCESS_TOKEN=your_access_token")
+            typer.echo("   META_WHATSAPP_PHONE_NUMBER_ID=your_phone_id")
+            typer.echo("   META_WHATSAPP_BUSINESS_ACCOUNT_ID=your_business_id")
         typer.echo()
         typer.echo("📡 Configure this one callback URL in the Meta App:")
         typer.echo("   https://your-domain.com/webhook/inboxes/whatsapp")
         typer.echo(
             "   Wappa authenticates every POST with META_APP_SECRET; "
-            "WP_WEBHOOK_VERIFY_TOKEN answers only the GET challenge."
+            "META_WEBHOOK_VERIFY_TOKEN answers only the GET challenge."
         )
 
     except Exception as e:

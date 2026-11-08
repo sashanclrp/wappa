@@ -17,7 +17,7 @@ The `Wappa` class adds `WappaCorePlugin` automatically -- no action required:
 ```python
 from wappa import Wappa
 
-app = Wappa(cache="memory")  # legacy mode reads WP_ACCESS_TOKEN / WP_PHONE_ID / WP_BID from the environment
+app = Wappa(cache="memory")  # legacy mode reads META_WHATSAPP_ACCESS_TOKEN / META_WHATSAPP_PHONE_NUMBER_ID / META_WHATSAPP_BUSINESS_ACCOUNT_ID from the environment
 # WappaCorePlugin is already registered internally.
 ```
 

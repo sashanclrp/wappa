@@ -18,14 +18,14 @@ dotenv.load_dotenv = lambda *args, **kwargs: False
 # Dummy, non-secret legacy single-Inbox bundle. Tests that build a Wappa app
 # in legacy mode need it; real values never belong in the test run.
 _TEST_ENV_DEFAULTS = {
-    "WP_ACCESS_TOKEN": "test-access-token",
-    "WP_PHONE_ID": "100000000000001",
-    "WP_BID": "200000000000002",
-    "WP_WEBHOOK_VERIFY_TOKEN": "test-verify-token",
+    "META_WHATSAPP_ACCESS_TOKEN": "test-access-token",
+    "META_WHATSAPP_PHONE_NUMBER_ID": "100000000000001",
+    "META_WHATSAPP_BUSINESS_ACCOUNT_ID": "200000000000002",
+    "META_WEBHOOK_VERIFY_TOKEN": "test-verify-token",
     "META_APP_SECRET": "test-app-secret",
     # Meta payload drift fails tests instead of being logged (ADR-0023):
     # fixtures must model every field Meta sends.
-    "WAPPA_STRICT_META_SCHEMA": "1",
+    "SYSTEM_STRICT_META_SCHEMA": "1",
 }
 
 for _key, _value in _TEST_ENV_DEFAULTS.items():
