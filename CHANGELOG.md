@@ -5,6 +5,21 @@ All notable changes to Wappa will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.34.5] - 2026-11-08
+
+Every Platform reports normalized per-part send evidence so Hosts can record accepted messages without Platform branches.
+
+### Added
+
+- `MessageResult.platform_response["wappa_parts"]["parts"]` describes every produced message in flattened send order, with `index`, `role`, exact `text` (or null), `message_id` and `outcome`. Single native sends use the same shape: WhatsApp normally has one part including its native caption; Instagram emulations report split text, caption follow-ups, media headers, buttons, quick replies, carousel intros and carousels separately. Existing `message_ids` and `delivered` remain available.
+- Failed attempted parts retain their error code and existing outcome, including indeterminate and rate-limited results; planned parts skipped after a failure are `not_attempted`. Nested emulations preserve accepted evidence even when a later nested part fails. Quote fallback remains one logical part with `reply_to_dropped: true`, alongside unchanged top-level `wappa_reply_to` evidence.
+
+### Documentation
+
+- The uniform result shape is part of the shared Messenger contract for every current and future Platform. Updated architecture, ADRs and shipped Host skills with accepted-part history guidance. Structured content without a text body and provider-rendered Template text are not fabricated. Provider acceptance remains separate from delivery/read confirmation. Native evidence stays excluded from result serialization; Hosts select it explicitly for persistence.
+
+Send payloads, public method signatures, first-failure stopping, root success/error codes/Message IDs, quote fallback and Delivery Address fallback retain their existing behavior.
+
 ## [0.34.4] - 2026-11-08
 
 Instagram sends recover from rejected reply quotes; authenticated callbacks for unknown Instagram accounts are acknowledged and dropped.

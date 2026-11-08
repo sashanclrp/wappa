@@ -154,6 +154,17 @@
         "narrow one-time adapter fallback",
         "explains result evidence and partial delivery"
       ]
+    },
+    {
+      "id": "uniform-accepted-part-history",
+      "prompt": "Store only the accepted parts of one Tool send, uniformly on WhatsApp and Instagram, including a split text or media-header buttons send whose later part failed.",
+      "expected_output": "Reads platform_response.wappa_parts.parts without a Platform branch. Filters outcome=accepted and stores exact text and role/message_id in order. Notes one native WhatsApp part including caption versus Instagram emulation parts, skipped not_attempted, indeterminate unknown, and reply_to_dropped metadata. Native evidence is excluded from model_dump.",
+      "assertions": [
+        "same result path for every Platform",
+        "records accepted parts only",
+        "never retries already accepted parts",
+        "does not confuse acceptance and delivery"
+      ]
     }
   ]
 }

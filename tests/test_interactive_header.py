@@ -374,7 +374,7 @@ async def test_instagram_split_text_lists_every_part() -> None:
     async with client:
         result = await messenger.send_text(" ".join(["palabra"] * 300), IG_DM)
     assert result.success and result.message_id == "mid.3"
-    assert _parts(result) == {
+    assert {k: _parts(result)[k] for k in ("message_ids", "delivered")} == {
         "message_ids": ["mid.1", "mid.2", "mid.3"],
         "delivered": 3,
     }
@@ -403,16 +403,27 @@ async def test_instagram_partial_failure_says_how_many_parts_went_out() -> None:
         result = await messenger.send_text(" ".join(["palabra"] * 300), IG_DM)
     assert not result.success
     assert len(sent) == 2  # the third part is never sent
-    assert _parts(result) == {"message_ids": ["mid.1"], "delivered": 1}
+    assert {k: _parts(result)[k] for k in ("message_ids", "delivered")} == {
+        "message_ids": ["mid.1"],
+        "delivered": 1,
+    }
     assert "1 earlier part(s) already delivered" in (result.error or "")
 
 
-async def test_instagram_single_message_send_carries_no_parts_record() -> None:
+async def test_instagram_single_message_send_carries_one_part() -> None:
     messenger, client, _ = _ig()
     async with client:
         result = await messenger.send_text("hola", IG_DM)
     assert result.success
-    assert "wappa_parts" not in (result.platform_response or {})
+    assert _parts(result)["parts"] == [
+        {
+            "index": 0,
+            "role": "text_chunk",
+            "text": "hola",
+            "message_id": "mid.1",
+            "outcome": "accepted",
+        }
+    ]
 
 
 async def test_instagram_nested_emulation_flattens_every_part() -> None:

@@ -2,7 +2,7 @@
 
 ``MessageResult`` is the private-message send result every Messenger returns;
 each adapter builds it from its own wire response and keeps the native
-response in ``platform_response``. Comments, controls and reads use their own
+response and normalized ``wappa_parts`` evidence in ``platform_response``. Comments, controls and reads use their own
 result kinds so a comment ID never masquerades as a DM message ID and a
 control success never claims a webhook exists.
 
@@ -36,7 +36,8 @@ class MessageResult(BaseModel):
 
     ``platform`` is required: an adapter always states which Platform it
     sent on. ``platform_response`` is the single native-evidence field and is
-    excluded from serialization. The recipient evidence fields carry the
+    excluded from serialization. Every send adapter adds normalized ``wappa_parts``
+    evidence there, even for a single native message. The recipient evidence fields carry the
     Delivery Address evidence of ADR-0022; Platforms without BSUIDs or phone
     numbers leave them ``None``.
     """

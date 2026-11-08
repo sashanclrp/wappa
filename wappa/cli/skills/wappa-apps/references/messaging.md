@@ -1,7 +1,7 @@
 ---
 checked_on: 2026-11-08
 checked_against: Meta WhatsApp Cloud API and Instagram messaging-api, sender-actions, quick-replies, button- and generic-template pages (Graph v26.0), Wappa's tests/test_instagram_conversations.py and the live format matrix of 2026-11-06
-revision: 5
+revision: 6
 ---
 
 # Sending and receiving messages
@@ -10,6 +10,7 @@ revision: 5
 
 - Receive
 - Send
+- Record accepted parts
 - Location, contact and sticker
 - One result per send
 - Interactive Messages
@@ -142,3 +143,15 @@ if got.found:
 To acknowledge an inbound message on any Platform, call `await self.messenger.mark_as_read(message_id, target, typing=True)`; `target` is required and `typing` is keyword-only. On WhatsApp it marks that message read and shows typing. On Instagram it marks the thread seen (there is no per-message seen), then sends `typing_on`. It returns a `MessageResult`. It is not a message, and it is the only seen/typing call on every Platform.
 
 Instagram DM webhooks carry only the User's scoped ID, so `webhook.user.get_display_name()` is the raw IGSID. To learn the User's name, call `profile = await self.messenger.resolve_platform_user_profile(webhook.user)`: on Instagram it looks up `name`, `username` and `profile_pic` with the Inbox token and returns a `PlatformUserProfile` (`profile_name`, `username`, `picture_url`, plus the webhook evidence). It never raises for a Graph failure; check `profile.found` (or `profile.outcome`: `not_found`, `access_denied`, `rejected`, `unavailable`) and keep the evidence. On WhatsApp the same call returns the webhook evidence with no request. Wappa never calls it for you and never caches it: store the fields in your own User record and decide when to resolve again.
+
+
+## Record accepted parts
+
+Every Platform's send result exposes `result.platform_response["wappa_parts"]`, including one-part native sends on WhatsApp. `parts` is flattened in send order, with zero-based `index`, `role`, exact `text` (or `None` for pure media/structured content), `message_id` and `outcome`. Roles include `text_chunk`, `caption`, `media`, `buttons`, `quick_replies`, `carousel_intro`, `carousel` and native operations such as `contact`, `location` and `template`. A refused part has `error_code` when known; skipped planned parts have `outcome="not_attempted"` and no ID. Existing `message_ids` and `delivered` count accepted messages. A native WhatsApp caption is in its media part; Instagram caption chunks have their own parts. Use the original Host send values for structured content that has no text body; rendered Template text is not invented.
+
+```python
+parts = (result.platform_response or {}).get("wappa_parts", {}).get("parts", [])
+accepted = [part for part in parts if part["outcome"] == "accepted"]
+```
+
+No Platform branch is needed. Accepted means provider acceptance, not delivery or a read receipt. `indeterminate` is unknown, and `rate_limited` is a refused rate budget; neither belongs in accepted history. Keep the Host's own policy for reconciliation. Quote fallback is one part marked `reply_to_dropped=True`, alongside unchanged top-level `wappa_reply_to`. Select evidence explicitly for persistence because `platform_response` is excluded from `model_dump()` and JSON. Do not resend the whole call after partial success. Single native sends, text chunks, media-caption follow-ups, header/button emulations and carousels share this structure.

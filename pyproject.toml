@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "wappa"
-version = "0.34.4"
+version = "0.34.5"
 description = "Open Source framework for messaging workflows, chat applications, and platform webhooks"
 authors = [
     {name = "Sasha Canal", email = "contact@mimeia.com"},

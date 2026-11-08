@@ -72,18 +72,21 @@ class _TextMixin(_InstagramBase):
             )
         parts = _Parts()
         result: MessageResult | None = None
+        stopped = False
         for index, chunk in enumerate(chunks):
             final = index == len(chunks) - 1
             message: dict[str, Any] = {"text": chunk}
             if final and last:
                 message.update(last)
+            if stopped:
+                parts.skip(message)
+                continue
             result = await self._send(
                 direct,
                 message,
                 operation=operation if final else "Instagram text send",
                 reply_to_message_id=reply_to_message_id if index == 0 else None,
             )
-            if not parts.add(result):
-                break
+            stopped = not parts.add(result)
         assert result is not None
         return parts.result(result)

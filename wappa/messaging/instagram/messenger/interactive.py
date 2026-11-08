@@ -108,6 +108,17 @@ class _InteractiveMixin(_InstagramBase):
         """
         text_header = header.text if header and header.kind == "text" else None
         parts = _Parts()
+        lead, text = button_texts(text_header, body, footer)
+        button_message = {
+            "attachment": {
+                "type": "template",
+                "payload": {
+                    "template_type": "button",
+                    "text": text,
+                    "buttons": buttons,
+                },
+            }
+        }
         if header is not None and header.media is not None:
             source = (
                 str(header.media.url)
@@ -122,12 +133,15 @@ class _InteractiveMixin(_InstagramBase):
                 filename=header.filename,
             )
             if not parts.add(media):
+                if lead:
+                    parts.skip_text(lead)
+                parts.skip(button_message)
                 return parts.result(media)
             reply_to_message_id = None
-        lead, text = button_texts(text_header, body, footer)
         if lead:
             intro = await self._send_texts(lead, direct, reply_to_message_id)
             if not parts.add(intro):
+                parts.skip(button_message)
                 return parts.result(intro)
             reply_to_message_id = None
         final = await self._button_template(
@@ -220,10 +234,12 @@ class _InteractiveMixin(_InstagramBase):
         direct = self._direct(target, "send_carousel")
         elements = [card_element(c) for c in cards]
         parts = _Parts()
-        intro = await self._send_texts(body, direct, reply_to_message_id)
-        if not parts.add(intro):
-            return parts.result(intro)
         template = {"template_type": "generic", "elements": elements}
+        carousel_message = {"attachment": {"type": "template", "payload": template}}
+        intro = await self._send_texts(body, direct, reply_to_message_id)
+        if not parts.add(intro, role="carousel_intro"):
+            parts.skip(carousel_message)
+            return parts.result(intro)
         final = await self._send(
             direct,
             {"attachment": {"type": "template", "payload": template}},

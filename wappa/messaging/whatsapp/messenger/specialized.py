@@ -39,6 +39,8 @@ class _SpecializedMixin(_DeliveryMixin):
                 contacts=cards,
                 reply_to_message_id=reply_to_message_id,
             ),
+            part_role="contact",
+            part_text=None,
         )
 
     async def send_location(
@@ -60,6 +62,8 @@ class _SpecializedMixin(_DeliveryMixin):
                 address=address,
                 reply_to_message_id=reply_to_message_id,
             ),
+            part_role="location",
+            part_text=None,
         )
 
     async def send_location_request(
@@ -70,6 +74,8 @@ class _SpecializedMixin(_DeliveryMixin):
             lambda recipient: self._send_location_request_to(
                 recipient=recipient, body=body, reply_to_message_id=reply_to_message_id
             ),
+            part_role="location_request",
+            part_text=body,
         )
 
     async def send_contact_request(
@@ -86,6 +92,8 @@ class _SpecializedMixin(_DeliveryMixin):
                 body=body,
                 reply_to_message_id=reply_to_message_id,
             ),
+            part_role="contact_request",
+            part_text=body,
         )
 
     async def _send_contact_card_to(

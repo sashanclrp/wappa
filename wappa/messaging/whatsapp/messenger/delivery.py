@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from wappa.domain.inbox.identity import InboxRef
+from wappa.domain.message_parts import message_part, with_message_parts
 from wappa.domain.messaging_targets import DirectMessage
 from wappa.domain.results import MessageResult
 from wappa.messaging.whatsapp.errors import ADDRESS_REJECTION_CODES
@@ -19,7 +20,7 @@ class _DeliveryMixin(_WhatsAppMessengerBase):
     def _error_result(
         self, error: str, error_code: str, recipient: str | None = None
     ) -> MessageResult:
-        return MessageResult(
+        result = MessageResult(
             success=False,
             platform=PlatformType.WHATSAPP,
             recipient=recipient,
@@ -29,6 +30,8 @@ class _DeliveryMixin(_WhatsAppMessengerBase):
             error_code=error_code,
             inbox_id=self._inbox_id,
         )
+
+        return with_message_parts(result, [message_part("message", None)])
 
     async def _post_payload(
         self, payload: dict[str, Any], recipient: str
@@ -47,6 +50,8 @@ class _DeliveryMixin(_WhatsAppMessengerBase):
         send: Callable[[str], Awaitable[MessageResult]],
         *,
         phone_only: bool = False,
+        part_role: str = "message",
+        part_text: str | None = None,
     ) -> MessageResult:
         """Send to the User's addresses in WhatsApp order, falling back once
         per address only when Meta rejects the address itself.
@@ -62,11 +67,12 @@ class _DeliveryMixin(_WhatsAppMessengerBase):
             phone_only=phone_only,
         )
         if not addresses:
-            return self._error_result(
+            failure = self._error_result(
                 "No phone number known for a message that requires one",
                 BSUID_ERROR_TAG,
                 recipient=target.address,
             )
+            return with_message_parts(failure, [message_part(part_role, part_text)])
         attempted: list[str] = []
         result: MessageResult | None = None
         for address in addresses:
@@ -84,4 +90,4 @@ class _DeliveryMixin(_WhatsAppMessengerBase):
             result = result.model_copy(
                 update={"attempted_recipients": tuple(attempted)}
             )
-        return result
+        return with_message_parts(result, [message_part(part_role, part_text, result)])

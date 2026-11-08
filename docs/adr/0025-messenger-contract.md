@@ -38,6 +38,8 @@ Known gap: `send_reaction(message_id, emoji, target)` belongs on `IMessenger` (W
 
 Instagram quote degradation stays inside the adapter: Instagram first sends `reply_to_message_id` as top-level `reply_to: {"mid": ...}`. If that call is rejected with HTTP 400 and Meta code `100/2534002`, it retries only that refused part once without `reply_to`, preserving the message and recipient. The returned result is the retry result, with `platform_response["wappa_reply_to"] = {"dropped": True, "error_code": "100/2534002"}` on success or failure. This evidence survives split text, media-caption and other multipart emulations alongside `wappa_parts`. Other errors and indeterminate outcomes never trigger quote fallback; accepted parts are never resent. Hosts use the same parameter on both Platforms without branching.
 
+Every Platform implements one per-part result contract: `platform_response["wappa_parts"]` retains `message_ids` and `delivered` and adds ordered `parts` with role, exact text, Message ID and outcome. Single sends have one part; emulation flattens actual messages and planned parts skipped after a refusal. WhatsApp is normally one native part, including its caption; Instagram records its own caption follow-ups and split chunks. Shared formatting lives in `wappa/domain/message_parts.py`, while adapters own production and roles. Quote fallback remains one part with `reply_to_dropped`; indeterminate outcomes never become accepted or not_attempted. Future Platforms follow this contract rather than teaching Hosts to branch.
+
 ## Consequences
 
 - Host code, Scores and Agents use one vocabulary on every Platform; a conversation built for Instagram runs on WhatsApp and the reverse, except for the Platform-only extras on `self.whatsapp` / `self.instagram`.

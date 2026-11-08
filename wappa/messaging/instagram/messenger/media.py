@@ -8,6 +8,7 @@ from typing import Any
 from wappa.domain.interactive import check_caption
 from wappa.domain.interfaces.media_library import MediaFamily
 from wappa.domain.media_renditions import MediaRenditions, pick_rendition
+from wappa.domain.message_parts import with_message_parts
 from wappa.domain.messaging_targets import DirectMessage, require_direct_message
 from wappa.domain.results import MessageResult
 
@@ -20,7 +21,7 @@ from ..media.rules import (
 )
 from ..payloads.specialized import document_link
 from ._base import _InstagramBase
-from .delivery import _Parts
+from .delivery import _part, _Parts
 
 
 class _MediaMixin(_InstagramBase):
@@ -52,13 +53,16 @@ class _MediaMixin(_InstagramBase):
                 source, MediaFamily(family), filename=filename
             )
             if not uploaded.success or not uploaded.media_id:
-                return MessageResult(
+                failure = MessageResult(
                     success=False,
                     platform=self.platform,
                     inbox_id=self.inbox_id,
                     recipient=direct.recipient_id,
                     error=uploaded.error,
                     error_code=uploaded.error_code or "INDETERMINATE",
+                )
+                return with_message_parts(
+                    failure, [_part({"attachment": {"type": rule_type}})]
                 )
             payload = {"attachment_id": uploaded.media_id}
         elif isinstance(source, str) and "://" in source:
@@ -111,9 +115,10 @@ class _MediaMixin(_InstagramBase):
             return result
         parts = _Parts()
         if not parts.add(result):
-            return result
+            parts.skip_text(caption, role="caption")
+            return with_message_parts(result, parts.parts)
         follow_up = await self.send_text(caption, target)
-        parts.add(follow_up)
+        parts.add(follow_up, role="caption")
         return parts.result(follow_up, primary=result)
 
     async def send_image(

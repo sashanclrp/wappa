@@ -90,6 +90,8 @@ class _TemplatesMixin(_TemplateSendsMixin):
                 authentication_button_index=authentication_button_index,
             ),
             phone_only=template_type_enum is WhatsAppTemplateType.AUTHENTICATION,
+            part_role="template",
+            part_text=None,
         )
 
     async def send_media_template(
@@ -131,6 +133,8 @@ class _TemplatesMixin(_TemplateSendsMixin):
                 template_type=template_type_enum,
                 routing_policy=routing_policy,
             ),
+            part_role="template",
+            part_text=None,
         )
 
     async def send_location_template(
@@ -167,4 +171,6 @@ class _TemplatesMixin(_TemplateSendsMixin):
                 template_type=template_type_enum,
                 routing_policy=routing_policy,
             ),
+            part_role="template",
+            part_text=None,
         )

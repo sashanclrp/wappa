@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
+from wappa.domain.message_parts import message_part, with_message_parts
 from wappa.domain.messaging_targets import (
     DirectMessage,
     MessageTarget,
@@ -14,64 +16,83 @@ from wappa.domain.messaging_targets import (
 from wappa.domain.results import MessageResult, OperationOutcome
 from wappa.messaging.meta.graph import GraphResponse
 
+from ..payloads.text import split_text
 from ._base import _InstagramBase
 
 PARTS_KEY = "wappa_parts"
 REPLY_TO_KEY = "wappa_reply_to"
 
 
-class _Parts:
-    """Fold the messages of one emulated send into one ``MessageResult``.
+def _part(
+    message: dict[str, Any], result: MessageResult | None = None
+) -> dict[str, Any]:
+    """Describe one planned Platform message; no recipient or credential values."""
+    attachment = message.get("attachment", {})
+    payload = attachment.get("payload", {})
+    template = payload.get("template_type")
+    role = "text_chunk"
+    text = message.get("text")
+    if "quick_replies" in message:
+        role = "quick_replies"
+    elif template == "button":
+        role, text = "buttons", payload.get("text")
+    elif template == "generic":
+        role, text = "carousel", None
+    elif attachment:
+        role, text = "media", None
+    part = message_part(role, text, result)
+    if result and (result.platform_response or {}).get(REPLY_TO_KEY, {}).get("dropped"):
+        part["reply_to_dropped"] = True
+    return part
 
-    An emulation (split text, media header then buttons, caption follow-up,
-    carousel intro) is one Host call, so it returns one result: success only
-    when every part was accepted, the final part's ``message_id``, and every
-    part's ID under ``platform_response["wappa_parts"]``. On a refusal the
-    failed result says how many parts were already delivered, so a Host never
-    resends the whole message blindly. Nested emulations are flattened.
-    """
+
+class _Parts:
+    """Flatten attempted and skipped messages without changing send control flow."""
 
     def __init__(self) -> None:
         self.ids: list[str] = []
+        self.parts: list[dict[str, Any]] = []
         self.reply_to: dict[str, Any] | None = None
 
-    def add(self, result: MessageResult) -> bool:
+    def add(self, result: MessageResult, *, role: str | None = None) -> bool:
         response = result.platform_response or {}
         reply_to = response.get(REPLY_TO_KEY)
         if reply_to is not None:
             self.reply_to = reply_to
-        if not result.success:
-            return False
-        nested = response.get(PARTS_KEY)
-        if nested:
-            self.ids.extend(nested["message_ids"])
-        elif result.message_id:
-            self.ids.append(result.message_id)
-        return True
+        nested = response.get(PARTS_KEY, {})
+        details = deepcopy(nested.get("parts", []))
+        if role:
+            for part in details:
+                if part["role"] == "text_chunk":
+                    part["role"] = role
+        self.parts.extend(details)
+        self.ids.extend(nested.get("message_ids", []))
+        return result.success
+
+    def skip(self, message: dict[str, Any], *, role: str | None = None) -> None:
+        part = _part(message)
+        if role is not None:
+            part["role"] = role
+        self.parts.append(part)
+
+    def skip_text(self, text: str, *, role: str | None = None) -> None:
+        for chunk in split_text(text):
+            self.skip({"text": chunk}, role=role)
 
     def result(
         self, last: MessageResult, *, primary: MessageResult | None = None
     ) -> MessageResult:
-        """``last`` is the final part's result, or the first refused one.
-
-        On success the returned ``message_id`` is ``primary``'s when given
-        (the media of a media-plus-caption send), else ``last``'s (the
-        interactive message a User taps).
-        """
         if last.success and primary is not None:
             last = last.model_copy(update={"message_id": primary.message_id})
-        delivered = len(self.ids)
         response = dict(last.platform_response or {})
         if self.reply_to is not None:
             response[REPLY_TO_KEY] = self.reply_to
-        response[PARTS_KEY] = {"message_ids": list(self.ids), "delivered": delivered}
         update: dict[str, Any] = {"platform_response": response}
-        if not last.success and delivered:
+        if not last.success and self.ids:
             update["error"] = (
-                f"{last.error or 'part refused'} "
-                f"({delivered} earlier part(s) already delivered)"
+                f"{last.error or 'part refused'} ({len(self.ids)} earlier part(s) already delivered)"
             )
-        return last.model_copy(update=update)
+        return with_message_parts(last.model_copy(update=update), self.parts)
 
 
 class _DeliveryMixin(_InstagramBase):
@@ -157,7 +178,7 @@ class _DeliveryMixin(_InstagramBase):
             result = result.model_copy(update={"platform_response": evidence})
         if result.success and result.message_id and self._sent_registry is not None:
             await self._sent_registry.record(self._inbox_ref, result.message_id)
-        return result
+        return with_message_parts(result, [_part(message, result)])
 
     def _direct(self, target: DirectMessage, operation: str) -> DirectMessage:
         direct = require_direct_message(target, f"Instagram {operation}")

@@ -40,6 +40,8 @@ class _MediaMixin(_MediaWireMixin):
                 caption=caption,
                 reply_to_message_id=reply_to_message_id,
             ),
+            part_role="media",
+            part_text=caption,
         )
 
     async def send_video(
@@ -64,6 +66,8 @@ class _MediaMixin(_MediaWireMixin):
                 reply_to_message_id=reply_to_message_id,
                 transcript=transcript,
             ),
+            part_role="media",
+            part_text=caption,
         )
 
     async def send_audio(
@@ -97,6 +101,8 @@ class _MediaMixin(_MediaWireMixin):
                 transcript=transcript,
                 is_voice=is_voice,
             ),
+            part_role="media",
+            part_text=None,
         )
 
     async def _check_media_id_mime(
@@ -142,6 +148,8 @@ class _MediaMixin(_MediaWireMixin):
                 filename=filename,
                 reply_to_message_id=reply_to_message_id,
             ),
+            part_role="media",
+            part_text=caption,
         )
 
     async def send_sticker(
@@ -169,4 +177,6 @@ class _MediaMixin(_MediaWireMixin):
                 media_cache=media_cache,
                 reply_to_message_id=reply_to_message_id,
             ),
+            part_role="media",
+            part_text=None,
         )

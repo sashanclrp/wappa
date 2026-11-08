@@ -24,6 +24,8 @@ class _TextMixin(_DeliveryMixin):
             lambda recipient: self._send_text_to(
                 recipient, text, reply_to_message_id, disable_preview
             ),
+            part_role="text_chunk",
+            part_text=text,
         )
 
     async def _send_text_to(

@@ -55,6 +55,8 @@ class _InteractiveMixin(_DeliveryMixin):
                 footer_text=footer,
                 reply_to_message_id=reply_to_message_id,
             ),
+            part_role="buttons",
+            part_text=body,
         )
 
     async def send_list_message(
@@ -79,6 +81,8 @@ class _InteractiveMixin(_DeliveryMixin):
                 footer_text=footer,
                 reply_to_message_id=reply_to_message_id,
             ),
+            part_role="quick_replies",
+            part_text=body,
         )
 
     async def send_cta_message(
@@ -103,6 +107,8 @@ class _InteractiveMixin(_DeliveryMixin):
                 footer_text=footer,
                 reply_to_message_id=reply_to_message_id,
             ),
+            part_role="buttons",
+            part_text=body,
         )
 
     async def send_carousel(
@@ -131,6 +137,8 @@ class _InteractiveMixin(_DeliveryMixin):
             lambda recipient: self._send_carousel_to(
                 recipient, interactive, reply_to_message_id
             ),
+            part_role="carousel",
+            part_text=body,
         )
 
     async def _send_carousel_to(

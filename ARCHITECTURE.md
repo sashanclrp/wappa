@@ -159,6 +159,8 @@ The API layer receives an Inbox Execution Context and knows nothing about Table 
 
 ## Message Flow — Outbound (Host sends a reply)
 
+Every Platform returns Wappa-owned `wappa_parts` evidence in `MessageResult.platform_response`, formatted by `wappa/domain/message_parts.py`: one native part for WhatsApp, actual ordered messages and skipped parts for Instagram emulations. Hosts inspect outcomes without Platform branches. Provider acceptance is separate from delivery/read confirmation.
+
 ```
 Host's process_message():
     await self.messenger.send_text("Hello!", recipient=user_id)

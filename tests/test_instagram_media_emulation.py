@@ -75,7 +75,9 @@ async def test_an_unattachable_document_url_is_shared_as_a_named_link() -> None:
     ]
     # One result: the link's message ID, both parts listed.
     assert result.message_id == "mid.1"
-    assert result.platform_response[PARTS_KEY] == {
+    assert {
+        k: result.platform_response[PARTS_KEY][k] for k in ("message_ids", "delivered")
+    } == {
         "message_ids": ["mid.1", "mid.2"],
         "delivered": 2,
     }
